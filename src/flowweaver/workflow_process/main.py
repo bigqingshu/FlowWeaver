@@ -2,14 +2,28 @@ from __future__ import annotations
 
 import argparse
 import time
+from collections.abc import Callable
 from typing import NoReturn
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import EventType, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
-from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
+from flowweaver.workflow_process.controller import (
+    initialize_node_runs,
+    recover_ready_nodes,
+)
+from flowweaver.workflow_process.dag import build_workflow_dag
+
+_TERMINAL_WORKFLOW_STATUSES = frozenset(
+    {
+        WorkflowRunStatus.SUCCEEDED.value,
+        WorkflowRunStatus.FAILED.value,
+        WorkflowRunStatus.CANCELLED.value,
+        WorkflowRunStatus.ABORTED.value,
+    }
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +58,7 @@ def run_workflow_process(
     workflow_run_id: str,
     process_id: str,
     heartbeat_interval_seconds: float,
+    sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     run = store.get_workflow_run(workflow_run_id)
     if run is None or run.revision_id is None:
@@ -75,7 +90,18 @@ def run_workflow_process(
     dag = build_workflow_dag(definition)
     if not dag.nodes:
         return _complete_empty_workflow(store, workflow_run_id, process_id)
-    _initialize_node_runs(store, workflow_run_id, process_id, dag)
+    initialize_node_runs(
+        store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        dag=dag,
+    )
+    recover_ready_nodes(
+        store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        dag=dag,
+    )
 
     while True:
         store.record_workflow_process_heartbeat(process_id)
@@ -95,7 +121,18 @@ def run_workflow_process(
             )
             store.mark_workflow_process_exited(process_id, exit_code=0)
             return 0
-        time.sleep(heartbeat_interval_seconds)
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            store.mark_workflow_process_exited(process_id, exit_code=0)
+            return 0
+        sleep_func(heartbeat_interval_seconds)
+
+
+def _workflow_run_is_terminal(
+    store: RuntimeStore,
+    workflow_run_id: str,
+) -> bool:
+    current = store.get_workflow_run(workflow_run_id)
+    return current is not None and current.status in _TERMINAL_WORKFLOW_STATUSES
 
 
 def _complete_empty_workflow(
@@ -119,45 +156,6 @@ def _complete_empty_workflow(
     )
     store.mark_workflow_process_exited(process_id, exit_code=0)
     return 0
-
-
-def _initialize_node_runs(
-    store: RuntimeStore,
-    workflow_run_id: str,
-    process_id: str,
-    dag: WorkflowDag,
-) -> None:
-    ready_node_ids = set(dag.ready_node_ids)
-    for node in dag.nodes:
-        existing = store.get_node_run_for_instance(
-            workflow_run_id=workflow_run_id,
-            node_instance_id=node.node_instance_id,
-        )
-        if existing is not None:
-            continue
-        status = (
-            NodeRunStatus.READY
-            if node.node_instance_id in ready_node_ids
-            else NodeRunStatus.WAITING_DEPENDENCY
-        )
-        node_run = store.create_node_run(
-            workflow_run_id=workflow_run_id,
-            node_instance_id=node.node_instance_id,
-            node_type=node.node_type,
-            status=status,
-        )
-        if status == NodeRunStatus.READY:
-            store.append_runtime_event(
-                EventModel(
-                    event_type=EventType.NODE_QUEUED,
-                    workflow_run_id=workflow_run_id,
-                    node_run_id=node_run.node_run_id,
-                    payload={
-                        "process_id": process_id,
-                        "node_instance_id": node.node_instance_id,
-                    },
-                )
-            )
 
 
 def _fail(

@@ -52,6 +52,9 @@
 - WorkflowRunProcess 加载 workflow run 与 revision
 - WorkflowRunProcess 构建 DAG 控制图
 - 为 DAG 节点初始化 NodeRun 控制状态
+- 节点成功结果推进下游 READY 状态
+- 基于持久化 NodeRun 状态恢复 READY 节点
+- WorkflowRunProcess 识别工作流终态并退出
 - 运行进程心跳、取消请求和失联识别
 - 空工作流可启动并完成
 
