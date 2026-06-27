@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已实现第一阶段的阶段 A 和阶段 B。
+当前已实现第一阶段的阶段 A、阶段 B 和阶段 C 的控制面骨架。
 
 阶段 A 范围包括：
 
@@ -24,7 +24,16 @@
 - 工作流运行记录基础 CRUD
 - 迁移与 RuntimeStore 集成测试
 
-尚未实现 EngineHost、WorkflowRunProcess、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
+阶段 C 范围包括：
+
+- FastAPI 应用入口
+- 统一 API 响应结构
+- 工作流定义 HTTP CRUD
+- 工作流运行记录查询接口
+- WebSocket 事件连接骨架
+- API 集成测试
+
+尚未实现 WorkflowRunProcess、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
 
 ## 环境
 
@@ -49,11 +58,17 @@ py -3.12 -m pip install uv
 运行测试：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.\python312\python.exe -m pytest
 ```
 
 对指定 SQLite 元数据库执行迁移：
 
 ```powershell
-.\.venv\Scripts\alembic.exe -c alembic.ini -x database_url=sqlite:///runtime/metadata/flowweaver.db upgrade head
+.\python312\Scripts\alembic.exe -c alembic.ini -x database_url=sqlite:///runtime/metadata/flowweaver.db upgrade head
+```
+
+启动本机 EngineHost API：
+
+```powershell
+.\python312\Scripts\uvicorn.exe --app-dir src workflow_platform.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```

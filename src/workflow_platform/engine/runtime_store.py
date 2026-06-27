@@ -111,6 +111,14 @@ class RuntimeStore:
             record.updated_at = _datetime_to_text(utc_now())
         return _workflow_definition_from_record(record)
 
+    def delete_workflow_definition(self, workflow_id: str) -> bool:
+        with self._session_factory.begin() as session:
+            record = session.get(WorkflowDefinitionRecord, workflow_id)
+            if record is None:
+                return False
+            session.delete(record)
+        return True
+
     def create_workflow_run(
         self,
         *,
