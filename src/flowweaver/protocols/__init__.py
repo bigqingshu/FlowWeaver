@@ -19,6 +19,7 @@ from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
     NodeTaskCompletedPayload,
+    NodeTaskHeartbeatPayload,
     NodeTaskProgressPayload,
     NodeTaskSubmitPayload,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "NodeResultStatus",
     "NodeRunStatus",
     "NodeTaskCompletedPayload",
+    "NodeTaskHeartbeatPayload",
     "NodeTaskModel",
     "NodeTaskProgressPayload",
     "NodeTaskResultModel",

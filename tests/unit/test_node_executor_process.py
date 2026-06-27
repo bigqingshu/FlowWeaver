@@ -103,6 +103,70 @@ def test_node_executor_process_heartbeat_reports_active_tasks() -> None:
     assert after_task.payload == {"executor_id": "executor-1", "active_task_ids": []}
 
 
+def test_node_executor_process_emits_task_heartbeat_and_progress() -> None:
+    task = make_task()
+    process_ref: list[NodeExecutorProcess] = []
+
+    class ReportingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            process_ref[0].emit_task_heartbeat(task)
+            process_ref[0].emit_task_progress(
+                task,
+                progress=0.5,
+                current_stage="halfway",
+                metrics={"rows": 10},
+            )
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: ReportingExecutor(),
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, heartbeat, progress, completed = process.handle_envelope(envelope)
+
+    message_types = [
+        item.message_type for item in (accepted, heartbeat, progress, completed)
+    ]
+    assert message_types == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_PROGRESS,
+        IPCMessageType.NODE_TASK_COMPLETED,
+    ]
+    assert heartbeat.correlation_id == envelope.message_id
+    assert heartbeat.payload == {
+        "executor_id": "executor-1",
+        "task_id": task.task_id,
+        "attempt": task.attempt,
+    }
+    assert progress.correlation_id == envelope.message_id
+    assert progress.payload == {
+        "progress": 0.5,
+        "current_stage": "halfway",
+        "metrics": {"rows": 10},
+    }
+
+
 def test_node_executor_process_jsonl_loop_emits_ready_and_failed_result() -> None:
     task = make_task()
     envelope = IPCEnvelope(

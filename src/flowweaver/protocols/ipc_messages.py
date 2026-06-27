@@ -28,6 +28,12 @@ class ExecutorHeartbeatPayload(StrictModel):
     active_task_ids: list[str] = Field(default_factory=list)
 
 
+class NodeTaskHeartbeatPayload(StrictModel):
+    executor_id: str
+    task_id: str
+    attempt: int
+
+
 class NodeTaskSubmitPayload(NodeTaskModel):
     pass
 
@@ -35,7 +41,7 @@ class NodeTaskSubmitPayload(NodeTaskModel):
 class NodeTaskProgressPayload(StrictModel):
     progress: float | None
     current_stage: str | None = None
-    metrics: dict[str, int | float | str] = {}
+    metrics: dict[str, int | float | str] = Field(default_factory=dict)
 
 
 class NodeTaskCompletedPayload(StrictModel):
