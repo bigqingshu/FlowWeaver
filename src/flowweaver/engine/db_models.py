@@ -239,9 +239,14 @@ class AuditEventRecord(Base):
 
 class RuntimeEventRecord(Base):
     __tablename__ = "runtime_events"
+    __table_args__ = {"sqlite_autoincrement": True}
 
-    event_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    sequence_number: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    event_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     event_version: Mapped[str] = mapped_column(Text, nullable=False)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
     timestamp: Mapped[str] = mapped_column(Text, nullable=False)

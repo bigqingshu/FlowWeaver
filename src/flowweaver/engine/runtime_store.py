@@ -9,7 +9,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.engine import Connection, CursorResult, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -928,21 +928,18 @@ class RuntimeStore:
 
     def append_runtime_event(self, event: EventModel) -> int:
         with self._session_factory.begin() as session:
-            current = session.scalar(func.max(RuntimeEventRecord.sequence_number)) or 0
-            sequence_number = int(current) + 1
-            session.add(
-                RuntimeEventRecord(
-                    event_id=event.event_id,
-                    sequence_number=sequence_number,
-                    event_version=event.event_version,
-                    event_type=event.event_type.value,
-                    timestamp=_datetime_to_text(event.timestamp),
-                    workflow_run_id=event.workflow_run_id,
-                    node_run_id=event.node_run_id,
-                    payload_json=_json_dumps(event.payload),
-                )
+            record = RuntimeEventRecord(
+                event_id=event.event_id,
+                event_version=event.event_version,
+                event_type=event.event_type.value,
+                timestamp=_datetime_to_text(event.timestamp),
+                workflow_run_id=event.workflow_run_id,
+                node_run_id=event.node_run_id,
+                payload_json=_json_dumps(event.payload),
             )
-            return sequence_number
+            session.add(record)
+            session.flush()
+            return record.sequence_number
 
     def list_runtime_events(
         self,

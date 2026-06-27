@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import queue
+import threading
 import time
 from pathlib import Path
 
@@ -39,6 +41,7 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
         local_api_token=TOKEN,
         enforce_single_instance=False,
         workflow_process_heartbeat_interval_seconds=0,
+        supervisor_maintenance_interval_seconds=0.05,
     )
     node_registry = NodeRegistry()
     node_registry.register(
@@ -58,12 +61,17 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
             output_ports=(NodePortSpec("out"),),
         )
     )
+    event_router = EventRouter(store)
     container = ServiceContainer(
         config=config,
         runtime_store=store,
-        event_router=EventRouter(store),
+        event_router=event_router,
         table_lease_manager=TableLeaseManager(store.engine),
-        supervisor=Supervisor(config=config, runtime_store=store),
+        supervisor=Supervisor(
+            config=config,
+            runtime_store=store,
+            event_router=event_router,
+        ),
         node_registry=node_registry,
     )
     return TestClient(create_app(container)), store, container
@@ -368,6 +376,41 @@ def test_websocket_events_connects(tmp_path: Path) -> None:
     assert event["event_id"]
     assert event["sequence_number"] == 1
     assert event["payload"] == {"status": "connected"}
+
+
+def test_websocket_receives_workflow_process_runtime_event(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="WebSocket runtime event",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+
+    with client.websocket_connect(f"/ws/v1/events?token={TOKEN}") as websocket:
+        ready = websocket.receive_json()
+        assert ready["event_type"] == "ENGINE_READY"
+        time.sleep(0.1)
+        received: queue.Queue[object] = queue.Queue()
+
+        def receive_one() -> None:
+            try:
+                received.put(websocket.receive_json())
+            except Exception as exc:
+                received.put(exc)
+
+        thread = threading.Thread(target=receive_one, daemon=True)
+        thread.start()
+        started = response_data(
+            client.post(
+                f"/api/v1/workflows/{workflow.workflow_id}/runs",
+                headers=auth_headers(),
+            )
+        )
+        event = received.get(timeout=5)
+
+    assert not isinstance(event, Exception)
+    assert event["event_type"] == "WORKFLOW_STARTED"
+    assert event["workflow_run_id"] == started["workflow_run_id"]
 
 
 def test_runtime_events_can_be_restored_through_rest(tmp_path: Path) -> None:

@@ -7,6 +7,11 @@ from collections.abc import Callable
 from typing import NoReturn
 
 from flowweaver.common.time import utc_now
+from flowweaver.engine.runtime_event_sink import (
+    DatabaseEventSink,
+    IPCEventSink,
+    RuntimeEventSink,
+)
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.protocols.enums import EventType, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
@@ -34,15 +39,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--process-id", required=True)
     parser.add_argument("--process-generation", type=int, required=True)
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
+    parser.add_argument("--runtime-event-path")
     args = parser.parse_args(argv)
     store = RuntimeStore(args.database_url)
     try:
+        event_sink: RuntimeEventSink = (
+            IPCEventSink(args.runtime_event_path)
+            if args.runtime_event_path
+            else DatabaseEventSink(store)
+        )
         return run_workflow_process(
             store=store,
             workflow_run_id=args.workflow_run_id,
             process_id=args.process_id,
             process_generation=args.process_generation,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
+            event_sink=event_sink,
         )
     except Exception:
         traceback.print_exc()
@@ -58,8 +70,10 @@ def run_workflow_process(
     process_id: str,
     heartbeat_interval_seconds: float,
     process_generation: int | None = None,
+    event_sink: RuntimeEventSink | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
+    event_sink = event_sink or DatabaseEventSink(store)
     if (
         process_generation is not None
         and not store.workflow_run_is_owned_by(
@@ -105,7 +119,7 @@ def run_workflow_process(
             owner_process_id=process_id if process_generation is not None else None,
             process_generation=process_generation,
         )
-    store.append_runtime_event(
+    event_sink.emit(
         EventModel(
             event_type=EventType.WORKFLOW_STARTED,
             workflow_run_id=workflow_run_id,
@@ -121,6 +135,7 @@ def run_workflow_process(
             workflow_run_id,
             process_id,
             process_generation=process_generation,
+            event_sink=event_sink,
         )
     initialize_node_runs(
         store,
@@ -128,6 +143,7 @@ def run_workflow_process(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
+        event_sink=event_sink,
     )
     recover_ready_nodes(
         store,
@@ -135,6 +151,7 @@ def run_workflow_process(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
+        event_sink=event_sink,
     )
 
     while True:
@@ -154,7 +171,7 @@ def run_workflow_process(
                 owner_process_id=process_id if process_generation is not None else None,
                 process_generation=process_generation,
             )
-            store.append_runtime_event(
+            event_sink.emit(
                 EventModel(
                     event_type=EventType.WORKFLOW_CANCELLED,
                     workflow_run_id=workflow_run_id,
@@ -180,7 +197,9 @@ def _complete_empty_workflow(
     workflow_run_id: str,
     process_id: str,
     process_generation: int | None = None,
+    event_sink: RuntimeEventSink | None = None,
 ) -> int:
+    event_sink = event_sink or DatabaseEventSink(store)
     current = store.get_workflow_run(workflow_run_id)
     store.update_workflow_run_status(
         workflow_run_id,
@@ -191,7 +210,7 @@ def _complete_empty_workflow(
         owner_process_id=process_id if process_generation is not None else None,
         process_generation=process_generation,
     )
-    store.append_runtime_event(
+    event_sink.emit(
         EventModel(
             event_type=EventType.WORKFLOW_FINISHED,
             workflow_run_id=workflow_run_id,

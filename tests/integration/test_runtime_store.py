@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 
@@ -551,3 +552,28 @@ def test_runtime_event_sequence_numbers_are_persisted(tmp_path: Path) -> None:
     )
 
     assert (first, second) == (1, 2)
+
+
+def test_runtime_event_sequence_numbers_are_atomic_under_concurrency(
+    tmp_path: Path,
+) -> None:
+    from flowweaver.protocols.enums import EventType
+    from flowweaver.protocols.events import EventModel
+
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+
+    def append_event(index: int) -> int:
+        return store.append_runtime_event(
+            EventModel(
+                event_type=EventType.NODE_PROGRESS,
+                payload={"index": index},
+            )
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        sequence_numbers = list(executor.map(append_event, range(32)))
+
+    assert sorted(sequence_numbers) == list(range(1, 33))
+    assert len({event.event_id for event in store.list_runtime_events(limit=40)}) == 32

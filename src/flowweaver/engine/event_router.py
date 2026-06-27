@@ -26,18 +26,27 @@ class RuntimeEvent:
         }
 
 
+@dataclass(frozen=True)
+class _EventSubscriber:
+    queue: asyncio.Queue[RuntimeEvent]
+    loop: asyncio.AbstractEventLoop
+
+
 class EventRouter:
     def __init__(self, runtime_store) -> None:
         self._runtime_store = runtime_store
-        self._subscribers: set[asyncio.Queue[RuntimeEvent]] = set()
+        self._subscribers: dict[asyncio.Queue[RuntimeEvent], _EventSubscriber] = {}
 
     async def subscribe(self) -> asyncio.Queue[RuntimeEvent]:
         queue: asyncio.Queue[RuntimeEvent] = asyncio.Queue()
-        self._subscribers.add(queue)
+        self._subscribers[queue] = _EventSubscriber(
+            queue=queue,
+            loop=asyncio.get_running_loop(),
+        )
         return queue
 
     def unsubscribe(self, queue: asyncio.Queue[RuntimeEvent]) -> None:
-        self._subscribers.discard(queue)
+        self._subscribers.pop(queue, None)
 
     async def publish(
         self,
@@ -53,8 +62,17 @@ class EventRouter:
             node_run_id=node_run_id,
             payload=payload or {},
         )
+        return self.publish_event(event)
+
+    def publish_event(self, event: EventModel) -> RuntimeEvent:
         sequence_number = self._runtime_store.append_runtime_event(event)
         runtime_event = RuntimeEvent(sequence_number=sequence_number, event=event)
-        for queue in list(self._subscribers):
-            queue.put_nowait(runtime_event)
+        for subscriber in list(self._subscribers.values()):
+            if subscriber.loop.is_closed():
+                self.unsubscribe(subscriber.queue)
+                continue
+            subscriber.loop.call_soon_threadsafe(
+                subscriber.queue.put_nowait,
+                runtime_event,
+            )
         return runtime_event

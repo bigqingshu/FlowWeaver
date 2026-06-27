@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flowweaver.common.time import utc_now
+from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore, WorkflowRun
 from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
@@ -23,6 +24,7 @@ def initialize_node_runs(
     process_id: str,
     process_generation: int | None = None,
     dag: WorkflowDag,
+    event_sink: RuntimeEventSink,
 ) -> tuple[NodeRun, ...]:
     initialized: list[NodeRun] = []
     ready_node_ids = set(dag.ready_node_ids)
@@ -49,7 +51,7 @@ def initialize_node_runs(
         )
         initialized.append(node_run)
         if status == NodeRunStatus.READY:
-            _publish_node_queued(store, workflow_run_id, process_id, node_run)
+            _publish_node_queued(event_sink, workflow_run_id, process_id, node_run)
     return tuple(initialized)
 
 
@@ -60,6 +62,7 @@ def recover_ready_nodes(
     process_id: str,
     process_generation: int | None = None,
     dag: WorkflowDag,
+    event_sink: RuntimeEventSink,
 ) -> tuple[NodeRun, ...]:
     node_runs = _node_runs_by_instance(store, workflow_run_id)
     newly_ready: list[NodeRun] = []
@@ -85,7 +88,7 @@ def recover_ready_nodes(
             )
             if ready is not None:
                 newly_ready.append(ready)
-                _publish_node_queued(store, workflow_run_id, process_id, ready)
+                _publish_node_queued(event_sink, workflow_run_id, process_id, ready)
     return tuple(newly_ready)
 
 
@@ -97,6 +100,7 @@ def apply_node_success(
     process_generation: int | None = None,
     dag: WorkflowDag,
     node_instance_id: str,
+    event_sink: RuntimeEventSink,
 ) -> NodeAdvanceResult:
     node_run = store.get_node_run_for_instance(
         workflow_run_id=workflow_run_id,
@@ -118,7 +122,7 @@ def apply_node_success(
     )
     if completed is None:
         return NodeAdvanceResult(None, (), None)
-    store.append_runtime_event(
+    event_sink.emit(
         EventModel(
             event_type=EventType.NODE_FINISHED,
             workflow_run_id=workflow_run_id,
@@ -135,12 +139,14 @@ def apply_node_success(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
+        event_sink=event_sink,
     )
     workflow_completed = _complete_workflow_if_all_nodes_succeeded(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
         process_generation=process_generation,
+        event_sink=event_sink,
     )
     return NodeAdvanceResult(completed, newly_ready, workflow_completed)
 
@@ -151,6 +157,7 @@ def _complete_workflow_if_all_nodes_succeeded(
     workflow_run_id: str,
     process_id: str,
     process_generation: int | None = None,
+    event_sink: RuntimeEventSink,
 ) -> WorkflowRun | None:
     node_runs = store.list_node_runs(workflow_run_id)
     if not node_runs or any(
@@ -170,7 +177,7 @@ def _complete_workflow_if_all_nodes_succeeded(
         process_generation=process_generation,
     )
     if completed is not None:
-        store.append_runtime_event(
+        event_sink.emit(
             EventModel(
                 event_type=EventType.WORKFLOW_FINISHED,
                 workflow_run_id=workflow_run_id,
@@ -191,12 +198,12 @@ def _node_runs_by_instance(
 
 
 def _publish_node_queued(
-    store: RuntimeStore,
+    event_sink: RuntimeEventSink,
     workflow_run_id: str,
     process_id: str,
     node_run: NodeRun,
 ) -> None:
-    store.append_runtime_event(
+    event_sink.emit(
         EventModel(
             event_type=EventType.NODE_QUEUED,
             workflow_run_id=workflow_run_id,

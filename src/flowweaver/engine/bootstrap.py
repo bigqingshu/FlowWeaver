@@ -34,7 +34,11 @@ class EngineHostBootstrap:
         runtime_store = RuntimeStore(database_url)
         event_router = EventRouter(runtime_store)
         table_lease_manager = TableLeaseManager(runtime_store.engine)
-        supervisor = Supervisor(config=config, runtime_store=runtime_store)
+        supervisor = Supervisor(
+            config=config,
+            runtime_store=runtime_store,
+            event_router=event_router,
+        )
         return ServiceContainer(
             config=config,
             runtime_store=runtime_store,
