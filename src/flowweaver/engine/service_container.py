@@ -22,6 +22,7 @@ class ServiceContainer:
     instance_lock: InstanceLock | None = None
 
     def close(self) -> None:
+        self.supervisor.close()
         self.runtime_store.dispose()
         if self.instance_lock is not None:
             self.instance_lock.release()

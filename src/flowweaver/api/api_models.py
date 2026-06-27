@@ -77,6 +77,9 @@ class WorkflowRunData(StrictModel):
     definition_hash: str | None
     status: str
     state_version: int
+    owner_process_id: str | None
+    process_generation: int
+    fencing_token: str | None
     input_snapshot_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
@@ -91,6 +94,8 @@ class WorkflowProcessView(StrictModel):
     process_id: str
     workflow_run_id: str
     os_pid: int | None
+    process_generation: int
+    fencing_token: str | None
     status: str
     started_at: datetime
     last_heartbeat_at: datetime | None

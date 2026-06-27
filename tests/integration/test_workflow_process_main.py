@@ -64,10 +64,11 @@ def test_workflow_process_exits_after_workflow_reaches_terminal_status(
         workflow_id=workflow.workflow_id,
         workflow_run_id="run-1",
     )
-    process = store.create_workflow_process(
+    process = store.claim_workflow_process(
         workflow_run_id=run.workflow_run_id,
         process_id="process-1",
     )
+    assert process is not None
     sleep_calls = 0
 
     def complete_workflow(_seconds: float) -> None:
@@ -80,12 +81,15 @@ def test_workflow_process_exits_after_workflow_reaches_terminal_status(
             WorkflowRunStatus.SUCCEEDED,
             finished_at=utc_now(),
             expected_state_version=current.state_version,
+            owner_process_id=process.process_id,
+            process_generation=process.process_generation,
         )
 
     exit_code = run_workflow_process(
         store=store,
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
+        process_generation=process.process_generation,
         heartbeat_interval_seconds=0,
         sleep_func=complete_workflow,
     )
@@ -94,6 +98,6 @@ def test_workflow_process_exits_after_workflow_reaches_terminal_status(
     assert exit_code == 0
     assert sleep_calls == 1
     assert loaded_process is not None
-    assert loaded_process.status == "EXITED"
-    assert loaded_process.exit_code == 0
+    assert loaded_process.status == "RUNNING"
+    assert loaded_process.exit_code is None
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"

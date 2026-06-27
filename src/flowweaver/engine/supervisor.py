@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 from datetime import timedelta
 from pathlib import Path
@@ -24,49 +25,117 @@ class Supervisor:
         self._runtime_store = runtime_store
         self._python_executable = python_executable or sys.executable
         self._children: dict[str, subprocess.Popen] = {}
+        self._stop_event = threading.Event()
+        self._maintenance_thread: threading.Thread | None = None
 
     def start_workflow_process(self, workflow_run_id: str) -> str:
-        process = self._runtime_store.create_workflow_process(
+        self.start()
+        process = self._runtime_store.claim_workflow_process(
             workflow_run_id=workflow_run_id
         )
-        src_path = Path(__file__).resolve().parents[2]
+        if process is None:
+            raise RuntimeError("RUN_ALREADY_OWNED")
         command = [
             self._python_executable,
-            "-c",
-            (
-                "import sys; "
-                f"sys.path.insert(0, {str(src_path)!r}); "
-                "from flowweaver.workflow_process.main import main; "
-                "raise SystemExit(main())"
-            ),
+            "-m",
+            "flowweaver.workflow_process.main",
             "--database-url",
             self._runtime_store.database_url,
             "--workflow-run-id",
             workflow_run_id,
             "--process-id",
             process.process_id,
+            "--process-generation",
+            str(process.process_generation),
             "--heartbeat-interval-seconds",
             str(self._config.workflow_process_heartbeat_interval_seconds),
         ]
+        stdout_path, stderr_path = self._workflow_process_log_paths(workflow_run_id)
+        stdout_file = stdout_path.open("ab")
+        stderr_file = stderr_path.open("ab")
         try:
             child = subprocess.Popen(
                 command,
-                cwd=Path.cwd(),
+                cwd=Path(__file__).resolve().parents[2],
                 env=self._child_environment(),
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
             )
         except Exception as exc:
+            stdout_file.close()
+            stderr_file.close()
             self._runtime_store.mark_workflow_process_exited(
                 process.process_id,
                 exit_code=1,
                 error={"message": str(exc)},
             )
+            self._runtime_store.abort_workflow_run_for_process(
+                process.process_id,
+                reason="WORKFLOW_PROCESS_START_FAILED",
+            )
             raise
+        finally:
+            if not stdout_file.closed:
+                stdout_file.close()
+            if not stderr_file.closed:
+                stderr_file.close()
         self._children[process.process_id] = child
         self._runtime_store.update_workflow_process_pid(process.process_id, child.pid)
         return process.process_id
+
+    def start(self) -> None:
+        if self._maintenance_thread is not None and self._maintenance_thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._maintenance_thread = threading.Thread(
+            target=self.maintenance_loop,
+            name="flowweaver-supervisor-maintenance",
+            daemon=True,
+        )
+        self._maintenance_thread.start()
+
+    def maintenance_loop(self) -> None:
+        interval = max(
+            float(self._config.supervisor_maintenance_interval_seconds),
+            0.05,
+        )
+        while not self._stop_event.is_set():
+            try:
+                self.sweep_exited_children()
+                self.mark_lost_workflow_processes()
+            except Exception:
+                pass
+            self._stop_event.wait(interval)
+
+    def close(self) -> None:
+        self._stop_event.set()
+        if self._maintenance_thread is not None:
+            self._maintenance_thread.join(timeout=2)
+            self._maintenance_thread = None
+        for process_id, child in list(self._children.items()):
+            forced = False
+            if child.poll() is None:
+                forced = True
+                child.terminate()
+                try:
+                    child.wait(timeout=self._config.workflow_process_cancel_grace_seconds)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=2)
+            exit_code = child.returncode if child.returncode is not None else 1
+            if forced and exit_code == 0:
+                exit_code = 1
+            self._children.pop(process_id, None)
+            self._finish_workflow_process(
+                process_id,
+                exit_code=exit_code,
+                error=(
+                    {"message": "Workflow process terminated during supervisor close"}
+                    if forced
+                    else None
+                ),
+            )
 
     def stop_workflow_process(
         self,
@@ -82,16 +151,23 @@ class Supervisor:
         deadline = time.monotonic() + graceful_timeout_seconds
         while time.monotonic() < deadline:
             if child.poll() is not None:
-                self._runtime_store.mark_workflow_process_exited(
+                self._children.pop(process.process_id, None)
+                self._finish_workflow_process(
                     process.process_id,
                     exit_code=child.returncode or 0,
                 )
                 return
             time.sleep(0.05)
         child.terminate()
-        self._runtime_store.mark_workflow_process_exited(
+        try:
+            child.wait(timeout=self._config.workflow_process_cancel_grace_seconds)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=2)
+        self._children.pop(process.process_id, None)
+        self._finish_workflow_process(
             process.process_id,
-            exit_code=1,
+            exit_code=child.returncode if child.returncode not in (None, 0) else 1,
             error={"message": "Workflow process terminated after cancel timeout"},
         )
 
@@ -105,10 +181,7 @@ class Supervisor:
             if exit_code is None:
                 continue
             self._children.pop(process_id, None)
-            process = self._runtime_store.mark_workflow_process_exited(
-                process_id,
-                exit_code=exit_code,
-            )
+            process = self._finish_workflow_process(process_id, exit_code=exit_code)
             if process is not None:
                 exited.append(process)
         return exited
@@ -117,9 +190,20 @@ class Supervisor:
         stale_before = utc_now() - timedelta(
             seconds=self._config.workflow_process_lost_threshold_seconds
         )
-        return self._runtime_store.mark_lost_workflow_processes(
-            stale_before=stale_before
+        starting_stale_before = utc_now() - timedelta(
+            seconds=self._config.workflow_process_start_timeout_seconds
         )
+        lost = self._runtime_store.mark_lost_workflow_processes(
+            stale_before=stale_before,
+            starting_stale_before=starting_stale_before,
+        )
+        for process in lost:
+            self._children.pop(process.process_id, None)
+            self._runtime_store.abort_workflow_run_for_process(
+                process.process_id,
+                reason="WORKFLOW_PROCESS_LOST",
+            )
+        return lost
 
     def _child_environment(self) -> dict[str, str]:
         env = os.environ.copy()
@@ -131,3 +215,30 @@ class Supervisor:
             else f"{src_path}{os.pathsep}{existing_pythonpath}"
         )
         return env
+
+    def _workflow_process_log_paths(self, workflow_run_id: str) -> tuple[Path, Path]:
+        log_dir = self._config.resolved_log_dir() / "workflow_runs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return (
+            log_dir / f"{workflow_run_id}.stdout.log",
+            log_dir / f"{workflow_run_id}.stderr.log",
+        )
+
+    def _finish_workflow_process(
+        self,
+        process_id: str,
+        *,
+        exit_code: int,
+        error: dict[str, str] | None = None,
+    ) -> WorkflowProcess | None:
+        process = self._runtime_store.mark_workflow_process_exited(
+            process_id,
+            exit_code=exit_code,
+            error=error,
+        )
+        if process is not None and exit_code != 0:
+            self._runtime_store.abort_workflow_run_for_process(
+                process_id,
+                reason="WORKFLOW_PROCESS_EXITED_ABNORMALLY",
+            )
+        return process

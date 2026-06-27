@@ -91,6 +91,9 @@ def _to_jsonable(value: Any) -> Any:
             "definition_hash": value.definition_hash,
             "status": value.status,
             "state_version": value.state_version,
+            "owner_process_id": value.owner_process_id,
+            "process_generation": value.process_generation,
+            "fencing_token": value.fencing_token,
             "input_snapshot_id": value.input_snapshot_id,
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,
@@ -101,6 +104,8 @@ def _to_jsonable(value: Any) -> Any:
             "process_id": value.process_id,
             "workflow_run_id": value.workflow_run_id,
             "os_pid": value.os_pid,
+            "process_generation": value.process_generation,
+            "fencing_token": value.fencing_token,
             "status": value.status,
             "started_at": value.started_at.isoformat(),
             "last_heartbeat_at": (

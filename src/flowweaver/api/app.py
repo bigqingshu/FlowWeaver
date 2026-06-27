@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 
@@ -14,7 +16,19 @@ from flowweaver.engine.service_container import ServiceContainer
 
 
 def create_app(container: ServiceContainer) -> FastAPI:
-    app = FastAPI(title="FlowWeaver EngineHost", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        container.supervisor.start()
+        try:
+            yield
+        finally:
+            container.close()
+
+    app = FastAPI(
+        title="FlowWeaver EngineHost",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
     app.state.container = container
 
     @app.exception_handler(RequestValidationError)

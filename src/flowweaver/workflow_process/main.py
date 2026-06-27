@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import time
+import traceback
 from collections.abc import Callable
 from typing import NoReturn
 
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--workflow-run-id", required=True)
     parser.add_argument("--process-id", required=True)
+    parser.add_argument("--process-generation", type=int, required=True)
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
     args = parser.parse_args(argv)
     store = RuntimeStore(args.database_url)
@@ -39,14 +41,11 @@ def main(argv: list[str] | None = None) -> int:
             store=store,
             workflow_run_id=args.workflow_run_id,
             process_id=args.process_id,
+            process_generation=args.process_generation,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
         )
-    except Exception as exc:
-        store.mark_workflow_process_exited(
-            args.process_id,
-            exit_code=1,
-            error={"message": str(exc)},
-        )
+    except Exception:
+        traceback.print_exc()
         return 1
     finally:
         store.dispose()
@@ -58,16 +57,41 @@ def run_workflow_process(
     workflow_run_id: str,
     process_id: str,
     heartbeat_interval_seconds: float,
+    process_generation: int | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
+    if (
+        process_generation is not None
+        and not store.workflow_run_is_owned_by(
+            workflow_run_id=workflow_run_id,
+            process_id=process_id,
+            process_generation=process_generation,
+        )
+    ):
+        return 1
     run = store.get_workflow_run(workflow_run_id)
     if run is None or run.revision_id is None:
-        return _fail(store, workflow_run_id, process_id, "Workflow run not found")
+        return _fail(
+            store,
+            workflow_run_id,
+            process_id,
+            "Workflow run not found",
+            process_generation=process_generation,
+        )
     revision = store.get_workflow_revision(run.revision_id)
     if revision is None:
-        return _fail(store, workflow_run_id, process_id, "Workflow revision not found")
+        return _fail(
+            store,
+            workflow_run_id,
+            process_id,
+            "Workflow revision not found",
+            process_generation=process_generation,
+        )
 
-    store.record_workflow_process_heartbeat(process_id)
+    store.record_workflow_process_heartbeat(
+        process_id,
+        process_generation=process_generation,
+    )
     current_run = store.get_workflow_run(workflow_run_id)
     if (
         current_run is not None
@@ -78,6 +102,8 @@ def run_workflow_process(
             WorkflowRunStatus.RUNNING,
             expected_state_version=current_run.state_version,
             allowed_source_statuses=[WorkflowRunStatus.PENDING],
+            owner_process_id=process_id if process_generation is not None else None,
+            process_generation=process_generation,
         )
     store.append_runtime_event(
         EventModel(
@@ -90,22 +116,34 @@ def run_workflow_process(
     definition = WorkflowDefinitionModel.model_validate(revision.definition)
     dag = build_workflow_dag(definition)
     if not dag.nodes:
-        return _complete_empty_workflow(store, workflow_run_id, process_id)
+        return _complete_empty_workflow(
+            store,
+            workflow_run_id,
+            process_id,
+            process_generation=process_generation,
+        )
     initialize_node_runs(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
+        process_generation=process_generation,
         dag=dag,
     )
     recover_ready_nodes(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
+        process_generation=process_generation,
         dag=dag,
     )
 
     while True:
-        store.record_workflow_process_heartbeat(process_id)
+        heartbeat = store.record_workflow_process_heartbeat(
+            process_id,
+            process_generation=process_generation,
+        )
+        if heartbeat is None:
+            return 1
         process = store.get_workflow_process(process_id)
         if process is not None and process.cancel_requested_at is not None:
             store.update_workflow_run_status(
@@ -113,6 +151,8 @@ def run_workflow_process(
                 WorkflowRunStatus.CANCELLED,
                 finished_at=utc_now(),
                 allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+                owner_process_id=process_id if process_generation is not None else None,
+                process_generation=process_generation,
             )
             store.append_runtime_event(
                 EventModel(
@@ -121,10 +161,8 @@ def run_workflow_process(
                     payload={"process_id": process_id},
                 )
             )
-            store.mark_workflow_process_exited(process_id, exit_code=0)
             return 0
         if _workflow_run_is_terminal(store, workflow_run_id):
-            store.mark_workflow_process_exited(process_id, exit_code=0)
             return 0
         sleep_func(heartbeat_interval_seconds)
 
@@ -141,6 +179,7 @@ def _complete_empty_workflow(
     store: RuntimeStore,
     workflow_run_id: str,
     process_id: str,
+    process_generation: int | None = None,
 ) -> int:
     current = store.get_workflow_run(workflow_run_id)
     store.update_workflow_run_status(
@@ -149,6 +188,8 @@ def _complete_empty_workflow(
         finished_at=utc_now(),
         expected_state_version=current.state_version if current is not None else None,
         allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+        owner_process_id=process_id if process_generation is not None else None,
+        process_generation=process_generation,
     )
     store.append_runtime_event(
         EventModel(
@@ -157,7 +198,6 @@ def _complete_empty_workflow(
             payload={"process_id": process_id, "empty_workflow": True},
         )
     )
-    store.mark_workflow_process_exited(process_id, exit_code=0)
     return 0
 
 
@@ -166,6 +206,7 @@ def _fail(
     workflow_run_id: str,
     process_id: str,
     message: str,
+    process_generation: int | None = None,
 ) -> int:
     store.update_workflow_run_status(
         workflow_run_id,
@@ -176,11 +217,8 @@ def _fail(
             WorkflowRunStatus.PENDING,
             WorkflowRunStatus.RUNNING,
         ],
-    )
-    store.mark_workflow_process_exited(
-        process_id,
-        exit_code=1,
-        error={"message": message},
+        owner_process_id=process_id if process_generation is not None else None,
+        process_generation=process_generation,
     )
     return 1
 

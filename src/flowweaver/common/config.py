@@ -27,6 +27,9 @@ class EngineConfig(StrictModel):
     orphan_cleanup_interval: int = 300
     workflow_process_heartbeat_interval_seconds: int = 2
     workflow_process_lost_threshold_seconds: int = 10
+    workflow_process_start_timeout_seconds: int = 10
+    workflow_process_cancel_grace_seconds: int = 5
+    supervisor_maintenance_interval_seconds: float = 1.0
     allowed_origins: set[str] = Field(default_factory=lambda: {"http://127.0.0.1"})
 
     def resolved_metadata_db_path(self) -> Path:

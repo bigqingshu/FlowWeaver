@@ -21,6 +21,7 @@ def initialize_node_runs(
     *,
     workflow_run_id: str,
     process_id: str,
+    process_generation: int | None = None,
     dag: WorkflowDag,
 ) -> tuple[NodeRun, ...]:
     initialized: list[NodeRun] = []
@@ -43,6 +44,8 @@ def initialize_node_runs(
             node_instance_id=node.node_instance_id,
             node_type=node.node_type,
             status=status,
+            owner_process_id=process_id if process_generation is not None else None,
+            process_generation=process_generation,
         )
         initialized.append(node_run)
         if status == NodeRunStatus.READY:
@@ -55,6 +58,7 @@ def recover_ready_nodes(
     *,
     workflow_run_id: str,
     process_id: str,
+    process_generation: int | None = None,
     dag: WorkflowDag,
 ) -> tuple[NodeRun, ...]:
     node_runs = _node_runs_by_instance(store, workflow_run_id)
@@ -76,6 +80,8 @@ def recover_ready_nodes(
                 NodeRunStatus.READY,
                 expected_state_version=node_run.state_version,
                 allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+                owner_process_id=process_id if process_generation is not None else None,
+                process_generation=process_generation,
             )
             if ready is not None:
                 newly_ready.append(ready)
@@ -88,6 +94,7 @@ def apply_node_success(
     *,
     workflow_run_id: str,
     process_id: str,
+    process_generation: int | None = None,
     dag: WorkflowDag,
     node_instance_id: str,
 ) -> NodeAdvanceResult:
@@ -106,6 +113,8 @@ def apply_node_success(
             NodeRunStatus.RUNNING,
             NodeRunStatus.LONG_RUNNING,
         ],
+        owner_process_id=process_id if process_generation is not None else None,
+        process_generation=process_generation,
     )
     if completed is None:
         return NodeAdvanceResult(None, (), None)
@@ -124,12 +133,14 @@ def apply_node_success(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
+        process_generation=process_generation,
         dag=dag,
     )
     workflow_completed = _complete_workflow_if_all_nodes_succeeded(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
+        process_generation=process_generation,
     )
     return NodeAdvanceResult(completed, newly_ready, workflow_completed)
 
@@ -139,6 +150,7 @@ def _complete_workflow_if_all_nodes_succeeded(
     *,
     workflow_run_id: str,
     process_id: str,
+    process_generation: int | None = None,
 ) -> WorkflowRun | None:
     node_runs = store.list_node_runs(workflow_run_id)
     if not node_runs or any(
@@ -154,6 +166,8 @@ def _complete_workflow_if_all_nodes_succeeded(
         finished_at=utc_now(),
         expected_state_version=run.state_version,
         allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+        owner_process_id=process_id if process_generation is not None else None,
+        process_generation=process_generation,
     )
     if completed is not None:
         store.append_runtime_event(

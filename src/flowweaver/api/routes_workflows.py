@@ -112,14 +112,18 @@ def start_workflow_run(
     try:
         supervisor.start_workflow_process(run.workflow_run_id)
     except Exception as exc:
+        current = store.get_workflow_run(run.workflow_run_id)
         failed = store.update_workflow_run_status(
             run.workflow_run_id,
             WorkflowRunStatus.FAILED,
             error={"message": str(exc)},
-            expected_state_version=run.state_version,
-            allowed_source_statuses=[WorkflowRunStatus.PENDING],
+            expected_state_version=current.state_version if current else None,
+            allowed_source_statuses=[
+                WorkflowRunStatus.PENDING,
+                WorkflowRunStatus.RUNNING,
+            ],
         )
-        return ok_response(request, failed or run, status_code=201)
+        return ok_response(request, failed or current or run, status_code=201)
     return ok_response(request, run, status_code=201)
 
 

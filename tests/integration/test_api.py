@@ -208,7 +208,7 @@ def test_run_query_api(tmp_path: Path) -> None:
 
 
 def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:
-    client, store, _container = make_client(tmp_path)
+    client, store, container = make_client(tmp_path)
     workflow = store.create_workflow_definition(
         name="Empty run",
         definition=valid_definition(),
@@ -231,6 +231,13 @@ def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:
         time.sleep(0.05)
 
     process = store.get_workflow_process_for_run(run_id)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        container.supervisor.sweep_exited_children()
+        process = store.get_workflow_process_for_run(run_id)
+        if process is not None and process.status == "EXITED":
+            break
+        time.sleep(0.05)
     events = store.list_runtime_events()
 
     assert loaded is not None

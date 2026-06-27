@@ -67,6 +67,9 @@ class WorkflowRunRecord(Base):
     definition_hash: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    owner_process_id: Mapped[str | None] = mapped_column(Text, index=True)
+    process_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fencing_token: Mapped[str | None] = mapped_column(Text)
     input_snapshot_id: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str | None] = mapped_column(Text)
     finished_at: Mapped[str | None] = mapped_column(Text)
@@ -84,6 +87,8 @@ class WorkflowProcessRecord(Base):
         index=True,
     )
     os_pid: Mapped[int | None] = mapped_column(Integer)
+    process_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fencing_token: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     started_at: Mapped[str] = mapped_column(Text, nullable=False)
     last_heartbeat_at: Mapped[str | None] = mapped_column(Text)
