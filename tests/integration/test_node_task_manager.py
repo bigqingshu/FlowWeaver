@@ -204,7 +204,10 @@ def test_success_result_is_idempotent_and_advances_downstream(
         process_generation=process.process_generation,
         node_instance_id="source",
     )
-    result = FakeNodeExecutor(executor_id="executor-1").execute(task)
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        result_id="duplicate-result",
+    ).execute(task)
 
     first = manager.apply_result(result)
     event_count = len(store.list_runtime_events())
@@ -213,7 +216,11 @@ def test_success_result_is_idempotent_and_advances_downstream(
         workflow_run_id=run.workflow_run_id,
         node_instance_id="transform",
     )
-    duplicate = result.model_copy(update={"node_run_id": "tampered-node-run"})
+    duplicate = FakeNodeExecutor(
+        executor_id="executor-1",
+        result_id=result.result_id,
+        node_run_id="tampered-node-run",
+    ).execute(task)
     second = manager.apply_result(duplicate)
     source_after_duplicate = store.get_node_run(task.node_run_id)
     transform_after_duplicate = store.get_node_run_for_instance(
@@ -250,22 +257,29 @@ def test_stale_and_mismatched_results_are_rejected(tmp_path: Path) -> None:
         process_generation=process.process_generation,
         node_instance_id="source",
     )
-    executor = FakeNodeExecutor(executor_id="executor-1")
-    base = executor.execute(task)
     event_count = len(store.list_runtime_events())
     node_before_rejections = store.get_node_run(task.node_run_id)
     assert node_before_rejections is not None
 
     stale_attempt = manager.apply_result(
-        base.model_copy(update={"result_id": "attempt-result", "attempt": 0})
+        FakeNodeExecutor(
+            executor_id="executor-1",
+            result_id="attempt-result",
+            attempt=0,
+        ).execute(task)
     )
     stale_generation = manager.apply_result(
-        base.model_copy(
-            update={"result_id": "generation-result", "process_generation": 0}
-        )
+        FakeNodeExecutor(
+            executor_id="executor-1",
+            result_id="generation-result",
+            process_generation=0,
+        ).execute(task)
     )
     wrong_executor = manager.apply_result(
-        base.model_copy(update={"result_id": "executor-result", "executor_id": "old"})
+        FakeNodeExecutor(
+            executor_id="old",
+            result_id="executor-result",
+        ).execute(task)
     )
 
     assert stale_attempt.status == NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT

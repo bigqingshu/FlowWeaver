@@ -15,12 +15,20 @@ class FakeNodeExecutor:
         executor_id: str = "fake-executor",
         status: NodeResultStatus = NodeResultStatus.SUCCEEDED,
         delay_seconds: float = 0,
+        result_id: str | None = None,
+        node_run_id: str | None = None,
+        attempt: int | None = None,
+        process_generation: int | None = None,
         output_refs: list[str] | None = None,
         error: dict[str, Any] | None = None,
     ) -> None:
         self.executor_id = executor_id
         self.status = status
         self.delay_seconds = delay_seconds
+        self.result_id = result_id
+        self.node_run_id = node_run_id
+        self.attempt = attempt
+        self.process_generation = process_generation
         self.output_refs = output_refs or []
         self.error = error
 
@@ -28,12 +36,22 @@ class FakeNodeExecutor:
         started_at = utc_now()
         if self.delay_seconds > 0:
             time.sleep(self.delay_seconds)
+        identity_overrides = {}
+        if self.result_id is not None:
+            identity_overrides["result_id"] = self.result_id
         return NodeTaskResultModel(
+            **identity_overrides,
             task_id=task.task_id,
-            node_run_id=task.node_run_id,
-            attempt=task.attempt,
+            node_run_id=(
+                task.node_run_id if self.node_run_id is None else self.node_run_id
+            ),
+            attempt=task.attempt if self.attempt is None else self.attempt,
             executor_id=self.executor_id,
-            process_generation=task.process_generation,
+            process_generation=(
+                task.process_generation
+                if self.process_generation is None
+                else self.process_generation
+            ),
             status=self.status,
             output_refs=self.output_refs,
             error=self.error,
