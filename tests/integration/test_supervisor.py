@@ -375,3 +375,56 @@ def test_supervisor_abnormal_exit_aborts_run_and_running_nodes(
     assert loaded_node is not None
     assert loaded_node.status == "CANCELLED"
     assert loaded_node.error["reason"] == "WORKFLOW_PROCESS_EXITED_ABNORMALLY"
+
+
+def test_supervisor_sweeps_exited_executor_and_records_event(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    supervisor = Supervisor(
+        config=EngineConfig(
+            data_dir=tmp_path / "runtime",
+            enforce_single_instance=False,
+            supervisor_maintenance_interval_seconds=60,
+        ),
+        runtime_store=store,
+        python_executable=sys.executable,
+    )
+
+    executor_id = supervisor.start_executor_process(executor_id="executor-1")
+    child = supervisor._executor_children[executor_id]
+    assert child.stdin is not None
+    child.stdin.close()
+
+    try:
+        deadline = time.monotonic() + 5
+        while (
+            time.monotonic() < deadline
+            and executor_id in supervisor._executor_children
+        ):
+            supervisor.sweep_exited_executors()
+            time.sleep(0.05)
+    finally:
+        supervisor.close()
+
+    events = [
+        event
+        for event in store.list_runtime_events()
+        if event.event_type == "EXECUTOR_EXITED"
+    ]
+    stdout_log = (
+        tmp_path
+        / "runtime"
+        / "logs"
+        / "executors"
+        / f"{executor_id}.stdout.log"
+    )
+    stderr_log = stdout_log.with_name(f"{executor_id}.stderr.log")
+
+    assert executor_id not in supervisor._executor_children
+    assert len(events) == 1
+    assert events[0].payload["executor_id"] == executor_id
+    assert events[0].payload["exit_code"] == 0
+    assert events[0].payload["abnormal"] is False
+    assert stdout_log.exists()
+    assert stderr_log.exists()

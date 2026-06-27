@@ -9,10 +9,11 @@ from datetime import timedelta
 from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
+from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
-from flowweaver.protocols.enums import IPCMessageType
+from flowweaver.protocols.enums import EventType, IPCMessageType
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 
@@ -31,6 +32,7 @@ class Supervisor:
         self._event_router = event_router
         self._python_executable = python_executable or sys.executable
         self._children: dict[str, subprocess.Popen] = {}
+        self._executor_children: dict[str, subprocess.Popen] = {}
         self._runtime_event_paths: dict[str, Path] = {}
         self._runtime_event_offsets: dict[str, int] = {}
         self._stop_event = threading.Event()
@@ -102,6 +104,34 @@ class Supervisor:
         self._runtime_store.update_workflow_process_pid(process.process_id, child.pid)
         return process.process_id
 
+    def start_executor_process(self, *, executor_id: str | None = None) -> str:
+        self.start()
+        executor_id = executor_id or new_id()
+        command = [
+            self._python_executable,
+            "-m",
+            "flowweaver.node_executor.process",
+            "--executor-id",
+            executor_id,
+        ]
+        stdout_path, stderr_path = self._executor_process_log_paths(executor_id)
+        stdout_file = stdout_path.open("ab")
+        stderr_file = stderr_path.open("ab")
+        try:
+            child = subprocess.Popen(
+                command,
+                cwd=Path(__file__).resolve().parents[2],
+                env=self._child_environment(),
+                stdin=subprocess.PIPE,
+                stdout=stdout_file,
+                stderr=stderr_file,
+            )
+        finally:
+            stdout_file.close()
+            stderr_file.close()
+        self._executor_children[executor_id] = child
+        return executor_id
+
     def start(self) -> None:
         if self._maintenance_thread is not None and self._maintenance_thread.is_alive():
             return
@@ -122,6 +152,7 @@ class Supervisor:
             try:
                 self.drain_runtime_events()
                 self.sweep_exited_children()
+                self.sweep_exited_executors()
                 self.drain_runtime_events()
                 self.mark_lost_workflow_processes()
             except Exception:
@@ -158,6 +189,20 @@ class Supervisor:
                 ),
             )
             self._forget_runtime_event_channel(process_id)
+        for executor_id, child in list(self._executor_children.items()):
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=2)
+            self._executor_children.pop(executor_id, None)
+            self._publish_executor_exited(
+                executor_id=executor_id,
+                exit_code=child.returncode if child.returncode is not None else 1,
+                pid=child.pid,
+            )
 
     def stop_workflow_process(
         self,
@@ -215,6 +260,21 @@ class Supervisor:
                 exited.append(process)
         return exited
 
+    def sweep_exited_executors(self) -> list[str]:
+        exited: list[str] = []
+        for executor_id, child in list(self._executor_children.items()):
+            exit_code = child.poll()
+            if exit_code is None:
+                continue
+            self._executor_children.pop(executor_id, None)
+            self._publish_executor_exited(
+                executor_id=executor_id,
+                exit_code=exit_code,
+                pid=child.pid,
+            )
+            exited.append(executor_id)
+        return exited
+
     def mark_lost_workflow_processes(self) -> list[WorkflowProcess]:
         stale_before = utc_now() - timedelta(
             seconds=self._config.workflow_process_lost_threshold_seconds
@@ -259,6 +319,14 @@ class Supervisor:
         return (
             log_dir / f"{workflow_run_id}.stdout.log",
             log_dir / f"{workflow_run_id}.stderr.log",
+        )
+
+    def _executor_process_log_paths(self, executor_id: str) -> tuple[Path, Path]:
+        log_dir = self._config.resolved_log_dir() / "executors"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return (
+            log_dir / f"{executor_id}.stdout.log",
+            log_dir / f"{executor_id}.stderr.log",
         )
 
     def _workflow_process_runtime_event_path(
@@ -313,3 +381,24 @@ class Supervisor:
                 reason="WORKFLOW_PROCESS_EXITED_ABNORMALLY",
             )
         return process
+
+    def _publish_executor_exited(
+        self,
+        *,
+        executor_id: str,
+        exit_code: int,
+        pid: int | None,
+    ) -> RuntimeEvent | None:
+        event = EventModel(
+            event_type=EventType.EXECUTOR_EXITED,
+            payload={
+                "executor_id": executor_id,
+                "exit_code": exit_code,
+                "pid": pid,
+                "abnormal": exit_code != 0,
+            },
+        )
+        if self._event_router is not None:
+            return self._event_router.publish_event(event)
+        self._runtime_store.append_runtime_event(event)
+        return None
