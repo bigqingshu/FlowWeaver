@@ -259,8 +259,8 @@ def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:
     ]
 
 
-def test_start_non_empty_workflow_initializes_node_runs(tmp_path: Path) -> None:
-    client, store, _container = make_client(tmp_path)
+def test_start_non_empty_workflow_completes_with_fake_executor(tmp_path: Path) -> None:
+    client, store, container = make_client(tmp_path)
     response = client.post(
         "/api/v1/workflows",
         json={
@@ -301,10 +301,23 @@ def test_start_non_empty_workflow_initializes_node_runs(tmp_path: Path) -> None:
     )
 
     deadline = time.monotonic() + 5
+    loaded_run = store.get_workflow_run(run["workflow_run_id"])
     node_runs = []
     while time.monotonic() < deadline:
+        container.supervisor.sweep_exited_children()
+        container.supervisor.drain_runtime_events()
+        loaded_run = store.get_workflow_run(run["workflow_run_id"])
         node_runs = store.list_node_runs(run["workflow_run_id"])
-        if len(node_runs) == 2:
+        if loaded_run is not None and loaded_run.status == "SUCCEEDED":
+            break
+        time.sleep(0.05)
+
+    process = store.get_workflow_process_for_run(run["workflow_run_id"])
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        container.supervisor.sweep_exited_children()
+        process = store.get_workflow_process_for_run(run["workflow_run_id"])
+        if process is not None and process.status == "EXITED":
             break
         time.sleep(0.05)
 
@@ -316,24 +329,17 @@ def test_start_non_empty_workflow_initializes_node_runs(tmp_path: Path) -> None:
     )
 
     assert {node.node_instance_id: node.status for node in node_runs} == {
-        "source": "READY",
-        "transform": "WAITING_DEPENDENCY",
+        "source": "SUCCEEDED",
+        "transform": "SUCCEEDED",
     }
     assert [item["node_instance_id"] for item in api_node_runs] == [
         "source",
         "transform",
     ]
-    assert store.get_workflow_run(run["workflow_run_id"]).status == "RUNNING"
-    client.post(
-        f"/api/v1/runs/{run['workflow_run_id']}/cancel",
-        headers=auth_headers(),
-    )
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        loaded = store.get_workflow_run(run["workflow_run_id"])
-        if loaded is not None and loaded.status == "CANCELLED":
-            break
-        time.sleep(0.05)
+    assert loaded_run is not None
+    assert loaded_run.status == "SUCCEEDED"
+    assert process is not None
+    assert process.status == "EXITED"
 
 
 def test_cancel_run_marks_process_cancel_requested(tmp_path: Path) -> None:

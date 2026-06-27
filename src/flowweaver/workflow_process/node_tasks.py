@@ -89,7 +89,7 @@ class NodeTaskManager:
             node_version=node.node_version,
             attempt=queued.attempt,
             input_refs=input_refs or [],
-            config=config or {},
+            config=node.config if config is None else config,
             permission_handle_id=permission_handle_id,
             timeout_seconds=timeout_seconds,
         )

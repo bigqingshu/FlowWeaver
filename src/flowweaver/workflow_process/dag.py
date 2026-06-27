@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from typing import Any
 
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 
@@ -11,6 +12,7 @@ class DagNode:
     node_instance_id: str
     node_type: str
     node_version: str
+    config: dict[str, Any]
     upstream_node_ids: tuple[str, ...]
     downstream_node_ids: tuple[str, ...]
 
@@ -43,6 +45,7 @@ def build_workflow_dag(definition: WorkflowDefinitionModel) -> WorkflowDag:
             node_instance_id=node_id,
             node_type=node_by_id[node_id].node_type,
             node_version=node_by_id[node_id].node_version,
+            config=node_by_id[node_id].config,
             upstream_node_ids=tuple(sorted(upstream[node_id])),
             downstream_node_ids=tuple(sorted(downstream[node_id])),
         )

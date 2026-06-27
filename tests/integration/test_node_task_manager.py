@@ -39,6 +39,7 @@ def linear_definition() -> dict:
                 "node_instance_id": "source",
                 "node_type": "core.source",
                 "node_version": "1.0",
+                "config": {"rows": 3},
             },
             {
                 "node_instance_id": "transform",
@@ -183,6 +184,7 @@ def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
     assert task.workflow_process_id == process.process_id
     assert task.process_generation == 1
     assert task.input_refs == []
+    assert task.config == {"rows": 3}
     assert [event.event_type for event in store.list_runtime_events()] == [
         "NODE_QUEUED",
         "NODE_STARTED",

@@ -13,14 +13,17 @@ from flowweaver.engine.runtime_event_sink import (
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.protocols.enums import EventType, WorkflowRunStatus
+from flowweaver.node_executor import FakeNodeExecutor
+from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.node_tasks import NodeTaskManager
 
 _TERMINAL_WORKFLOW_STATUSES = frozenset(
     {
@@ -71,9 +74,11 @@ def run_workflow_process(
     heartbeat_interval_seconds: float,
     process_generation: int | None = None,
     event_sink: RuntimeEventSink | None = None,
+    executor_factory: Callable[[NodeTaskModel], FakeNodeExecutor] | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
+    executor_factory = executor_factory or (lambda _task: FakeNodeExecutor())
     if (
         process_generation is not None
         and not store.workflow_run_is_owned_by(
@@ -151,6 +156,7 @@ def run_workflow_process(
         process_generation=process_generation,
         dag=dag,
     )
+    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
 
     while True:
         heartbeat = store.record_workflow_process_heartbeat(
@@ -179,7 +185,18 @@ def run_workflow_process(
             return 0
         if _workflow_run_is_terminal(store, workflow_run_id):
             return 0
-        sleep_func(heartbeat_interval_seconds)
+        dispatched_count = _dispatch_ready_nodes(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=process_id,
+            process_generation=process_generation,
+            task_manager=task_manager,
+            executor_factory=executor_factory,
+        )
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            return 0
+        if dispatched_count == 0:
+            sleep_func(heartbeat_interval_seconds)
 
 
 def _workflow_run_is_terminal(
@@ -216,6 +233,46 @@ def _complete_empty_workflow(
         )
     )
     return 0
+
+
+def _dispatch_ready_nodes(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    task_manager: NodeTaskManager,
+    executor_factory: Callable[[NodeTaskModel], FakeNodeExecutor],
+) -> int:
+    if process_generation is None:
+        return 0
+    dispatched_count = 0
+    ready_nodes = [
+        node_run
+        for node_run in store.list_node_runs(workflow_run_id)
+        if node_run.status == NodeRunStatus.READY.value
+    ]
+    for node_run in ready_nodes:
+        task = task_manager.submit_ready_node(
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
+            node_instance_id=node_run.node_instance_id,
+        )
+        if task is None:
+            continue
+        executor = executor_factory(task)
+        accepted = task_manager.accept_task(
+            task_id=task.task_id,
+            executor_id=executor.executor_id,
+        )
+        if accepted is None:
+            continue
+        task_manager.apply_result(executor.execute(accepted))
+        dispatched_count += 1
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            break
+    return dispatched_count
 
 
 def _fail(
