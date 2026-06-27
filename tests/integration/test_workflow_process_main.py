@@ -8,6 +8,7 @@ from alembic.config import Config
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
+from flowweaver.node_executor import FakeNodeExecutor
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -167,6 +168,68 @@ def test_workflow_process_applies_injected_executor_failure_result(
         "NODE_FAILED",
         "WORKFLOW_FAILED",
     ]
+
+
+def test_workflow_process_fails_when_executor_result_is_rejected(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Rejected executor result workflow",
+        definition=definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: FakeNodeExecutor(
+            result_id="stale-generation-result",
+            process_generation=0,
+        ),
+    )
+
+    events = store.list_runtime_events()
+    queued_event = next(event for event in events if event.event_type == "NODE_QUEUED")
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    node_runs = {
+        node.node_instance_id: node
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+
+    assert exit_code == 0
+    assert loaded_run is not None
+    assert loaded_run.status == "FAILED"
+    assert loaded_run.error is not None
+    assert loaded_run.error["apply_status"] == "REJECTED_STALE_GENERATION"
+    assert node_runs["source"].status == "FAILED"
+    assert node_runs["source"].error is not None
+    assert node_runs["source"].error["apply_status"] == "REJECTED_STALE_GENERATION"
+    assert node_runs["transform"].status == "WAITING_DEPENDENCY"
+    assert store.get_node_task_result(
+        task_id=queued_event.payload["task_id"],
+        result_id="stale-generation-result",
+    ) is None
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
+    ]
+    assert events[-1].payload["apply_status"] == "REJECTED_STALE_GENERATION"
 
 
 def test_workflow_process_ipc_event_sink_does_not_write_runtime_events(

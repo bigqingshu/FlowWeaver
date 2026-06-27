@@ -16,13 +16,18 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorFactory
 from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
-from flowweaver.workflow_process.node_tasks import NodeTaskManager
+from flowweaver.workflow_process.node_tasks import (
+    NodeTaskApplyResult,
+    NodeTaskApplyStatus,
+    NodeTaskManager,
+)
 
 _TERMINAL_WORKFLOW_STATUSES = frozenset(
     {
@@ -30,6 +35,12 @@ _TERMINAL_WORKFLOW_STATUSES = frozenset(
         WorkflowRunStatus.FAILED.value,
         WorkflowRunStatus.CANCELLED.value,
         WorkflowRunStatus.ABORTED.value,
+    }
+)
+_HANDLED_NODE_TASK_APPLY_STATUSES = frozenset(
+    {
+        NodeTaskApplyStatus.APPLIED,
+        NodeTaskApplyStatus.ALREADY_APPLIED,
     }
 )
 
@@ -191,6 +202,7 @@ def run_workflow_process(
             process_generation=process_generation,
             task_manager=task_manager,
             executor_factory=executor_factory,
+            event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
             return 0
@@ -242,6 +254,7 @@ def _dispatch_ready_nodes(
     process_generation: int | None,
     task_manager: NodeTaskManager,
     executor_factory: NodeExecutorFactory,
+    event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
         return 0
@@ -267,11 +280,102 @@ def _dispatch_ready_nodes(
         )
         if accepted is None:
             continue
-        task_manager.apply_result(executor.execute(accepted))
+        result = executor.execute(accepted)
+        apply_result = task_manager.apply_result(result)
+        if apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES:
+            _fail_rejected_node_result(
+                store=store,
+                workflow_run_id=workflow_run_id,
+                workflow_process_id=workflow_process_id,
+                process_generation=process_generation,
+                event_sink=event_sink,
+                task=accepted,
+                result=result,
+                apply_result=apply_result,
+            )
         dispatched_count += 1
         if _workflow_run_is_terminal(store, workflow_run_id):
             break
     return dispatched_count
+
+
+def _fail_rejected_node_result(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    event_sink: RuntimeEventSink,
+    task: NodeTaskModel,
+    result: NodeTaskResultModel,
+    apply_result: NodeTaskApplyResult,
+) -> None:
+    if _workflow_run_is_terminal(store, workflow_run_id):
+        return
+    error = {
+        "message": "Node task result was rejected",
+        "apply_status": apply_result.status.value,
+        "task_id": task.task_id,
+        "result_id": result.result_id,
+        "node_instance_id": task.node_instance_id,
+    }
+    node_run = store.get_node_run(task.node_run_id)
+    failed_node = None
+    if node_run is not None:
+        failed_node = store.update_node_run_status(
+            task.node_run_id,
+            NodeRunStatus.FAILED,
+            finished_at=utc_now(),
+            error=error,
+            expected_state_version=node_run.state_version,
+            allowed_source_statuses=[
+                NodeRunStatus.QUEUED,
+                NodeRunStatus.RUNNING,
+                NodeRunStatus.LONG_RUNNING,
+            ],
+            owner_process_id=(
+                workflow_process_id if process_generation is not None else None
+            ),
+            process_generation=process_generation,
+        )
+    failed_run = store.update_workflow_run_status(
+        workflow_run_id,
+        WorkflowRunStatus.FAILED,
+        finished_at=utc_now(),
+        error=error,
+        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+        owner_process_id=(
+            workflow_process_id if process_generation is not None else None
+        ),
+        process_generation=process_generation,
+    )
+    if failed_node is not None:
+        event_sink.emit(
+            EventModel(
+                event_type=EventType.NODE_FAILED,
+                workflow_run_id=workflow_run_id,
+                node_run_id=task.node_run_id,
+                payload={
+                    "process_id": workflow_process_id,
+                    "task_id": task.task_id,
+                    "result_id": result.result_id,
+                    "apply_status": apply_result.status.value,
+                },
+            )
+        )
+    if failed_run is not None:
+        event_sink.emit(
+            EventModel(
+                event_type=EventType.WORKFLOW_FAILED,
+                workflow_run_id=workflow_run_id,
+                payload={
+                    "process_id": workflow_process_id,
+                    "task_id": task.task_id,
+                    "result_id": result.result_id,
+                    "apply_status": apply_result.status.value,
+                },
+            )
+        )
 
 
 def _fail(
