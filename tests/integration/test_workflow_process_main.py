@@ -5,11 +5,31 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
-from flowweaver.protocols.enums import IPCMessageType
+from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow_process.main import run_workflow_process
+
+
+class InjectedFailingExecutor:
+    executor_id = "injected-failing-executor"
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.FAILED,
+            error={"message": "injected failure"},
+            started_at=now,
+            finished_at=now,
+        )
 
 
 def migrate(database_path: Path) -> None:
@@ -103,6 +123,49 @@ def test_workflow_process_executes_ready_nodes_with_fake_executor(
         "NODE_STARTED",
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_applies_injected_executor_failure_result(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Injected executor workflow",
+        definition=definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedFailingExecutor(),
+    )
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    } == {"source": "FAILED", "transform": "WAITING_DEPENDENCY"}
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
     ]
 
 

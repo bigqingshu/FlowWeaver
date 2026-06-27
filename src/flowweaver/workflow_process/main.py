@@ -13,10 +13,9 @@ from flowweaver.engine.runtime_event_sink import (
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.node_executor import FakeNodeExecutor
+from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorFactory
 from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
@@ -74,7 +73,7 @@ def run_workflow_process(
     heartbeat_interval_seconds: float,
     process_generation: int | None = None,
     event_sink: RuntimeEventSink | None = None,
-    executor_factory: Callable[[NodeTaskModel], FakeNodeExecutor] | None = None,
+    executor_factory: NodeExecutorFactory | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -242,7 +241,7 @@ def _dispatch_ready_nodes(
     workflow_process_id: str,
     process_generation: int | None,
     task_manager: NodeTaskManager,
-    executor_factory: Callable[[NodeTaskModel], FakeNodeExecutor],
+    executor_factory: NodeExecutorFactory,
 ) -> int:
     if process_generation is None:
         return 0
