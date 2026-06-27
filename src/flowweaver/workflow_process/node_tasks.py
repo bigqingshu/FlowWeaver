@@ -147,16 +147,14 @@ class NodeTaskManager:
         return task
 
     def apply_result(self, result: NodeTaskResultModel) -> NodeTaskApplyResult:
-        if (
-            self._store.get_node_task_result(
-                task_id=result.task_id,
-                result_id=result.result_id,
-            )
-            is not None
-        ):
+        existing_result = self._store.get_node_task_result(
+            task_id=result.task_id,
+            result_id=result.result_id,
+        )
+        if existing_result is not None:
             return NodeTaskApplyResult(
                 NodeTaskApplyStatus.ALREADY_APPLIED,
-                node_run_id=result.node_run_id,
+                node_run_id=existing_result.node_run_id,
             )
         task = self._store.get_node_task(result.task_id)
         if task is None or task.node_run_id != result.node_run_id:

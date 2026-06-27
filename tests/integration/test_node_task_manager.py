@@ -213,14 +213,29 @@ def test_success_result_is_idempotent_and_advances_downstream(
         workflow_run_id=run.workflow_run_id,
         node_instance_id="transform",
     )
-    second = manager.apply_result(result)
+    duplicate = result.model_copy(update={"node_run_id": "tampered-node-run"})
+    second = manager.apply_result(duplicate)
+    source_after_duplicate = store.get_node_run(task.node_run_id)
+    transform_after_duplicate = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
 
     assert first.status == NodeTaskApplyStatus.APPLIED
     assert second.status == NodeTaskApplyStatus.ALREADY_APPLIED
+    assert second.node_run_id == result.node_run_id
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) == result
     assert source is not None
     assert source.status == "SUCCEEDED"
     assert transform is not None
     assert transform.status == "READY"
+    assert source_after_duplicate is not None
+    assert source_after_duplicate.state_version == source.state_version
+    assert transform_after_duplicate is not None
+    assert transform_after_duplicate.state_version == transform.state_version
     assert len(store.list_runtime_events()) == event_count
 
 
@@ -237,6 +252,9 @@ def test_stale_and_mismatched_results_are_rejected(tmp_path: Path) -> None:
     )
     executor = FakeNodeExecutor(executor_id="executor-1")
     base = executor.execute(task)
+    event_count = len(store.list_runtime_events())
+    node_before_rejections = store.get_node_run(task.node_run_id)
+    assert node_before_rejections is not None
 
     stale_attempt = manager.apply_result(
         base.model_copy(update={"result_id": "attempt-result", "attempt": 0})
@@ -253,7 +271,23 @@ def test_stale_and_mismatched_results_are_rejected(tmp_path: Path) -> None:
     assert stale_attempt.status == NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT
     assert stale_generation.status == NodeTaskApplyStatus.REJECTED_STALE_GENERATION
     assert wrong_executor.status == NodeTaskApplyStatus.REJECTED_EXECUTOR_MISMATCH
-    assert store.get_node_run(task.node_run_id).status == "RUNNING"
+    assert store.get_node_task_result(
+        task_id=task.task_id,
+        result_id="attempt-result",
+    ) is None
+    assert store.get_node_task_result(
+        task_id=task.task_id,
+        result_id="generation-result",
+    ) is None
+    assert store.get_node_task_result(
+        task_id=task.task_id,
+        result_id="executor-result",
+    ) is None
+    node_after_rejections = store.get_node_run(task.node_run_id)
+    assert node_after_rejections is not None
+    assert node_after_rejections.status == "RUNNING"
+    assert node_after_rejections.state_version == node_before_rejections.state_version
+    assert len(store.list_runtime_events()) == event_count
 
 
 def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
@@ -270,12 +304,23 @@ def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
     executor = FakeNodeExecutor(executor_id="executor-1")
     first = executor.execute(task)
     assert manager.apply_result(first).status == NodeTaskApplyStatus.APPLIED
+    event_count = len(store.list_runtime_events())
+    terminal_node = store.get_node_run(task.node_run_id)
+    assert terminal_node is not None
     late = executor.execute(task).model_copy(update={"result_id": "late-result"})
 
     rejected = manager.apply_result(late)
 
     assert rejected.status == NodeTaskApplyStatus.REJECTED_NODE_TERMINAL
-    assert store.get_node_run(task.node_run_id).status == "SUCCEEDED"
+    assert store.get_node_task_result(
+        task_id=task.task_id,
+        result_id="late-result",
+    ) is None
+    node_after_late_result = store.get_node_run(task.node_run_id)
+    assert node_after_late_result is not None
+    assert node_after_late_result.status == "SUCCEEDED"
+    assert node_after_late_result.state_version == terminal_node.state_version
+    assert len(store.list_runtime_events()) == event_count
 
 
 def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
