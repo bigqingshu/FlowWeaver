@@ -4,7 +4,10 @@ from io import StringIO
 
 from flowweaver.common.time import utc_now
 from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorProcess
-from flowweaver.node_executor.process import run_node_executor_process
+from flowweaver.node_executor.process import (
+    EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE,
+    run_node_executor_process,
+)
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskSubmitPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -167,6 +170,51 @@ def test_node_executor_process_emits_task_heartbeat_and_progress() -> None:
     }
 
 
+def test_node_executor_process_emits_failed_envelope_when_executor_raises() -> None:
+    task = make_task()
+    process_ref: list[NodeExecutorProcess] = []
+
+    class RaisingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            process_ref[0].emit_task_heartbeat(task)
+            raise RuntimeError("boom")
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: RaisingExecutor(),
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, heartbeat, failed = process.handle_envelope(envelope)
+    after_failure = process.heartbeat_envelope()
+
+    assert [item.message_type for item in (accepted, heartbeat, failed)] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_FAILED,
+    ]
+    assert failed.correlation_id == envelope.message_id
+    assert failed.payload["error_type"] == "RuntimeError"
+    assert failed.payload["result"]["task_id"] == task.task_id
+    assert failed.payload["result"]["status"] == "FAILED"
+    assert failed.payload["result"]["error"] == {
+        "message": "boom",
+        "error_type": "RuntimeError",
+    }
+    assert after_failure.payload == {
+        "executor_id": "executor-1",
+        "active_task_ids": [],
+    }
+
+
 def test_node_executor_process_jsonl_loop_emits_ready_and_failed_result() -> None:
     task = make_task()
     envelope = IPCEnvelope(
@@ -204,3 +252,27 @@ def test_node_executor_process_jsonl_loop_emits_ready_and_failed_result() -> Non
     assert messages[2].payload["result"]["error"] == {
         "message": "injected failure"
     }
+
+
+def test_node_executor_process_jsonl_loop_returns_nonzero_for_invalid_input() -> None:
+    stdin = StringIO("{not-json}\n")
+    stdout = StringIO()
+    stderr = StringIO()
+
+    exit_code = run_node_executor_process(
+        executor_id="executor-1",
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    messages = [
+        IPCEnvelope.model_validate_json(line)
+        for line in stdout.getvalue().splitlines()
+    ]
+    assert exit_code == EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE
+    assert [message.message_type for message in messages] == [
+        IPCMessageType.EXECUTOR_READY,
+    ]
+    assert "IPC_INPUT_ERROR" in stderr.getvalue()
+    assert "Traceback" not in stderr.getvalue()

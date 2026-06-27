@@ -4,18 +4,22 @@ import argparse
 import sys
 from typing import TextIO
 
+from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
 from flowweaver.node_executor.fake import FakeNodeExecutor
-from flowweaver.protocols.enums import IPCMessageType
+from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
     NodeTaskCompletedPayload,
+    NodeTaskFailedPayload,
     NodeTaskHeartbeatPayload,
     NodeTaskProgressPayload,
     NodeTaskSubmitPayload,
 )
-from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+
+EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE = 2
 
 
 class NodeExecutorProcess:
@@ -142,6 +146,23 @@ class NodeExecutorProcess:
         try:
             result = executor.execute(task)
             task_events = tuple(self._pending_task_events)
+        except Exception as exc:
+            task_events = tuple(self._pending_task_events)
+            failed = IPCEnvelope(
+                message_type=IPCMessageType.NODE_TASK_FAILED,
+                workflow_run_id=task.workflow_run_id,
+                node_run_id=task.node_run_id,
+                correlation_id=envelope.message_id,
+                payload=NodeTaskFailedPayload(
+                    result=_failed_task_result(
+                        task,
+                        executor_id=self.executor_id,
+                        error=exc,
+                    ),
+                    error_type=type(exc).__name__,
+                ).model_dump(mode="json"),
+            )
+            return (accepted, *task_events, failed)
         finally:
             self._active_task_ids.discard(task.task_id)
             self._active_task_correlations.pop(task.task_id, None)
@@ -161,10 +182,12 @@ def run_node_executor_process(
     executor_id: str,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
     executor_factory: NodeExecutorFactory | None = None,
 ) -> int:
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
+    stderr = stderr or sys.stderr
     process = NodeExecutorProcess(
         executor_id=executor_id,
         executor_factory=executor_factory,
@@ -173,8 +196,13 @@ def run_node_executor_process(
     for line in stdin:
         if not line.strip():
             continue
-        envelope = IPCEnvelope.model_validate_json(line)
-        for response in process.handle_envelope(envelope):
+        try:
+            envelope = IPCEnvelope.model_validate_json(line)
+            responses = process.handle_envelope(envelope)
+        except ValueError as exc:
+            _write_process_error(stderr, "IPC_INPUT_ERROR", exc)
+            return EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE
+        for response in responses:
             _write_envelope(stdout, response)
     return 0
 
@@ -190,6 +218,34 @@ def _write_envelope(stream: TextIO, envelope: IPCEnvelope) -> None:
     stream.write(envelope.model_dump_json())
     stream.write("\n")
     stream.flush()
+
+
+def _write_process_error(stream: TextIO, error_code: str, error: Exception) -> None:
+    stream.write(f"{error_code}: {type(error).__name__}: {error}\n")
+    stream.flush()
+
+
+def _failed_task_result(
+    task: NodeTaskModel,
+    *,
+    executor_id: str,
+    error: Exception,
+) -> NodeTaskResultModel:
+    now = utc_now()
+    return NodeTaskResultModel(
+        task_id=task.task_id,
+        node_run_id=task.node_run_id,
+        attempt=task.attempt,
+        executor_id=executor_id,
+        process_generation=task.process_generation,
+        status=NodeResultStatus.FAILED,
+        error={
+            "message": str(error),
+            "error_type": type(error).__name__,
+        },
+        started_at=now,
+        finished_at=now,
+    )
 
 
 def _exit() -> None:

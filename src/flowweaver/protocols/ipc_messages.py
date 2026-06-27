@@ -46,3 +46,8 @@ class NodeTaskProgressPayload(StrictModel):
 
 class NodeTaskCompletedPayload(StrictModel):
     result: NodeTaskResultModel
+
+
+class NodeTaskFailedPayload(StrictModel):
+    result: NodeTaskResultModel
+    error_type: str
