@@ -42,6 +42,9 @@
 - EngineHost Bootstrap、ServiceContainer、单实例锁与本地 token
 - RuntimeEvent 持久化、EventRouter 与 WebSocket 广播
 - API view 数据、统一 response_model 与本地 token 校验
+- TableLeaseManager 最小 READ/WRITE 租约接口
+- NodeRun/WorkflowRun `state_version` 竞争保护验收
+- Ruff、mypy 与 Windows CI
 
 尚未实现 WorkflowRunProcess、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
 
@@ -69,6 +72,13 @@ py -3.12 -m pip install uv
 
 ```powershell
 .\python312\python.exe -m pytest
+```
+
+静态检查：
+
+```powershell
+.\python312\python.exe -m ruff check src tests migrations
+.\python312\python.exe -m mypy
 ```
 
 对指定 SQLite 元数据库执行迁移：

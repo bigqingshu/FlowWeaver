@@ -12,6 +12,7 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    NodeRunStatus,
     TableMutability,
     TableRole,
     TableScope,
@@ -56,6 +57,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "shared_publication_members",
         "input_snapshots",
         "read_leases",
+        "table_leases",
         "audit_events",
         "runtime_events",
     }.issubset(table_names(database_path))
@@ -176,6 +178,53 @@ def test_runtime_store_rejects_stale_workflow_run_state(tmp_path: Path) -> None:
     assert first.state_version == 1
     assert stale is None
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+
+
+def test_runtime_store_rejects_stale_node_run_terminal_update(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Node workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+    )
+
+    timed_out = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.TIMED_OUT,
+        expected_state_version=0,
+    )
+    stale_success = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        expected_state_version=0,
+    )
+    illegal_success = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        expected_state_version=1,
+    )
+
+    assert timed_out is not None
+    assert timed_out.state_version == 1
+    assert stale_success is None
+    assert illegal_success is None
+    loaded = store.get_node_run(node.node_run_id)
+    assert loaded is not None
+    assert loaded.status == NodeRunStatus.TIMED_OUT.value
 
 
 def test_sqlite_pragmas_enable_foreign_keys_and_wal(tmp_path: Path) -> None:

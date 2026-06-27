@@ -85,3 +85,47 @@ class WorkflowRunData(StrictModel):
 
 class WorkflowRunView(WorkflowRunData):
     pass
+
+
+class NodeRunView(StrictModel):
+    node_run_id: str
+    workflow_run_id: str
+    node_instance_id: str
+    node_type: str
+    status: str
+    state_version: int
+    executor_id: str | None
+    progress: float | None
+    current_stage: str | None
+    attempt: int
+    started_at: datetime | None
+    finished_at: datetime | None
+    last_heartbeat: datetime | None
+    error: dict[str, Any] | None
+
+
+class TableRefSummaryView(StrictModel):
+    table_ref_id: str
+    workflow_run_id: str
+    node_run_id: str
+    logical_table_id: str
+    version: int
+    lifecycle_status: str
+
+
+class PublicationSummaryView(StrictModel):
+    publication_id: str
+    share_name: str
+    publication_version: int
+    status: str
+
+
+class RuntimeEventView(StrictModel):
+    event_id: str
+    sequence_number: int
+    event_version: str
+    event_type: str
+    timestamp: datetime
+    workflow_run_id: str | None
+    node_run_id: str | None
+    payload: dict[str, Any]

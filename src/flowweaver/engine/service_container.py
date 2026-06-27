@@ -6,6 +6,7 @@ from flowweaver.common.config import EngineConfig
 from flowweaver.common.instance_lock import InstanceLock
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeRegistry
 
 
@@ -14,6 +15,7 @@ class ServiceContainer:
     config: EngineConfig
     runtime_store: RuntimeStore
     event_router: EventRouter
+    table_lease_manager: TableLeaseManager
     node_registry: NodeRegistry
     instance_lock: InstanceLock | None = None
 

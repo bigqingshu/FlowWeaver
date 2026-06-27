@@ -50,6 +50,17 @@ class TableMutability(str, Enum):
     PUBLISHED_IMMUTABLE = "PUBLISHED_IMMUTABLE"
 
 
+class TableLeaseType(str, Enum):
+    READ = "READ"
+    WRITE = "WRITE"
+
+
+class TableLeaseStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    RELEASED = "RELEASED"
+    EXPIRED = "EXPIRED"
+
+
 class LifecycleStatus(str, Enum):
     STAGING = "STAGING"
     PUBLISHED = "PUBLISHED"

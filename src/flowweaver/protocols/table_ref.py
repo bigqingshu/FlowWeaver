@@ -47,5 +47,5 @@ class TableRefModel(StrictModel):
     created_at: datetime
 
     @property
-    def schema(self) -> list[FieldSchemaModel]:
+    def schema(self) -> list[FieldSchemaModel]:  # type: ignore[override]
         return self.schema_

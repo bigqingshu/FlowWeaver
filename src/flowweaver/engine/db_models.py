@@ -171,6 +171,26 @@ class ReadLeaseRecord(Base):
     released_at: Mapped[str | None] = mapped_column(Text)
 
 
+class TableLeaseRecord(Base):
+    __tablename__ = "table_leases"
+
+    lease_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    table_ref_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("data_refs.table_ref_id"),
+        nullable=False,
+        index=True,
+    )
+    lease_type: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    acquired_at: Mapped[str] = mapped_column(Text, nullable=False)
+    last_heartbeat_at: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    released_at: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class AuditEventRecord(Base):
     __tablename__ = "audit_events"
 

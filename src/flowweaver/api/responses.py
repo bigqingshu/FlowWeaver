@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 
 from flowweaver.common.ids import new_id
 from flowweaver.engine.runtime_store import (
+    NodeRun,
+    RuntimeEventLog,
     WorkflowDefinition,
     WorkflowRevision,
     WorkflowRun,
@@ -92,5 +94,35 @@ def _to_jsonable(value: Any) -> Any:
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,
             "error": value.error,
+        }
+    if isinstance(value, NodeRun):
+        return {
+            "node_run_id": value.node_run_id,
+            "workflow_run_id": value.workflow_run_id,
+            "node_instance_id": value.node_instance_id,
+            "node_type": value.node_type,
+            "status": value.status,
+            "state_version": value.state_version,
+            "executor_id": value.executor_id,
+            "progress": value.progress,
+            "current_stage": value.current_stage,
+            "attempt": value.attempt,
+            "started_at": value.started_at.isoformat() if value.started_at else None,
+            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
+            "last_heartbeat": (
+                value.last_heartbeat.isoformat() if value.last_heartbeat else None
+            ),
+            "error": value.error,
+        }
+    if isinstance(value, RuntimeEventLog):
+        return {
+            "event_id": value.event_id,
+            "sequence_number": value.sequence_number,
+            "event_version": value.event_version,
+            "event_type": value.event_type,
+            "timestamp": value.timestamp.isoformat(),
+            "workflow_run_id": value.workflow_run_id,
+            "node_run_id": value.node_run_id,
+            "payload": value.payload,
         }
     return value

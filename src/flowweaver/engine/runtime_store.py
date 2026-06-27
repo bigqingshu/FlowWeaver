@@ -17,13 +17,22 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
     DataRefRecord,
+    NodeRunRecord,
     RuntimeEventRecord,
     WorkflowDefinitionRecord,
     WorkflowRecord,
     WorkflowRevisionRecord,
     WorkflowRunRecord,
 )
-from flowweaver.protocols.enums import WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    NodeRunStatus,
+    TableMutability,
+    TableRole,
+    TableScope,
+    TableStorageKind,
+    WorkflowRunStatus,
+)
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -65,6 +74,36 @@ class WorkflowRun:
     started_at: datetime | None
     finished_at: datetime | None
     error: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class NodeRun:
+    node_run_id: str
+    workflow_run_id: str
+    node_instance_id: str
+    node_type: str
+    status: str
+    state_version: int
+    executor_id: str | None
+    progress: float | None
+    current_stage: str | None
+    attempt: int
+    started_at: datetime | None
+    finished_at: datetime | None
+    last_heartbeat: datetime | None
+    error: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class RuntimeEventLog:
+    event_id: str
+    sequence_number: int
+    event_version: str
+    event_type: str
+    timestamp: datetime
+    workflow_run_id: str | None
+    node_run_id: str | None
+    payload: dict[str, Any]
 
 
 class RuntimeStore:
@@ -317,6 +356,82 @@ class RuntimeStore:
             next_record = record
         return _workflow_run_from_record(next_record)
 
+    def create_node_run(
+        self,
+        *,
+        workflow_run_id: str,
+        node_instance_id: str,
+        node_type: str,
+        node_run_id: str | None = None,
+        status: NodeRunStatus = NodeRunStatus.PENDING,
+        executor_id: str | None = None,
+        attempt: int = 1,
+    ) -> NodeRun:
+        record = NodeRunRecord(
+            node_run_id=node_run_id or new_id(),
+            workflow_run_id=workflow_run_id,
+            node_instance_id=node_instance_id,
+            node_type=node_type,
+            status=status.value,
+            state_version=0,
+            executor_id=executor_id,
+            progress=None,
+            current_stage=None,
+            attempt=attempt,
+            started_at=None,
+            finished_at=None,
+            last_heartbeat=None,
+            error_json=None,
+        )
+        with self._session_factory.begin() as session:
+            session.add(record)
+        return _node_run_from_record(record)
+
+    def get_node_run(self, node_run_id: str) -> NodeRun | None:
+        with self._session_factory() as session:
+            record = session.get(NodeRunRecord, node_run_id)
+            if record is None:
+                return None
+            return _node_run_from_record(record)
+
+    def update_node_run_status(
+        self,
+        node_run_id: str,
+        status: NodeRunStatus,
+        *,
+        progress: float | None = None,
+        current_stage: str | None = None,
+        finished_at: datetime | None = None,
+        error: dict[str, Any] | None = None,
+        expected_state_version: int | None = None,
+    ) -> NodeRun | None:
+        next_record: NodeRunRecord | None = None
+        with self._session_factory.begin() as session:
+            record = session.get(NodeRunRecord, node_run_id)
+            if record is None:
+                return None
+            if (
+                expected_state_version is not None
+                and record.state_version != expected_state_version
+            ):
+                return None
+            if (
+                _is_terminal_node_status(record.status)
+                and record.status != status.value
+            ):
+                return None
+            record.status = status.value
+            record.state_version += 1
+            if progress is not None:
+                record.progress = progress
+            if current_stage is not None:
+                record.current_stage = current_stage
+            if finished_at is not None:
+                record.finished_at = _datetime_to_text(finished_at)
+            record.error_json = _json_dumps(error) if error is not None else None
+            next_record = record
+        return _node_run_from_record(next_record)
+
     def register_table_ref(self, table_ref: TableRefModel) -> None:
         with self._session_factory.begin() as session:
             session.add(_data_ref_from_model(table_ref))
@@ -345,6 +460,26 @@ class RuntimeStore:
                 )
             )
             return sequence_number
+
+    def list_runtime_events(
+        self,
+        *,
+        after_sequence_number: int | None = None,
+        limit: int = 100,
+    ) -> list[RuntimeEventLog]:
+        limit = max(1, min(limit, 1000))
+        statement = select(RuntimeEventRecord).order_by(
+            RuntimeEventRecord.sequence_number
+        )
+        if after_sequence_number is not None:
+            statement = statement.where(
+                RuntimeEventRecord.sequence_number > after_sequence_number
+            )
+        with self._session_factory() as session:
+            return [
+                _runtime_event_from_record(record)
+                for record in session.scalars(statement.limit(limit))
+            ]
 
     def dispose(self) -> None:
         self.engine.dispose()
@@ -399,6 +534,38 @@ def _workflow_run_from_record(record: WorkflowRunRecord) -> WorkflowRun:
     )
 
 
+def _node_run_from_record(record: NodeRunRecord) -> NodeRun:
+    return NodeRun(
+        node_run_id=record.node_run_id,
+        workflow_run_id=record.workflow_run_id,
+        node_instance_id=record.node_instance_id,
+        node_type=record.node_type,
+        status=record.status,
+        state_version=record.state_version,
+        executor_id=record.executor_id,
+        progress=record.progress,
+        current_stage=record.current_stage,
+        attempt=record.attempt,
+        started_at=_optional_datetime_from_text(record.started_at),
+        finished_at=_optional_datetime_from_text(record.finished_at),
+        last_heartbeat=_optional_datetime_from_text(record.last_heartbeat),
+        error=json.loads(record.error_json) if record.error_json else None,
+    )
+
+
+def _runtime_event_from_record(record: RuntimeEventRecord) -> RuntimeEventLog:
+    return RuntimeEventLog(
+        event_id=record.event_id,
+        sequence_number=record.sequence_number,
+        event_version=record.event_version,
+        event_type=record.event_type,
+        timestamp=_datetime_from_text(record.timestamp),
+        workflow_run_id=record.workflow_run_id,
+        node_run_id=record.node_run_id,
+        payload=json.loads(record.payload_json),
+    )
+
+
 def _json_dumps(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -440,10 +607,10 @@ def _data_ref_from_model(table_ref: TableRefModel) -> DataRefRecord:
 def _table_ref_from_record(record: DataRefRecord) -> TableRefModel:
     return TableRefModel(
         table_ref_id=record.table_ref_id,
-        role=record.role,
-        storage_kind=record.storage_kind,
-        scope=record.scope,
-        mutability=record.mutability,
+        role=TableRole(record.role),
+        storage_kind=TableStorageKind(record.storage_kind),
+        scope=TableScope(record.scope),
+        mutability=TableMutability(record.mutability),
         provider_id=record.provider_id,
         resource_profile_id=record.resource_profile_id,
         mount_id=record.mount_id,
@@ -456,7 +623,7 @@ def _table_ref_from_record(record: DataRefRecord) -> TableRefModel:
         schema_fingerprint=record.schema_fingerprint,
         version=record.version,
         capabilities=set(json.loads(record.capabilities_json)),
-        lifecycle_status=record.lifecycle_status,
+        lifecycle_status=LifecycleStatus(record.lifecycle_status),
         created_by_workflow_run_id=record.workflow_run_id,
         created_by_node_run_id=record.node_run_id,
         created_at=_datetime_from_text(record.created_at),
@@ -477,3 +644,13 @@ def _datetime_from_text(value: str) -> datetime:
 
 def _optional_datetime_from_text(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value is not None else None
+
+
+def _is_terminal_node_status(status: str) -> bool:
+    return status in {
+        NodeRunStatus.TIMED_OUT.value,
+        NodeRunStatus.SUCCEEDED.value,
+        NodeRunStatus.FAILED.value,
+        NodeRunStatus.CANCELLED.value,
+        NodeRunStatus.SKIPPED.value,
+    }

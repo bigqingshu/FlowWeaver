@@ -141,10 +141,10 @@ def validate_workflow_definition(
             indegree[connection.target_node_id] += 1
 
     for node in model.nodes:
-        definition = definitions.get(node.node_instance_id)
-        if definition is None:
+        node_definition = definitions.get(node.node_instance_id)
+        if node_definition is None:
             continue
-        for port in definition.input_ports:
+        for port in node_definition.input_ports:
             port_key = (node.node_instance_id, port.name)
             if port.required and port_key not in incoming_ports:
                 errors.append(

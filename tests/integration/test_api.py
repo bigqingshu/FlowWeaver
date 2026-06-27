@@ -12,8 +12,10 @@ from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeRegistry
-from flowweaver.protocols.enums import WorkflowRunStatus
+from flowweaver.protocols.enums import EventType, WorkflowRunStatus
+from flowweaver.protocols.events import EventModel
 
 TOKEN = "test-token"
 
@@ -38,6 +40,7 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
         ),
         runtime_store=store,
         event_router=EventRouter(store),
+        table_lease_manager=TableLeaseManager(store.engine),
         node_registry=NodeRegistry(),
     )
     return TestClient(create_app(container)), store, container
@@ -200,6 +203,26 @@ def test_websocket_events_connects(tmp_path: Path) -> None:
     assert event["event_id"]
     assert event["sequence_number"] == 1
     assert event["payload"] == {"status": "connected"}
+
+
+def test_runtime_events_can_be_restored_through_rest(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    store.append_runtime_event(
+        EventModel(event_type=EventType.WORKFLOW_STARTED, payload={"run": "1"})
+    )
+    store.append_runtime_event(
+        EventModel(event_type=EventType.NODE_STARTED, payload={"node": "a"})
+    )
+
+    response = client.get(
+        "/api/v1/events",
+        params={"after_sequence_number": 1},
+        headers=auth_headers(),
+    )
+    data = response_data(response)
+
+    assert [event["sequence_number"] for event in data] == [2]
+    assert data[0]["event_type"] == "NODE_STARTED"
 
 
 def test_create_app_can_migrate_default_store(tmp_path: Path) -> None:
