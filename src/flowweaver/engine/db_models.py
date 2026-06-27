@@ -54,11 +54,15 @@ class WorkflowRunRecord(Base):
     workflow_run_id: Mapped[str] = mapped_column(Text, primary_key=True)
     workflow_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("workflow_definitions.workflow_id"),
+        ForeignKey("workflows.workflow_id"),
         nullable=False,
         index=True,
     )
-    revision_id: Mapped[str | None] = mapped_column(Text, index=True)
+    revision_id: Mapped[str | None] = mapped_column(
+        Text,
+        ForeignKey("workflow_revisions.revision_id"),
+        index=True,
+    )
     workflow_version: Mapped[int] = mapped_column(Integer, nullable=False)
     definition_hash: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, index=True)

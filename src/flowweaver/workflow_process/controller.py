@@ -75,6 +75,7 @@ def recover_ready_nodes(
                 node_run.node_run_id,
                 NodeRunStatus.READY,
                 expected_state_version=node_run.state_version,
+                allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
             )
             if ready is not None:
                 newly_ready.append(ready)
@@ -101,6 +102,10 @@ def apply_node_success(
         NodeRunStatus.SUCCEEDED,
         finished_at=utc_now(),
         expected_state_version=node_run.state_version,
+        allowed_source_statuses=[
+            NodeRunStatus.RUNNING,
+            NodeRunStatus.LONG_RUNNING,
+        ],
     )
     if completed is None:
         return NodeAdvanceResult(None, (), None)
@@ -148,6 +153,7 @@ def _complete_workflow_if_all_nodes_succeeded(
         WorkflowRunStatus.SUCCEEDED,
         finished_at=utc_now(),
         expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
     )
     if completed is not None:
         store.append_runtime_event(

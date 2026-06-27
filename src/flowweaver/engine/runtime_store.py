@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import func, select
-from sqlalchemy.engine import Engine
+from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult, Engine
 from sqlalchemy.orm import sessionmaker
 
 from flowweaver.common.database import create_sqlite_engine, sqlite_url
@@ -120,6 +120,54 @@ class RuntimeEventLog:
     workflow_run_id: str | None
     node_run_id: str | None
     payload: dict[str, Any]
+
+
+_TERMINAL_WORKFLOW_STATUSES = frozenset(
+    {
+        WorkflowRunStatus.SUCCEEDED.value,
+        WorkflowRunStatus.FAILED.value,
+        WorkflowRunStatus.CANCELLED.value,
+        WorkflowRunStatus.ABORTED.value,
+    }
+)
+_TERMINAL_NODE_STATUSES = frozenset(
+    {
+        NodeRunStatus.TIMED_OUT.value,
+        NodeRunStatus.SUCCEEDED.value,
+        NodeRunStatus.FAILED.value,
+        NodeRunStatus.CANCELLED.value,
+        NodeRunStatus.SKIPPED.value,
+    }
+)
+_WORKFLOW_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
+    WorkflowRunStatus.RUNNING.value: (WorkflowRunStatus.PENDING.value,),
+    WorkflowRunStatus.SUCCEEDED.value: (WorkflowRunStatus.RUNNING.value,),
+    WorkflowRunStatus.FAILED.value: (WorkflowRunStatus.RUNNING.value,),
+    WorkflowRunStatus.CANCELLED.value: (WorkflowRunStatus.RUNNING.value,),
+    WorkflowRunStatus.ABORTED.value: (WorkflowRunStatus.RUNNING.value,),
+}
+_NODE_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
+    NodeRunStatus.READY.value: (NodeRunStatus.WAITING_DEPENDENCY.value,),
+    NodeRunStatus.QUEUED.value: (NodeRunStatus.READY.value,),
+    NodeRunStatus.RUNNING.value: (NodeRunStatus.QUEUED.value,),
+    NodeRunStatus.LONG_RUNNING.value: (NodeRunStatus.RUNNING.value,),
+    NodeRunStatus.SUCCEEDED.value: (
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+    ),
+    NodeRunStatus.FAILED.value: (
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+    ),
+    NodeRunStatus.CANCELLED.value: (
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+    ),
+    NodeRunStatus.TIMED_OUT.value: (
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+    ),
+}
 
 
 class RuntimeStore:
@@ -293,20 +341,28 @@ class RuntimeStore:
         status: WorkflowRunStatus = WorkflowRunStatus.PENDING,
         started_at: datetime | None = None,
     ) -> WorkflowRun:
+        if workflow_version is not None:
+            raise ValueError("Workflow run version is derived from revision")
         with self._session_factory.begin() as session:
+            workflow = session.get(WorkflowRecord, workflow_id)
+            if workflow is None:
+                raise ValueError(f"Workflow not found: {workflow_id}")
             if revision_id is None:
-                workflow = session.get(WorkflowRecord, workflow_id)
-                if workflow is None or workflow.current_revision_id is None:
+                if workflow.current_revision_id is None:
                     raise ValueError(f"Workflow not found: {workflow_id}")
                 revision_id = workflow.current_revision_id
             revision = session.get(WorkflowRevisionRecord, revision_id)
             if revision is None:
                 raise ValueError(f"Workflow revision not found: {revision_id}")
+            if revision.workflow_id != workflow_id:
+                raise ValueError(
+                    f"Workflow revision {revision_id} does not belong to {workflow_id}"
+                )
             record = WorkflowRunRecord(
                 workflow_run_id=workflow_run_id or new_id(),
                 workflow_id=workflow_id,
                 revision_id=revision.revision_id,
-                workflow_version=workflow_version or revision.version,
+                workflow_version=revision.version,
                 definition_hash=revision.definition_hash,
                 status=status.value,
                 state_version=0,
@@ -355,23 +411,37 @@ class RuntimeStore:
         finished_at: datetime | None = None,
         error: dict[str, Any] | None = None,
         expected_state_version: int | None = None,
+        allowed_source_statuses: Iterable[WorkflowRunStatus | str] | None = None,
     ) -> WorkflowRun | None:
-        next_record: WorkflowRunRecord | None = None
         with self._session_factory.begin() as session:
+            source_statuses = (
+                _workflow_run_status_values(allowed_source_statuses)
+                if allowed_source_statuses is not None
+                else list(_WORKFLOW_RUN_STATUS_SOURCES.get(status.value, ()))
+            )
+            statement = (
+                update(WorkflowRunRecord)
+                .where(WorkflowRunRecord.workflow_run_id == workflow_run_id)
+                .where(WorkflowRunRecord.status.notin_(_TERMINAL_WORKFLOW_STATUSES))
+                .values(
+                    status=status.value,
+                    state_version=WorkflowRunRecord.state_version + 1,
+                    finished_at=_optional_datetime_to_text(finished_at),
+                    error_json=_json_dumps(error) if error is not None else None,
+                )
+            )
+            if expected_state_version is not None:
+                statement = statement.where(
+                    WorkflowRunRecord.state_version == expected_state_version
+                )
+            statement = statement.where(WorkflowRunRecord.status.in_(source_statuses))
+            result = cast(CursorResult[Any], session.execute(statement))
+            if result.rowcount != 1:
+                return None
             record = session.get(WorkflowRunRecord, workflow_run_id)
             if record is None:
                 return None
-            if (
-                expected_state_version is not None
-                and record.state_version != expected_state_version
-            ):
-                return None
-            record.status = status.value
-            record.state_version += 1
-            record.finished_at = _optional_datetime_to_text(finished_at)
-            record.error_json = _json_dumps(error) if error is not None else None
-            next_record = record
-        return _workflow_run_from_record(next_record)
+            return _workflow_run_from_record(record)
 
     def create_workflow_process(
         self,
@@ -593,33 +663,44 @@ class RuntimeStore:
         finished_at: datetime | None = None,
         error: dict[str, Any] | None = None,
         expected_state_version: int | None = None,
+        allowed_source_statuses: Iterable[NodeRunStatus | str] | None = None,
     ) -> NodeRun | None:
-        next_record: NodeRunRecord | None = None
         with self._session_factory.begin() as session:
+            source_statuses = (
+                _node_run_status_values(allowed_source_statuses)
+                if allowed_source_statuses is not None
+                else list(_NODE_RUN_STATUS_SOURCES.get(status.value, ()))
+            )
+            values: dict[str, Any] = {
+                "status": status.value,
+                "state_version": NodeRunRecord.state_version + 1,
+                "error_json": _json_dumps(error) if error is not None else None,
+            }
+            if progress is not None:
+                values["progress"] = progress
+            if current_stage is not None:
+                values["current_stage"] = current_stage
+            if finished_at is not None:
+                values["finished_at"] = _datetime_to_text(finished_at)
+
+            statement = (
+                update(NodeRunRecord)
+                .where(NodeRunRecord.node_run_id == node_run_id)
+                .where(NodeRunRecord.status.notin_(_TERMINAL_NODE_STATUSES))
+                .values(**values)
+            )
+            if expected_state_version is not None:
+                statement = statement.where(
+                    NodeRunRecord.state_version == expected_state_version
+                )
+            statement = statement.where(NodeRunRecord.status.in_(source_statuses))
+            result = cast(CursorResult[Any], session.execute(statement))
+            if result.rowcount != 1:
+                return None
             record = session.get(NodeRunRecord, node_run_id)
             if record is None:
                 return None
-            if (
-                expected_state_version is not None
-                and record.state_version != expected_state_version
-            ):
-                return None
-            if (
-                _is_terminal_node_status(record.status)
-                and record.status != status.value
-            ):
-                return None
-            record.status = status.value
-            record.state_version += 1
-            if progress is not None:
-                record.progress = progress
-            if current_stage is not None:
-                record.current_stage = current_stage
-            if finished_at is not None:
-                record.finished_at = _datetime_to_text(finished_at)
-            record.error_json = _json_dumps(error) if error is not None else None
-            next_record = record
-        return _node_run_from_record(next_record)
+            return _node_run_from_record(record)
 
     def register_table_ref(self, table_ref: TableRefModel) -> None:
         with self._session_factory.begin() as session:
@@ -850,11 +931,17 @@ def _optional_datetime_from_text(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value is not None else None
 
 
-def _is_terminal_node_status(status: str) -> bool:
-    return status in {
-        NodeRunStatus.TIMED_OUT.value,
-        NodeRunStatus.SUCCEEDED.value,
-        NodeRunStatus.FAILED.value,
-        NodeRunStatus.CANCELLED.value,
-        NodeRunStatus.SKIPPED.value,
-    }
+def _workflow_run_status_values(
+    statuses: Iterable[WorkflowRunStatus | str],
+) -> list[str]:
+    return [
+        status.value if isinstance(status, WorkflowRunStatus) else status
+        for status in statuses
+    ]
+
+
+def _node_run_status_values(statuses: Iterable[NodeRunStatus | str]) -> list[str]:
+    return [
+        status.value if isinstance(status, NodeRunStatus) else status
+        for status in statuses
+    ]

@@ -77,6 +77,7 @@ def run_workflow_process(
             workflow_run_id,
             WorkflowRunStatus.RUNNING,
             expected_state_version=current_run.state_version,
+            allowed_source_statuses=[WorkflowRunStatus.PENDING],
         )
     store.append_runtime_event(
         EventModel(
@@ -111,6 +112,7 @@ def run_workflow_process(
                 workflow_run_id,
                 WorkflowRunStatus.CANCELLED,
                 finished_at=utc_now(),
+                allowed_source_statuses=[WorkflowRunStatus.RUNNING],
             )
             store.append_runtime_event(
                 EventModel(
@@ -146,6 +148,7 @@ def _complete_empty_workflow(
         WorkflowRunStatus.SUCCEEDED,
         finished_at=utc_now(),
         expected_state_version=current.state_version if current is not None else None,
+        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
     )
     store.append_runtime_event(
         EventModel(
@@ -169,6 +172,10 @@ def _fail(
         WorkflowRunStatus.FAILED,
         finished_at=utc_now(),
         error={"message": message},
+        allowed_source_statuses=[
+            WorkflowRunStatus.PENDING,
+            WorkflowRunStatus.RUNNING,
+        ],
     )
     store.mark_workflow_process_exited(
         process_id,

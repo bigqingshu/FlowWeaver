@@ -7,7 +7,7 @@ from alembic.config import Config
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
-from flowweaver.protocols.enums import NodeRunStatus
+from flowweaver.protocols.enums import NodeRunStatus, WorkflowRunStatus
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     apply_node_success,
@@ -67,12 +67,43 @@ def create_run(store: RuntimeStore):
         workflow_id=workflow.workflow_id,
         workflow_run_id="run-1",
     )
+    store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
     process = store.create_workflow_process(
         workflow_run_id=run.workflow_run_id,
         process_id="process-1",
     )
     dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition()))
     return run, process, dag
+
+
+def mark_node_running(
+    store: RuntimeStore,
+    *,
+    workflow_run_id: str,
+    node_instance_id: str,
+) -> None:
+    node = store.get_node_run_for_instance(
+        workflow_run_id=workflow_run_id,
+        node_instance_id=node_instance_id,
+    )
+    assert node is not None
+    queued = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.QUEUED,
+        expected_state_version=node.state_version,
+    )
+    assert queued is not None
+    running = store.update_node_run_status(
+        queued.node_run_id,
+        NodeRunStatus.RUNNING,
+        expected_state_version=queued.state_version,
+    )
+    assert running is not None
 
 
 def test_controller_initializes_node_runs(tmp_path: Path) -> None:
@@ -103,6 +134,11 @@ def test_node_success_advances_downstream_to_ready(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
+    )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
     )
 
     result = apply_node_success(
@@ -137,7 +173,7 @@ def test_recover_ready_nodes_uses_persisted_state(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         node_instance_id="source",
         node_type="core.source",
-        status=NodeRunStatus.READY,
+        status=NodeRunStatus.RUNNING,
     )
     store.create_node_run(
         workflow_run_id=run.workflow_run_id,
@@ -172,12 +208,22 @@ def test_all_successful_nodes_complete_workflow(tmp_path: Path) -> None:
         process_id=process.process_id,
         dag=dag,
     )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
     apply_node_success(
         store,
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
         node_instance_id="source",
+    )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
     )
 
     result = apply_node_success(

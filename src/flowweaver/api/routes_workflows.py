@@ -117,6 +117,7 @@ def start_workflow_run(
             WorkflowRunStatus.FAILED,
             error={"message": str(exc)},
             expected_state_version=run.state_version,
+            allowed_source_statuses=[WorkflowRunStatus.PENDING],
         )
         return ok_response(request, failed or run, status_code=201)
     return ok_response(request, run, status_code=201)

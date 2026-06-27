@@ -42,6 +42,12 @@ def table_names(database_path: Path) -> set[str]:
     return {row[0] for row in rows}
 
 
+def foreign_keys(database_path: Path, table_name: str) -> set[tuple[str, str, str]]:
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(f"PRAGMA foreign_key_list({table_name})").fetchall()
+    return {(row[3], row[2], row[4]) for row in rows}
+
+
 def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "metadata.db"
 
@@ -63,6 +69,17 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "audit_events",
         "runtime_events",
     }.issubset(table_names(database_path))
+
+
+def test_workflow_run_foreign_keys_target_canonical_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+
+    migrate(database_path)
+
+    assert {
+        ("workflow_id", "workflows", "workflow_id"),
+        ("revision_id", "workflow_revisions", "revision_id"),
+    }.issubset(foreign_keys(database_path, "workflow_runs"))
 
 
 def test_alembic_migration_is_repeatable(tmp_path: Path) -> None:
@@ -133,8 +150,15 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
     )
     updated = store.update_workflow_run_status(
         created.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=created.state_version,
+    )
+    assert updated is not None
+    updated = store.update_workflow_run_status(
+        created.workflow_run_id,
         WorkflowRunStatus.SUCCEEDED,
         finished_at=utc_now(),
+        expected_state_version=updated.state_version,
     )
 
     assert store.get_workflow_run(created.workflow_run_id) is not None
@@ -142,13 +166,56 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
     assert created.definition_hash == definition.definition_hash
     assert updated is not None
     assert updated.status == WorkflowRunStatus.SUCCEEDED.value
-    assert updated.state_version == 1
+    assert updated.state_version == 2
     assert store.list_workflow_runs(workflow_id=definition.workflow_id)[
         0
     ].workflow_run_id == "run-1"
     assert store.list_workflow_runs(statuses=[WorkflowRunStatus.SUCCEEDED])[
         0
     ].workflow_run_id == "run-1"
+
+
+def test_runtime_store_rejects_workflow_run_revision_mismatch(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    first = store.create_workflow_definition(
+        name="First workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    second = store.create_workflow_definition(
+        name="Second workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-2",
+    )
+
+    with pytest.raises(ValueError, match="does not belong"):
+        store.create_workflow_run(
+            workflow_id=first.workflow_id,
+            revision_id=second.revision_id,
+        )
+
+
+def test_runtime_store_rejects_explicit_workflow_run_version(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Version workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+
+    with pytest.raises(ValueError, match="derived from revision"):
+        store.create_workflow_run(
+            workflow_id=workflow.workflow_id,
+            workflow_version=99,
+        )
 
 
 def test_runtime_store_rejects_stale_workflow_run_state(tmp_path: Path) -> None:
@@ -167,7 +234,7 @@ def test_runtime_store_rejects_stale_workflow_run_state(tmp_path: Path) -> None:
 
     first = store.update_workflow_run_status(
         run.workflow_run_id,
-        WorkflowRunStatus.SUCCEEDED,
+        WorkflowRunStatus.RUNNING,
         expected_state_version=0,
     )
     stale = store.update_workflow_run_status(
@@ -179,7 +246,93 @@ def test_runtime_store_rejects_stale_workflow_run_state(tmp_path: Path) -> None:
     assert first is not None
     assert first.state_version == 1
     assert stale is None
-    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+
+
+def test_runtime_store_workflow_run_cas_allows_only_one_writer(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    first_store = RuntimeStore.from_sqlite_path(database_path)
+    second_store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = first_store.create_workflow_definition(
+        name="CAS workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = first_store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+
+    first = first_store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=0,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+    stale = second_store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.CANCELLED,
+        expected_state_version=0,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+
+    assert first is not None
+    assert first.state_version == 1
+    assert stale is None
+    assert first_store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+
+
+@pytest.mark.parametrize(
+    "terminal_status",
+    [
+        WorkflowRunStatus.CANCELLED,
+        WorkflowRunStatus.FAILED,
+        WorkflowRunStatus.ABORTED,
+    ],
+)
+def test_runtime_store_rejects_workflow_run_terminal_revival(
+    tmp_path: Path,
+    terminal_status: WorkflowRunStatus,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Terminal workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    running = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=0,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+    assert running is not None
+    terminal = store.update_workflow_run_status(
+        run.workflow_run_id,
+        terminal_status,
+        expected_state_version=running.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+    )
+    assert terminal is not None
+
+    revived = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.SUCCEEDED,
+        expected_state_version=terminal.state_version,
+        allowed_source_statuses=[terminal_status],
+    )
+
+    assert revived is None
+    assert store.get_workflow_run(run.workflow_run_id).status == terminal_status.value
 
 
 def test_runtime_store_rejects_stale_node_run_terminal_update(
@@ -202,6 +355,7 @@ def test_runtime_store_rejects_stale_node_run_terminal_update(
         node_instance_id="node-1",
         node_type="core.test",
         node_run_id="node-run-1",
+        status=NodeRunStatus.RUNNING,
     )
 
     timed_out = store.update_node_run_status(
@@ -227,6 +381,78 @@ def test_runtime_store_rejects_stale_node_run_terminal_update(
     loaded = store.get_node_run(node.node_run_id)
     assert loaded is not None
     assert loaded.status == NodeRunStatus.TIMED_OUT.value
+
+
+def test_runtime_store_rejects_illegal_node_success_source(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Node transition workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.READY,
+    )
+
+    illegal_success = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        expected_state_version=node.state_version,
+    )
+
+    assert illegal_success is None
+    assert store.get_node_run(node.node_run_id).status == NodeRunStatus.READY.value
+
+
+def test_runtime_store_node_run_cas_allows_only_one_writer(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    first_store = RuntimeStore.from_sqlite_path(database_path)
+    second_store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = first_store.create_workflow_definition(
+        name="Node CAS workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = first_store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    node = first_store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.WAITING_DEPENDENCY,
+    )
+
+    first = first_store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=0,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    stale = second_store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.CANCELLED,
+        expected_state_version=0,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+
+    assert first is not None
+    assert first.state_version == 1
+    assert stale is None
+    assert first_store.get_node_run(node.node_run_id).status == "READY"
 
 
 def test_runtime_store_marks_stale_workflow_process_lost(tmp_path: Path) -> None:
