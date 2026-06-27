@@ -16,6 +16,7 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.ipc_messages import (
+    ExecutorHeartbeatPayload,
     IPCEnvelope,
     NodeTaskCompletedPayload,
     NodeTaskProgressPayload,
@@ -30,6 +31,7 @@ __all__ = [
     "ErrorOrigin",
     "EventModel",
     "EventType",
+    "ExecutorHeartbeatPayload",
     "FieldSchemaModel",
     "IPCEnvelope",
     "IPCMessageType",

@@ -8,6 +8,7 @@ from flowweaver.node_executor.base import NodeExecutorFactory
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
+    ExecutorHeartbeatPayload,
     IPCEnvelope,
     NodeTaskCompletedPayload,
     NodeTaskSubmitPayload,
@@ -25,11 +26,21 @@ class NodeExecutorProcess:
         self._executor_factory = executor_factory or (
             lambda _task: FakeNodeExecutor(executor_id=executor_id)
         )
+        self._active_task_ids: set[str] = set()
 
     def ready_envelope(self) -> IPCEnvelope:
         return IPCEnvelope(
             message_type=IPCMessageType.EXECUTOR_READY,
             payload={"executor_id": self.executor_id},
+        )
+
+    def heartbeat_envelope(self) -> IPCEnvelope:
+        return IPCEnvelope(
+            message_type=IPCMessageType.EXECUTOR_HEARTBEAT,
+            payload=ExecutorHeartbeatPayload(
+                executor_id=self.executor_id,
+                active_task_ids=sorted(self._active_task_ids),
+            ).model_dump(mode="json"),
         )
 
     def handle_envelope(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
@@ -48,7 +59,11 @@ class NodeExecutorProcess:
             },
         )
         executor = self._executor_factory(task)
-        result = executor.execute(task)
+        self._active_task_ids.add(task.task_id)
+        try:
+            result = executor.execute(task)
+        finally:
+            self._active_task_ids.discard(task.task_id)
         completed = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_COMPLETED,
             workflow_run_id=task.workflow_run_id,

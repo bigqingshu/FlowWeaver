@@ -23,6 +23,11 @@ class IPCEnvelope(StrictModel):
     payload: dict[str, Any]
 
 
+class ExecutorHeartbeatPayload(StrictModel):
+    executor_id: str
+    active_task_ids: list[str] = Field(default_factory=list)
+
+
 class NodeTaskSubmitPayload(NodeTaskModel):
     pass
 

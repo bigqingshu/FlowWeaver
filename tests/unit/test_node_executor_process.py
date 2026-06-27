@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from io import StringIO
 
+from flowweaver.common.time import utc_now
 from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorProcess
 from flowweaver.node_executor.process import run_node_executor_process
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskSubmitPayload
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
 def make_task() -> NodeTaskSubmitPayload:
@@ -50,6 +52,55 @@ def test_node_executor_process_accepts_and_completes_task_envelope() -> None:
     assert completed.payload["result"]["node_run_id"] == task.node_run_id
     assert completed.payload["result"]["executor_id"] == "executor-1"
     assert completed.payload["result"]["status"] == "SUCCEEDED"
+
+
+def test_node_executor_process_heartbeat_reports_active_tasks() -> None:
+    task = make_task()
+    observed_heartbeats: list[IPCEnvelope] = []
+
+    def capture_heartbeat() -> None:
+        observed_heartbeats.append(process.heartbeat_envelope())
+
+    class RecordingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            capture_heartbeat()
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: RecordingExecutor(),
+    )
+    idle = process.heartbeat_envelope()
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    process.handle_envelope(envelope)
+    after_task = process.heartbeat_envelope()
+
+    assert idle.message_type == IPCMessageType.EXECUTOR_HEARTBEAT
+    assert idle.payload == {"executor_id": "executor-1", "active_task_ids": []}
+    assert observed_heartbeats[0].message_type == IPCMessageType.EXECUTOR_HEARTBEAT
+    assert observed_heartbeats[0].payload == {
+        "executor_id": "executor-1",
+        "active_task_ids": [task.task_id],
+    }
+    assert after_task.payload == {"executor_id": "executor-1", "active_task_ids": []}
 
 
 def test_node_executor_process_jsonl_loop_emits_ready_and_failed_result() -> None:
