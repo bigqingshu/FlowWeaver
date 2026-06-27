@@ -558,6 +558,31 @@ class RuntimeStore:
                 return None
             return _node_run_from_record(record)
 
+    def get_node_run_for_instance(
+        self,
+        *,
+        workflow_run_id: str,
+        node_instance_id: str,
+    ) -> NodeRun | None:
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(NodeRunRecord)
+                .where(NodeRunRecord.workflow_run_id == workflow_run_id)
+                .where(NodeRunRecord.node_instance_id == node_instance_id)
+            )
+            if record is None:
+                return None
+            return _node_run_from_record(record)
+
+    def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
+        with self._session_factory() as session:
+            records = session.scalars(
+                select(NodeRunRecord)
+                .where(NodeRunRecord.workflow_run_id == workflow_run_id)
+                .order_by(NodeRunRecord.node_instance_id)
+            ).all()
+            return [_node_run_from_record(record) for record in records]
+
     def update_node_run_status(
         self,
         node_run_id: str,

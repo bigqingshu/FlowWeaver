@@ -6,8 +6,10 @@ from typing import NoReturn
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.protocols.enums import EventType, WorkflowRunStatus
+from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
+from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -69,9 +71,11 @@ def run_workflow_process(
         )
     )
 
-    nodes = revision.definition.get("nodes", [])
-    if not nodes:
+    definition = WorkflowDefinitionModel.model_validate(revision.definition)
+    dag = build_workflow_dag(definition)
+    if not dag.nodes:
         return _complete_empty_workflow(store, workflow_run_id, process_id)
+    _initialize_node_runs(store, workflow_run_id, process_id, dag)
 
     while True:
         store.record_workflow_process_heartbeat(process_id)
@@ -115,6 +119,45 @@ def _complete_empty_workflow(
     )
     store.mark_workflow_process_exited(process_id, exit_code=0)
     return 0
+
+
+def _initialize_node_runs(
+    store: RuntimeStore,
+    workflow_run_id: str,
+    process_id: str,
+    dag: WorkflowDag,
+) -> None:
+    ready_node_ids = set(dag.ready_node_ids)
+    for node in dag.nodes:
+        existing = store.get_node_run_for_instance(
+            workflow_run_id=workflow_run_id,
+            node_instance_id=node.node_instance_id,
+        )
+        if existing is not None:
+            continue
+        status = (
+            NodeRunStatus.READY
+            if node.node_instance_id in ready_node_ids
+            else NodeRunStatus.WAITING_DEPENDENCY
+        )
+        node_run = store.create_node_run(
+            workflow_run_id=workflow_run_id,
+            node_instance_id=node.node_instance_id,
+            node_type=node.node_type,
+            status=status,
+        )
+        if status == NodeRunStatus.READY:
+            store.append_runtime_event(
+                EventModel(
+                    event_type=EventType.NODE_QUEUED,
+                    workflow_run_id=workflow_run_id,
+                    node_run_id=node_run.node_run_id,
+                    payload={
+                        "process_id": process_id,
+                        "node_instance_id": node.node_instance_id,
+                    },
+                )
+            )
 
 
 def _fail(

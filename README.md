@@ -50,6 +50,8 @@
 
 - Supervisor 创建 WorkflowRunProcess 子进程
 - WorkflowRunProcess 加载 workflow run 与 revision
+- WorkflowRunProcess 构建 DAG 控制图
+- 为 DAG 节点初始化 NodeRun 控制状态
 - 运行进程心跳、取消请求和失联识别
 - 空工作流可启动并完成
 

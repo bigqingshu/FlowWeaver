@@ -15,7 +15,7 @@ from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
-from flowweaver.nodes.registry import NodeRegistry
+from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec, NodeRegistry
 from flowweaver.protocols.enums import EventType, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
 
@@ -40,13 +40,31 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
         enforce_single_instance=False,
         workflow_process_heartbeat_interval_seconds=0,
     )
+    node_registry = NodeRegistry()
+    node_registry.register(
+        NodeDefinitionSpec(
+            node_type="core.source",
+            node_version="1.0",
+            display_name="Source",
+            output_ports=(NodePortSpec("out"),),
+        )
+    )
+    node_registry.register(
+        NodeDefinitionSpec(
+            node_type="core.transform",
+            node_version="1.0",
+            display_name="Transform",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+        )
+    )
     container = ServiceContainer(
         config=config,
         runtime_store=store,
         event_router=EventRouter(store),
         table_lease_manager=TableLeaseManager(store.engine),
         supervisor=Supervisor(config=config, runtime_store=store),
-        node_registry=NodeRegistry(),
+        node_registry=node_registry,
     )
     return TestClient(create_app(container)), store, container
 
@@ -224,6 +242,83 @@ def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:
         "WORKFLOW_STARTED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_start_non_empty_workflow_initializes_node_runs(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "DAG run",
+            "definition": {
+                "schema_version": "1.0",
+                "nodes": [
+                    {
+                        "node_instance_id": "source",
+                        "node_type": "core.source",
+                        "node_version": "1.0",
+                    },
+                    {
+                        "node_instance_id": "transform",
+                        "node_type": "core.transform",
+                        "node_version": "1.0",
+                    },
+                ],
+                "connections": [
+                    {
+                        "connection_id": "c1",
+                        "source_node_id": "source",
+                        "source_port": "out",
+                        "target_node_id": "transform",
+                        "target_port": "in",
+                    }
+                ],
+            },
+        },
+        headers=auth_headers(),
+    )
+    workflow = response_data(response)
+    run = response_data(
+        client.post(
+            f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+            headers=auth_headers(),
+        )
+    )
+
+    deadline = time.monotonic() + 5
+    node_runs = []
+    while time.monotonic() < deadline:
+        node_runs = store.list_node_runs(run["workflow_run_id"])
+        if len(node_runs) == 2:
+            break
+        time.sleep(0.05)
+
+    api_node_runs = response_data(
+        client.get(
+            f"/api/v1/runs/{run['workflow_run_id']}/nodes",
+            headers=auth_headers(),
+        )
+    )
+
+    assert {node.node_instance_id: node.status for node in node_runs} == {
+        "source": "READY",
+        "transform": "WAITING_DEPENDENCY",
+    }
+    assert [item["node_instance_id"] for item in api_node_runs] == [
+        "source",
+        "transform",
+    ]
+    assert store.get_workflow_run(run["workflow_run_id"]).status == "RUNNING"
+    client.post(
+        f"/api/v1/runs/{run['workflow_run_id']}/cancel",
+        headers=auth_headers(),
+    )
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        loaded = store.get_workflow_run(run["workflow_run_id"])
+        if loaded is not None and loaded.status == "CANCELLED":
+            break
+        time.sleep(0.05)
 
 
 def test_cancel_run_marks_process_cancel_requested(tmp_path: Path) -> None:
