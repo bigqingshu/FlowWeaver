@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "input_snapshots",
         "read_leases",
         "table_leases",
+        "workflow_processes",
         "audit_events",
         "runtime_events",
     }.issubset(table_names(database_path))
@@ -225,6 +227,29 @@ def test_runtime_store_rejects_stale_node_run_terminal_update(
     loaded = store.get_node_run(node.node_run_id)
     assert loaded is not None
     assert loaded.status == NodeRunStatus.TIMED_OUT.value
+
+
+def test_runtime_store_marks_stale_workflow_process_lost(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Process workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(workflow_id=workflow.workflow_id)
+    process = store.create_workflow_process(workflow_run_id=run.workflow_run_id)
+    store.record_workflow_process_heartbeat(process.process_id)
+
+    lost = store.mark_lost_workflow_processes(
+        stale_before=utc_now() + timedelta(seconds=1)
+    )
+
+    assert [item.process_id for item in lost] == [process.process_id]
+    loaded = store.get_workflow_process(process.process_id)
+    assert loaded is not None
+    assert loaded.status == "LOST"
 
 
 def test_sqlite_pragmas_enable_foreign_keys_and_wal(tmp_path: Path) -> None:

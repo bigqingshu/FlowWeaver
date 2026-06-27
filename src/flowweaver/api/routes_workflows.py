@@ -14,11 +14,14 @@ from flowweaver.api.dependencies import (
     check_origin,
     get_node_registry,
     get_runtime_store,
+    get_supervisor,
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
 from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.supervisor import Supervisor
 from flowweaver.nodes.registry import NodeRegistry
+from flowweaver.protocols.enums import WorkflowRunStatus
 from flowweaver.workflow.validation import validate_workflow_definition
 
 router = APIRouter(
@@ -84,6 +87,39 @@ def get_workflow(
             status_code=404,
         )
     return ok_response(request, workflow)
+
+
+@router.post("/{workflow_id}/runs", status_code=201, response_model=APIResponseModel)
+def start_workflow_run(
+    request: Request,
+    workflow_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    supervisor: Annotated[Supervisor, Depends(get_supervisor)],
+):
+    workflow = store.get_workflow_definition(workflow_id)
+    if workflow is None:
+        return error_response(
+            request,
+            error_code="WORKFLOW_NOT_FOUND",
+            message="Workflow not found",
+            status_code=404,
+        )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        revision_id=workflow.revision_id,
+        status=WorkflowRunStatus.PENDING,
+    )
+    try:
+        supervisor.start_workflow_process(run.workflow_run_id)
+    except Exception as exc:
+        failed = store.update_workflow_run_status(
+            run.workflow_run_id,
+            WorkflowRunStatus.FAILED,
+            error={"message": str(exc)},
+            expected_state_version=run.state_version,
+        )
+        return ok_response(request, failed or run, status_code=201)
+    return ok_response(request, run, status_code=201)
 
 
 @router.put("/{workflow_id}", response_model=APIResponseModel)

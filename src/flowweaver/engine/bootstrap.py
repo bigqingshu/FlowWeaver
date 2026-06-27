@@ -11,6 +11,7 @@ from flowweaver.common.instance_lock import InstanceLock
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeRegistry
 
@@ -33,11 +34,13 @@ class EngineHostBootstrap:
         runtime_store = RuntimeStore(database_url)
         event_router = EventRouter(runtime_store)
         table_lease_manager = TableLeaseManager(runtime_store.engine)
+        supervisor = Supervisor(config=config, runtime_store=runtime_store)
         return ServiceContainer(
             config=config,
             runtime_store=runtime_store,
             event_router=event_router,
             table_lease_manager=table_lease_manager,
+            supervisor=supervisor,
             node_registry=NodeRegistry(),
             instance_lock=lock,
         )

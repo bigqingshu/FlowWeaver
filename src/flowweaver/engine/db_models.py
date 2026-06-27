@@ -69,6 +69,26 @@ class WorkflowRunRecord(Base):
     error_json: Mapped[str | None] = mapped_column(Text)
 
 
+class WorkflowProcessRecord(Base):
+    __tablename__ = "workflow_processes"
+
+    process_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    workflow_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("workflow_runs.workflow_run_id"),
+        nullable=False,
+        index=True,
+    )
+    os_pid: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    started_at: Mapped[str] = mapped_column(Text, nullable=False)
+    last_heartbeat_at: Mapped[str | None] = mapped_column(Text)
+    cancel_requested_at: Mapped[str | None] = mapped_column(Text)
+    exited_at: Mapped[str | None] = mapped_column(Text)
+    exit_code: Mapped[int | None] = mapped_column(Integer)
+    error_json: Mapped[str | None] = mapped_column(Text)
+
+
 class NodeRunRecord(Base):
     __tablename__ = "node_runs"
 

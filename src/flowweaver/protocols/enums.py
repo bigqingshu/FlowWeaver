@@ -12,6 +12,15 @@ class WorkflowRunStatus(str, Enum):
     ABORTED = "ABORTED"
 
 
+class WorkflowProcessStatus(str, Enum):
+    STARTING = "STARTING"
+    RUNNING = "RUNNING"
+    EXITED = "EXITED"
+    LOST = "LOST"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
+    FAILED = "FAILED"
+
+
 class NodeRunStatus(str, Enum):
     PENDING = "PENDING"
     READY = "READY"

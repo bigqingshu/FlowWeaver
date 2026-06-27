@@ -20,6 +20,7 @@ from flowweaver.engine.db_models import (
     NodeRunRecord,
     RuntimeEventRecord,
     WorkflowDefinitionRecord,
+    WorkflowProcessRecord,
     WorkflowRecord,
     WorkflowRevisionRecord,
     WorkflowRunRecord,
@@ -31,6 +32,7 @@ from flowweaver.protocols.enums import (
     TableRole,
     TableScope,
     TableStorageKind,
+    WorkflowProcessStatus,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
@@ -77,6 +79,20 @@ class WorkflowRun:
 
 
 @dataclass(frozen=True)
+class WorkflowProcess:
+    process_id: str
+    workflow_run_id: str
+    os_pid: int | None
+    status: str
+    started_at: datetime
+    last_heartbeat_at: datetime | None
+    cancel_requested_at: datetime | None
+    exited_at: datetime | None
+    exit_code: int | None
+    error: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
 class NodeRun:
     node_run_id: str
     workflow_run_id: str
@@ -108,6 +124,7 @@ class RuntimeEventLog:
 
 class RuntimeStore:
     def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
         self.engine = create_sqlite_engine(database_url)
         self._session_factory = sessionmaker(self.engine, expire_on_commit=False)
 
@@ -356,6 +373,153 @@ class RuntimeStore:
             next_record = record
         return _workflow_run_from_record(next_record)
 
+    def create_workflow_process(
+        self,
+        *,
+        workflow_run_id: str,
+        process_id: str | None = None,
+        os_pid: int | None = None,
+    ) -> WorkflowProcess:
+        now = utc_now()
+        record = WorkflowProcessRecord(
+            process_id=process_id or new_id(),
+            workflow_run_id=workflow_run_id,
+            os_pid=os_pid,
+            status=WorkflowProcessStatus.STARTING.value,
+            started_at=_datetime_to_text(now),
+            last_heartbeat_at=None,
+            cancel_requested_at=None,
+            exited_at=None,
+            exit_code=None,
+            error_json=None,
+        )
+        with self._session_factory.begin() as session:
+            session.add(record)
+        return _workflow_process_from_record(record)
+
+    def get_workflow_process(self, process_id: str) -> WorkflowProcess | None:
+        with self._session_factory() as session:
+            record = session.get(WorkflowProcessRecord, process_id)
+            if record is None:
+                return None
+            return _workflow_process_from_record(record)
+
+    def get_workflow_process_for_run(
+        self,
+        workflow_run_id: str,
+    ) -> WorkflowProcess | None:
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(WorkflowProcessRecord)
+                .where(WorkflowProcessRecord.workflow_run_id == workflow_run_id)
+                .order_by(WorkflowProcessRecord.started_at.desc())
+            )
+            if record is None:
+                return None
+            return _workflow_process_from_record(record)
+
+    def update_workflow_process_pid(
+        self,
+        process_id: str,
+        os_pid: int,
+    ) -> WorkflowProcess | None:
+        with self._session_factory.begin() as session:
+            record = session.get(WorkflowProcessRecord, process_id)
+            if record is None:
+                return None
+            record.os_pid = os_pid
+            return _workflow_process_from_record(record)
+
+    def record_workflow_process_heartbeat(
+        self,
+        process_id: str,
+    ) -> WorkflowProcess | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.get(WorkflowProcessRecord, process_id)
+            if record is None:
+                return None
+            if record.status == WorkflowProcessStatus.STARTING.value:
+                record.status = WorkflowProcessStatus.RUNNING.value
+            record.last_heartbeat_at = _datetime_to_text(now)
+            return _workflow_process_from_record(record)
+
+    def request_workflow_process_cancel(
+        self,
+        workflow_run_id: str,
+    ) -> WorkflowProcess | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.scalar(
+                select(WorkflowProcessRecord)
+                .where(WorkflowProcessRecord.workflow_run_id == workflow_run_id)
+                .order_by(WorkflowProcessRecord.started_at.desc())
+            )
+            if record is None:
+                return None
+            if record.status in {
+                WorkflowProcessStatus.STARTING.value,
+                WorkflowProcessStatus.RUNNING.value,
+            }:
+                record.status = WorkflowProcessStatus.CANCEL_REQUESTED.value
+                record.cancel_requested_at = _datetime_to_text(now)
+            return _workflow_process_from_record(record)
+
+    def mark_workflow_process_exited(
+        self,
+        process_id: str,
+        *,
+        exit_code: int,
+        error: dict[str, Any] | None = None,
+    ) -> WorkflowProcess | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.get(WorkflowProcessRecord, process_id)
+            if record is None:
+                return None
+            record.status = (
+                WorkflowProcessStatus.EXITED.value
+                if exit_code == 0
+                else WorkflowProcessStatus.FAILED.value
+            )
+            record.exited_at = _datetime_to_text(now)
+            record.exit_code = exit_code
+            record.error_json = _json_dumps(error) if error else None
+            return _workflow_process_from_record(record)
+
+    def mark_lost_workflow_processes(
+        self,
+        *,
+        stale_before: datetime,
+    ) -> list[WorkflowProcess]:
+        lost: list[WorkflowProcess] = []
+        with self._session_factory.begin() as session:
+            records = list(
+                session.scalars(
+                    select(WorkflowProcessRecord)
+                    .where(
+                        WorkflowProcessRecord.status.in_(
+                            [
+                                WorkflowProcessStatus.STARTING.value,
+                                WorkflowProcessStatus.RUNNING.value,
+                                WorkflowProcessStatus.CANCEL_REQUESTED.value,
+                            ]
+                        )
+                    )
+                    .where(WorkflowProcessRecord.last_heartbeat_at.is_not(None))
+                    .where(
+                        WorkflowProcessRecord.last_heartbeat_at
+                        < _datetime_to_text(stale_before)
+                    )
+                )
+            )
+            now = utc_now()
+            for record in records:
+                record.status = WorkflowProcessStatus.LOST.value
+                record.exited_at = _datetime_to_text(now)
+                lost.append(_workflow_process_from_record(record))
+        return lost
+
     def create_node_run(
         self,
         *,
@@ -530,6 +694,21 @@ def _workflow_run_from_record(record: WorkflowRunRecord) -> WorkflowRun:
         input_snapshot_id=record.input_snapshot_id,
         started_at=_optional_datetime_from_text(record.started_at),
         finished_at=_optional_datetime_from_text(record.finished_at),
+        error=json.loads(record.error_json) if record.error_json else None,
+    )
+
+
+def _workflow_process_from_record(record: WorkflowProcessRecord) -> WorkflowProcess:
+    return WorkflowProcess(
+        process_id=record.process_id,
+        workflow_run_id=record.workflow_run_id,
+        os_pid=record.os_pid,
+        status=record.status,
+        started_at=_datetime_from_text(record.started_at),
+        last_heartbeat_at=_optional_datetime_from_text(record.last_heartbeat_at),
+        cancel_requested_at=_optional_datetime_from_text(record.cancel_requested_at),
+        exited_at=_optional_datetime_from_text(record.exited_at),
+        exit_code=record.exit_code,
         error=json.loads(record.error_json) if record.error_json else None,
     )
 

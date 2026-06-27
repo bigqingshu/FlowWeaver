@@ -25,6 +25,8 @@ class EngineConfig(StrictModel):
     max_log_file_bytes: int = 10 * 1024 * 1024
     staging_ttl_seconds: int = 3600
     orphan_cleanup_interval: int = 300
+    workflow_process_heartbeat_interval_seconds: int = 2
+    workflow_process_lost_threshold_seconds: int = 10
     allowed_origins: set[str] = Field(default_factory=lambda: {"http://127.0.0.1"})
 
     def resolved_metadata_db_path(self) -> Path:

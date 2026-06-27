@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已实现第一阶段的阶段 A、阶段 B、阶段 C 和阶段 C.5 的控制面基础收口。
+当前已实现第一阶段的阶段 A、阶段 B、阶段 C 和阶段 C.5 的控制面基础收口，并已进入阶段 D 的 WorkflowRunProcess 第一小步。
 
 阶段 A 范围包括：
 
@@ -46,7 +46,14 @@
 - NodeRun/WorkflowRun `state_version` 竞争保护验收
 - Ruff、mypy 与 Windows CI
 
-尚未实现 WorkflowRunProcess、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
+阶段 D 当前范围包括：
+
+- Supervisor 创建 WorkflowRunProcess 子进程
+- WorkflowRunProcess 加载 workflow run 与 revision
+- 运行进程心跳、取消请求和失联识别
+- 空工作流可启动并完成
+
+尚未完成 WorkflowRunProcess 的完整 DAG 调度、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
 
 ## 环境
 

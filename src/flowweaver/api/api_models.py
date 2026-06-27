@@ -87,6 +87,19 @@ class WorkflowRunView(WorkflowRunData):
     pass
 
 
+class WorkflowProcessView(StrictModel):
+    process_id: str
+    workflow_run_id: str
+    os_pid: int | None
+    status: str
+    started_at: datetime
+    last_heartbeat_at: datetime | None
+    cancel_requested_at: datetime | None
+    exited_at: datetime | None
+    exit_code: int | None
+    error: dict[str, Any] | None
+
+
 class NodeRunView(StrictModel):
     node_run_id: str
     workflow_run_id: str

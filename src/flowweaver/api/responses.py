@@ -10,6 +10,7 @@ from flowweaver.engine.runtime_store import (
     NodeRun,
     RuntimeEventLog,
     WorkflowDefinition,
+    WorkflowProcess,
     WorkflowRevision,
     WorkflowRun,
 )
@@ -93,6 +94,27 @@ def _to_jsonable(value: Any) -> Any:
             "input_snapshot_id": value.input_snapshot_id,
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,
+            "error": value.error,
+        }
+    if isinstance(value, WorkflowProcess):
+        return {
+            "process_id": value.process_id,
+            "workflow_run_id": value.workflow_run_id,
+            "os_pid": value.os_pid,
+            "status": value.status,
+            "started_at": value.started_at.isoformat(),
+            "last_heartbeat_at": (
+                value.last_heartbeat_at.isoformat()
+                if value.last_heartbeat_at
+                else None
+            ),
+            "cancel_requested_at": (
+                value.cancel_requested_at.isoformat()
+                if value.cancel_requested_at
+                else None
+            ),
+            "exited_at": value.exited_at.isoformat() if value.exited_at else None,
+            "exit_code": value.exit_code,
             "error": value.error,
         }
     if isinstance(value, NodeRun):

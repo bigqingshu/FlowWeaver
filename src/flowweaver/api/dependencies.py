@@ -4,6 +4,7 @@ from fastapi import Request
 
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.supervisor import Supervisor
 
 
 class APIAuthError(Exception):
@@ -20,6 +21,10 @@ def get_runtime_store(request: Request) -> RuntimeStore:
 
 def get_node_registry(request: Request):
     return get_container(request).node_registry
+
+
+def get_supervisor(request: Request) -> Supervisor:
+    return get_container(request).supervisor
 
 
 def require_api_token(request: Request) -> None:

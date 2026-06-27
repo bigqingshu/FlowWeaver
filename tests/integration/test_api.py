@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from alembic import command
@@ -12,6 +13,7 @@ from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeRegistry
 from flowweaver.protocols.enums import EventType, WorkflowRunStatus
@@ -32,15 +34,18 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
     database_path = tmp_path / "metadata.db"
     migrate(database_path)
     store = RuntimeStore.from_sqlite_path(database_path)
+    config = EngineConfig(
+        data_dir=tmp_path / "runtime",
+        local_api_token=TOKEN,
+        enforce_single_instance=False,
+        workflow_process_heartbeat_interval_seconds=0,
+    )
     container = ServiceContainer(
-        config=EngineConfig(
-            data_dir=tmp_path / "runtime",
-            local_api_token=TOKEN,
-            enforce_single_instance=False,
-        ),
+        config=config,
         runtime_store=store,
         event_router=EventRouter(store),
         table_lease_manager=TableLeaseManager(store.engine),
+        supervisor=Supervisor(config=config, runtime_store=store),
         node_registry=NodeRegistry(),
     )
     return TestClient(create_app(container)), store, container
@@ -182,6 +187,64 @@ def test_run_query_api(tmp_path: Path) -> None:
     assert loaded["workflow_id"] == "workflow-1"
     assert loaded["revision_id"] == workflow.revision_id
     assert filtered[0]["status"] == "PENDING"
+
+
+def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Empty run",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+
+    started = response_data(
+        client.post(
+            f"/api/v1/workflows/{workflow.workflow_id}/runs",
+            headers=auth_headers(),
+        )
+    )
+    run_id = started["workflow_run_id"]
+    deadline = time.monotonic() + 5
+    loaded = store.get_workflow_run(run_id)
+    while time.monotonic() < deadline:
+        loaded = store.get_workflow_run(run_id)
+        if loaded is not None and loaded.status == "SUCCEEDED":
+            break
+        time.sleep(0.05)
+
+    process = store.get_workflow_process_for_run(run_id)
+    events = store.list_runtime_events()
+
+    assert loaded is not None
+    assert loaded.status == "SUCCEEDED"
+    assert process is not None
+    assert process.os_pid is not None
+    assert process.status == "EXITED"
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "WORKFLOW_FINISHED",
+    ]
+
+
+def test_cancel_run_marks_process_cancel_requested(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cancelable",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(workflow_id=workflow.workflow_id)
+    process = store.create_workflow_process(workflow_run_id=run.workflow_run_id)
+
+    response = client.post(
+        f"/api/v1/runs/{run.workflow_run_id}/cancel",
+        headers=auth_headers(),
+    )
+    data = response_data(response)
+
+    assert process.process_id == data["process_id"]
+    assert data["status"] == "CANCEL_REQUESTED"
+    assert data["cancel_requested_at"] is not None
 
 
 def test_run_not_found_uses_error_envelope(tmp_path: Path) -> None:
