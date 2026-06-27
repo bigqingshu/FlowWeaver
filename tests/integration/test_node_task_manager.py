@@ -359,6 +359,10 @@ def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
     assert applied.status == NodeTaskApplyStatus.APPLIED
     assert store.get_node_run(task.node_run_id).status == "FAILED"
     assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) == result
     assert [event.event_type for event in store.list_runtime_events()][-2:] == [
         "NODE_FAILED",
         "WORKFLOW_FAILED",

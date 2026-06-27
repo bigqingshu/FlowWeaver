@@ -6,7 +6,7 @@ from typing import Any
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
-from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.protocols.enums import (
     EventType,
     NodeResultStatus,
@@ -15,7 +15,7 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.workflow_process.controller import apply_node_success
+from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
 
 
@@ -186,33 +186,38 @@ class NodeTaskManager:
                 node_run_id=result.node_run_id,
             )
         if result.status == NodeResultStatus.SUCCEEDED:
-            return self._apply_success(task, result)
-        return self._apply_terminal_failure(task, result)
+            return self._apply_success(task, result, node_run)
+        return self._apply_terminal_failure(task, result, node_run)
 
     def _apply_success(
         self,
         task: NodeTaskModel,
         result: NodeTaskResultModel,
+        node_run: NodeRun,
     ) -> NodeTaskApplyResult:
-        advance = apply_node_success(
+        updated = self._store.record_node_task_result_and_update_node_run_status(
+            result,
+            NodeRunStatus.SUCCEEDED,
+            finished_at=result.finished_at,
+            expected_state_version=node_run.state_version,
+            allowed_source_statuses=[
+                NodeRunStatus.RUNNING,
+                NodeRunStatus.LONG_RUNNING,
+            ],
+            owner_process_id=task.workflow_process_id,
+            process_generation=task.process_generation,
+        )
+        if updated is None:
+            return self._result_already_applied_or_terminal(result)
+        advance_after_node_success(
             self._store,
             workflow_run_id=task.workflow_run_id,
             process_id=task.workflow_process_id,
             process_generation=task.process_generation,
             dag=self._dag,
-            node_instance_id=task.node_instance_id,
+            completed_node=updated,
             event_sink=self._event_sink,
         )
-        if advance.completed_node is None:
-            return NodeTaskApplyResult(
-                NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
-                node_run_id=result.node_run_id,
-            )
-        if not self._store.record_node_task_result_once(result):
-            return NodeTaskApplyResult(
-                NodeTaskApplyStatus.ALREADY_APPLIED,
-                node_run_id=result.node_run_id,
-            )
         return NodeTaskApplyResult(
             NodeTaskApplyStatus.APPLIED,
             node_run_id=result.node_run_id,
@@ -222,6 +227,7 @@ class NodeTaskManager:
         self,
         task: NodeTaskModel,
         result: NodeTaskResultModel,
+        node_run: NodeRun,
     ) -> NodeTaskApplyResult:
         node_status = (
             NodeRunStatus.CANCELLED
@@ -233,11 +239,8 @@ class NodeTaskManager:
             if result.status == NodeResultStatus.CANCELLED
             else WorkflowRunStatus.FAILED
         )
-        node_run = self._store.get_node_run(result.node_run_id)
-        if node_run is None:
-            return NodeTaskApplyResult(NodeTaskApplyStatus.REJECTED_INVALID_TASK)
-        updated = self._store.update_node_run_status(
-            result.node_run_id,
+        updated = self._store.record_node_task_result_and_update_node_run_status(
+            result,
             node_status,
             finished_at=result.finished_at,
             error=result.error,
@@ -250,11 +253,8 @@ class NodeTaskManager:
             process_generation=task.process_generation,
         )
         if updated is None:
-            return NodeTaskApplyResult(
-                NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
-                node_run_id=result.node_run_id,
-            )
-        self._store.update_workflow_run_status(
+            return self._result_already_applied_or_terminal(result)
+        updated_workflow = self._store.update_workflow_run_status(
             task.workflow_run_id,
             workflow_status,
             finished_at=utc_now(),
@@ -280,7 +280,10 @@ class NodeTaskManager:
                 },
             )
         )
-        if workflow_status == WorkflowRunStatus.FAILED:
+        if (
+            workflow_status == WorkflowRunStatus.FAILED
+            and updated_workflow is not None
+        ):
             self._event_sink.emit(
                 EventModel(
                     event_type=EventType.WORKFLOW_FAILED,
@@ -291,13 +294,26 @@ class NodeTaskManager:
                     },
                 )
             )
-        if not self._store.record_node_task_result_once(result):
-            return NodeTaskApplyResult(
-                NodeTaskApplyStatus.ALREADY_APPLIED,
-                node_run_id=result.node_run_id,
-            )
         return NodeTaskApplyResult(
             NodeTaskApplyStatus.APPLIED,
+            node_run_id=result.node_run_id,
+        )
+
+    def _result_already_applied_or_terminal(
+        self,
+        result: NodeTaskResultModel,
+    ) -> NodeTaskApplyResult:
+        existing_result = self._store.get_node_task_result(
+            task_id=result.task_id,
+            result_id=result.result_id,
+        )
+        if existing_result is not None:
+            return NodeTaskApplyResult(
+                NodeTaskApplyStatus.ALREADY_APPLIED,
+                node_run_id=existing_result.node_run_id,
+            )
+        return NodeTaskApplyResult(
+            NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
             node_run_id=result.node_run_id,
         )
 

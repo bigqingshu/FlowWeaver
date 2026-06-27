@@ -117,14 +117,35 @@ def apply_node_success(
     )
     if completed is None:
         return NodeAdvanceResult(None, (), None)
+    return advance_after_node_success(
+        store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        dag=dag,
+        completed_node=completed,
+        event_sink=event_sink,
+    )
+
+
+def advance_after_node_success(
+    store: RuntimeStore,
+    *,
+    workflow_run_id: str,
+    process_id: str,
+    process_generation: int | None = None,
+    dag: WorkflowDag,
+    completed_node: NodeRun,
+    event_sink: RuntimeEventSink,
+) -> NodeAdvanceResult:
     event_sink.emit(
         EventModel(
             event_type=EventType.NODE_FINISHED,
             workflow_run_id=workflow_run_id,
-            node_run_id=completed.node_run_id,
+            node_run_id=completed_node.node_run_id,
             payload={
                 "process_id": process_id,
-                "node_instance_id": completed.node_instance_id,
+                "node_instance_id": completed_node.node_instance_id,
             },
         )
     )
@@ -142,7 +163,7 @@ def apply_node_success(
         process_generation=process_generation,
         event_sink=event_sink,
     )
-    return NodeAdvanceResult(completed, newly_ready, workflow_completed)
+    return NodeAdvanceResult(completed_node, newly_ready, workflow_completed)
 
 
 def _complete_workflow_if_all_nodes_succeeded(

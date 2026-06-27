@@ -14,6 +14,7 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    NodeResultStatus,
     NodeRunStatus,
     TableMutability,
     TableRole,
@@ -21,6 +22,7 @@ from flowweaver.protocols.enums import (
     TableStorageKind,
     WorkflowRunStatus,
 )
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -456,6 +458,153 @@ def test_runtime_store_node_run_cas_allows_only_one_writer(tmp_path: Path) -> No
     assert first.state_version == 1
     assert stale is None
     assert first_store.get_node_run(node.node_run_id).status == "READY"
+
+
+def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Atomic node result workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.RUNNING,
+        executor_id="executor-1",
+    )
+    task = NodeTaskModel(
+        task_id="task-1",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        result_id="result-1",
+        task_id=task.task_id,
+        node_run_id=node.node_run_id,
+        attempt=node.attempt,
+        executor_id="executor-1",
+        process_generation=process.process_generation,
+        status=NodeResultStatus.SUCCEEDED,
+        output_refs=["table-1"],
+    )
+    store.create_node_task(task)
+
+    updated = store.record_node_task_result_and_update_node_run_status(
+        result,
+        NodeRunStatus.SUCCEEDED,
+        finished_at=result.finished_at,
+        expected_state_version=node.state_version,
+        allowed_source_statuses=[NodeRunStatus.RUNNING],
+    )
+
+    assert updated is not None
+    assert updated.status == NodeRunStatus.SUCCEEDED.value
+    assert updated.state_version == node.state_version + 1
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) == result
+
+
+def test_runtime_store_rolls_back_node_task_result_when_terminal_update_rejected(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Atomic rollback workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.RUNNING,
+        executor_id="executor-1",
+    )
+    task = NodeTaskModel(
+        task_id="task-1",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        result_id="result-1",
+        task_id=task.task_id,
+        node_run_id=node.node_run_id,
+        attempt=node.attempt,
+        executor_id="executor-1",
+        process_generation=process.process_generation,
+        status=NodeResultStatus.SUCCEEDED,
+    )
+    store.create_node_task(task)
+    failed = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.FAILED,
+        expected_state_version=node.state_version,
+    )
+    assert failed is not None
+
+    rejected = store.record_node_task_result_and_update_node_run_status(
+        result,
+        NodeRunStatus.SUCCEEDED,
+        finished_at=result.finished_at,
+        expected_state_version=node.state_version,
+        allowed_source_statuses=[NodeRunStatus.RUNNING],
+    )
+
+    assert rejected is None
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) is None
+    loaded_node = store.get_node_run(node.node_run_id)
+    assert loaded_node is not None
+    assert loaded_node.status == NodeRunStatus.FAILED.value
+    assert loaded_node.state_version == failed.state_version
 
 
 def test_runtime_store_marks_stale_workflow_process_lost(tmp_path: Path) -> None:

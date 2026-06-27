@@ -43,6 +43,13 @@ _HANDLED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.ALREADY_APPLIED,
     }
 )
+_IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
+    {
+        NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT,
+        NodeTaskApplyStatus.REJECTED_STALE_GENERATION,
+        NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
+    }
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -282,7 +289,10 @@ def _dispatch_ready_nodes(
             continue
         result = executor.execute(accepted)
         apply_result = task_manager.apply_result(result)
-        if apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES:
+        if (
+            apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
+            and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
+        ):
             _fail_rejected_node_result(
                 store=store,
                 workflow_run_id=workflow_run_id,

@@ -170,7 +170,7 @@ def test_workflow_process_applies_injected_executor_failure_result(
     ]
 
 
-def test_workflow_process_fails_when_executor_result_is_rejected(
+def test_workflow_process_ignores_stale_executor_result_without_failing(
     tmp_path: Path,
 ) -> None:
     store = make_store(tmp_path)
@@ -188,6 +188,12 @@ def test_workflow_process_fails_when_executor_result_is_rejected(
         process_id="process-1",
     )
     assert process is not None
+    sleep_calls = 0
+
+    def stop_after_ignored_result(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        store.request_workflow_process_cancel(run.workflow_run_id)
 
     exit_code = run_workflow_process(
         store=store,
@@ -199,6 +205,7 @@ def test_workflow_process_fails_when_executor_result_is_rejected(
             result_id="stale-generation-result",
             process_generation=0,
         ),
+        sleep_func=stop_after_ignored_result,
     )
 
     events = store.list_runtime_events()
@@ -210,13 +217,12 @@ def test_workflow_process_fails_when_executor_result_is_rejected(
     }
 
     assert exit_code == 0
+    assert sleep_calls == 1
     assert loaded_run is not None
-    assert loaded_run.status == "FAILED"
-    assert loaded_run.error is not None
-    assert loaded_run.error["apply_status"] == "REJECTED_STALE_GENERATION"
-    assert node_runs["source"].status == "FAILED"
-    assert node_runs["source"].error is not None
-    assert node_runs["source"].error["apply_status"] == "REJECTED_STALE_GENERATION"
+    assert loaded_run.status == "CANCELLED"
+    assert loaded_run.error is None
+    assert node_runs["source"].status == "RUNNING"
+    assert node_runs["source"].error is None
     assert node_runs["transform"].status == "WAITING_DEPENDENCY"
     assert store.get_node_task_result(
         task_id=queued_event.payload["task_id"],
@@ -226,10 +232,8 @@ def test_workflow_process_fails_when_executor_result_is_rejected(
         "WORKFLOW_STARTED",
         "NODE_QUEUED",
         "NODE_STARTED",
-        "NODE_FAILED",
-        "WORKFLOW_FAILED",
+        "WORKFLOW_CANCELLED",
     ]
-    assert events[-1].payload["apply_status"] == "REJECTED_STALE_GENERATION"
 
 
 def test_workflow_process_ipc_event_sink_does_not_write_runtime_events(
