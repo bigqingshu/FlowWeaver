@@ -5,6 +5,7 @@ import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
@@ -56,11 +57,13 @@ class SubprocessNodeExecutorIpcClient:
         python_executable: str | None = None,
         cwd: str | Path | None = None,
         env: Mapping[str, str] | None = None,
+        command: list[str] | None = None,
     ) -> None:
         self.executor_id = executor_id
         self._closed = False
         self._child = subprocess.Popen(
-            [
+            command
+            or [
                 python_executable or sys.executable,
                 "-m",
                 "flowweaver.node_executor.process",
@@ -86,11 +89,11 @@ class SubprocessNodeExecutorIpcClient:
             payload=task.model_dump(mode="json"),
         )
         if not self._write_envelope(envelope):
-            return _missing_result(task, executor_id=self.executor_id)
+            return self._missing_result(task)
         while True:
             response = self._read_response()
             if response is None:
-                return _missing_result(task, executor_id=self.executor_id)
+                return self._missing_result(task)
             if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
                 return NodeTaskCompletedPayload.model_validate(
                     response.payload
@@ -158,11 +161,63 @@ class SubprocessNodeExecutorIpcClient:
         except ValueError:
             return None
 
+    def _missing_result(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        return _ipc_failure_result(
+            task,
+            executor_id=self.executor_id,
+            error=self._failure_error(),
+        )
+
+    def _failure_error(self) -> dict[str, Any]:
+        exit_code = self._child.poll()
+        if exit_code is None:
+            try:
+                exit_code = self._child.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                return {
+                    "message": "Node executor IPC response did not include a result"
+                }
+        if exit_code is None:
+            return {"message": "Node executor IPC response did not include a result"}
+        error: dict[str, Any] = {
+            "message": "Node executor subprocess exited before completing task",
+            "exit_code": exit_code,
+        }
+        stderr = self._read_stderr_tail()
+        if stderr:
+            error["stderr"] = stderr
+        return error
+
+    def _read_stderr_tail(self) -> str:
+        if self._child.poll() is None:
+            return ""
+        stderr = self._child.stderr
+        if stderr is None or stderr.closed:
+            return ""
+        try:
+            output = stderr.read().strip()
+        except OSError:
+            return ""
+        return output[-2000:]
+
 
 def _missing_result(
     task: NodeTaskModel,
     *,
     executor_id: str,
+) -> NodeTaskResultModel:
+    return _ipc_failure_result(
+        task,
+        executor_id=executor_id,
+        error={"message": "Node executor IPC response did not include a result"},
+    )
+
+
+def _ipc_failure_result(
+    task: NodeTaskModel,
+    *,
+    executor_id: str,
+    error: dict[str, Any],
 ) -> NodeTaskResultModel:
     now = utc_now()
     return NodeTaskResultModel(
@@ -172,7 +227,7 @@ def _missing_result(
         executor_id=executor_id,
         process_generation=task.process_generation,
         status=NodeResultStatus.FAILED,
-        error={"message": "Node executor IPC response did not include a result"},
+        error=error,
         started_at=now,
         finished_at=now,
     )
