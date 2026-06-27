@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from workflow_platform.common.serialization import from_msgpack, to_msgpack
-from workflow_platform.common.time import utc_now
-from workflow_platform.protocols import (
+from flowweaver.common.serialization import from_msgpack, to_msgpack
+from flowweaver.common.time import utc_now
+from flowweaver.protocols import (
     ErrorModel,
     ErrorOrigin,
     FieldSchemaModel,
@@ -19,7 +19,7 @@ from workflow_platform.protocols import (
     TableScope,
     TableStorageKind,
 )
-from workflow_platform.protocols.enums import LifecycleStatus
+from flowweaver.protocols.enums import LifecycleStatus
 
 
 def make_table_ref() -> TableRefModel:

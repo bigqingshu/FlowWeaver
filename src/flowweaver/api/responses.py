@@ -5,8 +5,12 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from workflow_platform.common.ids import new_id
-from workflow_platform.engine.runtime_store import WorkflowDefinition, WorkflowRun
+from flowweaver.common.ids import new_id
+from flowweaver.engine.runtime_store import (
+    WorkflowDefinition,
+    WorkflowRevision,
+    WorkflowRun,
+)
 
 
 def request_id(request: Request) -> str:
@@ -57,17 +61,33 @@ def _to_jsonable(value: Any) -> Any:
         return {
             "workflow_id": value.workflow_id,
             "name": value.name,
+            "revision_id": value.revision_id,
             "version": value.version,
+            "definition_hash": value.definition_hash,
             "definition": value.definition,
+            "status": value.status,
             "created_at": value.created_at.isoformat(),
             "updated_at": value.updated_at.isoformat(),
+        }
+    if isinstance(value, WorkflowRevision):
+        return {
+            "revision_id": value.revision_id,
+            "workflow_id": value.workflow_id,
+            "version": value.version,
+            "definition_hash": value.definition_hash,
+            "definition": value.definition,
+            "created_at": value.created_at.isoformat(),
+            "created_by": value.created_by,
         }
     if isinstance(value, WorkflowRun):
         return {
             "workflow_run_id": value.workflow_run_id,
             "workflow_id": value.workflow_id,
+            "revision_id": value.revision_id,
             "workflow_version": value.workflow_version,
+            "definition_hash": value.definition_hash,
             "status": value.status,
+            "state_version": value.state_version,
             "input_snapshot_id": value.input_snapshot_id,
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,

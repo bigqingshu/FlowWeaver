@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import Field
 
-from workflow_platform.protocols.base import StrictModel
-from workflow_platform.protocols.enums import (
+from flowweaver.protocols.base import StrictModel
+from flowweaver.protocols.enums import (
     LifecycleStatus,
     TableMutability,
     TableRole,

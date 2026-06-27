@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "20260627_0001"
 down_revision = None
@@ -93,7 +93,10 @@ def upgrade() -> None:
         sa.Column("export_name", sa.Text(), nullable=False),
         sa.Column("table_ref_id", sa.Text(), nullable=False),
         sa.Column("exact_table_version", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["publication_id"], ["shared_publications.publication_id"]),
+        sa.ForeignKeyConstraint(
+            ["publication_id"],
+            ["shared_publications.publication_id"],
+        ),
         sa.ForeignKeyConstraint(["table_ref_id"], ["data_refs.table_ref_id"]),
         sa.PrimaryKeyConstraint("publication_id", "export_name"),
     )

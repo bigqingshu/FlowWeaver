@@ -19,6 +19,35 @@ class WorkflowDefinitionRecord(Base):
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class WorkflowRecord(Base):
+    __tablename__ = "workflows"
+
+    workflow_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    current_revision_id: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="ACTIVE")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class WorkflowRevisionRecord(Base):
+    __tablename__ = "workflow_revisions"
+    __table_args__ = (UniqueConstraint("workflow_id", "version"),)
+
+    revision_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("workflows.workflow_id"),
+        nullable=False,
+        index=True,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition_json: Mapped[str] = mapped_column(Text, nullable=False)
+    definition_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(Text)
+
+
 class WorkflowRunRecord(Base):
     __tablename__ = "workflow_runs"
 
@@ -29,8 +58,11 @@ class WorkflowRunRecord(Base):
         nullable=False,
         index=True,
     )
+    revision_id: Mapped[str | None] = mapped_column(Text, index=True)
     workflow_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition_hash: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     input_snapshot_id: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str | None] = mapped_column(Text)
     finished_at: Mapped[str | None] = mapped_column(Text)
@@ -49,6 +81,7 @@ class NodeRunRecord(Base):
     node_instance_id: Mapped[str] = mapped_column(Text, nullable=False)
     node_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     executor_id: Mapped[str | None] = mapped_column(Text)
     progress: Mapped[float | None] = mapped_column(Float)
     current_stage: Mapped[str | None] = mapped_column(Text)
@@ -70,6 +103,8 @@ class DataRefRecord(Base):
     scope: Mapped[str] = mapped_column(Text, nullable=False)
     mutability: Mapped[str] = mapped_column(Text, nullable=False)
     provider_id: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_profile_id: Mapped[str | None] = mapped_column(Text)
+    mount_id: Mapped[str | None] = mapped_column(Text)
     logical_table_id: Mapped[str] = mapped_column(Text, nullable=False)
     opaque_handle_json: Mapped[str] = mapped_column(Text, nullable=False)
     schema_json: Mapped[str] = mapped_column(Text, nullable=False)
@@ -78,6 +113,8 @@ class DataRefRecord(Base):
     capabilities_json: Mapped[str] = mapped_column(Text, nullable=False)
     lifecycle_status: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    published_at: Mapped[str | None] = mapped_column(Text)
+    released_at: Mapped[str | None] = mapped_column(Text)
 
 
 class SharedPublicationRecord(Base):
@@ -149,3 +186,16 @@ class AuditEventRecord(Base):
     action: Mapped[str | None] = mapped_column(Text)
     result: Mapped[str] = mapped_column(Text, nullable=False)
     summary_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class RuntimeEventRecord(Base):
+    __tablename__ = "runtime_events"
+
+    event_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    event_version: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[str] = mapped_column(Text, nullable=False)
+    workflow_run_id: Mapped[str | None] = mapped_column(Text, index=True)
+    node_run_id: Mapped[str | None] = mapped_column(Text, index=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)

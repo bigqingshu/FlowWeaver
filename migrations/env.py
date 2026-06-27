@@ -5,7 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from workflow_platform.engine.db_models import Base
+from flowweaver.engine.db_models import Base
 
 config = context.config
 

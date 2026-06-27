@@ -5,10 +5,10 @@ from typing import Any
 
 from pydantic import Field
 
-from workflow_platform.common.ids import new_id
-from workflow_platform.common.time import utc_now
-from workflow_platform.protocols.base import StrictModel
-from workflow_platform.protocols.enums import EventType
+from flowweaver.common.ids import new_id
+from flowweaver.common.time import utc_now
+from flowweaver.protocols.base import StrictModel
+from flowweaver.protocols.enums import EventType
 
 
 class EventModel(StrictModel):

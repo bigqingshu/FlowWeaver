@@ -1,7 +1,7 @@
 """Public protocol models and enums."""
 
-from workflow_platform.protocols.base import StrictModel
-from workflow_platform.protocols.enums import (
+from flowweaver.protocols.base import StrictModel
+from flowweaver.protocols.enums import (
     ErrorOrigin,
     EventType,
     IPCMessageType,
@@ -14,15 +14,15 @@ from workflow_platform.protocols.enums import (
     TableStorageKind,
     WorkflowRunStatus,
 )
-from workflow_platform.protocols.events import EventModel
-from workflow_platform.protocols.ipc_messages import (
+from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
     NodeTaskCompletedPayload,
     NodeTaskProgressPayload,
     NodeTaskSubmitPayload,
 )
-from workflow_platform.protocols.node_result import ErrorModel, NodeResultModel
-from workflow_platform.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.protocols.node_result import ErrorModel, NodeResultModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 __all__ = [
     "ErrorModel",

@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已实现第一阶段的阶段 A、阶段 B 和阶段 C 的控制面骨架。
+当前已实现第一阶段的阶段 A、阶段 B、阶段 C 和阶段 C.5 的控制面基础收口。
 
 阶段 A 范围包括：
 
@@ -32,6 +32,16 @@
 - 工作流运行记录查询接口
 - WebSocket 事件连接骨架
 - API 集成测试
+
+阶段 C.5 基础收口范围包括：
+
+- 包名统一为 `flowweaver`
+- 工作流不可变 revision 与 definition hash
+- 严格 WorkflowDefinition 校验接口
+- SQLite PRAGMA、`data_refs` 字段对齐与 `state_version`
+- EngineHost Bootstrap、ServiceContainer、单实例锁与本地 token
+- RuntimeEvent 持久化、EventRouter 与 WebSocket 广播
+- API view 数据、统一 response_model 与本地 token 校验
 
 尚未实现 WorkflowRunProcess、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
 
@@ -70,5 +80,12 @@ py -3.12 -m pip install uv
 启动本机 EngineHost API：
 
 ```powershell
-.\python312\Scripts\uvicorn.exe --app-dir src workflow_platform.api.app:create_app --factory --host 127.0.0.1 --port 8000
+.\python312\Scripts\uvicorn.exe --app-dir src flowweaver.api.app:create_default_app --factory --host 127.0.0.1 --port 8000
+```
+
+首次启动会在 `runtime/config/local_api_token` 生成本地 API token。
+除 `/api/v1/health` 外，HTTP API 需要携带：
+
+```powershell
+Authorization: Bearer <local_api_token>
 ```
