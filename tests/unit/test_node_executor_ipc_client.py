@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from flowweaver.node_executor import LocalNodeExecutorIpcClient
+import sys
+
+from flowweaver.node_executor import (
+    LocalNodeExecutorIpcClient,
+    SubprocessNodeExecutorIpcClient,
+)
 from flowweaver.protocols.enums import NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
@@ -54,3 +59,20 @@ def test_local_node_executor_ipc_client_returns_failed_result() -> None:
     assert result.executor_id == "executor-1"
     assert result.status == NodeResultStatus.FAILED
     assert result.error == {"message": "boom", "error_type": "RuntimeError"}
+
+
+def test_subprocess_node_executor_ipc_client_returns_completed_result() -> None:
+    task = make_task()
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="subprocess-executor-1",
+        python_executable=sys.executable,
+    )
+    try:
+        result = executor.execute(task)
+    finally:
+        executor.close()
+
+    assert result.task_id == task.task_id
+    assert result.node_run_id == task.node_run_id
+    assert result.executor_id == "subprocess-executor-1"
+    assert result.status == NodeResultStatus.SUCCEEDED
