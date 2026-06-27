@@ -35,6 +35,7 @@ class Supervisor:
         self._executor_children: dict[str, subprocess.Popen] = {}
         self._runtime_event_paths: dict[str, Path] = {}
         self._runtime_event_offsets: dict[str, int] = {}
+        self._runtime_event_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._maintenance_thread: threading.Thread | None = None
 
@@ -339,25 +340,26 @@ class Supervisor:
         return event_dir / f"{workflow_run_id}.{process_id}.events.jsonl"
 
     def _drain_runtime_events_for_process(self, process_id: str) -> list[RuntimeEvent]:
-        if self._event_router is None:
-            return []
-        path = self._runtime_event_paths.get(process_id)
-        if path is None or not path.exists():
-            return []
-        offset = self._runtime_event_offsets.get(process_id, 0)
-        published: list[RuntimeEvent] = []
-        with path.open("r", encoding="utf-8") as stream:
-            stream.seek(offset)
-            for line in stream:
-                if not line.strip():
-                    continue
-                envelope = IPCEnvelope.model_validate_json(line)
-                if envelope.message_type != IPCMessageType.RUNTIME_EVENT:
-                    continue
-                event = EventModel.model_validate(envelope.payload)
-                published.append(self._event_router.publish_event(event))
-            self._runtime_event_offsets[process_id] = stream.tell()
-        return published
+        with self._runtime_event_lock:
+            if self._event_router is None:
+                return []
+            path = self._runtime_event_paths.get(process_id)
+            if path is None or not path.exists():
+                return []
+            offset = self._runtime_event_offsets.get(process_id, 0)
+            published: list[RuntimeEvent] = []
+            with path.open("r", encoding="utf-8") as stream:
+                stream.seek(offset)
+                for line in stream:
+                    if not line.strip():
+                        continue
+                    envelope = IPCEnvelope.model_validate_json(line)
+                    if envelope.message_type != IPCMessageType.RUNTIME_EVENT:
+                        continue
+                    event = EventModel.model_validate(envelope.payload)
+                    published.append(self._event_router.publish_event(event))
+                self._runtime_event_offsets[process_id] = stream.tell()
+            return published
 
     def _forget_runtime_event_channel(self, process_id: str) -> None:
         self._runtime_event_paths.pop(process_id, None)

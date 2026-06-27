@@ -115,6 +115,7 @@ def test_workflow_process_executes_ready_nodes_with_fake_executor(
         "source": "SUCCEEDED",
         "transform": "SUCCEEDED",
     }
+    assert {node.executor_id for node in node_runs} == {"local-node-executor"}
     assert [event.event_type for event in store.list_runtime_events()] == [
         "WORKFLOW_STARTED",
         "NODE_QUEUED",
