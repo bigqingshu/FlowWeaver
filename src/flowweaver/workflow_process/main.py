@@ -143,7 +143,6 @@ def run_workflow_process(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
-        event_sink=event_sink,
     )
     recover_ready_nodes(
         store,
@@ -151,7 +150,6 @@ def run_workflow_process(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
-        event_sink=event_sink,
     )
 
     while True:

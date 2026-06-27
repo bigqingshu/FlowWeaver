@@ -121,6 +121,67 @@ class NodeRunRecord(Base):
     error_json: Mapped[str | None] = mapped_column(Text)
 
 
+class NodeTaskRecord(Base):
+    __tablename__ = "node_tasks"
+
+    task_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    workflow_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("workflow_runs.workflow_run_id"),
+        nullable=False,
+        index=True,
+    )
+    workflow_process_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("workflow_processes.process_id"),
+        nullable=False,
+        index=True,
+    )
+    process_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    node_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_runs.node_run_id"),
+        nullable=False,
+        index=True,
+    )
+    node_instance_id: Mapped[str] = mapped_column(Text, nullable=False)
+    node_type: Mapped[str] = mapped_column(Text, nullable=False)
+    node_version: Mapped[str] = mapped_column(Text, nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    config_json: Mapped[str] = mapped_column(Text, nullable=False)
+    permission_handle_id: Mapped[str | None] = mapped_column(Text)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class NodeTaskResultRecord(Base):
+    __tablename__ = "node_task_results"
+    __table_args__ = (UniqueConstraint("task_id", "result_id"),)
+
+    result_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    task_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_tasks.task_id"),
+        nullable=False,
+        index=True,
+    )
+    node_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_runs.node_run_id"),
+        nullable=False,
+        index=True,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    executor_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    process_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    output_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    error_json: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[str] = mapped_column(Text, nullable=False)
+    finished_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class DataRefRecord(Base):
     __tablename__ = "data_refs"
 

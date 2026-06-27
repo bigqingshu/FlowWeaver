@@ -24,7 +24,6 @@ def initialize_node_runs(
     process_id: str,
     process_generation: int | None = None,
     dag: WorkflowDag,
-    event_sink: RuntimeEventSink,
 ) -> tuple[NodeRun, ...]:
     initialized: list[NodeRun] = []
     ready_node_ids = set(dag.ready_node_ids)
@@ -50,8 +49,6 @@ def initialize_node_runs(
             process_generation=process_generation,
         )
         initialized.append(node_run)
-        if status == NodeRunStatus.READY:
-            _publish_node_queued(event_sink, workflow_run_id, process_id, node_run)
     return tuple(initialized)
 
 
@@ -62,7 +59,6 @@ def recover_ready_nodes(
     process_id: str,
     process_generation: int | None = None,
     dag: WorkflowDag,
-    event_sink: RuntimeEventSink,
 ) -> tuple[NodeRun, ...]:
     node_runs = _node_runs_by_instance(store, workflow_run_id)
     newly_ready: list[NodeRun] = []
@@ -88,7 +84,6 @@ def recover_ready_nodes(
             )
             if ready is not None:
                 newly_ready.append(ready)
-                _publish_node_queued(event_sink, workflow_run_id, process_id, ready)
     return tuple(newly_ready)
 
 
@@ -139,7 +134,6 @@ def apply_node_success(
         process_id=process_id,
         process_generation=process_generation,
         dag=dag,
-        event_sink=event_sink,
     )
     workflow_completed = _complete_workflow_if_all_nodes_succeeded(
         store,

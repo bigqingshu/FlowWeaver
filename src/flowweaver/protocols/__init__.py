@@ -22,6 +22,7 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_result import ErrorModel, NodeResultModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 __all__ = [
@@ -37,7 +38,9 @@ __all__ = [
     "NodeResultStatus",
     "NodeRunStatus",
     "NodeTaskCompletedPayload",
+    "NodeTaskModel",
     "NodeTaskProgressPayload",
+    "NodeTaskResultModel",
     "NodeTaskSubmitPayload",
     "StrictModel",
     "TableMutability",

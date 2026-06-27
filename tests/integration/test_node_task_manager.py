@@ -1,0 +1,359 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
+
+from flowweaver.engine.runtime_event_sink import DatabaseEventSink
+from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
+from flowweaver.node_executor import FakeNodeExecutor
+from flowweaver.protocols.enums import NodeResultStatus, WorkflowRunStatus
+from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow_process.controller import initialize_node_runs
+from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.node_tasks import (
+    NodeTaskApplyStatus,
+    NodeTaskManager,
+)
+
+
+def migrate(database_path: Path) -> None:
+    config = Config("alembic.ini")
+    config.set_main_option("script_location", "migrations")
+    config.set_main_option("sqlalchemy.url", sqlite_url(database_path))
+    command.upgrade(config, "head")
+
+
+def make_store(tmp_path: Path) -> RuntimeStore:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    return RuntimeStore.from_sqlite_path(database_path)
+
+
+def linear_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "source",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "transform",
+                "node_type": "core.transform",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "c1",
+                "source_node_id": "source",
+                "source_port": "out",
+                "target_node_id": "transform",
+                "target_port": "in",
+            }
+        ],
+    }
+
+
+def diamond_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {"node_instance_id": "a", "node_type": "core.a", "node_version": "1.0"},
+            {"node_instance_id": "b", "node_type": "core.b", "node_version": "1.0"},
+            {"node_instance_id": "c", "node_type": "core.c", "node_version": "1.0"},
+            {"node_instance_id": "d", "node_type": "core.d", "node_version": "1.0"},
+        ],
+        "connections": [
+            {
+                "connection_id": "ab",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "b",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "ac",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "c",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "bd",
+                "source_node_id": "b",
+                "source_port": "out",
+                "target_node_id": "d",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "cd",
+                "source_node_id": "c",
+                "source_port": "out",
+                "target_node_id": "d",
+                "target_port": "in",
+            },
+        ],
+    }
+
+
+def create_running_process(store: RuntimeStore, definition: dict):
+    workflow = store.create_workflow_definition(
+        name="Node task workflow",
+        definition=definition,
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    assert process is not None
+    claimed_run = store.get_workflow_run(run.workflow_run_id)
+    assert claimed_run is not None
+    store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=claimed_run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+        owner_process_id=process.process_id,
+        process_generation=process.process_generation,
+    )
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition))
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        dag=dag,
+    )
+    manager = NodeTaskManager(
+        store=store,
+        event_sink=DatabaseEventSink(store),
+        dag=dag,
+    )
+    return run, process, manager
+
+
+def submit_and_accept(
+    store: RuntimeStore,
+    manager: NodeTaskManager,
+    *,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int,
+    node_instance_id: str,
+    executor_id: str = "executor-1",
+):
+    task = manager.submit_ready_node(
+        workflow_run_id=workflow_run_id,
+        workflow_process_id=workflow_process_id,
+        process_generation=process_generation,
+        node_instance_id=node_instance_id,
+    )
+    assert task is not None
+    accepted = manager.accept_task(task_id=task.task_id, executor_id=executor_id)
+    assert accepted == task
+    node_run = store.get_node_run(task.node_run_id)
+    assert node_run is not None
+    assert node_run.status == "RUNNING"
+    assert node_run.executor_id == executor_id
+    return task
+
+
+def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+
+    assert task.workflow_process_id == process.process_id
+    assert task.process_generation == 1
+    assert task.input_refs == []
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "NODE_QUEUED",
+        "NODE_STARTED",
+    ]
+
+
+def test_success_result_is_idempotent_and_advances_downstream(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    result = FakeNodeExecutor(executor_id="executor-1").execute(task)
+
+    first = manager.apply_result(result)
+    event_count = len(store.list_runtime_events())
+    source = store.get_node_run(task.node_run_id)
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    second = manager.apply_result(result)
+
+    assert first.status == NodeTaskApplyStatus.APPLIED
+    assert second.status == NodeTaskApplyStatus.ALREADY_APPLIED
+    assert source is not None
+    assert source.status == "SUCCEEDED"
+    assert transform is not None
+    assert transform.status == "READY"
+    assert len(store.list_runtime_events()) == event_count
+
+
+def test_stale_and_mismatched_results_are_rejected(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    executor = FakeNodeExecutor(executor_id="executor-1")
+    base = executor.execute(task)
+
+    stale_attempt = manager.apply_result(
+        base.model_copy(update={"result_id": "attempt-result", "attempt": 0})
+    )
+    stale_generation = manager.apply_result(
+        base.model_copy(
+            update={"result_id": "generation-result", "process_generation": 0}
+        )
+    )
+    wrong_executor = manager.apply_result(
+        base.model_copy(update={"result_id": "executor-result", "executor_id": "old"})
+    )
+
+    assert stale_attempt.status == NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT
+    assert stale_generation.status == NodeTaskApplyStatus.REJECTED_STALE_GENERATION
+    assert wrong_executor.status == NodeTaskApplyStatus.REJECTED_EXECUTOR_MISMATCH
+    assert store.get_node_run(task.node_run_id).status == "RUNNING"
+
+
+def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    executor = FakeNodeExecutor(executor_id="executor-1")
+    first = executor.execute(task)
+    assert manager.apply_result(first).status == NodeTaskApplyStatus.APPLIED
+    late = executor.execute(task).model_copy(update={"result_id": "late-result"})
+
+    rejected = manager.apply_result(late)
+
+    assert rejected.status == NodeTaskApplyStatus.REJECTED_NODE_TERMINAL
+    assert store.get_node_run(task.node_run_id).status == "SUCCEEDED"
+
+
+def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={"message": "failed"},
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert store.get_node_run(task.node_run_id).status == "FAILED"
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert [event.event_type for event in store.list_runtime_events()][-2:] == [
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
+    ]
+
+
+def test_fork_and_join_dag_waits_for_all_upstreams(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, diamond_definition())
+    executor = FakeNodeExecutor(executor_id="executor-1")
+    task_a = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="a",
+    )
+    assert manager.apply_result(executor.execute(task_a)).status == (
+        NodeTaskApplyStatus.APPLIED
+    )
+    assert {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    } == {"a": "SUCCEEDED", "b": "READY", "c": "READY", "d": "WAITING_DEPENDENCY"}
+
+    task_b = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="b",
+    )
+    task_c = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="c",
+    )
+    assert manager.apply_result(executor.execute(task_b)).status == (
+        NodeTaskApplyStatus.APPLIED
+    )
+    assert store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="d",
+    ).status == "WAITING_DEPENDENCY"
+    assert manager.apply_result(executor.execute(task_c)).status == (
+        NodeTaskApplyStatus.APPLIED
+    )
+
+    join = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="d",
+    )
+    assert join is not None
+    assert join.status == "READY"

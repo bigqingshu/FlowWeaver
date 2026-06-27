@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from sqlalchemy import select, update
 from sqlalchemy.engine import Connection, CursorResult, Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.database import create_sqlite_engine, sqlite_url
@@ -19,6 +20,8 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
     DataRefRecord,
     NodeRunRecord,
+    NodeTaskRecord,
+    NodeTaskResultRecord,
     RuntimeEventRecord,
     WorkflowDefinitionRecord,
     WorkflowProcessRecord,
@@ -28,6 +31,7 @@ from flowweaver.engine.db_models import (
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    NodeResultStatus,
     NodeRunStatus,
     TableMutability,
     TableRole,
@@ -37,6 +41,7 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -841,6 +846,42 @@ class RuntimeStore:
                 return None
             return _node_run_from_record(record)
 
+    def create_node_task(self, task: NodeTaskModel) -> NodeTaskModel:
+        with self._session_factory.begin() as session:
+            session.add(_node_task_to_record(task))
+        return task
+
+    def get_node_task(self, task_id: str) -> NodeTaskModel | None:
+        with self._session_factory() as session:
+            record = session.get(NodeTaskRecord, task_id)
+            if record is None:
+                return None
+            return _node_task_from_record(record)
+
+    def record_node_task_result_once(self, result: NodeTaskResultModel) -> bool:
+        try:
+            with self._session_factory.begin() as session:
+                session.add(_node_task_result_to_record(result))
+            return True
+        except IntegrityError:
+            return False
+
+    def get_node_task_result(
+        self,
+        *,
+        task_id: str,
+        result_id: str,
+    ) -> NodeTaskResultModel | None:
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(NodeTaskResultRecord)
+                .where(NodeTaskResultRecord.task_id == task_id)
+                .where(NodeTaskResultRecord.result_id == result_id)
+            )
+            if record is None:
+                return None
+            return _node_task_result_from_record(record)
+
     def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
         with self._session_factory() as session:
             records = session.scalars(
@@ -859,6 +900,7 @@ class RuntimeStore:
         current_stage: str | None = None,
         finished_at: datetime | None = None,
         error: dict[str, Any] | None = None,
+        executor_id: str | None = None,
         expected_state_version: int | None = None,
         allowed_source_statuses: Iterable[NodeRunStatus | str] | None = None,
         owner_process_id: str | None = None,
@@ -881,6 +923,8 @@ class RuntimeStore:
                 values["current_stage"] = current_stage
             if finished_at is not None:
                 values["finished_at"] = _datetime_to_text(finished_at)
+            if executor_id is not None:
+                values["executor_id"] = executor_id
 
             statement = (
                 update(NodeRunRecord)
@@ -1050,6 +1094,89 @@ def _node_run_from_record(record: NodeRunRecord) -> NodeRun:
         finished_at=_optional_datetime_from_text(record.finished_at),
         last_heartbeat=_optional_datetime_from_text(record.last_heartbeat),
         error=json.loads(record.error_json) if record.error_json else None,
+    )
+
+
+def _node_task_to_record(task: NodeTaskModel) -> NodeTaskRecord:
+    return NodeTaskRecord(
+        task_id=task.task_id,
+        workflow_run_id=task.workflow_run_id,
+        workflow_process_id=task.workflow_process_id,
+        process_generation=task.process_generation,
+        node_run_id=task.node_run_id,
+        node_instance_id=task.node_instance_id,
+        node_type=task.node_type,
+        node_version=task.node_version,
+        attempt=task.attempt,
+        input_refs_json=json.dumps(
+            task.input_refs,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        config_json=_json_dumps(task.config),
+        permission_handle_id=task.permission_handle_id,
+        timeout_seconds=task.timeout_seconds,
+        created_at=_datetime_to_text(utc_now()),
+    )
+
+
+def _node_task_from_record(record: NodeTaskRecord) -> NodeTaskModel:
+    return NodeTaskModel(
+        task_id=record.task_id,
+        workflow_run_id=record.workflow_run_id,
+        workflow_process_id=record.workflow_process_id,
+        process_generation=record.process_generation,
+        node_run_id=record.node_run_id,
+        node_instance_id=record.node_instance_id,
+        node_type=record.node_type,
+        node_version=record.node_version,
+        attempt=record.attempt,
+        input_refs=list(json.loads(record.input_refs_json)),
+        config=json.loads(record.config_json),
+        permission_handle_id=record.permission_handle_id,
+        timeout_seconds=record.timeout_seconds,
+    )
+
+
+def _node_task_result_to_record(
+    result: NodeTaskResultModel,
+) -> NodeTaskResultRecord:
+    return NodeTaskResultRecord(
+        result_id=result.result_id,
+        task_id=result.task_id,
+        node_run_id=result.node_run_id,
+        attempt=result.attempt,
+        executor_id=result.executor_id,
+        process_generation=result.process_generation,
+        status=result.status.value,
+        output_refs_json=json.dumps(
+            result.output_refs,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        error_json=_json_dumps(result.error) if result.error is not None else None,
+        started_at=_datetime_to_text(result.started_at),
+        finished_at=_datetime_to_text(result.finished_at),
+    )
+
+
+def _node_task_result_from_record(
+    record: NodeTaskResultRecord,
+) -> NodeTaskResultModel:
+    return NodeTaskResultModel(
+        result_id=record.result_id,
+        task_id=record.task_id,
+        node_run_id=record.node_run_id,
+        attempt=record.attempt,
+        executor_id=record.executor_id,
+        process_generation=record.process_generation,
+        status=NodeResultStatus(record.status),
+        output_refs=list(json.loads(record.output_refs_json)),
+        error=json.loads(record.error_json) if record.error_json else None,
+        started_at=_datetime_from_text(record.started_at),
+        finished_at=_datetime_from_text(record.finished_at),
     )
 
 

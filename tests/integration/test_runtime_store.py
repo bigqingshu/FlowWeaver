@@ -60,6 +60,8 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "workflow_revisions",
         "workflow_runs",
         "node_runs",
+        "node_tasks",
+        "node_task_results",
         "data_refs",
         "shared_publications",
         "shared_publication_members",

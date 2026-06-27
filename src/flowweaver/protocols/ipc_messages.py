@@ -9,7 +9,7 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.base import StrictModel
 from flowweaver.protocols.enums import IPCMessageType
-from flowweaver.protocols.node_result import NodeResultModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
 class IPCEnvelope(StrictModel):
@@ -23,15 +23,8 @@ class IPCEnvelope(StrictModel):
     payload: dict[str, Any]
 
 
-class NodeTaskSubmitPayload(StrictModel):
-    node_type: str
-    node_version: str
-    node_instance_id: str
-    config: dict[str, Any]
-    input_refs: list[str]
-    permission_handle_id: str
-    timeout_seconds: int
-    attempt: int
+class NodeTaskSubmitPayload(NodeTaskModel):
+    pass
 
 
 class NodeTaskProgressPayload(StrictModel):
@@ -41,4 +34,4 @@ class NodeTaskProgressPayload(StrictModel):
 
 
 class NodeTaskCompletedPayload(StrictModel):
-    result: NodeResultModel
+    result: NodeTaskResultModel

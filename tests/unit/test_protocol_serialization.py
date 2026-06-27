@@ -13,6 +13,8 @@ from flowweaver.protocols import (
     IPCMessageType,
     NodeResultModel,
     NodeResultStatus,
+    NodeTaskModel,
+    NodeTaskResultModel,
     TableMutability,
     TableRefModel,
     TableRole,
@@ -95,6 +97,38 @@ def test_node_result_msgpack_round_trip() -> None:
     assert restored == result
     assert restored.outputs[0].opaque_handle["table_name"] == "stg_node-1_output"
     assert restored.errors[0].error_code == "VALIDATION_ERROR"
+
+
+def test_node_task_and_result_msgpack_round_trip() -> None:
+    task = NodeTaskModel(
+        workflow_run_id="run-1",
+        workflow_process_id="process-1",
+        process_generation=1,
+        node_run_id="node-run-1",
+        node_instance_id="source",
+        node_type="core.source",
+        node_version="1.0",
+        attempt=1,
+        input_refs=[],
+        config={"rows": 3},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        task_id=task.task_id,
+        node_run_id=task.node_run_id,
+        attempt=task.attempt,
+        executor_id="executor-1",
+        process_generation=task.process_generation,
+        status=NodeResultStatus.SUCCEEDED,
+        output_refs=[],
+    )
+
+    restored_task = from_msgpack(to_msgpack(task), NodeTaskModel)
+    restored_result = from_msgpack(to_msgpack(result), NodeTaskResultModel)
+
+    assert restored_task == task
+    assert restored_result == result
+    assert restored_result.task_id == task.task_id
 
 
 def test_protocol_models_reject_unknown_fields() -> None:

@@ -116,16 +116,13 @@ def test_controller_initializes_node_runs(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
-        event_sink=DatabaseEventSink(store),
     )
 
     assert {node.node_instance_id: node.status for node in initialized} == {
         "source": NodeRunStatus.READY.value,
         "transform": NodeRunStatus.WAITING_DEPENDENCY.value,
     }
-    assert [event.event_type for event in store.list_runtime_events()] == [
-        "NODE_QUEUED"
-    ]
+    assert store.list_runtime_events() == []
 
 
 def test_node_success_advances_downstream_to_ready(tmp_path: Path) -> None:
@@ -136,7 +133,6 @@ def test_node_success_advances_downstream_to_ready(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
-        event_sink=DatabaseEventSink(store),
     )
     mark_node_running(
         store,
@@ -164,9 +160,7 @@ def test_node_success_advances_downstream_to_ready(tmp_path: Path) -> None:
         "transform": NodeRunStatus.READY.value,
     }
     assert [event.event_type for event in store.list_runtime_events()] == [
-        "NODE_QUEUED",
-        "NODE_FINISHED",
-        "NODE_QUEUED",
+        "NODE_FINISHED"
     ]
 
 
@@ -197,7 +191,6 @@ def test_recover_ready_nodes_uses_persisted_state(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
-        event_sink=DatabaseEventSink(store),
     )
 
     assert [node.node_instance_id for node in recovered] == ["transform"]
@@ -212,7 +205,6 @@ def test_all_successful_nodes_complete_workflow(tmp_path: Path) -> None:
         workflow_run_id=run.workflow_run_id,
         process_id=process.process_id,
         dag=dag,
-        event_sink=DatabaseEventSink(store),
     )
     mark_node_running(
         store,
