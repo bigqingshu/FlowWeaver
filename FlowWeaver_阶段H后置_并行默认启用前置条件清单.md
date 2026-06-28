@@ -157,13 +157,14 @@ max_concurrent_node_tasks = 1 | 2
 
 决策：
 
+- 当配置字段缺省时，自动使用安全默认值：`execution_mode="immediate"` 且 `max_concurrent_node_tasks=1`。
 - 默认 `execution_mode` 固定为 `"immediate"`。
 - 可选 `execution_mode` 为 `"threaded"`，必须显式配置后才启用。
 - 默认并发数固定为 `1`。
 - 当前阶段只允许把并发数配置为 `2`，不开放更大的并发值。
 - `execution_mode="immediate"` 时，即使配置并发数为 `2`，运行效果仍应保持单任务同步执行。
 - `execution_mode="threaded"` 且 `max_concurrent_node_tasks=2` 时，才允许最多两个 READY 节点并发执行。
-- 非法 `execution_mode` 或非法并发数必须被拒绝或回退为安全默认值；具体采用拒绝还是回退，应在实现前单独确认。
+- 用户显式填写非法 `execution_mode` 或非法并发数时，启动即拒绝，不自动回退。
 
 进入实现前置条件：
 
