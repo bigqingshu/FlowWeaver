@@ -341,6 +341,19 @@ def _run_workflow_process_loop(
             return 0
         if _workflow_run_is_terminal(store, workflow_run_id):
             return 0
+        completed_count = _drain_executor_task_completions(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=process_id,
+            process_generation=process_generation,
+            event_sink=event_sink,
+            task_manager=task_manager,
+            cleanup_staging_for_node=cleanup_staging_for_node,
+            close_executor_after_task=close_executor_after_task,
+            execution_pool=execution_pool,
+        )
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            return 0
         dispatched_count = _dispatch_ready_nodes(
             store=store,
             workflow_run_id=workflow_run_id,
@@ -360,7 +373,7 @@ def _run_workflow_process_loop(
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
             return 0
-        if dispatched_count == 0:
+        if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
 
 
@@ -476,6 +489,39 @@ def _dispatch_ready_nodes(
         if _workflow_run_is_terminal(store, workflow_run_id):
             break
     return dispatched_count
+
+
+def _drain_executor_task_completions(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    event_sink: RuntimeEventSink,
+    task_manager: NodeTaskManager,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
+    close_executor_after_task: bool,
+    execution_pool: NodeTaskExecutionPool,
+) -> int:
+    completed_count = 0
+    while True:
+        completion = execution_pool.pop_completed()
+        if completion is None:
+            return completed_count
+        _apply_executor_task_completion(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
+            event_sink=event_sink,
+            task_manager=task_manager,
+            cleanup_staging_for_node=cleanup_staging_for_node,
+            close_executor_after_task=close_executor_after_task,
+            completion=completion,
+        )
+        completed_count += 1
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            return completed_count
 
 
 def _apply_executor_task_completion(

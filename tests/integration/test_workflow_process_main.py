@@ -426,6 +426,37 @@ class RecordingImmediateExecutionPool:
         return 0
 
 
+class DelayedCompletionExecutionPool:
+    def __init__(self) -> None:
+        self.submitted: list[DispatchedNodeTask] = []
+        self._completed: list[ExecutorTaskCompletion] = []
+
+    def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
+        self.submitted.append(dispatched_task)
+        return True
+
+    def complete_next(self) -> bool:
+        if not self.submitted:
+            return False
+        dispatched_task = self.submitted.pop(0)
+        result = dispatched_task.executor.execute(dispatched_task.task)
+        self._completed.append(
+            ExecutorTaskCompletion(
+                dispatched_task=dispatched_task,
+                result=result,
+            )
+        )
+        return True
+
+    def pop_completed(self) -> ExecutorTaskCompletion | None:
+        if not self._completed:
+            return None
+        return self._completed.pop(0)
+
+    def in_flight_count(self) -> int:
+        return len(self.submitted)
+
+
 class TrackingSubprocessNodeExecutor(SubprocessNodeExecutorIpcClient):
     def __init__(
         self,
@@ -897,6 +928,69 @@ def test_workflow_process_uses_injected_execution_pool(
         "transform": ["source-output"],
     }
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+
+
+def test_workflow_process_drains_pending_pool_completions_before_dispatch(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = NodeAwareOutputExecutor(
+        {
+            "source": ["source-output"],
+            "transform": ["transform-output"],
+        }
+    )
+    execution_pool = DelayedCompletionExecutionPool()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Pending completion workflow",
+        definition=definition(),
+        workflow_id="workflow-pending-completion",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-pending-completion",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-pending-completion",
+    )
+    assert process is not None
+
+    def complete_during_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        assert execution_pool.complete_next() is True
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+        max_ready_dispatch_per_cycle=1,
+        sleep_func=complete_during_sleep,
+    )
+
+    assert exit_code == 0
+    assert sleep_calls == 2
+    assert executor.seen_input_refs_by_node == {
+        "source": [],
+        "transform": ["source-output"],
+    }
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
 
 
 def test_workflow_process_dispatches_ready_candidate_to_running_task(
