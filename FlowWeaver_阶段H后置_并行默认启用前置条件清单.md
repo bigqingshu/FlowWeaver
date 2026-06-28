@@ -144,6 +144,34 @@
 
 这样可以保留同步路径作为回退，也便于定位并行问题。
 
+### 8. 最小配置决策清单
+
+下一步只建议引入显式、保守的运行模式配置，不直接改变现有默认行为。
+
+配置字段：
+
+```text
+execution_mode = "immediate" | "threaded"
+max_concurrent_node_tasks = 1 | 2
+```
+
+决策：
+
+- 默认 `execution_mode` 固定为 `"immediate"`。
+- 可选 `execution_mode` 为 `"threaded"`，必须显式配置后才启用。
+- 默认并发数固定为 `1`。
+- 当前阶段只允许把并发数配置为 `2`，不开放更大的并发值。
+- `execution_mode="immediate"` 时，即使配置并发数为 `2`，运行效果仍应保持单任务同步执行。
+- `execution_mode="threaded"` 且 `max_concurrent_node_tasks=2` 时，才允许最多两个 READY 节点并发执行。
+- 非法 `execution_mode` 或非法并发数必须被拒绝或回退为安全默认值；具体采用拒绝还是回退，应在实现前单独确认。
+
+进入实现前置条件：
+
+- 配置来源明确，优先使用已有 `EngineConfig` 或 workflow process 入参，不新增独立配置系统。
+- API、CLI、测试 helper 对默认值的行为保持兼容。
+- threaded 模式必须继续通过 H+1 到 H+6 已覆盖的异常、取消、失败隔离、终态 close 验收。
+- 本轮不把 threaded 设为默认，不扩大到多进程池或节点隔离方案。
+
 ## 四、建议执行顺序
 
 ### H+1：线程池异常 completion 最小边界
