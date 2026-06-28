@@ -91,6 +91,48 @@ def fork_definition() -> dict:
     }
 
 
+def diamond_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {"node_instance_id": "a", "node_type": "core.a", "node_version": "1.0"},
+            {"node_instance_id": "b", "node_type": "core.b", "node_version": "1.0"},
+            {"node_instance_id": "c", "node_type": "core.c", "node_version": "1.0"},
+            {"node_instance_id": "d", "node_type": "core.d", "node_version": "1.0"},
+        ],
+        "connections": [
+            {
+                "connection_id": "ab",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "b",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "ac",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "c",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "bd",
+                "source_node_id": "b",
+                "source_port": "out",
+                "target_node_id": "d",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "cd",
+                "source_node_id": "c",
+                "source_port": "out",
+                "target_node_id": "d",
+                "target_port": "in",
+            },
+        ],
+    }
+
+
 def create_run(store: RuntimeStore):
     workflow = store.create_workflow_definition(
         name="Controller workflow",
@@ -138,6 +180,93 @@ def mark_node_running(
         expected_state_version=queued.state_version,
     )
     assert running is not None
+
+
+def create_run_from_definition(
+    store: RuntimeStore,
+    *,
+    definition_data: dict,
+    workflow_id: str,
+    workflow_run_id: str,
+    process_id: str,
+):
+    workflow = store.create_workflow_definition(
+        name="Controller workflow",
+        definition=definition_data,
+        workflow_id=workflow_id,
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id=workflow_run_id,
+    )
+    store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id=process_id,
+    )
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition_data))
+    return run, process, dag
+
+
+def record_successful_node_result(
+    store: RuntimeStore,
+    *,
+    workflow_run_id: str,
+    process_id: str,
+    process_generation: int,
+    node_instance_id: str,
+    output_refs: list[str],
+) -> None:
+    node = store.get_node_run_for_instance(
+        workflow_run_id=workflow_run_id,
+        node_instance_id=node_instance_id,
+    )
+    assert node is not None
+    running = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.RUNNING,
+        expected_state_version=node.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    assert running is not None
+    task = NodeTaskModel(
+        task_id=f"{node_instance_id}-task-1",
+        workflow_run_id=workflow_run_id,
+        workflow_process_id=process_id,
+        process_generation=process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        result_id=f"{node_instance_id}-result-1",
+        task_id=task.task_id,
+        node_run_id=node.node_run_id,
+        attempt=node.attempt,
+        executor_id="executor-1",
+        process_generation=process_generation,
+        status=NodeResultStatus.SUCCEEDED,
+        output_refs=output_refs,
+    )
+    store.create_node_task(task)
+    succeeded = store.record_node_task_result_and_update_node_run_status(
+        result,
+        NodeRunStatus.SUCCEEDED,
+        finished_at=result.finished_at,
+        expected_state_version=running.state_version,
+        allowed_source_statuses=[NodeRunStatus.RUNNING],
+    )
+    assert succeeded is not None
 
 
 def test_controller_initializes_node_runs(tmp_path: Path) -> None:
@@ -267,6 +396,7 @@ def test_ready_queue_uses_dag_order_for_ready_nodes(tmp_path: Path) -> None:
 
     assert [item.node_run.node_instance_id for item in candidates] == ["a"]
     assert candidates[0].input_refs == ()
+    assert candidates[0].dependency_count == 0
 
 
 def test_ready_queue_waits_for_upstream_result_refs(tmp_path: Path) -> None:
@@ -386,6 +516,146 @@ def test_ready_queue_passes_upstream_result_refs(tmp_path: Path) -> None:
 
     assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
     assert candidates[0].input_refs == ("table-source-1", "table-source-2")
+    assert candidates[0].dependency_count == 1
+
+
+def test_ready_queue_exposes_fork_candidates_after_source_success(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=diamond_definition(),
+        workflow_id="workflow-ready-fork",
+        workflow_run_id="run-ready-fork",
+        process_id="process-ready-fork",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    record_successful_node_result(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="a",
+        output_refs=["table-a"],
+    )
+    recovered = recover_ready_nodes(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert [node.node_instance_id for node in recovered] == ["b", "c"]
+    assert [item.node_run.node_instance_id for item in candidates] == ["b", "c"]
+    assert [item.input_refs for item in candidates] == [("table-a",), ("table-a",)]
+    assert [item.dependency_count for item in candidates] == [1, 1]
+
+
+def test_ready_queue_waits_for_all_join_upstream_result_refs(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=diamond_definition(),
+        workflow_id="workflow-ready-join",
+        workflow_run_id="run-ready-join",
+        process_id="process-ready-join",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    for node_instance_id, output_refs in (
+        ("a", ["table-a"]),
+        ("b", ["table-b"]),
+    ):
+        node = store.get_node_run_for_instance(
+            workflow_run_id=run.workflow_run_id,
+            node_instance_id=node_instance_id,
+        )
+        assert node is not None
+        if node.status == NodeRunStatus.WAITING_DEPENDENCY.value:
+            ready = store.update_node_run_status(
+                node.node_run_id,
+                NodeRunStatus.READY,
+                expected_state_version=node.state_version,
+                allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+            )
+            assert ready is not None
+        record_successful_node_result(
+            store,
+            workflow_run_id=run.workflow_run_id,
+            process_id=process.process_id,
+            process_generation=process.process_generation,
+            node_instance_id=node_instance_id,
+            output_refs=output_refs,
+        )
+    d_node = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="d",
+    )
+    assert d_node is not None
+    ready_d = store.update_node_run_status(
+        d_node.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=d_node.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert ready_d is not None
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert candidates == ()
+
+    c_node = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="c",
+    )
+    assert c_node is not None
+    ready_c = store.update_node_run_status(
+        c_node.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=c_node.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert ready_c is not None
+    record_successful_node_result(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="c",
+        output_refs=["table-c"],
+    )
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert [item.node_run.node_instance_id for item in candidates] == ["d"]
+    assert candidates[0].input_refs == ("table-b", "table-c")
+    assert candidates[0].dependency_count == 2
 
 
 def test_all_successful_nodes_complete_workflow(tmp_path: Path) -> None:

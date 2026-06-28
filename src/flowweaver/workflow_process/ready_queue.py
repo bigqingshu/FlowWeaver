@@ -12,6 +12,7 @@ class ReadyNodeCandidate:
     node_run: NodeRun
     dag_node: DagNode
     input_refs: tuple[str, ...]
+    dependency_count: int
 
 
 def collect_ready_node_candidates(
@@ -41,6 +42,7 @@ def collect_ready_node_candidates(
                 node_run=node_run,
                 dag_node=dag_node,
                 input_refs=tuple(input_refs),
+                dependency_count=len(dag_node.upstream_node_ids),
             )
         )
     return tuple(candidates)
