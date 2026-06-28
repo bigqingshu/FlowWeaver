@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -29,9 +30,24 @@ class NodeTaskApplyStatus(str, Enum):
     REJECTED_NODE_TERMINAL = "REJECTED_NODE_TERMINAL"
 
 
+class NodeTaskTimeoutStatus(str, Enum):
+    TIMED_OUT = "TIMED_OUT"
+    NOT_TIMED_OUT = "NOT_TIMED_OUT"
+    REJECTED_INVALID_TASK = "REJECTED_INVALID_TASK"
+    REJECTED_WORKFLOW_NOT_RUNNING = "REJECTED_WORKFLOW_NOT_RUNNING"
+    REJECTED_NODE_NOT_RUNNING = "REJECTED_NODE_NOT_RUNNING"
+
+
 @dataclass(frozen=True)
 class NodeTaskApplyResult:
     status: NodeTaskApplyStatus
+    node_run_id: str | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class NodeTaskTimeoutResult:
+    status: NodeTaskTimeoutStatus
     node_run_id: str | None = None
     detail: str | None = None
 
@@ -120,10 +136,12 @@ class NodeTaskManager:
         node_run = self._store.get_node_run(task.node_run_id)
         if node_run is None:
             return None
+        started_at = utc_now()
         running = self._store.update_node_run_status(
             node_run.node_run_id,
             NodeRunStatus.RUNNING,
             executor_id=executor_id,
+            started_at=started_at,
             expected_state_version=node_run.state_version,
             allowed_source_statuses=[NodeRunStatus.QUEUED],
             owner_process_id=task.workflow_process_id,
@@ -194,6 +212,122 @@ class NodeTaskManager:
             )
         )
         return updated
+
+    def mark_timed_out_task(
+        self,
+        task: NodeTaskModel,
+        *,
+        now: datetime | None = None,
+    ) -> NodeTaskTimeoutResult:
+        stored_task = self._store.get_node_task(task.task_id)
+        if stored_task is None or stored_task.node_run_id != task.node_run_id:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.REJECTED_INVALID_TASK
+            )
+        node_run = self._store.get_node_run(stored_task.node_run_id)
+        if node_run is None or node_run.attempt != stored_task.attempt:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.REJECTED_INVALID_TASK,
+                node_run_id=stored_task.node_run_id,
+            )
+        if node_run.status not in {
+            NodeRunStatus.RUNNING.value,
+            NodeRunStatus.LONG_RUNNING.value,
+        }:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.REJECTED_NODE_NOT_RUNNING,
+                node_run_id=stored_task.node_run_id,
+            )
+        workflow_run = self._store.get_workflow_run(stored_task.workflow_run_id)
+        if (
+            workflow_run is None
+            or workflow_run.status != WorkflowRunStatus.RUNNING.value
+        ):
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.REJECTED_WORKFLOW_NOT_RUNNING,
+                node_run_id=stored_task.node_run_id,
+            )
+        if node_run.started_at is None:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.NOT_TIMED_OUT,
+                node_run_id=stored_task.node_run_id,
+                detail="missing_started_at",
+            )
+        checked_at = now or utc_now()
+        deadline = node_run.started_at + timedelta(
+            seconds=stored_task.timeout_seconds
+        )
+        if checked_at < deadline:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.NOT_TIMED_OUT,
+                node_run_id=stored_task.node_run_id,
+            )
+        error = {
+            "message": "Node task timed out",
+            "task_id": stored_task.task_id,
+            "node_instance_id": stored_task.node_instance_id,
+            "timeout_seconds": stored_task.timeout_seconds,
+            "started_at": node_run.started_at.isoformat(),
+            "timed_out_at": checked_at.isoformat(),
+        }
+        updated = self._store.update_node_run_status(
+            stored_task.node_run_id,
+            NodeRunStatus.TIMED_OUT,
+            finished_at=checked_at,
+            error=error,
+            expected_state_version=node_run.state_version,
+            allowed_source_statuses=[
+                NodeRunStatus.RUNNING,
+                NodeRunStatus.LONG_RUNNING,
+            ],
+            owner_process_id=stored_task.workflow_process_id,
+            process_generation=stored_task.process_generation,
+        )
+        if updated is None:
+            return NodeTaskTimeoutResult(
+                NodeTaskTimeoutStatus.REJECTED_NODE_NOT_RUNNING,
+                node_run_id=stored_task.node_run_id,
+            )
+        updated_workflow = self._store.update_workflow_run_status(
+            stored_task.workflow_run_id,
+            WorkflowRunStatus.FAILED,
+            finished_at=checked_at,
+            error=error,
+            allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+            owner_process_id=stored_task.workflow_process_id,
+            process_generation=stored_task.process_generation,
+        )
+        self._event_sink.emit(
+            EventModel(
+                event_type=EventType.NODE_TIMEOUT,
+                workflow_run_id=stored_task.workflow_run_id,
+                node_run_id=stored_task.node_run_id,
+                payload={
+                    "process_id": stored_task.workflow_process_id,
+                    "task_id": stored_task.task_id,
+                    "executor_id": updated.executor_id,
+                    "node_instance_id": stored_task.node_instance_id,
+                    "timeout_seconds": stored_task.timeout_seconds,
+                },
+            )
+        )
+        if updated_workflow is not None:
+            self._event_sink.emit(
+                EventModel(
+                    event_type=EventType.WORKFLOW_FAILED,
+                    workflow_run_id=stored_task.workflow_run_id,
+                    payload={
+                        "process_id": stored_task.workflow_process_id,
+                        "task_id": stored_task.task_id,
+                        "node_instance_id": stored_task.node_instance_id,
+                        "reason": "NODE_TIMEOUT",
+                    },
+                )
+            )
+        return NodeTaskTimeoutResult(
+            NodeTaskTimeoutStatus.TIMED_OUT,
+            node_run_id=stored_task.node_run_id,
+        )
 
     def apply_result(self, result: NodeTaskResultModel) -> NodeTaskApplyResult:
         existing_result = self._store.get_node_task_result(

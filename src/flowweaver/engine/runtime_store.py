@@ -1049,6 +1049,7 @@ class RuntimeStore:
         *,
         progress: float | None = None,
         current_stage: str | None = None,
+        started_at: datetime | None = None,
         finished_at: datetime | None = None,
         error: dict[str, Any] | None = None,
         executor_id: str | None = None,
@@ -1072,6 +1073,8 @@ class RuntimeStore:
                 values["progress"] = progress
             if current_stage is not None:
                 values["current_stage"] = current_stage
+            if started_at is not None:
+                values["started_at"] = _datetime_to_text(started_at)
             if finished_at is not None:
                 values["finished_at"] = _datetime_to_text(finished_at)
             if executor_id is not None:

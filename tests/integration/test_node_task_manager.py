@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.node_executor import FakeNodeExecutor
-from flowweaver.protocols.enums import NodeResultStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    NodeResultStatus,
+    NodeRunStatus,
+    WorkflowRunStatus,
+)
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyStatus,
     NodeTaskManager,
+    NodeTaskTimeoutStatus,
 )
 
 
@@ -151,12 +158,14 @@ def submit_and_accept(
     process_generation: int,
     node_instance_id: str,
     executor_id: str = "executor-1",
+    timeout_seconds: int = 60,
 ):
     task = manager.submit_ready_node(
         workflow_run_id=workflow_run_id,
         workflow_process_id=workflow_process_id,
         process_generation=process_generation,
         node_instance_id=node_instance_id,
+        timeout_seconds=timeout_seconds,
     )
     assert task is not None
     accepted = manager.accept_task(task_id=task.task_id, executor_id=executor_id)
@@ -165,6 +174,7 @@ def submit_and_accept(
     assert node_run is not None
     assert node_run.status == "RUNNING"
     assert node_run.executor_id == executor_id
+    assert node_run.started_at is not None
     return task
 
 
@@ -360,6 +370,134 @@ def test_task_heartbeat_and_progress_update_node_runtime_state(
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_node_task_manager_does_not_timeout_before_deadline(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        timeout_seconds=30,
+    )
+    node_run = store.get_node_run(task.node_run_id)
+    assert node_run is not None
+    assert node_run.started_at is not None
+    event_count = len(store.list_runtime_events())
+
+    result = manager.mark_timed_out_task(
+        task,
+        now=node_run.started_at + timedelta(seconds=29),
+    )
+
+    assert result.status == NodeTaskTimeoutStatus.NOT_TIMED_OUT
+    loaded_node = store.get_node_run(task.node_run_id)
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+    assert loaded_node is not None
+    assert loaded_workflow is not None
+    assert loaded_node.status == NodeRunStatus.RUNNING.value
+    assert loaded_workflow.status == WorkflowRunStatus.RUNNING.value
+    assert len(store.list_runtime_events()) == event_count
+
+
+@pytest.mark.parametrize(
+    "active_status",
+    [NodeRunStatus.RUNNING, NodeRunStatus.LONG_RUNNING],
+)
+def test_node_task_manager_marks_active_task_timed_out_and_fails_workflow(
+    tmp_path: Path,
+    active_status: NodeRunStatus,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        timeout_seconds=5,
+    )
+    node_run = store.get_node_run(task.node_run_id)
+    assert node_run is not None
+    if active_status == NodeRunStatus.LONG_RUNNING:
+        node_run = store.update_node_run_status(
+            task.node_run_id,
+            NodeRunStatus.LONG_RUNNING,
+            expected_state_version=node_run.state_version,
+            allowed_source_statuses=[NodeRunStatus.RUNNING],
+            owner_process_id=process.process_id,
+            process_generation=process.process_generation,
+        )
+    assert node_run is not None
+    assert node_run.started_at is not None
+    timed_out_at = node_run.started_at + timedelta(
+        seconds=task.timeout_seconds + 1
+    )
+
+    result = manager.mark_timed_out_task(task, now=timed_out_at)
+    late_success = FakeNodeExecutor(executor_id="executor-1").execute(task)
+    late_apply = manager.apply_result(late_success)
+
+    loaded_node = store.get_node_run(task.node_run_id)
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+    assert result.status == NodeTaskTimeoutStatus.TIMED_OUT
+    assert loaded_node is not None
+    assert loaded_workflow is not None
+    assert loaded_node.status == NodeRunStatus.TIMED_OUT.value
+    assert loaded_node.finished_at == timed_out_at
+    assert loaded_node.error is not None
+    assert loaded_node.error["task_id"] == task.task_id
+    assert loaded_workflow.status == WorkflowRunStatus.FAILED.value
+    assert loaded_workflow.finished_at == timed_out_at
+    assert late_apply.status == NodeTaskApplyStatus.REJECTED_NODE_TERMINAL
+    assert store.get_node_task_result(
+        task_id=task.task_id,
+        result_id=late_success.result_id,
+    ) is None
+    assert [event.event_type for event in store.list_runtime_events()][-2:] == [
+        "NODE_TIMEOUT",
+        "WORKFLOW_FAILED",
+    ]
+
+
+def test_node_task_manager_does_not_timeout_terminal_node(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    node_run = store.get_node_run(task.node_run_id)
+    assert node_run is not None
+    assert node_run.started_at is not None
+    success = FakeNodeExecutor(executor_id="executor-1").execute(task)
+    assert manager.apply_result(success).status == NodeTaskApplyStatus.APPLIED
+    event_count = len(store.list_runtime_events())
+
+    result = manager.mark_timed_out_task(
+        task,
+        now=node_run.started_at + timedelta(seconds=task.timeout_seconds + 1),
+    )
+
+    loaded_node = store.get_node_run(task.node_run_id)
+    assert result.status == NodeTaskTimeoutStatus.REJECTED_NODE_NOT_RUNNING
+    assert loaded_node is not None
+    assert loaded_node.status == NodeRunStatus.SUCCEEDED.value
+    assert len(store.list_runtime_events()) == event_count
 
 
 def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
