@@ -38,6 +38,7 @@ from flowweaver.protocols.enums import (
     TableScope,
     TableStorageKind,
     WorkflowProcessStatus,
+    WorkflowRunCompletionReason,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
@@ -84,6 +85,7 @@ class WorkflowRun:
     input_snapshot_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
+    completion_reason: str | None
     error: dict[str, Any] | None
 
 
@@ -183,6 +185,12 @@ _NODE_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
         NodeRunStatus.RUNNING.value,
         NodeRunStatus.LONG_RUNNING.value,
         NodeRunStatus.CANCEL_REQUESTED.value,
+    ),
+    NodeRunStatus.SKIPPED.value: (
+        NodeRunStatus.PENDING.value,
+        NodeRunStatus.READY.value,
+        NodeRunStatus.WAITING_DEPENDENCY.value,
+        NodeRunStatus.WAITING_PERMISSION.value,
     ),
 }
 _ACTIVE_WORKFLOW_PROCESS_STATUSES = frozenset(
@@ -408,6 +416,7 @@ class RuntimeStore:
                 input_snapshot_id=None,
                 started_at=_optional_datetime_to_text(started_at),
                 finished_at=None,
+                completion_reason=None,
                 error_json=None,
             )
             session.add(record)
@@ -463,6 +472,7 @@ class RuntimeStore:
         status: WorkflowRunStatus,
         *,
         finished_at: datetime | None = None,
+        completion_reason: WorkflowRunCompletionReason | str | None = None,
         error: dict[str, Any] | None = None,
         expected_state_version: int | None = None,
         allowed_source_statuses: Iterable[WorkflowRunStatus | str] | None = None,
@@ -483,6 +493,9 @@ class RuntimeStore:
                     status=status.value,
                     state_version=WorkflowRunRecord.state_version + 1,
                     finished_at=_optional_datetime_to_text(finished_at),
+                    completion_reason=_optional_completion_reason_value(
+                        completion_reason
+                    ),
                     error_json=_json_dumps(error) if error is not None else None,
                 )
             )
@@ -1262,6 +1275,7 @@ def _workflow_run_from_record(record: WorkflowRunRecord) -> WorkflowRun:
         input_snapshot_id=record.input_snapshot_id,
         started_at=_optional_datetime_from_text(record.started_at),
         finished_at=_optional_datetime_from_text(record.finished_at),
+        completion_reason=record.completion_reason,
         error=json.loads(record.error_json) if record.error_json else None,
     )
 
@@ -1513,3 +1527,11 @@ def _node_run_status_values(statuses: Iterable[NodeRunStatus | str]) -> list[str
         status.value if isinstance(status, NodeRunStatus) else status
         for status in statuses
     ]
+
+
+def _optional_completion_reason_value(
+    value: WorkflowRunCompletionReason | str | None,
+) -> str | None:
+    if isinstance(value, WorkflowRunCompletionReason):
+        return value.value
+    return value

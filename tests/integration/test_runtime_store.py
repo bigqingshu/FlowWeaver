@@ -20,6 +20,7 @@ from flowweaver.protocols.enums import (
     TableRole,
     TableScope,
     TableStorageKind,
+    WorkflowRunCompletionReason,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -49,6 +50,12 @@ def foreign_keys(database_path: Path, table_name: str) -> set[tuple[str, str, st
     with sqlite3.connect(database_path) as connection:
         rows = connection.execute(f"PRAGMA foreign_key_list({table_name})").fetchall()
     return {(row[3], row[2], row[4]) for row in rows}
+
+
+def column_names(database_path: Path, table_name: str) -> set[str]:
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row[1] for row in rows}
 
 
 def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
@@ -85,6 +92,16 @@ def test_workflow_run_foreign_keys_target_canonical_tables(tmp_path: Path) -> No
         ("workflow_id", "workflows", "workflow_id"),
         ("revision_id", "workflow_revisions", "revision_id"),
     }.issubset(foreign_keys(database_path, "workflow_runs"))
+
+
+def test_workflow_run_completion_reason_column_is_available(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+
+    migrate(database_path)
+
+    assert "completion_reason" in column_names(database_path, "workflow_runs")
 
 
 def test_alembic_migration_is_repeatable(tmp_path: Path) -> None:
@@ -172,12 +189,52 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
     assert updated is not None
     assert updated.status == WorkflowRunStatus.SUCCEEDED.value
     assert updated.state_version == 2
+    assert updated.completion_reason is None
     assert store.list_workflow_runs(workflow_id=definition.workflow_id)[
         0
     ].workflow_run_id == "run-1"
     assert store.list_workflow_runs(statuses=[WorkflowRunStatus.SUCCEEDED])[
         0
     ].workflow_run_id == "run-1"
+
+
+def test_runtime_store_persists_workflow_run_completion_reason(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Partial failure workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    running = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+    )
+    assert running is not None
+
+    failed = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.FAILED,
+        finished_at=utc_now(),
+        completion_reason=WorkflowRunCompletionReason.PARTIAL_FAILURE,
+        expected_state_version=running.state_version,
+    )
+
+    loaded = store.get_workflow_run(run.workflow_run_id)
+    listed = store.list_workflow_runs(statuses=[WorkflowRunStatus.FAILED])
+    assert failed is not None
+    assert failed.completion_reason == "PARTIAL_FAILURE"
+    assert loaded is not None
+    assert loaded.completion_reason == "PARTIAL_FAILURE"
+    assert listed[0].completion_reason == "PARTIAL_FAILURE"
 
 
 def test_runtime_store_rejects_workflow_run_revision_mismatch(
@@ -417,6 +474,46 @@ def test_runtime_store_rejects_illegal_node_success_source(tmp_path: Path) -> No
 
     assert illegal_success is None
     assert store.get_node_run(node.node_run_id).status == NodeRunStatus.READY.value
+
+
+def test_runtime_store_allows_waiting_node_to_be_skipped_as_terminal(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Skip node workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.WAITING_DEPENDENCY,
+    )
+
+    skipped = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.SKIPPED,
+        expected_state_version=node.state_version,
+    )
+    revived = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=skipped.state_version if skipped is not None else 1,
+    )
+
+    assert skipped is not None
+    assert skipped.status == NodeRunStatus.SKIPPED.value
+    assert revived is None
+    assert store.get_node_run(node.node_run_id).status == NodeRunStatus.SKIPPED.value
 
 
 def test_runtime_store_node_run_cas_allows_only_one_writer(tmp_path: Path) -> None:

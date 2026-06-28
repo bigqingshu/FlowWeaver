@@ -12,6 +12,10 @@ class WorkflowRunStatus(str, Enum):
     ABORTED = "ABORTED"
 
 
+class WorkflowRunCompletionReason(str, Enum):
+    PARTIAL_FAILURE = "PARTIAL_FAILURE"
+
+
 class WorkflowProcessStatus(str, Enum):
     STARTING = "STARTING"
     RUNNING = "RUNNING"

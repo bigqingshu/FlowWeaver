@@ -73,6 +73,7 @@ class WorkflowRunRecord(Base):
     input_snapshot_id: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str | None] = mapped_column(Text)
     finished_at: Mapped[str | None] = mapped_column(Text)
+    completion_reason: Mapped[str | None] = mapped_column(Text)
     error_json: Mapped[str | None] = mapped_column(Text)
 
 

@@ -83,6 +83,7 @@ class WorkflowRunData(StrictModel):
     input_snapshot_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
+    completion_reason: str | None
     error: dict[str, Any] | None
 
 

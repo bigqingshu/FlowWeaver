@@ -18,7 +18,11 @@ from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec, NodeRegistry
-from flowweaver.protocols.enums import EventType, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    EventType,
+    WorkflowRunCompletionReason,
+    WorkflowRunStatus,
+)
 from flowweaver.protocols.events import EventModel
 
 TOKEN = "test-token"
@@ -212,7 +216,42 @@ def test_run_query_api(tmp_path: Path) -> None:
     assert [item["workflow_run_id"] for item in listed] == ["run-1"]
     assert loaded["workflow_id"] == "workflow-1"
     assert loaded["revision_id"] == workflow.revision_id
+    assert loaded["completion_reason"] is None
     assert filtered[0]["status"] == "PENDING"
+
+
+def test_run_query_api_includes_completion_reason(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Partial failure run",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        status=WorkflowRunStatus.PENDING,
+    )
+    running = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+    )
+    assert running is not None
+    failed = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.FAILED,
+        completion_reason=WorkflowRunCompletionReason.PARTIAL_FAILURE,
+        expected_state_version=running.state_version,
+    )
+    assert failed is not None
+
+    loaded = response_data(
+        client.get(f"/api/v1/runs/{run.workflow_run_id}", headers=auth_headers())
+    )
+
+    assert loaded["status"] == "FAILED"
+    assert loaded["completion_reason"] == "PARTIAL_FAILURE"
 
 
 def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:

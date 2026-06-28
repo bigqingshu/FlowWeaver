@@ -97,6 +97,7 @@ def _to_jsonable(value: Any) -> Any:
             "input_snapshot_id": value.input_snapshot_id,
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,
+            "completion_reason": value.completion_reason,
             "error": value.error,
         }
     if isinstance(value, WorkflowProcess):
