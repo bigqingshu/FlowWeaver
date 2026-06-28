@@ -43,6 +43,10 @@ from flowweaver.protocols.table_ref import FieldSchemaModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.executor_pool import (
+    DispatchedNodeTask,
+    ExecutorTaskCompletion,
+)
 from flowweaver.workflow_process.main import run_workflow_process
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
 from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
@@ -395,6 +399,31 @@ class RecordingSuccessExecutor:
             started_at=now,
             finished_at=now,
         )
+
+
+class RecordingImmediateExecutionPool:
+    def __init__(self) -> None:
+        self.submitted_task_ids: list[str] = []
+        self._completed: list[ExecutorTaskCompletion] = []
+
+    def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
+        self.submitted_task_ids.append(dispatched_task.task.task_id)
+        result = dispatched_task.executor.execute(dispatched_task.task)
+        self._completed.append(
+            ExecutorTaskCompletion(
+                dispatched_task=dispatched_task,
+                result=result,
+            )
+        )
+        return True
+
+    def pop_completed(self) -> ExecutorTaskCompletion | None:
+        if not self._completed:
+            return None
+        return self._completed.pop(0)
+
+    def in_flight_count(self) -> int:
+        return 0
 
 
 class TrackingSubprocessNodeExecutor(SubprocessNodeExecutorIpcClient):
@@ -802,6 +831,7 @@ def test_workflow_process_limits_ready_dispatch_per_cycle(
         cancel_grace_seconds=5,
         max_ready_dispatch_per_cycle=1,
         max_concurrent_node_tasks=None,
+        execution_pool=RecordingImmediateExecutionPool(),
         event_sink=event_sink,
     )
 
@@ -822,6 +852,51 @@ def test_workflow_process_limits_ready_dispatch_per_cycle(
         "NODE_STARTED",
         "NODE_FINISHED",
     ]
+
+
+def test_workflow_process_uses_injected_execution_pool(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = NodeAwareOutputExecutor(
+        {
+            "source": ["source-output"],
+            "transform": ["transform-output"],
+        }
+    )
+    execution_pool = RecordingImmediateExecutionPool()
+    workflow = store.create_workflow_definition(
+        name="Injected execution pool workflow",
+        definition=definition(),
+        workflow_id="workflow-injected-execution-pool",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-injected-execution-pool",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-injected-execution-pool",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+    )
+
+    assert exit_code == 0
+    assert len(execution_pool.submitted_task_ids) == 2
+    assert executor.seen_input_refs_by_node == {
+        "source": [],
+        "transform": ["source-output"],
+    }
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
 
 
 def test_workflow_process_dispatches_ready_candidate_to_running_task(
@@ -946,6 +1021,7 @@ def test_workflow_process_does_not_dispatch_when_capacity_is_full(
         cancel_grace_seconds=5,
         max_ready_dispatch_per_cycle=None,
         max_concurrent_node_tasks=1,
+        execution_pool=RecordingImmediateExecutionPool(),
         event_sink=event_sink,
     )
 

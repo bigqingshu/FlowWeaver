@@ -42,7 +42,12 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
-from flowweaver.workflow_process.executor_pool import DispatchedNodeTask
+from flowweaver.workflow_process.executor_pool import (
+    DispatchedNodeTask,
+    ExecutorTaskCompletion,
+    ImmediateNodeTaskExecutionPool,
+    NodeTaskExecutionPool,
+)
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
@@ -160,6 +165,7 @@ def run_workflow_process(
     cancel_grace_seconds: float = 5.0,
     max_ready_dispatch_per_cycle: int | None = None,
     max_concurrent_node_tasks: int | None = None,
+    execution_pool: NodeTaskExecutionPool | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -183,6 +189,7 @@ def run_workflow_process(
             cancel_grace_seconds=cancel_grace_seconds,
             max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
             max_concurrent_node_tasks=max_concurrent_node_tasks,
+            execution_pool=execution_pool,
             sleep_func=sleep_func,
         )
     finally:
@@ -204,6 +211,7 @@ def _run_workflow_process_loop(
     cancel_grace_seconds: float,
     max_ready_dispatch_per_cycle: int | None,
     max_concurrent_node_tasks: int | None,
+    execution_pool: NodeTaskExecutionPool | None,
     sleep_func: Callable[[float], None],
 ) -> int:
     if (
@@ -282,6 +290,29 @@ def _run_workflow_process_loop(
         dag=dag,
     )
     task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    if execution_pool is None:
+        if process_generation is None:
+            execution_pool = ImmediateNodeTaskExecutionPool(
+                execute_task=lambda _dispatched_task: None
+            )
+        else:
+            active_generation = process_generation
+            execution_pool = ImmediateNodeTaskExecutionPool(
+                execute_task=lambda dispatched_task: (
+                    _execute_node_task_with_supervision(
+                        store=store,
+                        workflow_run_id=workflow_run_id,
+                        workflow_process_id=process_id,
+                        process_generation=active_generation,
+                        heartbeat_interval_seconds=heartbeat_interval_seconds,
+                        task_manager=task_manager,
+                        executor=dispatched_task.executor,
+                        cleanup_staging_for_node=cleanup_staging_for_node,
+                        cancel_grace_seconds=cancel_grace_seconds,
+                        task=dispatched_task.task,
+                    )
+                )
+            )
 
     while True:
         heartbeat = store.record_workflow_process_heartbeat(
@@ -324,6 +355,7 @@ def _run_workflow_process_loop(
             cancel_grace_seconds=cancel_grace_seconds,
             max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
             max_concurrent_node_tasks=max_concurrent_node_tasks,
+            execution_pool=execution_pool,
             event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
@@ -383,6 +415,7 @@ def _dispatch_ready_nodes(
     cancel_grace_seconds: float,
     max_ready_dispatch_per_cycle: int | None,
     max_concurrent_node_tasks: int | None,
+    execution_pool: NodeTaskExecutionPool,
     event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
@@ -422,46 +455,68 @@ def _dispatch_ready_nodes(
             task_manager=task_manager,
             process_generation=process_generation,
         )
-        try:
-            result = _execute_node_task_with_supervision(
+        if not execution_pool.submit(dispatched):
+            if close_executor_after_task:
+                _close_executor(dispatched.executor)
+            continue
+        completion = execution_pool.pop_completed()
+        if completion is not None:
+            _apply_executor_task_completion(
                 store=store,
                 workflow_run_id=workflow_run_id,
                 workflow_process_id=workflow_process_id,
                 process_generation=process_generation,
-                heartbeat_interval_seconds=heartbeat_interval_seconds,
+                event_sink=event_sink,
                 task_manager=task_manager,
-                executor=dispatched.executor,
                 cleanup_staging_for_node=cleanup_staging_for_node,
-                cancel_grace_seconds=cancel_grace_seconds,
-                task=dispatched.task,
+                close_executor_after_task=close_executor_after_task,
+                completion=completion,
             )
-            if result is not None:
-                apply_result = _apply_node_task_result(
-                    store=store,
-                    workflow_run_id=workflow_run_id,
-                    workflow_process_id=workflow_process_id,
-                    process_generation=process_generation,
-                    event_sink=event_sink,
-                    task_manager=task_manager,
-                    task=dispatched.task,
-                    result=result,
-                )
-                if (
-                    result.status != NodeResultStatus.SUCCEEDED
-                    and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
-                ):
-                    _cleanup_staging_for_node(
-                        cleanup_staging_for_node,
-                        workflow_run_id=workflow_run_id,
-                        node_run_id=dispatched.node_run_id,
-                    )
-            dispatched_count += 1
-            if _workflow_run_is_terminal(store, workflow_run_id):
-                break
-        finally:
-            if close_executor_after_task:
-                _close_executor(dispatched.executor)
+        dispatched_count += 1
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            break
     return dispatched_count
+
+
+def _apply_executor_task_completion(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    event_sink: RuntimeEventSink,
+    task_manager: NodeTaskManager,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
+    close_executor_after_task: bool,
+    completion: ExecutorTaskCompletion,
+) -> None:
+    dispatched = completion.dispatched_task
+    try:
+        result = completion.result
+        if result is None:
+            return
+        apply_result = _apply_node_task_result(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
+            event_sink=event_sink,
+            task_manager=task_manager,
+            task=dispatched.task,
+            result=result,
+        )
+        if (
+            result.status != NodeResultStatus.SUCCEEDED
+            and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
+        ):
+            _cleanup_staging_for_node(
+                cleanup_staging_for_node,
+                workflow_run_id=workflow_run_id,
+                node_run_id=dispatched.node_run_id,
+            )
+    finally:
+        if close_executor_after_task:
+            _close_executor(dispatched.executor)
 
 
 def dispatch_ready_node_candidate(

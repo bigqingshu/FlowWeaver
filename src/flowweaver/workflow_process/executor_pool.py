@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -22,6 +23,9 @@ class ExecutorTaskCompletion:
     result: NodeTaskResultModel | None
 
 
+NodeTaskExecute = Callable[[DispatchedNodeTask], NodeTaskResultModel | None]
+
+
 class NodeTaskExecutionPool(Protocol):
     def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
         ...
@@ -34,11 +38,12 @@ class NodeTaskExecutionPool(Protocol):
 
 
 class ImmediateNodeTaskExecutionPool:
-    def __init__(self) -> None:
+    def __init__(self, execute_task: NodeTaskExecute | None = None) -> None:
         self._completed: list[ExecutorTaskCompletion] = []
+        self._execute_task = execute_task or _execute_directly
 
     def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
-        result = dispatched_task.executor.execute(dispatched_task.task)
+        result = self._execute_task(dispatched_task)
         self._completed.append(
             ExecutorTaskCompletion(
                 dispatched_task=dispatched_task,
@@ -91,3 +96,9 @@ class ManualNodeTaskExecutionPool:
 
     def in_flight_count(self) -> int:
         return len(self._in_flight)
+
+
+def _execute_directly(
+    dispatched_task: DispatchedNodeTask,
+) -> NodeTaskResultModel:
+    return dispatched_task.executor.execute(dispatched_task.task)
