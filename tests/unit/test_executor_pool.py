@@ -211,6 +211,37 @@ def test_threaded_node_task_execution_pool_converts_executor_error_to_failure() 
     assert pool.pop_completed() is None
 
 
+def test_threaded_node_task_execution_pool_rejects_submit_after_close() -> None:
+    pool = ThreadedNodeTaskExecutionPool()
+
+    pool.close(timeout_seconds=0)
+
+    assert pool.closed is True
+    assert pool.submit(make_dispatched_task()) is False
+    assert pool.in_flight_count() == 0
+    assert pool.pop_completed() is None
+
+
+def test_threaded_node_task_execution_pool_close_waits_for_running_task() -> None:
+    dispatched, executor = make_blocking_dispatched_task()
+    pool = ThreadedNodeTaskExecutionPool()
+
+    assert pool.submit(dispatched) is True
+    assert executor.started.wait(timeout=1)
+    executor.release.set()
+    pool.close(timeout_seconds=1)
+    completion = pool.pop_completed()
+
+    assert pool.closed is True
+    assert pool.in_flight_count() == 0
+    assert completion is not None
+    assert completion.dispatched_task == dispatched
+    assert completion.result is not None
+    assert completion.result.status == NodeResultStatus.SUCCEEDED
+    assert pool.submit(make_dispatched_task("task-2")) is False
+    assert pool.pop_completed() is None
+
+
 def test_manual_node_task_execution_pool_tracks_in_flight_completion() -> None:
     dispatched = make_dispatched_task()
     result = NodeTaskResultModel(

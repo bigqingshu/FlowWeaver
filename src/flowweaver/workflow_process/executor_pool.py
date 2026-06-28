@@ -70,22 +70,39 @@ class ThreadedNodeTaskExecutionPool:
         self._completed: Queue[ExecutorTaskCompletion] = Queue()
         self._execute_task = execute_task or _execute_directly
         self._in_flight: dict[str, DispatchedNodeTask] = {}
+        self._workers: dict[str, Thread] = {}
+        self._closed = False
         self._lock = Lock()
 
     def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
         task_id = dispatched_task.task.task_id
-        with self._lock:
-            if task_id in self._in_flight:
-                return False
-            self._in_flight[task_id] = dispatched_task
         worker = Thread(
             target=self._execute_in_thread,
             args=(task_id, dispatched_task),
             name=f"flowweaver-node-task-pool-{task_id}",
             daemon=True,
         )
-        worker.start()
+        with self._lock:
+            if self._closed:
+                return False
+            if task_id in self._in_flight:
+                return False
+            self._in_flight[task_id] = dispatched_task
+            self._workers[task_id] = worker
+            worker.start()
         return True
+
+    @property
+    def closed(self) -> bool:
+        with self._lock:
+            return self._closed
+
+    def close(self, *, timeout_seconds: float | None = None) -> None:
+        with self._lock:
+            self._closed = True
+            workers = tuple(self._workers.values())
+        for worker in workers:
+            worker.join(timeout=timeout_seconds)
 
     def pop_completed(self) -> ExecutorTaskCompletion | None:
         try:
@@ -110,6 +127,7 @@ class ThreadedNodeTaskExecutionPool:
         finally:
             with self._lock:
                 self._in_flight.pop(task_id, None)
+                self._workers.pop(task_id, None)
             self._completed.put(
                 ExecutorTaskCompletion(
                     dispatched_task=dispatched_task,
