@@ -439,6 +439,42 @@ class ReleasableBlockingExecutor:
         self.closed.set()
 
 
+class ReleasableMultiNodeExecutor:
+    executor_id = "releasable-multi-node-executor"
+
+    def __init__(self) -> None:
+        self.started_by_node: dict[str, Event] = {}
+        self.release_by_node: dict[str, Event] = {}
+        self.executed_nodes: list[str] = []
+        self.seen_input_refs_by_node: dict[str, list[str]] = {}
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        node_id = task.node_instance_id
+        self.seen_input_refs_by_node[node_id] = list(task.input_refs)
+        self.started_by_node.setdefault(node_id, Event()).set()
+        if node_id in {"source_a", "source_b"}:
+            self.release_by_node.setdefault(node_id, Event()).wait(timeout=2)
+        self.executed_nodes.append(node_id)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=[f"{node_id}-output"],
+            started_at=now,
+            finished_at=now,
+        )
+
+    def started_event(self, node_id: str) -> Event:
+        return self.started_by_node.setdefault(node_id, Event())
+
+    def release(self, node_id: str) -> None:
+        self.release_by_node.setdefault(node_id, Event()).set()
+
+
 class RecordingImmediateExecutionPool:
     def __init__(self) -> None:
         self.submitted_task_ids: list[str] = []
@@ -1135,6 +1171,95 @@ def test_workflow_process_with_threaded_pool_requests_cancel_for_in_flight_task(
         "NODE_QUEUED",
         "NODE_STARTED",
         "WORKFLOW_CANCELLED",
+    ]
+
+
+def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = ReleasableMultiNodeExecutor()
+    execution_pool = ThreadedNodeTaskExecutionPool()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution pool multi ready workflow",
+        definition=multi_upstream_definition(),
+        workflow_id="workflow-threaded-execution-pool-multi-ready",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-pool-multi-ready",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-pool-multi-ready",
+    )
+    assert process is not None
+
+    def release_sources_out_of_order(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls == 1:
+            assert executor.started_event("source_a").wait(timeout=1)
+            assert executor.started_event("source_b").wait(timeout=1)
+            assert execution_pool.in_flight_count() == 2
+            executor.release("source_a")
+            return
+        if sleep_calls == 2:
+            assert executor.executed_nodes == ["source_a"]
+            assert {
+                node.node_instance_id: node.status
+                for node in store.list_node_runs(run.workflow_run_id)
+            } == {
+                "merge": "WAITING_DEPENDENCY",
+                "source_a": "SUCCEEDED",
+                "source_b": "RUNNING",
+            }
+            executor.release("source_b")
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+        sleep_func=release_sources_out_of_order,
+    )
+
+    node_runs = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+
+    assert exit_code == 0
+    assert sleep_calls == 2
+    assert execution_pool.in_flight_count() == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert node_runs == {
+        "merge": "SUCCEEDED",
+        "source_a": "SUCCEEDED",
+        "source_b": "SUCCEEDED",
+    }
+    assert executor.seen_input_refs_by_node == {
+        "source_a": [],
+        "source_b": [],
+        "merge": ["source_a-output", "source_b-output"],
+    }
+    assert executor.executed_nodes == ["source_a", "source_b", "merge"]
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "NODE_FINISHED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
     ]
 
 
