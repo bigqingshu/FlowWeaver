@@ -4,6 +4,8 @@ import argparse
 import time
 import traceback
 from collections.abc import Callable
+from queue import Empty, Queue
+from threading import Thread
 from typing import NoReturn, Protocol, runtime_checkable
 
 from flowweaver.common.time import utc_now
@@ -14,6 +16,7 @@ from flowweaver.engine.runtime_event_sink import (
 )
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import (
+    NodeExecutor,
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
@@ -40,6 +43,7 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
     NodeTaskManager,
+    NodeTaskTimeoutStatus,
 )
 
 _TERMINAL_WORKFLOW_STATUSES = frozenset(
@@ -288,6 +292,7 @@ def _run_workflow_process_loop(
             workflow_run_id=workflow_run_id,
             workflow_process_id=process_id,
             process_generation=process_generation,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
             dag=dag,
             task_manager=task_manager,
             executor_factory=executor_factory,
@@ -342,6 +347,7 @@ def _dispatch_ready_nodes(
     workflow_run_id: str,
     workflow_process_id: str,
     process_generation: int | None,
+    heartbeat_interval_seconds: float,
     dag: WorkflowDag,
     task_manager: NodeTaskManager,
     executor_factory: NodeExecutorFactory,
@@ -357,6 +363,16 @@ def _dispatch_ready_nodes(
         if node_run.status == NodeRunStatus.READY.value
     ]
     for node_run in ready_nodes:
+        dag_node = next(
+            (
+                node
+                for node in dag.nodes
+                if node.node_instance_id == node_run.node_instance_id
+            ),
+            None,
+        )
+        if dag_node is None:
+            continue
         input_refs = _input_refs_for_ready_node(
             store=store,
             workflow_run_id=workflow_run_id,
@@ -371,6 +387,7 @@ def _dispatch_ready_nodes(
             process_generation=process_generation,
             node_instance_id=node_run.node_instance_id,
             input_refs=input_refs,
+            timeout_seconds=_timeout_seconds_from_node_config(dag_node.config),
         )
         if task is None:
             continue
@@ -389,21 +406,26 @@ def _dispatch_ready_nodes(
             )
             if accepted is None:
                 continue
-            result = executor.execute(accepted)
-            apply_result = task_manager.apply_result(result)
-            if (
-                apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
-                and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
-            ):
-                _fail_rejected_node_result(
+            result = _execute_node_task_with_supervision(
+                store=store,
+                workflow_run_id=workflow_run_id,
+                workflow_process_id=workflow_process_id,
+                process_generation=process_generation,
+                heartbeat_interval_seconds=heartbeat_interval_seconds,
+                task_manager=task_manager,
+                executor=executor,
+                task=accepted,
+            )
+            if result is not None:
+                _apply_node_task_result(
                     store=store,
                     workflow_run_id=workflow_run_id,
                     workflow_process_id=workflow_process_id,
                     process_generation=process_generation,
                     event_sink=event_sink,
+                    task_manager=task_manager,
                     task=accepted,
                     result=result,
-                    apply_result=apply_result,
                 )
             dispatched_count += 1
             if _workflow_run_is_terminal(store, workflow_run_id):
@@ -412,6 +434,131 @@ def _dispatch_ready_nodes(
             if close_executor_after_task:
                 _close_executor(executor)
     return dispatched_count
+
+
+def _execute_node_task_with_supervision(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int,
+    heartbeat_interval_seconds: float,
+    task_manager: NodeTaskManager,
+    executor: NodeExecutor,
+    task: NodeTaskModel,
+) -> NodeTaskResultModel | None:
+    results: Queue[NodeTaskResultModel | Exception] = Queue(maxsize=1)
+
+    def run_executor() -> None:
+        try:
+            results.put(executor.execute(task))
+        except Exception as exc:
+            results.put(exc)
+
+    worker = Thread(
+        target=run_executor,
+        name=f"flowweaver-node-task-{task.task_id}",
+        daemon=True,
+    )
+    worker.start()
+    poll_seconds = _task_supervision_poll_seconds(heartbeat_interval_seconds)
+    while True:
+        result = _get_node_task_execution_result(
+            results,
+            timeout_seconds=poll_seconds,
+        )
+        if result is not None:
+            return result
+        if not worker.is_alive():
+            result = _get_node_task_execution_result(results, timeout_seconds=0)
+            if result is not None:
+                return result
+            raise RuntimeError("Node executor finished without a task result")
+        heartbeat = store.record_workflow_process_heartbeat(
+            workflow_process_id,
+            process_generation=process_generation,
+        )
+        if heartbeat is None:
+            _close_executor(executor)
+            return None
+        timeout_result = task_manager.mark_timed_out_task(task)
+        if timeout_result.status == NodeTaskTimeoutStatus.TIMED_OUT:
+            _close_executor(executor)
+            worker.join(timeout=0.2)
+            late_result = _get_node_task_execution_result(
+                results,
+                timeout_seconds=0,
+                raise_executor_errors=False,
+            )
+            if late_result is not None:
+                task_manager.apply_result(late_result)
+            return None
+        if _workflow_run_is_terminal(store, workflow_run_id):
+            _close_executor(executor)
+            return None
+
+
+def _get_node_task_execution_result(
+    results: Queue[NodeTaskResultModel | Exception],
+    *,
+    timeout_seconds: float,
+    raise_executor_errors: bool = True,
+) -> NodeTaskResultModel | None:
+    try:
+        item = (
+            results.get(timeout=timeout_seconds)
+            if timeout_seconds > 0
+            else results.get_nowait()
+        )
+    except Empty:
+        return None
+    if isinstance(item, Exception):
+        if raise_executor_errors:
+            raise item
+        return None
+    return item
+
+
+def _task_supervision_poll_seconds(heartbeat_interval_seconds: float) -> float:
+    if heartbeat_interval_seconds <= 0:
+        return 0.01
+    return min(max(heartbeat_interval_seconds, 0.01), 0.1)
+
+
+def _apply_node_task_result(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    event_sink: RuntimeEventSink,
+    task_manager: NodeTaskManager,
+    task: NodeTaskModel,
+    result: NodeTaskResultModel,
+) -> NodeTaskApplyResult:
+    apply_result = task_manager.apply_result(result)
+    if (
+        apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
+        and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
+    ):
+        _fail_rejected_node_result(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
+            event_sink=event_sink,
+            task=task,
+            result=result,
+            apply_result=apply_result,
+        )
+    return apply_result
+
+
+def _timeout_seconds_from_node_config(config: dict[str, object]) -> int:
+    value = config.get("timeout_seconds")
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 60
+    return max(0, value)
 
 
 def _input_refs_for_ready_node(

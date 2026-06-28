@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Thread
@@ -164,6 +165,69 @@ class BlockingReportingExecutor:
             started_at=now,
             finished_at=now,
         )
+
+    def close(self) -> None:
+        self._finish_task.set()
+
+
+class CloseableBlockingSuccessExecutor:
+    executor_id = "closeable-blocking-success-executor"
+
+    def __init__(self) -> None:
+        self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
+        self.started = Event()
+        self.closed = Event()
+
+    def set_event_handler(
+        self,
+        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
+    ) -> None:
+        self._event_handler = handler
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        if self._event_handler is not None:
+            self._event_handler(
+                task,
+                IPCEnvelope(
+                    message_type=IPCMessageType.NODE_TASK_HEARTBEAT,
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    payload={
+                        "executor_id": self.executor_id,
+                        "task_id": task.task_id,
+                        "attempt": task.attempt,
+                    },
+                ),
+            )
+            self._event_handler(
+                task,
+                IPCEnvelope(
+                    message_type=IPCMessageType.NODE_TASK_PROGRESS,
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    payload={
+                        "progress": 0.1,
+                        "current_stage": "blocking",
+                        "metrics": {"ticks": 1},
+                    },
+                ),
+            )
+        self.started.set()
+        self.closed.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            started_at=now,
+            finished_at=now,
+        )
+
+    def close(self) -> None:
+        self.closed.set()
 
 
 class NodeAwareOutputExecutor:
@@ -971,6 +1035,94 @@ def test_workflow_process_records_task_events_while_executor_is_still_running(
 
     assert exit_codes == [0]
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+
+
+def test_workflow_process_times_out_task_while_executor_is_still_running(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Execution timeout workflow",
+        definition={
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                    "config": {"timeout_seconds": 1},
+                }
+            ],
+            "connections": [],
+        },
+        workflow_id="workflow-timeout",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-timeout",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-timeout",
+    )
+    assert process is not None
+    executor = CloseableBlockingSuccessExecutor()
+    exit_codes: list[int] = []
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0,
+                executor_factory=lambda _task: executor,
+            )
+        )
+    )
+    worker.start()
+    try:
+        assert executor.started.wait(timeout=5)
+        node_run = store.list_node_runs(run.workflow_run_id)[0]
+        process_before = store.get_workflow_process(process.process_id)
+        time.sleep(0.05)
+        process_after = store.get_workflow_process(process.process_id)
+
+        assert node_run.status == "RUNNING"
+        assert node_run.last_heartbeat is not None
+        assert node_run.progress == 0.1
+        assert process_before is not None
+        assert process_after is not None
+        assert process_before.last_heartbeat_at is not None
+        assert process_after.last_heartbeat_at is not None
+        assert process_after.last_heartbeat_at > process_before.last_heartbeat_at
+
+        worker.join(timeout=5)
+    finally:
+        if worker.is_alive():
+            executor.close()
+            worker.join(timeout=5)
+
+    loaded_node = store.list_node_runs(run.workflow_run_id)[0]
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+    loaded_process = store.get_workflow_process(process.process_id)
+    events = store.list_runtime_events()
+    assert exit_codes == [0]
+    assert executor.closed.is_set()
+    assert loaded_workflow is not None
+    assert loaded_workflow.status == "FAILED"
+    assert loaded_node.status == "TIMED_OUT"
+    assert loaded_node.error is not None
+    assert loaded_node.error["timeout_seconds"] == 1
+    assert loaded_process is not None
+    assert loaded_process.last_heartbeat_at is not None
+    assert store.get_latest_succeeded_node_task_result_for_node_run(
+        loaded_node.node_run_id
+    ) is None
+    assert [event.event_type for event in events][-2:] == [
+        "NODE_TIMEOUT",
+        "WORKFLOW_FAILED",
+    ]
 
 
 def test_workflow_process_applies_injected_executor_failure_result(
