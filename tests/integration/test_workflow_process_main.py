@@ -17,6 +17,7 @@ from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import (
     DELAY_TEST_NODE_TYPE,
+    FAULT_MODE_INFINITE_LOOP,
     FAULT_MODE_PROCESS_EXIT,
     FAULT_MODE_RAISE_EXCEPTION,
     FAULT_TEST_NODE_TYPE,
@@ -920,6 +921,64 @@ def test_workflow_process_marks_process_exit_fault_node_failed(
         "Node executor subprocess exited before completing task"
     )
     assert node_run.error["exit_code"] == 7
+
+
+def test_workflow_process_times_out_infinite_loop_fault_node_with_default_executor(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Infinite loop fault workflow",
+        definition=single_test_node_definition(
+            node_type=FAULT_TEST_NODE_TYPE,
+            config={
+                "mode": FAULT_MODE_INFINITE_LOOP,
+                "timeout_seconds": 1,
+                "heartbeat_interval_seconds": 0.05,
+                "progress_interval_seconds": 0.05,
+            },
+        ),
+        workflow_id="workflow-infinite-loop-fault",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-infinite-loop-fault",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-infinite-loop-fault",
+    )
+    assert process is not None
+    started_at = time.monotonic()
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+    )
+    elapsed_seconds = time.monotonic() - started_at
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    events = store.list_runtime_events()
+    assert exit_code == 0
+    assert elapsed_seconds < 5
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert node_run.status == "TIMED_OUT"
+    assert node_run.executor_id == "subprocess-node-executor"
+    assert node_run.last_heartbeat is not None
+    assert node_run.current_stage == "infinite_loop"
+    assert node_run.error is not None
+    assert node_run.error["timeout_seconds"] == 1
+    assert store.get_latest_succeeded_node_task_result_for_node_run(
+        node_run.node_run_id
+    ) is None
+    assert "NODE_PROGRESS" in [event.event_type for event in events]
+    assert [event.event_type for event in events][-2:] == [
+        "NODE_TIMEOUT",
+        "WORKFLOW_FAILED",
+    ]
 
 
 def test_workflow_process_records_executor_heartbeat_and_progress(

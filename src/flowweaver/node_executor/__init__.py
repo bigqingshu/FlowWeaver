@@ -5,6 +5,7 @@ from flowweaver.node_executor.builtin import BuiltinTableNodeExecutor
 from flowweaver.node_executor.builtin_fault import (
     BUILTIN_FAULT_NODE_TYPES,
     DELAY_TEST_NODE_TYPE,
+    FAULT_MODE_INFINITE_LOOP,
     FAULT_MODE_PROCESS_EXIT,
     FAULT_MODE_RAISE_EXCEPTION,
     FAULT_TEST_NODE_TYPE,
@@ -25,6 +26,7 @@ __all__ = [
     "BuiltinTableNodeExecutor",
     "BuiltinFaultNodeExecutor",
     "DELAY_TEST_NODE_TYPE",
+    "FAULT_MODE_INFINITE_LOOP",
     "FAULT_MODE_PROCESS_EXIT",
     "FAULT_MODE_RAISE_EXCEPTION",
     "FAULT_TEST_NODE_TYPE",

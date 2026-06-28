@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Protocol
+from typing import Any, NoReturn, Protocol
 
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.enums import NodeResultStatus
@@ -9,6 +9,7 @@ from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 DELAY_TEST_NODE_TYPE = "DelayTestNode"
 FAULT_TEST_NODE_TYPE = "FaultTestNode"
+FAULT_MODE_INFINITE_LOOP = "INFINITE_LOOP"
 FAULT_MODE_RAISE_EXCEPTION = "RAISE_EXCEPTION"
 FAULT_MODE_PROCESS_EXIT = "PROCESS_EXIT"
 BUILTIN_FAULT_NODE_TYPES = frozenset(
@@ -119,10 +120,40 @@ class BuiltinFaultNodeExecutor:
         if mode == FAULT_MODE_RAISE_EXCEPTION:
             message = str(task.config.get("message", "FaultTestNode injected failure"))
             raise RuntimeError(message)
+        if mode == FAULT_MODE_INFINITE_LOOP:
+            self._execute_infinite_loop(task)
         if mode == FAULT_MODE_PROCESS_EXIT:
             exit_code = _int_config(task.config, "exit_code", default=7)
             raise SystemExit(exit_code)
         raise ValueError(f"Unsupported FaultTestNode mode: {mode}")
+
+    def _execute_infinite_loop(self, task: NodeTaskModel) -> NoReturn:
+        heartbeat_interval = max(
+            _float_config(task.config, "heartbeat_interval_seconds", default=0.2),
+            0.001,
+        )
+        progress_interval = max(
+            _float_config(task.config, "progress_interval_seconds", default=0.2),
+            0.001,
+        )
+        started_monotonic = time.monotonic()
+        next_heartbeat_at = started_monotonic
+        next_progress_at = started_monotonic
+        while True:
+            now_monotonic = time.monotonic()
+            elapsed = max(0.0, now_monotonic - started_monotonic)
+            if now_monotonic >= next_heartbeat_at:
+                self._event_emitter.emit_task_heartbeat(task)
+                next_heartbeat_at = now_monotonic + heartbeat_interval
+            if now_monotonic >= next_progress_at:
+                self._event_emitter.emit_task_progress(
+                    task,
+                    progress=None,
+                    current_stage="infinite_loop",
+                    metrics={"elapsed_seconds": round(elapsed, 6)},
+                )
+                next_progress_at = now_monotonic + progress_interval
+            time.sleep(0.01)
 
     def _emit_delay_progress(
         self,
