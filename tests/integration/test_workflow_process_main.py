@@ -23,9 +23,14 @@ from flowweaver.node_executor import (
     FAULT_MODE_PROCESS_EXIT,
     FAULT_MODE_RAISE_EXCEPTION,
     FAULT_TEST_NODE_TYPE,
+    BuiltinSharedTableNodeExecutor,
     BuiltinTableNodeExecutor,
     FakeNodeExecutor,
     SubprocessNodeExecutorIpcClient,
+)
+from flowweaver.nodes.builtin_shared_table import (
+    PUBLISH_SHARED_TABLES_NODE_TYPE,
+    READ_SHARED_TABLES_NODE_TYPE,
 )
 from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
@@ -725,6 +730,79 @@ def table_ref_definition() -> dict:
     }
 
 
+def publish_shared_tables_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "orders",
+                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "rows": 2,
+                    "columns": ["row_id", "amount"],
+                    "seed": 0,
+                },
+            },
+            {
+                "node_instance_id": "customers",
+                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "rows": 1,
+                    "columns": ["row_id", "label"],
+                    "seed": 0,
+                },
+            },
+            {
+                "node_instance_id": "publish",
+                "node_type": PUBLISH_SHARED_TABLES_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "share_name": "daily_report",
+                    "export_names": ["orders", "customers"],
+                },
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "orders-to-publish",
+                "source_node_id": "orders",
+                "source_port": "out",
+                "target_node_id": "publish",
+                "target_port": "in-orders",
+            },
+            {
+                "connection_id": "customers-to-publish",
+                "source_node_id": "customers",
+                "source_port": "out",
+                "target_node_id": "publish",
+                "target_port": "in-customers",
+            },
+        ],
+    }
+
+
+def read_shared_tables_definition(*, exact_version: int = 1) -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "read",
+                "node_type": READ_SHARED_TABLES_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "share_name": "daily_report",
+                    "version_policy": "EXACT_VERSION",
+                    "exact_version": exact_version,
+                    "selected_members": ["customers", "orders"],
+                },
+            }
+        ],
+        "connections": [],
+    }
+
+
 def multi_upstream_definition() -> dict:
     return {
         "schema_version": "1.0",
@@ -907,6 +985,114 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_runs_shared_table_nodes_in_main_loop(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    table_executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-mainloop",
+        registry=registry,
+        table_provider=provider,
+    )
+    shared_executor = BuiltinSharedTableNodeExecutor(
+        executor_id="builtin-shared-mainloop",
+        store=store,
+    )
+    producer_workflow = store.create_workflow_definition(
+        name="Shared table producer workflow",
+        definition=publish_shared_tables_definition(),
+        workflow_id="workflow-shared-producer",
+    )
+    producer_run = store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-shared-producer",
+    )
+    producer_process = store.claim_workflow_process(
+        workflow_run_id=producer_run.workflow_run_id,
+        process_id="process-shared-producer",
+    )
+    assert producer_process is not None
+
+    producer_exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=producer_run.workflow_run_id,
+        process_id=producer_process.process_id,
+        process_generation=producer_process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=(
+            lambda task: (
+                shared_executor
+                if task.node_type == PUBLISH_SHARED_TABLES_NODE_TYPE
+                else table_executor
+            )
+        ),
+    )
+
+    publication = store.get_latest_shared_publication("daily_report")
+    assert producer_exit_code == 0
+    assert store.get_workflow_run(producer_run.workflow_run_id).status == "SUCCEEDED"
+    assert publication is not None
+    assert publication.publication_version == 1
+    publication_member_refs = {
+        member.export_name: member.table_ref_id for member in publication.members
+    }
+    assert sorted(publication_member_refs) == ["customers", "orders"]
+
+    consumer_workflow = store.create_workflow_definition(
+        name="Shared table consumer workflow",
+        definition=read_shared_tables_definition(exact_version=1),
+        workflow_id="workflow-shared-consumer",
+    )
+    consumer_run = store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-shared-consumer",
+    )
+    consumer_process = store.claim_workflow_process(
+        workflow_run_id=consumer_run.workflow_run_id,
+        process_id="process-shared-consumer",
+    )
+    assert consumer_process is not None
+
+    consumer_exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=consumer_run.workflow_run_id,
+        process_id=consumer_process.process_id,
+        process_generation=consumer_process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: shared_executor,
+    )
+
+    consumer_loaded = store.get_workflow_run(consumer_run.workflow_run_id)
+    read_node = store.get_node_run_for_instance(
+        workflow_run_id=consumer_run.workflow_run_id,
+        node_instance_id="read",
+    )
+    assert consumer_exit_code == 0
+    assert consumer_loaded is not None
+    assert consumer_loaded.status == "SUCCEEDED"
+    assert consumer_loaded.input_snapshot_id is not None
+    assert read_node is not None
+    read_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        read_node.node_run_id
+    )
+    assert read_result is not None
+    assert read_result.output_refs == [
+        publication_member_refs["customers"],
+        publication_member_refs["orders"],
+    ]
+    snapshot = store.get_input_snapshot(consumer_loaded.input_snapshot_id)
+    assert snapshot is not None
+    assert snapshot.inputs[0].publication_id == publication.publication_id
+    assert snapshot.inputs[0].publication_version == 1
+    assert snapshot.inputs[0].selected_members == ("customers", "orders")
+    leases = store.list_read_leases_by_workflow_run(consumer_run.workflow_run_id)
+    assert len(leases) == 1
+    assert leases[0].publication_id == publication.publication_id
+    assert leases[0].selected_members == ("customers", "orders")
 
 
 def test_workflow_process_passes_multiple_upstream_table_refs_in_stable_order(
@@ -1921,18 +2107,120 @@ def test_reusable_default_executor_owner_rebuilds_after_closed_executor(
         config={},
         timeout_seconds=60,
     )
-    owner = workflow_process_main._ReusableSubprocessExecutorOwner()
+    store = RuntimeStore("sqlite:///:memory:")
+    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(store=store)
     first = owner.executor_for_task(task)
     first.close()
     second = owner.executor_for_task(task)
     result = second.execute(task)
     owner.close()
+    store.dispose()
 
     assert first is not second
     assert result.executor_id == "default-rebuild-2"
     assert created_executor_ids == ["default-rebuild-1", "default-rebuild-2"]
     assert executed_executor_ids == ["default-rebuild-2"]
     assert closed_executor_ids == ["default-rebuild-1", "default-rebuild-2"]
+
+
+def test_default_executor_owner_uses_builtin_shared_table_executor(
+    monkeypatch,
+) -> None:
+    created_shared_executor_ids: list[str] = []
+    created_subprocess_executor_ids: list[str] = []
+
+    class TrackingSharedTableExecutor:
+        def __init__(self, *, store: RuntimeStore) -> None:
+            self.executor_id = f"shared-table-{len(created_shared_executor_ids) + 1}"
+            created_shared_executor_ids.append(self.executor_id)
+            self.store = store
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    class TrackingDefaultSubprocessExecutor:
+        def __init__(self) -> None:
+            self.executor_id = (
+                f"default-subprocess-{len(created_subprocess_executor_ids) + 1}"
+            )
+            created_subprocess_executor_ids.append(self.executor_id)
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        workflow_process_main,
+        "BuiltinSharedTableNodeExecutor",
+        TrackingSharedTableExecutor,
+    )
+    monkeypatch.setattr(
+        workflow_process_main,
+        "SubprocessNodeExecutorIpcClient",
+        TrackingDefaultSubprocessExecutor,
+    )
+    store = RuntimeStore("sqlite:///:memory:")
+    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(store=store)
+    shared_task = NodeTaskModel(
+        task_id="task-shared",
+        workflow_run_id="run-shared",
+        workflow_process_id="process-shared",
+        process_generation=1,
+        node_run_id="node-run-shared",
+        node_instance_id="node-shared",
+        node_type=READ_SHARED_TABLES_NODE_TYPE,
+        node_version="1.0",
+        attempt=1,
+        input_refs=[],
+        config={"share_name": "daily_report", "version_policy": "LATEST"},
+        timeout_seconds=60,
+    )
+    normal_task = NodeTaskModel(
+        task_id="task-normal",
+        workflow_run_id="run-normal",
+        workflow_process_id="process-normal",
+        process_generation=1,
+        node_run_id="node-run-normal",
+        node_instance_id="node-normal",
+        node_type="core.source",
+        node_version="1.0",
+        attempt=1,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+
+    shared_executor = owner.executor_for_task(shared_task)
+    normal_executor = owner.executor_for_task(normal_task)
+    owner.close()
+    store.dispose()
+
+    assert shared_executor.executor_id == "shared-table-1"
+    assert normal_executor.executor_id == "default-subprocess-1"
+    assert created_shared_executor_ids == ["shared-table-1"]
+    assert created_subprocess_executor_ids == ["default-subprocess-1"]
 
 
 def test_workflow_process_runs_single_node_with_subprocess_executor(

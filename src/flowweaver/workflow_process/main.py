@@ -22,11 +22,13 @@ from flowweaver.engine.runtime_event_sink import (
 )
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.node_executor import (
+    BuiltinSharedTableNodeExecutor,
     CancellableNodeExecutor,
     NodeExecutor,
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
+from flowweaver.nodes.builtin_shared_table import is_shared_table_node_type
 from flowweaver.protocols.enums import (
     EventType,
     IPCMessageType,
@@ -122,14 +124,17 @@ class _NodeTaskIpcEventAwareExecutor(Protocol):
         ...
 
 
-class _ReusableSubprocessExecutorOwner:
-    def __init__(self) -> None:
+class _DefaultWorkflowProcessExecutorOwner:
+    def __init__(self, *, store: RuntimeStore) -> None:
+        self._store = store
         self._executor: SubprocessNodeExecutorIpcClient | None = None
 
     def executor_for_task(
         self,
-        _task: NodeTaskModel,
-    ) -> SubprocessNodeExecutorIpcClient:
+        task: NodeTaskModel,
+    ) -> NodeExecutor:
+        if is_shared_table_node_type(task.node_type):
+            return BuiltinSharedTableNodeExecutor(store=self._store)
         if self._executor is None or getattr(self._executor, "closed", False):
             self._executor = SubprocessNodeExecutorIpcClient()
         return self._executor
@@ -198,10 +203,10 @@ def run_workflow_process(
     resolved_max_concurrent_node_tasks = (
         resolve_workflow_process_max_concurrent_node_tasks(max_concurrent_node_tasks)
     )
-    reusable_executor_owner: _ReusableSubprocessExecutorOwner | None = None
+    reusable_executor_owner: _DefaultWorkflowProcessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
-        reusable_executor_owner = _ReusableSubprocessExecutorOwner()
+        reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(store=store)
         executor_factory = reusable_executor_owner.executor_for_task
         close_executor_after_task = False
     try:
