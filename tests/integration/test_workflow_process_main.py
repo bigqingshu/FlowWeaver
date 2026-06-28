@@ -34,6 +34,26 @@ class InjectedFailingExecutor:
         )
 
 
+class TrackingSubprocessNodeExecutor(SubprocessNodeExecutorIpcClient):
+    def __init__(
+        self,
+        *,
+        closed_executor_ids: list[str],
+        executor_id: str,
+        python_executable: str,
+    ) -> None:
+        self._closed_executor_ids = closed_executor_ids
+        super().__init__(
+            executor_id=executor_id,
+            python_executable=python_executable,
+        )
+
+    def close(self) -> None:
+        if self.executor_id not in self._closed_executor_ids:
+            self._closed_executor_ids.append(self.executor_id)
+        super().close()
+
+
 def migrate(database_path: Path) -> None:
     config = Config("alembic.ini")
     config.set_main_option("script_location", "migrations")
@@ -162,9 +182,11 @@ def test_workflow_process_runs_single_node_with_subprocess_executor(
     )
     assert process is not None
     executors: list[SubprocessNodeExecutorIpcClient] = []
+    closed_executor_ids: list[str] = []
 
     def create_executor(_task: NodeTaskModel) -> SubprocessNodeExecutorIpcClient:
-        executor = SubprocessNodeExecutorIpcClient(
+        executor = TrackingSubprocessNodeExecutor(
+            closed_executor_ids=closed_executor_ids,
             executor_id=f"subprocess-mainloop-{len(executors) + 1}",
             python_executable=sys.executable,
         )
@@ -180,13 +202,15 @@ def test_workflow_process_runs_single_node_with_subprocess_executor(
             heartbeat_interval_seconds=0,
             executor_factory=create_executor,
         )
+        node_runs = store.list_node_runs(run.workflow_run_id)
+        closed_executor_ids_after_run = list(closed_executor_ids)
     finally:
         for executor in executors:
             executor.close()
 
-    node_runs = store.list_node_runs(run.workflow_run_id)
     assert exit_code == 0
     assert len(executors) == 1
+    assert closed_executor_ids_after_run == ["subprocess-mainloop-1"]
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
     assert {node.node_instance_id: node.status for node in node_runs} == {
         "source": "SUCCEEDED",

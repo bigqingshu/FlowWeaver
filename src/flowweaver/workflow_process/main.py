@@ -4,7 +4,7 @@ import argparse
 import time
 import traceback
 from collections.abc import Callable
-from typing import NoReturn
+from typing import NoReturn, Protocol, runtime_checkable
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import (
@@ -50,6 +50,12 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
     }
 )
+
+
+@runtime_checkable
+class _ClosableExecutor(Protocol):
+    def close(self) -> None:
+        ...
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -283,32 +289,44 @@ def _dispatch_ready_nodes(
         if task is None:
             continue
         executor = executor_factory(task)
-        accepted = task_manager.accept_task(
-            task_id=task.task_id,
-            executor_id=executor.executor_id,
-        )
-        if accepted is None:
-            continue
-        result = executor.execute(accepted)
-        apply_result = task_manager.apply_result(result)
-        if (
-            apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
-            and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
-        ):
-            _fail_rejected_node_result(
-                store=store,
-                workflow_run_id=workflow_run_id,
-                workflow_process_id=workflow_process_id,
-                process_generation=process_generation,
-                event_sink=event_sink,
-                task=accepted,
-                result=result,
-                apply_result=apply_result,
+        try:
+            accepted = task_manager.accept_task(
+                task_id=task.task_id,
+                executor_id=executor.executor_id,
             )
-        dispatched_count += 1
-        if _workflow_run_is_terminal(store, workflow_run_id):
-            break
+            if accepted is None:
+                continue
+            result = executor.execute(accepted)
+            apply_result = task_manager.apply_result(result)
+            if (
+                apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
+                and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
+            ):
+                _fail_rejected_node_result(
+                    store=store,
+                    workflow_run_id=workflow_run_id,
+                    workflow_process_id=workflow_process_id,
+                    process_generation=process_generation,
+                    event_sink=event_sink,
+                    task=accepted,
+                    result=result,
+                    apply_result=apply_result,
+                )
+            dispatched_count += 1
+            if _workflow_run_is_terminal(store, workflow_run_id):
+                break
+        finally:
+            _close_executor(executor)
     return dispatched_count
+
+
+def _close_executor(executor: object) -> None:
+    if not isinstance(executor, _ClosableExecutor):
+        return
+    try:
+        executor.close()
+    except Exception:
+        pass
 
 
 def _fail_rejected_node_result(
