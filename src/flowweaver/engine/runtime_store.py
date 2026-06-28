@@ -1103,6 +1103,18 @@ class RuntimeStore:
                 return None
             return _table_ref_from_record(record)
 
+    def list_table_refs_by_workflow_run(
+        self,
+        workflow_run_id: str,
+    ) -> list[TableRefModel]:
+        with self._session_factory() as session:
+            records = session.scalars(
+                select(DataRefRecord)
+                .where(DataRefRecord.workflow_run_id == workflow_run_id)
+                .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
+            ).all()
+            return [_table_ref_from_record(record) for record in records]
+
     def append_runtime_event(self, event: EventModel) -> int:
         with self._session_factory.begin() as session:
             record = RuntimeEventRecord(

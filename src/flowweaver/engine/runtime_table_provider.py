@@ -110,10 +110,13 @@ class SQLiteRuntimeTableProvider:
         self,
         staging_ref: TableRefModel,
         *,
-        version: int = 1,
+        version: int | None = None,
     ) -> TableRefModel:
         database_path, staging_table = _table_location(staging_ref)
-        published_table = f"pub_{_identifier_token(staging_table)}_v{version}"
+        published_version = staging_ref.version + 1 if version is None else version
+        published_table = (
+            f"pub_{_identifier_token(staging_table)}_v{published_version}"
+        )
         return TableRefModel(
             table_ref_id=new_id(),
             role=staging_ref.role,
@@ -130,7 +133,7 @@ class SQLiteRuntimeTableProvider:
             },
             schema=staging_ref.schema,
             schema_fingerprint=staging_ref.schema_fingerprint,
-            version=version,
+            version=published_version,
             capabilities={"READ"},
             lifecycle_status=LifecycleStatus.PUBLISHED,
             created_by_workflow_run_id=staging_ref.created_by_workflow_run_id,
