@@ -24,36 +24,38 @@ SKIP_DEPENDENTS
 
 `CONTINUE_INDEPENDENT` 下，单个节点失败后不应立即让 WorkflowRun 进入终态 `FAILED`。
 
-需要明确最终状态表达：
+已确认最终状态表达：
 
-- 继续使用 `FAILED` 表示最终有失败节点；
-- 或新增类似 `PARTIAL_FAILED` / `COMPLETED_WITH_FAILURES` 的终态；
-- 或保持 `SUCCEEDED` 但在 summary 中记录 failed nodes。
+- 运行期间，单个节点失败不会立即结束 WorkflowRun。
+- 所有可执行节点结束后，WorkflowRun 最终状态为 `FAILED`。
+- 最终完成原因为 `completion_reason=PARTIAL_FAILURE`。
 
-当前阶段建议不新增状态，先采用最小策略：
+确认策略：
 
 ```text
 运行期间：WorkflowRun 保持 RUNNING
 所有可运行分支结束后：WorkflowRun 最终 FAILED
+完成原因：completion_reason = PARTIAL_FAILURE
 ```
 
 ### 2. 失败节点的下游
 
 失败节点的直接或间接依赖节点不能继续执行，因为缺少成功输出。
 
-需要明确下游状态：
+已确认节点状态表达：
 
-- 保持 `WAITING_DEPENDENCY`；
-- 标记为 `SKIPPED`；
-- 标记为 `BLOCKED`;
-- 或沿用 `FAILED`。
+- 失败节点：`FAILED`。
+- 直接或间接依赖失败节点，且无法继续执行的节点：`SKIPPED`。
+- 与失败分支无关的节点：继续执行。
 
-当前 `NodeRunStatus` 还没有 `SKIPPED` / `BLOCKED`。因此最小实现前必须先决定是否扩展枚举。
+当前 `NodeRunStatus` 还没有 `SKIPPED`。因此实现前需要先扩展节点状态、状态迁移和事件/响应序列化边界。
 
-建议最小路径：
+确认策略：
 
 ```text
-先不实现 CONTINUE_INDEPENDENT，直到有可表达的下游阻断状态。
+失败节点：FAILED
+受失败分支阻断的下游节点：SKIPPED
+无关分支：继续执行
 ```
 
 ### 3. 独立分支继续执行
@@ -76,7 +78,8 @@ SKIP_DEPENDENTS
 - 节点失败时仍发 `NODE_FAILED`；
 - Workflow 最终失败时再发 `WORKFLOW_FAILED`；
 - 不应在第一个节点失败时提前发 `WORKFLOW_FAILED`；
-- 如果后续新增 skipped/blocked 节点，应增加对应事件或在 workflow failure summary 中表达。
+- `SKIPPED` 节点应增加对应事件，或至少在 workflow failure summary 中表达。
+- `WORKFLOW_FAILED` payload 应携带 `completion_reason="PARTIAL_FAILURE"`。
 
 ## 三、当前代码冲突点
 
@@ -86,7 +89,8 @@ SKIP_DEPENDENTS
 | `_run_workflow_process_loop()` | workflow 终态后立即 return | 若失败不立即终态，主循环才能继续调度独立分支 |
 | `_drain_executor_task_completions()` | completion 后发现终态即停止 drain | CONTINUE_INDEPENDENT 下不能因单个失败停止 |
 | H+5 失败隔离验收 | 失败后迟到成功不污染终态 | CONTINUE_INDEPENDENT 需要允许其他独立成功继续落地 |
-| `NodeRunStatus` | 没有 skipped/blocked 状态 | 无法清晰表达失败节点下游不可运行 |
+| `NodeRunStatus` | 没有 `SKIPPED` 状态 | 无法清晰表达失败节点下游不可运行 |
+| WorkflowRun 记录 | 当前没有 `completion_reason` 字段 | 无法表达 `PARTIAL_FAILURE` 完成原因 |
 
 ## 四、建议最小实现顺序
 
@@ -103,36 +107,51 @@ SKIP_DEPENDENTS
 - 不改变失败结果应用行为。
 - 不新增状态。
 
-### CI-2：CONTINUE_INDEPENDENT 失败不终止 workflow
+### CI-2：状态与完成原因前置结构
+
+范围：
+
+- 新增 `NodeRunStatus.SKIPPED`。
+- 为 WorkflowRun 增加 `completion_reason` 或等价可序列化字段。
+- 定义 `PARTIAL_FAILURE` 常量。
+- 补序列化/API response/状态迁移测试。
+
+不做：
+
+- 不改变默认 `FAIL_FAST` 行为。
+- 不开始调度独立分支。
+
+### CI-3：CONTINUE_INDEPENDENT 失败不终止 workflow
 
 范围：
 
 - 节点失败后仅标记该节点 `FAILED` 并发 `NODE_FAILED`。
 - WorkflowRun 保持 `RUNNING`。
+- 直接或间接依赖失败节点的不可执行下游标记为 `SKIPPED`。
 - 独立 READY 分支继续执行。
 
 不做：
 
-- 不处理失败节点下游状态。
-- 不新增 final summary。
+- 不实现 `SKIP_DEPENDENTS` 的完整独立策略。
 
-### CI-3：完成判定与最终失败
+### CI-4：完成判定与最终失败
 
 范围：
 
 - 当没有可继续运行的 READY/RUNNING/LONG_RUNNING 节点时，若存在 failed node，则 WorkflowRun 最终 `FAILED`。
 - 此时再发 `WORKFLOW_FAILED`。
+- WorkflowRun 写入 `completion_reason=PARTIAL_FAILURE`。
+- `WORKFLOW_FAILED` 事件 payload 携带 `completion_reason="PARTIAL_FAILURE"`。
 
 不做：
 
-- 不新增 `PARTIAL_FAILED` 状态。
+- 不新增 `PARTIAL_FAILED` workflow 状态。
 
-### CI-4：下游阻断状态
+### CI-5：下游阻断验收
 
 范围：
 
-- 决定是否新增 `SKIPPED` 或 `BLOCKED`。
-- 失败节点的依赖下游进入明确阻断状态。
+- 失败节点的依赖下游进入 `SKIPPED`。
 - workflow failure summary 记录 failed/skipped/blocked 节点。
 
 不做：
@@ -160,9 +179,10 @@ merge depends on source_a + source_b
 expected:
   source_a FAILED
   source_b SUCCEEDED
-  merge 不执行
+  merge SKIPPED
   workflow 最终 FAILED
-  WORKFLOW_FAILED 在 source_b 完成后出现
+  completion_reason PARTIAL_FAILURE
+  WORKFLOW_FAILED 在 source_b 完成和 merge SKIPPED 后出现
 ```
 
 ### 场景 3：threaded/2 下失败不关闭独立分支
@@ -173,6 +193,7 @@ source_b late success
 expected:
   source_b success 可落地
   workflow 最终 FAILED
+  completion_reason PARTIAL_FAILURE
   不触发 H+5 的终态拒绝路径
 ```
 
@@ -188,7 +209,10 @@ expected:
 
 `CONTINUE_INDEPENDENT` 应作为独立后续小阶段处理。
 
-进入实现前，先确认两个产品语义：
+已确认产品语义：
 
-1. 最终 workflow 是否继续用 `FAILED` 表示“部分失败完成”。
-2. 失败节点下游应新增 `SKIPPED`、`BLOCKED`，还是暂时保持 `WAITING_DEPENDENCY`。
+1. 失败节点为 `FAILED`。
+2. 直接或间接依赖失败节点且无法继续执行的节点为 `SKIPPED`。
+3. 与失败分支无关的节点继续执行。
+4. 所有可执行节点结束后，WorkflowRun 为 `FAILED`。
+5. WorkflowRun 完成原因为 `completion_reason=PARTIAL_FAILURE`。
