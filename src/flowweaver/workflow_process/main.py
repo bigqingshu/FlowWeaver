@@ -385,8 +385,12 @@ def _run_workflow_process_loop(
                     payload={"process_id": process_id},
                 )
             )
+            _release_unreleased_read_leases_for_terminal_workflow(
+                store,
+                workflow_run_id,
+            )
             return 0
-        if _workflow_run_is_terminal(store, workflow_run_id):
+        if _finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
         completed_count = _drain_executor_task_completions(
             store=store,
@@ -399,7 +403,7 @@ def _run_workflow_process_loop(
             close_executor_after_task=close_executor_after_task,
             execution_pool=execution_pool,
         )
-        if _workflow_run_is_terminal(store, workflow_run_id):
+        if _finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
         dispatched_count = _dispatch_ready_nodes(
             store=store,
@@ -418,7 +422,7 @@ def _run_workflow_process_loop(
             execution_pool=execution_pool,
             event_sink=event_sink,
         )
-        if _workflow_run_is_terminal(store, workflow_run_id):
+        if _finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
         if _complete_continue_independent_partial_failure_if_finished(
             store=store,
@@ -429,6 +433,10 @@ def _run_workflow_process_loop(
             dag=dag,
             event_sink=event_sink,
         ):
+            _release_unreleased_read_leases_for_terminal_workflow(
+                store,
+                workflow_run_id,
+            )
             return 0
         if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
@@ -473,6 +481,23 @@ def _workflow_run_is_terminal(
 ) -> bool:
     current = store.get_workflow_run(workflow_run_id)
     return current is not None and current.status in _TERMINAL_WORKFLOW_STATUSES
+
+
+def _finalize_if_workflow_run_terminal(
+    store: RuntimeStore,
+    workflow_run_id: str,
+) -> bool:
+    if not _workflow_run_is_terminal(store, workflow_run_id):
+        return False
+    _release_unreleased_read_leases_for_terminal_workflow(store, workflow_run_id)
+    return True
+
+
+def _release_unreleased_read_leases_for_terminal_workflow(
+    store: RuntimeStore,
+    workflow_run_id: str,
+) -> None:
+    store.release_unreleased_read_leases_for_workflow_run(workflow_run_id)
 
 
 def _complete_continue_independent_partial_failure_if_finished(
@@ -583,6 +608,7 @@ def _complete_empty_workflow(
             payload={"process_id": process_id, "empty_workflow": True},
         )
     )
+    _release_unreleased_read_leases_for_terminal_workflow(store, workflow_run_id)
     return 0
 
 
@@ -1256,6 +1282,7 @@ def _fail(
         owner_process_id=process_id if process_generation is not None else None,
         process_generation=process_generation,
     )
+    _release_unreleased_read_leases_for_terminal_workflow(store, workflow_run_id)
     return 1
 
 

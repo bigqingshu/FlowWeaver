@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import time
 from collections.abc import Callable
+from datetime import timedelta
 from pathlib import Path
 from threading import Event, Thread
 
@@ -41,10 +42,14 @@ from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
     NodeRunStatus,
+    TableMutability,
+    TableRole,
+    TableScope,
+    TableStorageKind,
 )
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
@@ -633,6 +638,46 @@ def make_store(tmp_path: Path) -> RuntimeStore:
     return RuntimeStore.from_sqlite_path(database_path)
 
 
+def make_test_table_ref(
+    *,
+    table_ref_id: str,
+    workflow_run_id: str,
+    node_run_id: str,
+    logical_table_id: str,
+) -> TableRefModel:
+    return TableRefModel(
+        table_ref_id=table_ref_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        scope=TableScope.WORKFLOW_SCOPE,
+        mutability=TableMutability.PUBLISHED_IMMUTABLE,
+        provider_id="sqlite_runtime",
+        resource_profile_id=None,
+        mount_id=None,
+        logical_table_id=logical_table_id,
+        opaque_handle={
+            "database_path": "runtime/run.db",
+            "table_name": f"{logical_table_id}_v1",
+        },
+        schema=[
+            FieldSchemaModel(
+                field_id=f"{logical_table_id}-field-1",
+                name="amount",
+                data_type="FLOAT",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+        schema_fingerprint=f"{logical_table_id}-fingerprint-1",
+        version=1,
+        capabilities={"READ"},
+        lifecycle_status=LifecycleStatus.PUBLISHED,
+        created_by_workflow_run_id=workflow_run_id,
+        created_by_node_run_id=node_run_id,
+        created_at=utc_now(),
+    )
+
+
 def definition() -> dict:
     return {
         "schema_version": "1.0",
@@ -1093,6 +1138,98 @@ def test_workflow_process_runs_shared_table_nodes_in_main_loop(
     assert len(leases) == 1
     assert leases[0].publication_id == publication.publication_id
     assert leases[0].selected_members == ("customers", "orders")
+    assert leases[0].released_at is not None
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
+
+
+def test_workflow_process_releases_unreleased_read_leases_on_failure(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    producer_workflow = store.create_workflow_definition(
+        name="Lease producer workflow",
+        definition=empty_definition(),
+        workflow_id="workflow-lease-producer",
+    )
+    producer_run = store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-lease-producer",
+    )
+    producer_node = store.create_node_run(
+        workflow_run_id=producer_run.workflow_run_id,
+        node_instance_id="producer",
+        node_type="builtin.producer",
+        node_run_id="node-lease-producer",
+    )
+    orders = make_test_table_ref(
+        table_ref_id="table-lease-orders",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-lease",
+        share_name="daily_report",
+        producer_workflow_id=producer_workflow.workflow_id,
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+    consumer_workflow = store.create_workflow_definition(
+        name="Lease failure consumer workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-lease-consumer",
+    )
+    consumer_run = store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-lease-consumer",
+    )
+    lease = store.create_read_lease(
+        lease_id="lease-to-release",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() + timedelta(seconds=60),
+    )
+    expired_lease = store.create_read_lease(
+        lease_id="expired-lease-to-release",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() - timedelta(seconds=1),
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=consumer_run.workflow_run_id,
+        process_id="process-lease-consumer",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=consumer_run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedFailingExecutor(),
+    )
+
+    released = store.get_read_lease(lease.lease_id)
+    released_expired = store.get_read_lease(expired_lease.lease_id)
+    assert exit_code == 0
+    assert store.get_workflow_run(consumer_run.workflow_run_id).status == "FAILED"
+    assert released is not None
+    assert released.released_at is not None
+    assert released_expired is not None
+    assert released_expired.released_at is not None
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
 
 
 def test_workflow_process_passes_multiple_upstream_table_refs_in_stable_order(

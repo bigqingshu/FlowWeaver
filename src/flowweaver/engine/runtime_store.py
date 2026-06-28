@@ -1567,6 +1567,23 @@ class RuntimeStore:
                 record.released_at = _datetime_to_text(now)
             return _read_lease_from_record(record)
 
+    def release_unreleased_read_leases_for_workflow_run(
+        self,
+        workflow_run_id: str,
+    ) -> list[ReadLease]:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            records = session.scalars(
+                select(ReadLeaseRecord)
+                .where(ReadLeaseRecord.consumer_workflow_run_id == workflow_run_id)
+                .where(ReadLeaseRecord.released_at.is_(None))
+                .order_by(ReadLeaseRecord.acquired_at, ReadLeaseRecord.lease_id)
+            ).all()
+            for record in records:
+                record.released_at = _datetime_to_text(now)
+            session.flush()
+            return [_read_lease_from_record(record) for record in records]
+
     def append_runtime_event(self, event: EventModel) -> int:
         with self._session_factory.begin() as session:
             record = RuntimeEventRecord(

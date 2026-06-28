@@ -1646,6 +1646,72 @@ def test_runtime_store_read_lease_excludes_expired_from_active_list(
     ) == [expired]
 
 
+def test_runtime_store_releases_unreleased_read_leases_for_workflow_run(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+    active = store.create_read_lease(
+        lease_id="lease-active",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() + timedelta(seconds=60),
+    )
+    expired = store.create_read_lease(
+        lease_id="lease-expired",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() - timedelta(seconds=1),
+    )
+
+    released = store.release_unreleased_read_leases_for_workflow_run(
+        consumer_run.workflow_run_id
+    )
+
+    assert [lease.lease_id for lease in released] == [
+        active.lease_id,
+        expired.lease_id,
+    ]
+    assert released[0].released_at is not None
+    assert released[1].released_at is not None
+    assert store.get_read_lease(active.lease_id).released_at is not None
+    assert store.get_read_lease(expired.lease_id).released_at is not None
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
+    assert store.release_unreleased_read_leases_for_workflow_run(
+        consumer_run.workflow_run_id
+    ) == []
+
+
 def test_runtime_event_sequence_numbers_are_persisted(tmp_path: Path) -> None:
     from flowweaver.protocols.enums import EventType
     from flowweaver.protocols.events import EventModel
