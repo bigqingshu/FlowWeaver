@@ -4,7 +4,6 @@ import argparse
 import time
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import datetime
 from queue import Empty, Queue
 from threading import Thread
@@ -43,6 +42,7 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
+from flowweaver.workflow_process.executor_pool import DispatchedNodeTask
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
@@ -78,15 +78,6 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
     }
 )
-
-
-@dataclass(frozen=True)
-class DispatchedNodeTask:
-    task: NodeTaskModel
-    executor: NodeExecutor
-    node_run_id: str
-    node_instance_id: str
-    executor_id: str
 
 
 @runtime_checkable
