@@ -5,7 +5,12 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-from flowweaver.common.config import EngineConfig
+from flowweaver.common.config import (
+    EngineConfig,
+    WorkflowProcessExecutionMode,
+    resolve_workflow_process_execution_mode,
+    resolve_workflow_process_max_concurrent_node_tasks,
+)
 from flowweaver.common.ids import new_id
 from flowweaver.common.instance_lock import InstanceLock
 from flowweaver.engine.event_router import EventRouter
@@ -75,5 +80,21 @@ class EngineHostBootstrap:
         command.upgrade(config, "head")
 
 
-def bootstrap_default(data_dir: str | Path = "runtime") -> ServiceContainer:
-    return EngineHostBootstrap(EngineConfig(data_dir=Path(data_dir))).initialize()
+def bootstrap_default(
+    data_dir: str | Path = "runtime",
+    *,
+    workflow_process_execution_mode: WorkflowProcessExecutionMode | str | None = None,
+    workflow_process_max_concurrent_node_tasks: int | str | None = None,
+) -> ServiceContainer:
+    config = EngineConfig(
+        data_dir=Path(data_dir),
+        workflow_process_execution_mode=resolve_workflow_process_execution_mode(
+            workflow_process_execution_mode
+        ),
+        workflow_process_max_concurrent_node_tasks=(
+            resolve_workflow_process_max_concurrent_node_tasks(
+                workflow_process_max_concurrent_node_tasks
+            )
+        ),
+    )
+    return EngineHostBootstrap(config).initialize()
