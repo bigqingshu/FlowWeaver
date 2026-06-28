@@ -146,6 +146,55 @@ class NodeTaskManager:
         )
         return task
 
+    def record_task_heartbeat(
+        self,
+        task: NodeTaskModel,
+        *,
+        executor_id: str,
+        attempt: int,
+    ) -> NodeRun | None:
+        if attempt != task.attempt:
+            return None
+        return self._store.update_node_task_runtime_state(
+            task,
+            executor_id=executor_id,
+        )
+
+    def record_task_progress(
+        self,
+        task: NodeTaskModel,
+        *,
+        executor_id: str,
+        progress: float | None,
+        current_stage: str | None,
+        metrics: dict[str, int | float | str] | None = None,
+    ) -> NodeRun | None:
+        updated = self._store.update_node_task_runtime_state(
+            task,
+            executor_id=executor_id,
+            progress=progress,
+            current_stage=current_stage,
+        )
+        if updated is None:
+            return None
+        self._event_sink.emit(
+            EventModel(
+                event_type=EventType.NODE_PROGRESS,
+                workflow_run_id=task.workflow_run_id,
+                node_run_id=task.node_run_id,
+                payload={
+                    "process_id": task.workflow_process_id,
+                    "task_id": task.task_id,
+                    "executor_id": executor_id,
+                    "node_instance_id": task.node_instance_id,
+                    "progress": progress,
+                    "current_stage": current_stage,
+                    "metrics": metrics or {},
+                },
+            )
+        )
+        return updated
+
     def apply_result(self, result: NodeTaskResultModel) -> NodeTaskApplyResult:
         existing_result = self._store.get_node_task_result(
             task_id=result.task_id,

@@ -17,8 +17,18 @@ from flowweaver.node_executor import (
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    EventType,
+    IPCMessageType,
+    NodeRunStatus,
+    WorkflowRunStatus,
+)
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.ipc_messages import (
+    IPCEnvelope,
+    NodeTaskHeartbeatPayload,
+    NodeTaskProgressPayload,
+)
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
@@ -58,6 +68,17 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
 @runtime_checkable
 class _ClosableExecutor(Protocol):
     def close(self) -> None:
+        ...
+
+
+@runtime_checkable
+class _NodeTaskIpcEventAwareExecutor(Protocol):
+    executor_id: str
+
+    def set_event_handler(
+        self,
+        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
+    ) -> None:
         ...
 
 
@@ -343,6 +364,10 @@ def _dispatch_ready_nodes(
         if task is None:
             continue
         executor = executor_factory(task)
+        _configure_executor_event_handler(
+            executor,
+            task_manager=task_manager,
+        )
         try:
             accepted = task_manager.accept_task(
                 task_id=task.task_id,
@@ -373,6 +398,53 @@ def _dispatch_ready_nodes(
             if close_executor_after_task:
                 _close_executor(executor)
     return dispatched_count
+
+
+def _configure_executor_event_handler(
+    executor: object,
+    *,
+    task_manager: NodeTaskManager,
+) -> None:
+    if not isinstance(executor, _NodeTaskIpcEventAwareExecutor):
+        return
+
+    def handle_event(task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        _record_node_task_ipc_event(
+            task_manager=task_manager,
+            executor_id=executor.executor_id,
+            task=task,
+            envelope=envelope,
+        )
+
+    executor.set_event_handler(handle_event)
+
+
+def _record_node_task_ipc_event(
+    *,
+    task_manager: NodeTaskManager,
+    executor_id: str,
+    task: NodeTaskModel,
+    envelope: IPCEnvelope,
+) -> None:
+    if envelope.message_type == IPCMessageType.NODE_TASK_HEARTBEAT:
+        heartbeat_payload = NodeTaskHeartbeatPayload.model_validate(envelope.payload)
+        if heartbeat_payload.task_id != task.task_id:
+            return
+        task_manager.record_task_heartbeat(
+            task,
+            executor_id=heartbeat_payload.executor_id,
+            attempt=heartbeat_payload.attempt,
+        )
+        return
+    if envelope.message_type == IPCMessageType.NODE_TASK_PROGRESS:
+        progress_payload = NodeTaskProgressPayload.model_validate(envelope.payload)
+        task_manager.record_task_progress(
+            task,
+            executor_id=executor_id,
+            progress=progress_payload.progress,
+            current_stage=progress_payload.current_stage,
+            metrics=progress_payload.metrics,
+        )
 
 
 def _close_executor(executor: object) -> None:

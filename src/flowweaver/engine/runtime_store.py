@@ -862,6 +862,61 @@ class RuntimeStore:
                 return None
             return _node_task_from_record(record)
 
+    def update_node_task_runtime_state(
+        self,
+        task: NodeTaskModel,
+        *,
+        executor_id: str,
+        heartbeat_at: datetime | None = None,
+        progress: float | None = None,
+        current_stage: str | None = None,
+    ) -> NodeRun | None:
+        values: dict[str, Any] = {
+            "last_heartbeat": _datetime_to_text(heartbeat_at or utc_now()),
+        }
+        if progress is not None:
+            values["progress"] = progress
+        if current_stage is not None:
+            values["current_stage"] = current_stage
+        with self._session_factory.begin() as session:
+            task_check = (
+                select(NodeTaskRecord.task_id)
+                .where(NodeTaskRecord.task_id == task.task_id)
+                .where(NodeTaskRecord.node_run_id == task.node_run_id)
+                .where(NodeTaskRecord.attempt == task.attempt)
+                .where(NodeTaskRecord.workflow_process_id == task.workflow_process_id)
+                .where(NodeTaskRecord.process_generation == task.process_generation)
+            )
+            owner_check = (
+                select(WorkflowRunRecord.workflow_run_id)
+                .where(
+                    WorkflowRunRecord.workflow_run_id
+                    == NodeRunRecord.workflow_run_id
+                )
+                .where(WorkflowRunRecord.owner_process_id == task.workflow_process_id)
+                .where(WorkflowRunRecord.process_generation == task.process_generation)
+            )
+            statement = (
+                update(NodeRunRecord)
+                .where(NodeRunRecord.node_run_id == task.node_run_id)
+                .where(NodeRunRecord.status.in_([
+                    NodeRunStatus.RUNNING.value,
+                    NodeRunStatus.LONG_RUNNING.value,
+                ]))
+                .where(NodeRunRecord.executor_id == executor_id)
+                .where(NodeRunRecord.attempt == task.attempt)
+                .where(task_check.exists())
+                .where(owner_check.exists())
+                .values(**values)
+            )
+            result = cast(CursorResult[Any], session.execute(statement))
+            if result.rowcount != 1:
+                return None
+            record = session.get(NodeRunRecord, task.node_run_id)
+            if record is None:
+                return None
+            return _node_run_from_record(record)
+
     def record_node_task_result_once(self, result: NodeTaskResultModel) -> bool:
         try:
             with self._session_factory.begin() as session:

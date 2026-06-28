@@ -304,6 +304,64 @@ def test_stale_and_mismatched_results_are_rejected(tmp_path: Path) -> None:
     assert len(store.list_runtime_events()) == event_count
 
 
+def test_task_heartbeat_and_progress_update_node_runtime_state(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+
+    heartbeat = manager.record_task_heartbeat(
+        task,
+        executor_id="executor-1",
+        attempt=task.attempt,
+    )
+    progress = manager.record_task_progress(
+        task,
+        executor_id="executor-1",
+        progress=0.5,
+        current_stage="halfway",
+        metrics={"rows": 10},
+    )
+    stale_progress = manager.record_task_progress(
+        task,
+        executor_id="old-executor",
+        progress=0.9,
+        current_stage="stale",
+    )
+
+    loaded = store.get_node_run(task.node_run_id)
+    assert heartbeat is not None
+    assert progress is not None
+    assert stale_progress is None
+    assert loaded is not None
+    assert loaded.status == "RUNNING"
+    assert loaded.last_heartbeat is not None
+    assert loaded.progress == 0.5
+    assert loaded.current_stage == "halfway"
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_PROGRESS",
+    ]
+    assert store.list_runtime_events()[-1].payload == {
+        "process_id": process.process_id,
+        "task_id": task.task_id,
+        "executor_id": "executor-1",
+        "node_instance_id": "source",
+        "progress": 0.5,
+        "current_stage": "halfway",
+        "metrics": {"rows": 10},
+    }
+
+
 def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     run, process, manager = create_running_process(store, linear_definition())

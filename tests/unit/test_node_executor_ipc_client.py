@@ -7,7 +7,8 @@ from flowweaver.node_executor import (
     LocalNodeExecutorIpcClient,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.protocols.enums import NodeResultStatus
+from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
+from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
@@ -79,6 +80,38 @@ def test_subprocess_node_executor_ipc_client_returns_completed_result() -> None:
     assert result.status == NodeResultStatus.SUCCEEDED
 
 
+def test_subprocess_node_executor_ipc_client_emits_intermediate_events() -> None:
+    task = make_task()
+    events: list[IPCEnvelope] = []
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="reporting-executor-1",
+        command=_reporting_executor_command(executor_id="reporting-executor-1"),
+        event_handler=lambda _task, envelope: events.append(envelope),
+        env={},
+    )
+    try:
+        result = executor.execute(task)
+    finally:
+        executor.close()
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert [event.message_type for event in events] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_PROGRESS,
+    ]
+    assert events[1].payload == {
+        "executor_id": "reporting-executor-1",
+        "task_id": task.task_id,
+        "attempt": task.attempt,
+    }
+    assert events[2].payload == {
+        "progress": 0.5,
+        "current_stage": "halfway",
+        "metrics": {"rows": 10},
+    }
+
+
 def test_subprocess_node_executor_ipc_client_returns_failed_result_on_eof() -> None:
     task = make_task()
     executor = SubprocessNodeExecutorIpcClient(
@@ -101,6 +134,88 @@ def test_subprocess_node_executor_ipc_client_returns_failed_result_on_eof() -> N
     )
     assert result.error["exit_code"] == 7
     assert "forced executor exit" in result.error["stderr"]
+
+
+def _reporting_executor_command(*, executor_id: str) -> list[str]:
+    script = dedent(
+        f"""
+        from __future__ import annotations
+
+        import json
+        import sys
+
+        timestamp = "2026-01-01T00:00:00+00:00"
+        ready = {{
+            "protocol_version": "1.0",
+            "message_id": "ready-1",
+            "message_type": "EXECUTOR_READY",
+            "timestamp": timestamp,
+            "payload": {{"executor_id": {executor_id!r}}},
+        }}
+        sys.stdout.write(json.dumps(ready) + "\\n")
+        sys.stdout.flush()
+        submitted = json.loads(sys.stdin.readline())
+        task = submitted["payload"]
+
+        def write(message_type, payload):
+            envelope = {{
+                "protocol_version": "1.0",
+                "message_id": message_type.lower(),
+                "message_type": message_type,
+                "timestamp": timestamp,
+                "workflow_run_id": task["workflow_run_id"],
+                "node_run_id": task["node_run_id"],
+                "correlation_id": submitted["message_id"],
+                "payload": payload,
+            }}
+            sys.stdout.write(json.dumps(envelope) + "\\n")
+            sys.stdout.flush()
+
+        write(
+            "NODE_TASK_ACCEPTED",
+            {{
+                "executor_id": {executor_id!r},
+                "task_id": task["task_id"],
+                "node_run_id": task["node_run_id"],
+            }},
+        )
+        write(
+            "NODE_TASK_HEARTBEAT",
+            {{
+                "executor_id": {executor_id!r},
+                "task_id": task["task_id"],
+                "attempt": task["attempt"],
+            }},
+        )
+        write(
+            "NODE_TASK_PROGRESS",
+            {{
+                "progress": 0.5,
+                "current_stage": "halfway",
+                "metrics": {{"rows": 10}},
+            }},
+        )
+        write(
+            "NODE_TASK_COMPLETED",
+            {{
+                "result": {{
+                    "result_id": "result-1",
+                    "task_id": task["task_id"],
+                    "node_run_id": task["node_run_id"],
+                    "attempt": task["attempt"],
+                    "executor_id": {executor_id!r},
+                    "process_generation": task["process_generation"],
+                    "status": "SUCCEEDED",
+                    "output_refs": [],
+                    "error": None,
+                    "started_at": timestamp,
+                    "finished_at": timestamp,
+                }}
+            }},
+        )
+        """
+    )
+    return [sys.executable, "-c", script]
 
 
 def _exiting_executor_command(*, executor_id: str) -> list[str]:

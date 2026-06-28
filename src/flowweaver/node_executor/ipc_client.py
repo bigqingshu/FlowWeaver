@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,8 @@ from flowweaver.protocols.ipc_messages import (
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
+NodeTaskIpcEventHandler = Callable[[NodeTaskModel, IPCEnvelope], None]
+
 
 class LocalNodeExecutorIpcClient:
     def __init__(
@@ -25,12 +27,17 @@ class LocalNodeExecutorIpcClient:
         *,
         executor_id: str = "local-node-executor",
         executor_factory: NodeExecutorFactory | None = None,
+        event_handler: NodeTaskIpcEventHandler | None = None,
     ) -> None:
         self.executor_id = executor_id
+        self._event_handler = event_handler
         self._process = NodeExecutorProcess(
             executor_id=executor_id,
             executor_factory=executor_factory,
         )
+
+    def set_event_handler(self, handler: NodeTaskIpcEventHandler | None) -> None:
+        self._event_handler = handler
 
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
         envelope = IPCEnvelope(
@@ -40,6 +47,9 @@ class LocalNodeExecutorIpcClient:
             payload=task.model_dump(mode="json"),
         )
         for response in self._process.handle_envelope(envelope):
+            if response.message_type in _INTERMEDIATE_NODE_TASK_MESSAGES:
+                self._emit_event(task, response)
+                continue
             if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
                 return NodeTaskCompletedPayload.model_validate(
                     response.payload
@@ -47,6 +57,10 @@ class LocalNodeExecutorIpcClient:
             if response.message_type == IPCMessageType.NODE_TASK_FAILED:
                 return NodeTaskFailedPayload.model_validate(response.payload).result
         return _missing_result(task, executor_id=self.executor_id)
+
+    def _emit_event(self, task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        if self._event_handler is not None:
+            self._event_handler(task, envelope)
 
 
 class SubprocessNodeExecutorIpcClient:
@@ -58,8 +72,10 @@ class SubprocessNodeExecutorIpcClient:
         cwd: str | Path | None = None,
         env: Mapping[str, str] | None = None,
         command: list[str] | None = None,
+        event_handler: NodeTaskIpcEventHandler | None = None,
     ) -> None:
         self.executor_id = executor_id
+        self._event_handler = event_handler
         self._closed = False
         self._child = subprocess.Popen(
             command
@@ -81,6 +97,9 @@ class SubprocessNodeExecutorIpcClient:
         )
         self._expect_ready()
 
+    def set_event_handler(self, handler: NodeTaskIpcEventHandler | None) -> None:
+        self._event_handler = handler
+
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
         envelope = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_SUBMIT,
@@ -94,6 +113,9 @@ class SubprocessNodeExecutorIpcClient:
             response = self._read_response()
             if response is None:
                 return self._missing_result(task)
+            if response.message_type in _INTERMEDIATE_NODE_TASK_MESSAGES:
+                self._emit_event(task, response)
+                continue
             if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
                 return NodeTaskCompletedPayload.model_validate(
                     response.payload
@@ -160,6 +182,10 @@ class SubprocessNodeExecutorIpcClient:
             return IPCEnvelope.model_validate_json(line)
         except ValueError:
             return None
+
+    def _emit_event(self, task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        if self._event_handler is not None:
+            self._event_handler(task, envelope)
 
     def _missing_result(self, task: NodeTaskModel) -> NodeTaskResultModel:
         return _ipc_failure_result(
@@ -247,3 +273,12 @@ def _child_environment(base_env: Mapping[str, str] | None = None) -> dict[str, s
         else f"{src_path}{os.pathsep}{existing_pythonpath}"
     )
     return env
+
+
+_INTERMEDIATE_NODE_TASK_MESSAGES = frozenset(
+    {
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_PROGRESS,
+    }
+)
