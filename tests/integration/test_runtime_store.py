@@ -1426,6 +1426,226 @@ def test_runtime_store_input_snapshot_rejects_publication_version_mismatch(
     assert loaded_run.input_snapshot_id is None
 
 
+def test_runtime_store_read_lease_round_trip_and_release(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    lease = store.create_read_lease(
+        lease_id="lease-1",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() + timedelta(seconds=60),
+    )
+
+    assert lease.publication_id == publication.publication_id
+    assert lease.publication_version == 1
+    assert lease.selected_members == ("orders",)
+    assert lease.consumer_workflow_run_id == consumer_run.workflow_run_id
+    assert lease.released_at is None
+    assert store.get_read_lease("lease-1") == lease
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == [lease]
+
+    released = store.release_read_lease("lease-1")
+
+    assert released is not None
+    assert released.released_at is not None
+    assert store.get_read_lease("lease-1") == released
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=False,
+    ) == [released]
+
+
+def test_runtime_store_read_lease_rejects_missing_consumer_run(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Consumer workflow run not found: missing-run",
+    ):
+        store.create_read_lease(
+            lease_id="lease-1",
+            publication_id=publication.publication_id,
+            publication_version=publication.publication_version,
+            consumer_workflow_run_id="missing-run",
+            selected_members=("orders",),
+            expires_at=utc_now() + timedelta(seconds=60),
+        )
+
+    assert store.get_read_lease("lease-1") is None
+    assert row_count(database_path, "read_leases") == 0
+
+
+def test_runtime_store_read_lease_rejects_missing_publication(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    consumer_run, _consumer_node = create_producer_context(store)
+
+    with pytest.raises(
+        ValueError,
+        match="Read lease publication not found: missing-publication",
+    ):
+        store.create_read_lease(
+            lease_id="lease-1",
+            publication_id="missing-publication",
+            publication_version=1,
+            consumer_workflow_run_id=consumer_run.workflow_run_id,
+            selected_members=("orders",),
+            expires_at=utc_now() + timedelta(seconds=60),
+        )
+
+    assert store.get_read_lease("lease-1") is None
+    assert row_count(database_path, "read_leases") == 0
+
+
+def test_runtime_store_read_lease_rejects_publication_version_mismatch(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Read lease publication version mismatch: publication-v1",
+    ):
+        store.create_read_lease(
+            lease_id="lease-1",
+            publication_id=publication.publication_id,
+            publication_version=publication.publication_version + 1,
+            consumer_workflow_run_id=consumer_run.workflow_run_id,
+            selected_members=("orders",),
+            expires_at=utc_now() + timedelta(seconds=60),
+        )
+
+    assert store.get_read_lease("lease-1") is None
+    assert row_count(database_path, "read_leases") == 0
+
+
+def test_runtime_store_read_lease_excludes_expired_from_active_list(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+    expired = store.create_read_lease(
+        lease_id="lease-expired",
+        publication_id=publication.publication_id,
+        publication_version=publication.publication_version,
+        consumer_workflow_run_id=consumer_run.workflow_run_id,
+        selected_members=("orders",),
+        expires_at=utc_now() - timedelta(seconds=1),
+    )
+
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=False,
+    ) == [expired]
+
+
 def test_runtime_event_sequence_numbers_are_persisted(tmp_path: Path) -> None:
     from flowweaver.protocols.enums import EventType
     from flowweaver.protocols.events import EventModel
