@@ -4,6 +4,7 @@ import argparse
 import time
 import traceback
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from queue import Empty, Queue
 from threading import Thread
@@ -49,6 +50,7 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskTimeoutStatus,
 )
 from flowweaver.workflow_process.ready_queue import (
+    ReadyNodeCandidate,
     collect_ready_node_candidates,
     count_in_flight_node_runs,
 )
@@ -76,6 +78,15 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
     }
 )
+
+
+@dataclass(frozen=True)
+class DispatchedNodeTask:
+    task: NodeTaskModel
+    executor: NodeExecutor
+    node_run_id: str
+    node_instance_id: str
+    executor_id: str
 
 
 @runtime_checkable
@@ -402,33 +413,25 @@ def _dispatch_ready_nodes(
     for candidate in ready_candidates:
         if max_dispatch_count is not None and dispatched_count >= max_dispatch_count:
             break
-        task = task_manager.submit_ready_node(
+        dispatched = dispatch_ready_node_candidate(
             workflow_run_id=workflow_run_id,
             workflow_process_id=workflow_process_id,
             process_generation=process_generation,
-            node_instance_id=candidate.node_run.node_instance_id,
-            input_refs=list(candidate.input_refs),
-            timeout_seconds=_timeout_seconds_from_node_config(
-                candidate.dag_node.config
-            ),
+            candidate=candidate,
+            task_manager=task_manager,
+            executor_factory=executor_factory,
+            close_executor_on_reject=close_executor_after_task,
         )
-        if task is None:
+        if dispatched is None:
             continue
-        executor = executor_factory(task)
         _configure_executor_event_handler(
-            executor,
+            dispatched.executor,
             store=store,
             workflow_process_id=workflow_process_id,
             task_manager=task_manager,
             process_generation=process_generation,
         )
         try:
-            accepted = task_manager.accept_task(
-                task_id=task.task_id,
-                executor_id=executor.executor_id,
-            )
-            if accepted is None:
-                continue
             result = _execute_node_task_with_supervision(
                 store=store,
                 workflow_run_id=workflow_run_id,
@@ -436,10 +439,10 @@ def _dispatch_ready_nodes(
                 process_generation=process_generation,
                 heartbeat_interval_seconds=heartbeat_interval_seconds,
                 task_manager=task_manager,
-                executor=executor,
+                executor=dispatched.executor,
                 cleanup_staging_for_node=cleanup_staging_for_node,
                 cancel_grace_seconds=cancel_grace_seconds,
-                task=accepted,
+                task=dispatched.task,
             )
             if result is not None:
                 apply_result = _apply_node_task_result(
@@ -449,7 +452,7 @@ def _dispatch_ready_nodes(
                     process_generation=process_generation,
                     event_sink=event_sink,
                     task_manager=task_manager,
-                    task=accepted,
+                    task=dispatched.task,
                     result=result,
                 )
                 if (
@@ -459,15 +462,53 @@ def _dispatch_ready_nodes(
                     _cleanup_staging_for_node(
                         cleanup_staging_for_node,
                         workflow_run_id=workflow_run_id,
-                        node_run_id=accepted.node_run_id,
+                        node_run_id=dispatched.node_run_id,
                     )
             dispatched_count += 1
             if _workflow_run_is_terminal(store, workflow_run_id):
                 break
         finally:
             if close_executor_after_task:
-                _close_executor(executor)
+                _close_executor(dispatched.executor)
     return dispatched_count
+
+
+def dispatch_ready_node_candidate(
+    *,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int,
+    candidate: ReadyNodeCandidate,
+    task_manager: NodeTaskManager,
+    executor_factory: NodeExecutorFactory,
+    close_executor_on_reject: bool = True,
+) -> DispatchedNodeTask | None:
+    task = task_manager.submit_ready_node(
+        workflow_run_id=workflow_run_id,
+        workflow_process_id=workflow_process_id,
+        process_generation=process_generation,
+        node_instance_id=candidate.node_run.node_instance_id,
+        input_refs=list(candidate.input_refs),
+        timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
+    )
+    if task is None:
+        return None
+    executor = executor_factory(task)
+    accepted = task_manager.accept_task(
+        task_id=task.task_id,
+        executor_id=executor.executor_id,
+    )
+    if accepted is None:
+        if close_executor_on_reject:
+            _close_executor(executor)
+        return None
+    return DispatchedNodeTask(
+        task=accepted,
+        executor=executor,
+        node_run_id=accepted.node_run_id,
+        node_instance_id=accepted.node_instance_id,
+        executor_id=executor.executor_id,
+    )
 
 
 def _available_ready_dispatch_slots(

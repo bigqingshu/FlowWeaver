@@ -45,6 +45,7 @@ from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.main import run_workflow_process
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
+from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
 
 
 class InjectedFailingExecutor:
@@ -821,6 +822,71 @@ def test_workflow_process_limits_ready_dispatch_per_cycle(
         "NODE_STARTED",
         "NODE_FINISHED",
     ]
+
+
+def test_workflow_process_dispatches_ready_candidate_to_running_task(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    event_sink = DatabaseEventSink(store)
+    definition_data = multi_upstream_definition()
+    workflow = store.create_workflow_definition(
+        name="Ready candidate dispatch workflow",
+        definition=definition_data,
+        workflow_id="workflow-ready-candidate-dispatch",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-ready-candidate-dispatch",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-ready-candidate-dispatch",
+    )
+    assert process is not None
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition_data))
+    initialize_node_runs(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        dag=dag,
+    )
+    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+    executor = RecordingSuccessExecutor()
+
+    dispatched = workflow_process_main.dispatch_ready_node_candidate(
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        candidate=candidates[0],
+        task_manager=task_manager,
+        executor_factory=lambda _task: executor,
+    )
+
+    assert dispatched is not None
+    assert dispatched.task.node_instance_id == "source_b"
+    assert dispatched.node_instance_id == "source_b"
+    assert dispatched.executor is executor
+    assert dispatched.executor_id == "recording-success-executor"
+    loaded_task = store.get_node_task(dispatched.task.task_id)
+    loaded_node = store.get_node_run(dispatched.node_run_id)
+    assert loaded_task == dispatched.task
+    assert loaded_node is not None
+    assert loaded_node.status == "RUNNING"
+    assert loaded_node.executor_id == "recording-success-executor"
+    assert loaded_node.started_at is not None
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "NODE_QUEUED",
+        "NODE_STARTED",
+    ]
+    assert store.list_runtime_events()[0].payload["task_id"] == dispatched.task.task_id
+    assert store.list_runtime_events()[1].payload["task_id"] == dispatched.task.task_id
 
 
 def test_workflow_process_does_not_dispatch_when_capacity_is_full(
