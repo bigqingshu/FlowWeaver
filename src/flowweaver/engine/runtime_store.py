@@ -1402,33 +1402,11 @@ class RuntimeStore:
             run = session.get(WorkflowRunRecord, workflow_run_id)
             if run is None:
                 raise ValueError(f"Workflow run not found: {workflow_run_id}")
-            for item in inputs_tuple:
-                publication = session.get(
-                    SharedPublicationRecord,
-                    item.publication_id,
-                )
-                if publication is None:
-                    raise ValueError(
-                        "Input snapshot publication not found: "
-                        f"{item.publication_id}"
-                    )
-                if publication.publication_version != item.publication_version:
-                    raise ValueError(
-                        "Input snapshot publication version mismatch: "
-                        f"{item.publication_id}"
-                    )
-            snapshot_json = _json_dumps(
-                {
-                    "inputs": [
-                        _input_snapshot_entry_to_json(item)
-                        for item in inputs_tuple
-                    ]
-                }
-            )
+            _validate_input_snapshot_publications(session, inputs_tuple)
             record = InputSnapshotRecord(
                 input_snapshot_id=input_snapshot_id,
                 workflow_run_id=workflow_run_id,
-                snapshot_json=snapshot_json,
+                snapshot_json=_input_snapshot_json(inputs_tuple),
                 created_at=_datetime_to_text(now),
             )
             session.add(record)
@@ -1477,12 +1455,7 @@ class RuntimeStore:
                 publication_id=publication_id,
                 publication_version=publication_version,
                 consumer_workflow_run_id=consumer_workflow_run_id,
-                selected_members_json=json.dumps(
-                    list(selected_members_tuple),
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ),
+                selected_members_json=_selected_members_json(selected_members_tuple),
                 acquired_at=_datetime_to_text(now),
                 expires_at=_datetime_to_text(expires_at),
                 released_at=None,
@@ -1490,6 +1463,70 @@ class RuntimeStore:
             session.add(record)
             session.flush()
             return _read_lease_from_record(record)
+
+    def create_input_snapshot_and_read_lease(
+        self,
+        *,
+        workflow_run_id: str,
+        inputs: Iterable[InputSnapshotEntry],
+        publication_id: str,
+        publication_version: int,
+        selected_members: Iterable[str],
+        expires_at: datetime,
+    ) -> tuple[InputSnapshot, ReadLease]:
+        input_snapshot_id = new_id()
+        lease_id = new_id()
+        inputs_tuple = tuple(inputs)
+        selected_members_tuple = tuple(selected_members)
+        if len(inputs_tuple) != 1:
+            raise ValueError(
+                "Atomic input snapshot/read lease requires exactly one input"
+            )
+        snapshot_input = inputs_tuple[0]
+        if snapshot_input.publication_id != publication_id:
+            raise ValueError("Input snapshot and read lease publication mismatch")
+        if snapshot_input.publication_version != publication_version:
+            raise ValueError(
+                "Input snapshot and read lease publication version mismatch"
+            )
+        if snapshot_input.selected_members != selected_members_tuple:
+            raise ValueError("Input snapshot and read lease selected members mismatch")
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            run = session.get(WorkflowRunRecord, workflow_run_id)
+            if run is None:
+                raise ValueError(f"Workflow run not found: {workflow_run_id}")
+            _validate_input_snapshot_publications(session, inputs_tuple)
+            publication = session.get(SharedPublicationRecord, publication_id)
+            if publication is None:
+                raise ValueError(f"Read lease publication not found: {publication_id}")
+            if publication.publication_version != publication_version:
+                raise ValueError(
+                    f"Read lease publication version mismatch: {publication_id}"
+                )
+            snapshot_record = InputSnapshotRecord(
+                input_snapshot_id=input_snapshot_id,
+                workflow_run_id=workflow_run_id,
+                snapshot_json=_input_snapshot_json(inputs_tuple),
+                created_at=_datetime_to_text(now),
+            )
+            lease_record = ReadLeaseRecord(
+                lease_id=lease_id,
+                publication_id=publication_id,
+                publication_version=publication_version,
+                consumer_workflow_run_id=workflow_run_id,
+                selected_members_json=_selected_members_json(selected_members_tuple),
+                acquired_at=_datetime_to_text(now),
+                expires_at=_datetime_to_text(expires_at),
+                released_at=None,
+            )
+            session.add_all([snapshot_record, lease_record])
+            run.input_snapshot_id = input_snapshot_id
+            session.flush()
+            return (
+                _input_snapshot_from_record(snapshot_record),
+                _read_lease_from_record(lease_record),
+            )
 
     def get_read_lease(self, lease_id: str) -> ReadLease | None:
         with self._session_factory() as session:
@@ -1831,6 +1868,42 @@ def _input_snapshot_entry_from_json(
         publication_id=str(value["publication_id"]),
         publication_version=int(value["publication_version"]),
         selected_members=tuple(str(item) for item in selected_members),
+    )
+
+
+def _validate_input_snapshot_publications(
+    session: Session,
+    inputs: tuple[InputSnapshotEntry, ...],
+) -> None:
+    for item in inputs:
+        publication = session.get(
+            SharedPublicationRecord,
+            item.publication_id,
+        )
+        if publication is None:
+            raise ValueError(
+                "Input snapshot publication not found: "
+                f"{item.publication_id}"
+            )
+        if publication.publication_version != item.publication_version:
+            raise ValueError(
+                "Input snapshot publication version mismatch: "
+                f"{item.publication_id}"
+            )
+
+
+def _input_snapshot_json(inputs: tuple[InputSnapshotEntry, ...]) -> str:
+    return _json_dumps(
+        {"inputs": [_input_snapshot_entry_to_json(item) for item in inputs]}
+    )
+
+
+def _selected_members_json(selected_members: tuple[str, ...]) -> str:
+    return json.dumps(
+        list(selected_members),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
 
 
