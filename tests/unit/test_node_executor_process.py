@@ -57,6 +57,60 @@ def test_node_executor_process_accepts_and_completes_task_envelope() -> None:
     assert completed.payload["result"]["status"] == "SUCCEEDED"
 
 
+def test_node_executor_process_ipc_passes_table_refs_without_inline_rows() -> None:
+    task = NodeTaskSubmitPayload(
+        task_id="task-table-ref",
+        workflow_run_id="run-1",
+        workflow_process_id="workflow-process-1",
+        process_generation=1,
+        node_run_id="node-run-table-ref",
+        node_instance_id="filter",
+        node_type="FilterRowsNode",
+        node_version="1.0",
+        attempt=1,
+        input_refs=["table-input-1"],
+        config={"field": "amount", "operator": "GT", "value": 2.0},
+        timeout_seconds=60,
+    )
+
+    class RefProducingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                output_refs=["table-output-1"],
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: RefProducingExecutor(),
+    )
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, completed = process.handle_envelope(envelope)
+
+    assert accepted.message_type == IPCMessageType.NODE_TASK_ACCEPTED
+    assert completed.message_type == IPCMessageType.NODE_TASK_COMPLETED
+    assert envelope.payload["input_refs"] == ["table-input-1"]
+    assert completed.payload["result"]["output_refs"] == ["table-output-1"]
+    assert _inline_table_payload_keys(envelope.payload) == set()
+    assert _inline_table_payload_keys(completed.payload) == set()
+
+
 def test_node_executor_process_heartbeat_reports_active_tasks() -> None:
     task = make_task()
     observed_heartbeats: list[IPCEnvelope] = []
@@ -276,3 +330,16 @@ def test_node_executor_process_jsonl_loop_returns_nonzero_for_invalid_input() ->
     ]
     assert "IPC_INPUT_ERROR" in stderr.getvalue()
     assert "Traceback" not in stderr.getvalue()
+
+
+def _inline_table_payload_keys(value) -> set[str]:
+    forbidden_keys = {"table_data", "records", "record_batches", "row_values"}
+    found: set[str] = set()
+    if isinstance(value, dict):
+        found.update(forbidden_keys.intersection(value))
+        for item in value.values():
+            found.update(_inline_table_payload_keys(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.update(_inline_table_payload_keys(item))
+    return found
