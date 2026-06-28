@@ -724,6 +724,76 @@ def test_workflow_process_reuses_default_executor_for_run(
     assert {node.executor_id for node in node_runs} == {"default-reusable-1"}
 
 
+def test_reusable_default_executor_owner_rebuilds_after_closed_executor(
+    monkeypatch,
+) -> None:
+    created_executor_ids: list[str] = []
+    executed_executor_ids: list[str] = []
+    closed_executor_ids: list[str] = []
+
+    class TrackingRebuildableDefaultExecutor:
+        def __init__(self) -> None:
+            self.executor_id = f"default-rebuild-{len(created_executor_ids) + 1}"
+            self._closed = False
+            created_executor_ids.append(self.executor_id)
+
+        @property
+        def closed(self) -> bool:
+            return self._closed
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            executed_executor_ids.append(self.executor_id)
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+        def close(self) -> None:
+            if self._closed:
+                return
+            self._closed = True
+            closed_executor_ids.append(self.executor_id)
+
+    monkeypatch.setattr(
+        workflow_process_main,
+        "SubprocessNodeExecutorIpcClient",
+        TrackingRebuildableDefaultExecutor,
+    )
+    task = NodeTaskModel(
+        task_id="task-rebuild",
+        workflow_run_id="run-rebuild",
+        workflow_process_id="process-rebuild",
+        process_generation=1,
+        node_run_id="node-run-rebuild",
+        node_instance_id="node-rebuild",
+        node_type="core.source",
+        node_version="1.0",
+        attempt=1,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    owner = workflow_process_main._ReusableSubprocessExecutorOwner()
+    first = owner.executor_for_task(task)
+    first.close()
+    second = owner.executor_for_task(task)
+    result = second.execute(task)
+    owner.close()
+
+    assert first is not second
+    assert result.executor_id == "default-rebuild-2"
+    assert created_executor_ids == ["default-rebuild-1", "default-rebuild-2"]
+    assert executed_executor_ids == ["default-rebuild-2"]
+    assert closed_executor_ids == ["default-rebuild-1", "default-rebuild-2"]
+
+
 def test_workflow_process_runs_single_node_with_subprocess_executor(
     tmp_path: Path,
 ) -> None:

@@ -100,6 +100,10 @@ class SubprocessNodeExecutorIpcClient:
     def set_event_handler(self, handler: NodeTaskIpcEventHandler | None) -> None:
         self._event_handler = handler
 
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
         envelope = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_SUBMIT,

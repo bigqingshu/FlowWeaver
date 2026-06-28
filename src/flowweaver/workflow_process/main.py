@@ -94,7 +94,7 @@ class _ReusableSubprocessExecutorOwner:
         self,
         _task: NodeTaskModel,
     ) -> SubprocessNodeExecutorIpcClient:
-        if self._executor is None:
+        if self._executor is None or getattr(self._executor, "closed", False):
             self._executor = SubprocessNodeExecutorIpcClient()
         return self._executor
 
