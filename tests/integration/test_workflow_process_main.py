@@ -46,6 +46,7 @@ from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.executor_pool import (
     DispatchedNodeTask,
     ExecutorTaskCompletion,
+    ThreadedNodeTaskExecutionPool,
 )
 from flowweaver.workflow_process.main import run_workflow_process
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
@@ -399,6 +400,36 @@ class RecordingSuccessExecutor:
             started_at=now,
             finished_at=now,
         )
+
+
+class ReleasableBlockingExecutor:
+    executor_id = "releasable-blocking-executor"
+
+    def __init__(self) -> None:
+        self.started = Event()
+        self.release = Event()
+        self.closed = Event()
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.started.set()
+        released = self.release.wait(timeout=1)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=(
+                NodeResultStatus.SUCCEEDED if released else NodeResultStatus.FAILED
+            ),
+            error=None if released else {"message": "test did not release task"},
+            started_at=now,
+            finished_at=now,
+        )
+
+    def close(self) -> None:
+        self.closed.set()
 
 
 class RecordingImmediateExecutionPool:
@@ -928,6 +959,68 @@ def test_workflow_process_uses_injected_execution_pool(
         "transform": ["source-output"],
     }
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+
+
+def test_workflow_process_with_threaded_pool_does_not_block_after_dispatch(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = ReleasableBlockingExecutor()
+    execution_pool = ThreadedNodeTaskExecutionPool()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution pool workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-threaded-execution-pool",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-pool",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-pool",
+    )
+    assert process is not None
+
+    def release_during_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        assert sleep_calls == 1
+        assert executor.started.wait(timeout=1)
+        assert execution_pool.in_flight_count() == 1
+        node_run = store.list_node_runs(run.workflow_run_id)[0]
+        assert node_run.status == "RUNNING"
+        assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+        executor.release.set()
+        deadline = time.monotonic() + 1
+        while execution_pool.in_flight_count() > 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert execution_pool.in_flight_count() == 0
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+        sleep_func=release_during_sleep,
+    )
+
+    assert exit_code == 0
+    assert sleep_calls == 1
+    assert execution_pool.in_flight_count() == 0
+    assert executor.closed.is_set()
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
 
 
 def test_workflow_process_drains_pending_pool_completions_before_dispatch(
