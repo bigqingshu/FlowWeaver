@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入和 I.8 生命周期收口。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。
 
 阶段 A 范围包括：
 
@@ -83,13 +83,13 @@
 - `SharedTableReader` 已支持 `LATEST` / `EXACT_VERSION` 解析，并一次性返回固定版本 `TableRef`、`InputSnapshot` 和 `ReadLease`
 - `BuiltinSharedTableNodeRunner` 已具备发布共享表节点和读取共享表节点的最小执行入口
 - `WorkflowRunProcess` 默认执行器路径已能分流并执行共享表节点
+- 阶段 I 已具备 A 发布 V1/V2、B 固定读取 V1、B 结束释放 ReadLease 的主循环验收
 - `RuntimeDataRegistry` 已具备单表 STAGING 注册、发布为 PUBLISHED、按 workflow/node 查询和节点失败清理
 - `TableLeaseManager` 已具备表级 READ / WRITE 租约基础能力
 - EngineHost、Supervisor、WorkflowRunProcess 和默认 NodeExecutor 子进程入口已能串通
 
 尚未完成：
 
-- 阶段 I 总体验收
 - 权限审计服务和 UI
 
 ## 阶段 I 计划

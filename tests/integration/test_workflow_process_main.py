@@ -478,6 +478,40 @@ class ReleasableBlockingExecutor:
         self.closed.set()
 
 
+class BlockingInputRefsExecutor:
+    executor_id = "blocking-input-refs-executor"
+
+    def __init__(self) -> None:
+        self.started = Event()
+        self.release = Event()
+        self.closed = Event()
+        self.seen_input_refs_by_node: dict[str, list[str]] = {}
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.seen_input_refs_by_node[task.node_instance_id] = list(task.input_refs)
+        self.started.set()
+        released = self.release.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=(
+                NodeResultStatus.SUCCEEDED if released else NodeResultStatus.FAILED
+            ),
+            output_refs=list(task.input_refs) if released else [],
+            error=None if released else {"message": "test did not release task"},
+            started_at=now,
+            finished_at=now,
+        )
+
+    def close(self) -> None:
+        self.closed.set()
+        self.release.set()
+
+
 class ReleasableMultiNodeExecutor:
     executor_id = "releasable-multi-node-executor"
 
@@ -848,6 +882,39 @@ def read_shared_tables_definition(*, exact_version: int = 1) -> dict:
     }
 
 
+def read_shared_tables_with_consumer_definition(*, exact_version: int = 1) -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "read",
+                "node_type": READ_SHARED_TABLES_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "share_name": "daily_report",
+                    "version_policy": "EXACT_VERSION",
+                    "exact_version": exact_version,
+                    "selected_members": ["customers", "orders"],
+                },
+            },
+            {
+                "node_instance_id": "consume",
+                "node_type": "core.consume",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "read-to-consume",
+                "source_node_id": "read",
+                "source_port": "out",
+                "target_node_id": "consume",
+                "target_port": "in",
+            }
+        ],
+    }
+
+
 def multi_upstream_definition() -> dict:
     return {
         "schema_version": "1.0",
@@ -1138,6 +1205,211 @@ def test_workflow_process_runs_shared_table_nodes_in_main_loop(
     assert len(leases) == 1
     assert leases[0].publication_id == publication.publication_id
     assert leases[0].selected_members == ("customers", "orders")
+    assert leases[0].released_at is not None
+    assert store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    ) == []
+
+
+def test_stage_i_workflow_process_keeps_consumer_pinned_to_read_publication(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    table_executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-i9",
+        registry=registry,
+        table_provider=provider,
+    )
+    shared_executor = BuiltinSharedTableNodeExecutor(
+        executor_id="builtin-shared-i9",
+        store=store,
+    )
+
+    producer_workflow = store.create_workflow_definition(
+        name="Stage I producer workflow",
+        definition=publish_shared_tables_definition(),
+        workflow_id="workflow-stage-i-producer",
+    )
+    producer_v1_run = store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-stage-i-producer-v1",
+    )
+    producer_v1_process = store.claim_workflow_process(
+        workflow_run_id=producer_v1_run.workflow_run_id,
+        process_id="process-stage-i-producer-v1",
+    )
+    assert producer_v1_process is not None
+
+    producer_v1_exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=producer_v1_run.workflow_run_id,
+        process_id=producer_v1_process.process_id,
+        process_generation=producer_v1_process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=(
+            lambda task: (
+                shared_executor
+                if task.node_type == PUBLISH_SHARED_TABLES_NODE_TYPE
+                else table_executor
+            )
+        ),
+    )
+
+    publication_v1 = store.get_latest_shared_publication("daily_report")
+    assert producer_v1_exit_code == 0
+    assert store.get_workflow_run(producer_v1_run.workflow_run_id).status == "SUCCEEDED"
+    assert publication_v1 is not None
+    assert publication_v1.publication_version == 1
+    publication_v1_member_refs = {
+        member.export_name: member.table_ref_id for member in publication_v1.members
+    }
+    assert sorted(publication_v1_member_refs) == ["customers", "orders"]
+
+    consumer_workflow = store.create_workflow_definition(
+        name="Stage I consumer workflow",
+        definition=read_shared_tables_with_consumer_definition(exact_version=1),
+        workflow_id="workflow-stage-i-consumer",
+    )
+    consumer_run = store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-stage-i-consumer",
+    )
+    consumer_process = store.claim_workflow_process(
+        workflow_run_id=consumer_run.workflow_run_id,
+        process_id="process-stage-i-consumer",
+    )
+    assert consumer_process is not None
+    blocking_consumer_executor = BlockingInputRefsExecutor()
+    consumer_exit_codes: list[int] = []
+
+    def consumer_executor_factory(task: NodeTaskModel):
+        if task.node_type == READ_SHARED_TABLES_NODE_TYPE:
+            return shared_executor
+        return blocking_consumer_executor
+
+    def run_consumer_workflow() -> None:
+        consumer_exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=consumer_run.workflow_run_id,
+                process_id=consumer_process.process_id,
+                process_generation=consumer_process.process_generation,
+                heartbeat_interval_seconds=0,
+                executor_factory=consumer_executor_factory,
+                execution_mode="threaded",
+            )
+        )
+
+    consumer_thread = Thread(
+        target=run_consumer_workflow,
+    )
+    consumer_thread.start()
+    assert blocking_consumer_executor.started.wait(timeout=5)
+
+    consumer_running = store.get_workflow_run(consumer_run.workflow_run_id)
+    read_node = store.get_node_run_for_instance(
+        workflow_run_id=consumer_run.workflow_run_id,
+        node_instance_id="read",
+    )
+    assert consumer_running is not None
+    assert consumer_running.status == "RUNNING"
+    assert consumer_running.input_snapshot_id is not None
+    consumer_snapshot = store.get_input_snapshot(consumer_running.input_snapshot_id)
+    assert read_node is not None
+    assert read_node.status == "SUCCEEDED"
+    assert consumer_snapshot is not None
+    assert consumer_snapshot.inputs[0].publication_id == publication_v1.publication_id
+    assert consumer_snapshot.inputs[0].publication_version == 1
+    assert consumer_snapshot.inputs[0].selected_members == ("customers", "orders")
+    assert blocking_consumer_executor.seen_input_refs_by_node["consume"] == [
+        publication_v1_member_refs["customers"],
+        publication_v1_member_refs["orders"],
+    ]
+    active_leases = store.list_read_leases_by_workflow_run(
+        consumer_run.workflow_run_id,
+        active_only=True,
+    )
+    assert len(active_leases) == 1
+    assert active_leases[0].publication_id == publication_v1.publication_id
+    assert active_leases[0].publication_version == 1
+
+    producer_v2_run = store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-stage-i-producer-v2",
+    )
+    producer_v2_process = store.claim_workflow_process(
+        workflow_run_id=producer_v2_run.workflow_run_id,
+        process_id="process-stage-i-producer-v2",
+    )
+    assert producer_v2_process is not None
+
+    producer_v2_exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=producer_v2_run.workflow_run_id,
+        process_id=producer_v2_process.process_id,
+        process_generation=producer_v2_process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=(
+            lambda task: (
+                shared_executor
+                if task.node_type == PUBLISH_SHARED_TABLES_NODE_TYPE
+                else table_executor
+            )
+        ),
+    )
+
+    publication_v2 = store.get_latest_shared_publication("daily_report")
+    assert producer_v2_exit_code == 0
+    assert store.get_workflow_run(producer_v2_run.workflow_run_id).status == "SUCCEEDED"
+    assert publication_v2 is not None
+    assert publication_v2.publication_version == 2
+    assert publication_v2.publication_id != publication_v1.publication_id
+    assert {
+        member.export_name: member.table_ref_id for member in publication_v2.members
+    } != publication_v1_member_refs
+
+    consumer_still_pinned = store.get_workflow_run(consumer_run.workflow_run_id)
+    assert consumer_still_pinned is not None
+    assert (
+        consumer_still_pinned.input_snapshot_id
+        == consumer_snapshot.input_snapshot_id
+    )
+    assert store.get_input_snapshot(consumer_snapshot.input_snapshot_id) == (
+        consumer_snapshot
+    )
+    assert blocking_consumer_executor.seen_input_refs_by_node["consume"] == [
+        publication_v1_member_refs["customers"],
+        publication_v1_member_refs["orders"],
+    ]
+
+    blocking_consumer_executor.release.set()
+    consumer_thread.join(timeout=5)
+    assert not consumer_thread.is_alive()
+    assert consumer_exit_codes == [0]
+
+    consumer_loaded = store.get_workflow_run(consumer_run.workflow_run_id)
+    consume_node = store.get_node_run_for_instance(
+        workflow_run_id=consumer_run.workflow_run_id,
+        node_instance_id="consume",
+    )
+    assert consumer_loaded is not None
+    assert consumer_loaded.status == "SUCCEEDED"
+    assert consume_node is not None
+    consume_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        consume_node.node_run_id
+    )
+    assert consume_result is not None
+    assert consume_result.output_refs == [
+        publication_v1_member_refs["customers"],
+        publication_v1_member_refs["orders"],
+    ]
+    leases = store.list_read_leases_by_workflow_run(consumer_run.workflow_run_id)
+    assert len(leases) == 1
+    assert leases[0].publication_id == publication_v1.publication_id
+    assert leases[0].publication_version == 1
     assert leases[0].released_at is not None
     assert store.list_read_leases_by_workflow_run(
         consumer_run.workflow_run_id,
