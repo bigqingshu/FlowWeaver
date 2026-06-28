@@ -193,6 +193,7 @@ def run_workflow_process(
             sleep_func=sleep_func,
         )
     finally:
+        _close_execution_pool(execution_pool)
         if reusable_executor_owner is not None:
             reusable_executor_owner.close()
 
@@ -968,6 +969,23 @@ def _close_executor(executor: object) -> None:
         return
     try:
         executor.close()
+    except Exception:
+        pass
+
+
+def _close_execution_pool(execution_pool: object | None) -> None:
+    if execution_pool is None:
+        return
+    close = getattr(execution_pool, "close", None)
+    if not callable(close):
+        return
+    try:
+        close(timeout_seconds=0)
+    except TypeError:
+        try:
+            close()
+        except Exception:
+            pass
     except Exception:
         pass
 

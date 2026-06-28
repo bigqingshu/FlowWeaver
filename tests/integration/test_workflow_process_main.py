@@ -485,6 +485,31 @@ class ReleasableMultiNodeExecutor:
         self.release_by_node.setdefault(node_id, Event()).set()
 
 
+def make_dummy_dispatched_task(task_id: str = "dummy-task") -> DispatchedNodeTask:
+    task = NodeTaskModel(
+        task_id=task_id,
+        workflow_run_id="run-dummy",
+        workflow_process_id="process-dummy",
+        process_generation=1,
+        node_run_id=f"{task_id}-node-run",
+        node_instance_id="dummy",
+        node_type="core.dummy",
+        node_version="1.0",
+        attempt=1,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    executor = RecordingSuccessExecutor()
+    return DispatchedNodeTask(
+        task=task,
+        executor=executor,
+        node_run_id=task.node_run_id,
+        node_instance_id=task.node_instance_id,
+        executor_id=executor.executor_id,
+    )
+
+
 class RecordingImmediateExecutionPool:
     def __init__(self) -> None:
         self.submitted_task_ids: list[str] = []
@@ -1343,6 +1368,8 @@ def test_workflow_process_with_threaded_pool_keeps_failure_after_late_success(
 
     assert exit_code == 0
     assert sleep_calls >= 1
+    assert execution_pool.closed is True
+    assert execution_pool.submit(make_dummy_dispatched_task()) is False
     assert late_completion is not None
     assert late_completion.dispatched_task.node_instance_id == "source_b"
     assert late_completion.result is not None
