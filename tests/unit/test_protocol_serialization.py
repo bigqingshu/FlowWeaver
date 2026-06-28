@@ -13,6 +13,7 @@ from flowweaver.protocols import (
     IPCMessageType,
     NodeResultModel,
     NodeResultStatus,
+    NodeTaskCancelRequestPayload,
     NodeTaskModel,
     NodeTaskResultModel,
     TableMutability,
@@ -129,6 +130,15 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
     assert restored_task == task
     assert restored_result == result
     assert restored_result.task_id == task.task_id
+
+
+def test_node_task_cancel_request_payload_msgpack_round_trip() -> None:
+    payload = NodeTaskCancelRequestPayload(task_id="task-1")
+
+    restored = from_msgpack(to_msgpack(payload), NodeTaskCancelRequestPayload)
+
+    assert restored == payload
+    assert restored.reason == "WORKFLOW_CANCEL_REQUESTED"
 
 
 def test_protocol_models_reject_unknown_fields() -> None:

@@ -18,6 +18,7 @@ from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
+    NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
     NodeTaskHeartbeatPayload,
@@ -41,6 +42,7 @@ __all__ = [
     "NodeResultModel",
     "NodeResultStatus",
     "NodeRunStatus",
+    "NodeTaskCancelRequestPayload",
     "NodeTaskCompletedPayload",
     "NodeTaskFailedPayload",
     "NodeTaskHeartbeatPayload",

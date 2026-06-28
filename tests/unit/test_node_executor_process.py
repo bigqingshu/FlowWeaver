@@ -296,6 +296,69 @@ def test_node_executor_process_realtime_writer_streams_before_completion() -> No
     assert responses[0].message_type == IPCMessageType.NODE_TASK_COMPLETED
 
 
+def test_node_executor_process_records_cancel_request_for_active_task() -> None:
+    task = make_task()
+    cancel_seen = Event()
+    finish_task = Event()
+    process_ref: list[NodeExecutorProcess] = []
+
+    class CancelAwareExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            while not process_ref[0].task_is_cancelled(task):
+                if finish_task.wait(timeout=0.01):
+                    break
+            cancel_seen.set()
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.CANCELLED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: CancelAwareExecutor(),
+    )
+    process_ref.append(process)
+    submit = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+    cancel = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_CANCEL_REQUEST,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload={"task_id": task.task_id, "reason": "test-cancel"},
+    )
+    responses: list[IPCEnvelope] = []
+    worker = Thread(target=lambda: responses.extend(process.handle_envelope(submit)))
+    worker.start()
+    try:
+        while not process.heartbeat_envelope().payload["active_task_ids"]:
+            assert worker.is_alive()
+        assert process.handle_envelope(cancel) == ()
+        assert cancel_seen.wait(timeout=2)
+    finally:
+        finish_task.set()
+        worker.join(timeout=2)
+
+    assert [response.message_type for response in responses] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_COMPLETED,
+    ]
+    assert responses[-1].payload["result"]["status"] == "CANCELLED"
+    assert process.heartbeat_envelope().payload["active_task_ids"] == []
+
+
 def test_node_executor_process_runs_delay_test_node_with_realtime_events() -> None:
     task = make_task().model_copy(
         update={

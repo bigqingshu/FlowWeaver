@@ -44,6 +44,11 @@ class NodeTaskProgressPayload(StrictModel):
     metrics: dict[str, int | float | str] = Field(default_factory=dict)
 
 
+class NodeTaskCancelRequestPayload(StrictModel):
+    task_id: str
+    reason: str = "WORKFLOW_CANCEL_REQUESTED"
+
+
 class NodeTaskCompletedPayload(StrictModel):
     result: NodeTaskResultModel
 

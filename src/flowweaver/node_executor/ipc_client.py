@@ -13,6 +13,7 @@ from flowweaver.node_executor.process import NodeExecutorProcess
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
+    NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
 )
@@ -57,6 +58,16 @@ class LocalNodeExecutorIpcClient:
             if response.message_type == IPCMessageType.NODE_TASK_FAILED:
                 return NodeTaskFailedPayload.model_validate(response.payload).result
         return _missing_result(task, executor_id=self.executor_id)
+
+    def request_cancel(
+        self,
+        task: NodeTaskModel,
+        *,
+        reason: str = "WORKFLOW_CANCEL_REQUESTED",
+    ) -> bool:
+        envelope = _cancel_request_envelope(task, reason=reason)
+        self._process.handle_envelope(envelope)
+        return True
 
     def _emit_event(self, task: NodeTaskModel, envelope: IPCEnvelope) -> None:
         if self._event_handler is not None:
@@ -126,6 +137,14 @@ class SubprocessNodeExecutorIpcClient:
                 ).result
             if response.message_type == IPCMessageType.NODE_TASK_FAILED:
                 return NodeTaskFailedPayload.model_validate(response.payload).result
+
+    def request_cancel(
+        self,
+        task: NodeTaskModel,
+        *,
+        reason: str = "WORKFLOW_CANCEL_REQUESTED",
+    ) -> bool:
+        return self._write_envelope(_cancel_request_envelope(task, reason=reason))
 
     def close(self) -> None:
         if self._closed:
@@ -240,6 +259,22 @@ def _missing_result(
         task,
         executor_id=executor_id,
         error={"message": "Node executor IPC response did not include a result"},
+    )
+
+
+def _cancel_request_envelope(
+    task: NodeTaskModel,
+    *,
+    reason: str,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_CANCEL_REQUEST,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=NodeTaskCancelRequestPayload(
+            task_id=task.task_id,
+            reason=reason,
+        ).model_dump(mode="json"),
     )
 
 

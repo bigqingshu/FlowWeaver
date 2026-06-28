@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable
+from threading import Lock, Thread
 from typing import TextIO
 
 from flowweaver.common.time import utc_now
@@ -11,11 +13,13 @@ from flowweaver.node_executor.builtin_fault import (
     BUILTIN_FAULT_NODE_TYPES,
     BuiltinFaultNodeExecutor,
 )
+from flowweaver.node_executor.cancel_token import CancelToken
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
+    NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
     NodeTaskHeartbeatPayload,
@@ -40,7 +44,9 @@ class NodeExecutorProcess:
         self._event_writer = event_writer
         self._active_task_ids: set[str] = set()
         self._active_task_correlations: dict[str, str] = {}
+        self._cancel_tokens: dict[str, CancelToken] = {}
         self._pending_task_events: list[IPCEnvelope] = []
+        self._state_lock = Lock()
 
     def ready_envelope(self) -> IPCEnvelope:
         return IPCEnvelope(
@@ -49,11 +55,13 @@ class NodeExecutorProcess:
         )
 
     def heartbeat_envelope(self) -> IPCEnvelope:
+        with self._state_lock:
+            active_task_ids = sorted(self._active_task_ids)
         return IPCEnvelope(
             message_type=IPCMessageType.EXECUTOR_HEARTBEAT,
             payload=ExecutorHeartbeatPayload(
                 executor_id=self.executor_id,
-                active_task_ids=sorted(self._active_task_ids),
+                active_task_ids=active_task_ids,
             ).model_dump(mode="json"),
         )
 
@@ -130,12 +138,16 @@ class NodeExecutorProcess:
         )
 
     def handle_envelope(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
+        if envelope.message_type == IPCMessageType.NODE_TASK_CANCEL_REQUEST:
+            return self._handle_cancel_request(envelope)
         if envelope.message_type != IPCMessageType.NODE_TASK_SUBMIT:
             return ()
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
         executor = self._executor_for_task(task)
-        self._active_task_ids.add(task.task_id)
-        self._active_task_correlations[task.task_id] = envelope.message_id
+        with self._state_lock:
+            self._active_task_ids.add(task.task_id)
+            self._active_task_correlations[task.task_id] = envelope.message_id
+            self._cancel_tokens[task.task_id] = CancelToken()
         self._pending_task_events = []
         accepted = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_ACCEPTED,
@@ -170,8 +182,10 @@ class NodeExecutorProcess:
             )
             return (*accepted_events, *task_events, failed)
         finally:
-            self._active_task_ids.discard(task.task_id)
-            self._active_task_correlations.pop(task.task_id, None)
+            with self._state_lock:
+                self._active_task_ids.discard(task.task_id)
+                self._active_task_correlations.pop(task.task_id, None)
+                self._cancel_tokens.pop(task.task_id, None)
             self._pending_task_events = []
         completed = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_COMPLETED,
@@ -181,6 +195,22 @@ class NodeExecutorProcess:
             payload=NodeTaskCompletedPayload(result=result).model_dump(mode="json"),
         )
         return (*accepted_events, *task_events, completed)
+
+    def task_is_cancelled(self, task: NodeTaskModel) -> bool:
+        with self._state_lock:
+            token = self._cancel_tokens.get(task.task_id)
+        return token is not None and token.is_cancelled()
+
+    def _handle_cancel_request(
+        self,
+        envelope: IPCEnvelope,
+    ) -> tuple[IPCEnvelope, ...]:
+        payload = NodeTaskCancelRequestPayload.model_validate(envelope.payload)
+        with self._state_lock:
+            token = self._cancel_tokens.get(payload.task_id)
+        if token is not None:
+            token.request_cancel(reason=payload.reason)
+        return ()
 
     def _emit_or_queue_task_event(self, envelope: IPCEnvelope) -> None:
         if self._event_writer is not None:
@@ -222,17 +252,40 @@ def run_node_executor_process(
         event_writer=lambda envelope: _write_envelope(stdout, envelope),
     )
     _write_envelope(stdout, process.ready_envelope())
+    task_workers: list[Thread] = []
+
+    def handle_task(envelope: IPCEnvelope) -> None:
+        try:
+            responses = process.handle_envelope(envelope)
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+            os._exit(code)
+        for response in responses:
+            _write_envelope(stdout, response)
+
     for line in stdin:
         if not line.strip():
             continue
         try:
             envelope = IPCEnvelope.model_validate_json(line)
-            responses = process.handle_envelope(envelope)
         except ValueError as exc:
             _write_process_error(stderr, "IPC_INPUT_ERROR", exc)
             return EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE
+        if envelope.message_type == IPCMessageType.NODE_TASK_SUBMIT:
+            worker = Thread(
+                target=handle_task,
+                args=(envelope,),
+                name=f"flowweaver-executor-task-{envelope.message_id}",
+                daemon=True,
+            )
+            task_workers.append(worker)
+            worker.start()
+            continue
+        responses = process.handle_envelope(envelope)
         for response in responses:
             _write_envelope(stdout, response)
+    for worker in task_workers:
+        worker.join()
     return 0
 
 

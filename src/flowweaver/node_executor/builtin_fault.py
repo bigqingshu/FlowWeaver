@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, NoReturn, Protocol
+from datetime import datetime
+from typing import Any, Protocol
 
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.enums import NodeResultStatus
@@ -38,6 +39,9 @@ class TaskEventEmitter(Protocol):
         metrics: dict[str, int | float | str] | None = None,
         correlation_id: str | None = None,
     ) -> None:
+        ...
+
+    def task_is_cancelled(self, task: NodeTaskModel) -> bool:
         ...
 
 
@@ -87,6 +91,8 @@ class BuiltinFaultNodeExecutor:
             if now_monotonic >= next_progress_at:
                 self._emit_delay_progress(task, elapsed, duration_seconds)
                 next_progress_at = now_monotonic + progress_interval
+            if self._event_emitter.task_is_cancelled(task):
+                return self._cancelled_result(task, started_at=started_at)
             if now_monotonic >= deadline:
                 break
             sleep_seconds = min(
@@ -121,13 +127,14 @@ class BuiltinFaultNodeExecutor:
             message = str(task.config.get("message", "FaultTestNode injected failure"))
             raise RuntimeError(message)
         if mode == FAULT_MODE_INFINITE_LOOP:
-            self._execute_infinite_loop(task)
+            return self._execute_infinite_loop(task)
         if mode == FAULT_MODE_PROCESS_EXIT:
             exit_code = _int_config(task.config, "exit_code", default=7)
             raise SystemExit(exit_code)
         raise ValueError(f"Unsupported FaultTestNode mode: {mode}")
 
-    def _execute_infinite_loop(self, task: NodeTaskModel) -> NoReturn:
+    def _execute_infinite_loop(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        started_at = utc_now()
         heartbeat_interval = max(
             _float_config(task.config, "heartbeat_interval_seconds", default=0.2),
             0.001,
@@ -153,6 +160,8 @@ class BuiltinFaultNodeExecutor:
                     metrics={"elapsed_seconds": round(elapsed, 6)},
                 )
                 next_progress_at = now_monotonic + progress_interval
+            if self._event_emitter.task_is_cancelled(task):
+                return self._cancelled_result(task, started_at=started_at)
             time.sleep(0.01)
 
     def _emit_delay_progress(
@@ -167,6 +176,27 @@ class BuiltinFaultNodeExecutor:
             progress=max(0.0, min(1.0, progress)),
             current_stage="running",
             metrics={"elapsed_seconds": round(elapsed_seconds, 6)},
+        )
+
+    def _cancelled_result(
+        self,
+        task: NodeTaskModel,
+        *,
+        started_at: datetime,
+    ) -> NodeTaskResultModel:
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.CANCELLED,
+            error={
+                "message": "Node task cancelled",
+                "reason": "NODE_TASK_CANCEL_REQUEST",
+            },
+            started_at=started_at,
+            finished_at=utc_now(),
         )
 
 

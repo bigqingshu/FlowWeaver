@@ -185,6 +185,9 @@ class CloseableBlockingSuccessExecutor:
         self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
         self.started = Event()
         self.closed = Event()
+        self.cancel_requested = Event()
+        self.cancelled_task_id: str | None = None
+        self.cancel_reason: str | None = None
 
     def set_event_handler(
         self,
@@ -236,6 +239,17 @@ class CloseableBlockingSuccessExecutor:
 
     def close(self) -> None:
         self.closed.set()
+
+    def request_cancel(
+        self,
+        task: NodeTaskModel,
+        *,
+        reason: str = "WORKFLOW_CANCEL_REQUESTED",
+    ) -> bool:
+        self.cancelled_task_id = task.task_id
+        self.cancel_reason = reason
+        self.cancel_requested.set()
+        return True
 
 
 class BlockingStagingExecutor:
@@ -1310,6 +1324,75 @@ def test_workflow_process_times_out_task_while_executor_is_still_running(
     assert [event.event_type for event in events][-2:] == [
         "NODE_TIMEOUT",
         "WORKFLOW_FAILED",
+    ]
+
+
+def test_workflow_process_cancels_running_task_with_cancel_request(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Execution cancel workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-cancel",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cancel",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-cancel",
+    )
+    assert process is not None
+    executor = CloseableBlockingSuccessExecutor()
+    exit_codes: list[int] = []
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0,
+                executor_factory=lambda _task: executor,
+            )
+        )
+    )
+    worker.start()
+    try:
+        assert executor.started.wait(timeout=5)
+        store.request_workflow_process_cancel(run.workflow_run_id)
+        worker.join(timeout=5)
+    finally:
+        if worker.is_alive():
+            executor.close()
+            worker.join(timeout=5)
+
+    loaded_node = store.list_node_runs(run.workflow_run_id)[0]
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+    events = store.list_runtime_events()
+    assert exit_codes == [0]
+    assert executor.cancel_requested.is_set()
+    assert executor.cancelled_task_id is not None
+    assert executor.cancel_reason == "WORKFLOW_CANCEL_REQUESTED"
+    assert executor.closed.is_set()
+    assert loaded_workflow is not None
+    assert loaded_workflow.status == "CANCELLED"
+    assert loaded_node.status == "CANCELLED"
+    assert loaded_node.error == {
+        "message": "Node task cancelled",
+        "reason": "WORKFLOW_CANCEL_REQUESTED",
+    }
+    assert store.get_latest_succeeded_node_task_result_for_node_run(
+        loaded_node.node_run_id
+    ) is None
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_PROGRESS",
+        "WORKFLOW_CANCELLED",
     ]
 
 

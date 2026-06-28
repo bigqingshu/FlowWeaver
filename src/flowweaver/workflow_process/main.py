@@ -16,6 +16,7 @@ from flowweaver.engine.runtime_event_sink import (
 )
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import (
+    CancellableNodeExecutor,
     NodeExecutor,
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
@@ -520,6 +521,14 @@ def _execute_node_task_with_supervision(
         if _workflow_run_is_terminal(store, workflow_run_id):
             _close_executor(executor)
             return None
+        if _workflow_cancel_was_requested(
+            store=store,
+            workflow_process_id=workflow_process_id,
+        ):
+            _request_cancel(executor, task)
+            _close_executor(executor)
+            worker.join(timeout=0.2)
+            return _cancelled_task_result(task, executor_id=executor.executor_id)
 
 
 def _get_node_task_execution_result(
@@ -547,6 +556,49 @@ def _task_supervision_poll_seconds(heartbeat_interval_seconds: float) -> float:
     if heartbeat_interval_seconds <= 0:
         return 0.01
     return min(max(heartbeat_interval_seconds, 0.01), 0.1)
+
+
+def _workflow_cancel_was_requested(
+    *,
+    store: RuntimeStore,
+    workflow_process_id: str,
+) -> bool:
+    process = store.get_workflow_process(workflow_process_id)
+    return process is not None and process.cancel_requested_at is not None
+
+
+def _request_cancel(
+    executor: NodeExecutor,
+    task: NodeTaskModel,
+) -> None:
+    if not isinstance(executor, CancellableNodeExecutor):
+        return
+    try:
+        executor.request_cancel(task)
+    except Exception:
+        pass
+
+
+def _cancelled_task_result(
+    task: NodeTaskModel,
+    *,
+    executor_id: str,
+) -> NodeTaskResultModel:
+    now = utc_now()
+    return NodeTaskResultModel(
+        task_id=task.task_id,
+        node_run_id=task.node_run_id,
+        attempt=task.attempt,
+        executor_id=executor_id,
+        process_generation=task.process_generation,
+        status=NodeResultStatus.CANCELLED,
+        error={
+            "message": "Node task cancelled",
+            "reason": "WORKFLOW_CANCEL_REQUESTED",
+        },
+        started_at=now,
+        finished_at=now,
+    )
 
 
 def _apply_node_task_result(
