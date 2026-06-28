@@ -16,6 +16,7 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.workflow.definition import FailurePolicyMode
 from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
 
@@ -59,10 +60,18 @@ class NodeTaskManager:
         store: RuntimeStore,
         event_sink: RuntimeEventSink,
         dag: WorkflowDag,
+        failure_policy_mode: FailurePolicyMode | str | None = None,
     ) -> None:
         self._store = store
         self._event_sink = event_sink
         self._dag = dag
+        self._failure_policy_mode = FailurePolicyMode(
+            failure_policy_mode or FailurePolicyMode.FAIL_FAST
+        )
+
+    @property
+    def failure_policy_mode(self) -> FailurePolicyMode:
+        return self._failure_policy_mode
 
     def submit_ready_node(
         self,

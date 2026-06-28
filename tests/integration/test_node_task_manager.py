@@ -15,7 +15,10 @@ from flowweaver.protocols.enums import (
     NodeRunStatus,
     WorkflowRunStatus,
 )
-from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow.definition import (
+    FailurePolicyMode,
+    WorkflowDefinitionModel,
+)
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import (
@@ -133,7 +136,8 @@ def create_running_process(store: RuntimeStore, definition: dict):
         owner_process_id=process.process_id,
         process_generation=process.process_generation,
     )
-    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition))
+    definition_model = WorkflowDefinitionModel.model_validate(definition)
+    dag = build_workflow_dag(definition_model)
     initialize_node_runs(
         store,
         workflow_run_id=run.workflow_run_id,
@@ -145,6 +149,7 @@ def create_running_process(store: RuntimeStore, definition: dict):
         store=store,
         event_sink=DatabaseEventSink(store),
         dag=dag,
+        failure_policy_mode=definition_model.failure_policy.mode,
     )
     return run, process, manager
 
@@ -599,6 +604,45 @@ def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
         "NODE_FAILED",
         "WORKFLOW_FAILED",
     ]
+
+
+def test_node_task_manager_defaults_to_fail_fast_policy(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    _run, _process, manager = create_running_process(store, linear_definition())
+
+    assert manager.failure_policy_mode == FailurePolicyMode.FAIL_FAST
+
+
+def test_continue_independent_policy_is_read_without_changing_failure_behavior(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = linear_definition() | {
+        "failure_policy": {"mode": "CONTINUE_INDEPENDENT"}
+    }
+    run, process, manager = create_running_process(store, definition)
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={"message": "failed"},
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    assert manager.failure_policy_mode == FailurePolicyMode.CONTINUE_INDEPENDENT
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert store.get_node_run(task.node_run_id).status == "FAILED"
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
 
 
 def test_fork_and_join_dag_waits_for_all_upstreams(tmp_path: Path) -> None:

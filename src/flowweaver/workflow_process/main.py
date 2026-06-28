@@ -307,7 +307,12 @@ def _run_workflow_process_loop(
         process_generation=process_generation,
         dag=dag,
     )
-    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    task_manager = NodeTaskManager(
+        store=store,
+        event_sink=event_sink,
+        dag=dag,
+        failure_policy_mode=definition.failure_policy.mode,
+    )
     if execution_pool is None:
         execute_task = _build_node_task_execute(
             store=store,
