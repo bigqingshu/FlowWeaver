@@ -478,3 +478,56 @@ def test_supervisor_sweeps_exited_executor_and_records_event(
     assert events[0].payload["abnormal"] is False
     assert stdout_log.exists()
     assert stderr_log.exists()
+
+
+def test_supervisor_passes_workflow_process_execution_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = make_store(tmp_path)
+    run = create_run(store, definition=non_empty_definition())
+    captured_command: list[str] = []
+
+    class FakeProcess:
+        pid = 12345
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+
+        def wait(self, timeout: float | None = None) -> int:
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+    def fake_popen(command: list[str], **_kwargs: object) -> FakeProcess:
+        captured_command.extend(command)
+        return FakeProcess()
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    supervisor = Supervisor(
+        config=EngineConfig(
+            data_dir=tmp_path / "runtime",
+            enforce_single_instance=False,
+            workflow_process_execution_mode="threaded",
+            workflow_process_max_concurrent_node_tasks=2,
+        ),
+        runtime_store=store,
+        python_executable=sys.executable,
+    )
+
+    process_id = supervisor.start_workflow_process(run.workflow_run_id)
+
+    try:
+        assert supervisor._children[process_id].pid == 12345
+        assert captured_command[
+            captured_command.index("--execution-mode") + 1
+        ] == "threaded"
+        assert captured_command[
+            captured_command.index("--max-concurrent-node-tasks") + 1
+        ] == "2"
+    finally:
+        supervisor.close()

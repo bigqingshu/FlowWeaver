@@ -1260,6 +1260,7 @@ def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order
         heartbeat_interval_seconds=0,
         executor_factory=lambda _task: executor,
         execution_pool=execution_pool,
+        max_concurrent_node_tasks=2,
         sleep_func=release_sources_out_of_order,
     )
 
@@ -1296,6 +1297,130 @@ def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_threaded_execution_mode_allows_two_ready_tasks(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = ReleasableMultiNodeExecutor()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution mode workflow",
+        definition=multi_upstream_definition(),
+        workflow_id="workflow-threaded-execution-mode",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-mode",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-mode",
+    )
+    assert process is not None
+
+    def release_sources_when_both_running(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls == 1:
+            assert executor.started_event("source_a").wait(timeout=1)
+            assert executor.started_event("source_b").wait(timeout=1)
+            assert {
+                node.node_instance_id: node.status
+                for node in store.list_node_runs(run.workflow_run_id)
+            } == {
+                "merge": "WAITING_DEPENDENCY",
+                "source_a": "RUNNING",
+                "source_b": "RUNNING",
+            }
+            executor.release("source_a")
+            executor.release("source_b")
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_mode="threaded",
+        max_concurrent_node_tasks=2,
+        sleep_func=release_sources_when_both_running,
+    )
+
+    assert exit_code == 0
+    assert sleep_calls >= 1
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    } == {
+        "merge": "SUCCEEDED",
+        "source_a": "SUCCEEDED",
+        "source_b": "SUCCEEDED",
+    }
+    assert executor.seen_input_refs_by_node == {
+        "source_a": [],
+        "source_b": [],
+        "merge": ["source_a-output", "source_b-output"],
+    }
+
+
+def test_workflow_process_threaded_execution_mode_defaults_to_one_task(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = ReleasableMultiNodeExecutor()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution mode default concurrency workflow",
+        definition=multi_upstream_definition(),
+        workflow_id="workflow-threaded-execution-mode-default-concurrency",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-mode-default-concurrency",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-mode-default-concurrency",
+    )
+    assert process is not None
+
+    def check_only_one_source_running(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls == 1:
+            assert executor.started_event("source_b").wait(timeout=1)
+            assert not executor.started_event("source_a").is_set()
+            assert {
+                node.node_instance_id: node.status
+                for node in store.list_node_runs(run.workflow_run_id)
+            } == {
+                "merge": "WAITING_DEPENDENCY",
+                "source_a": "READY",
+                "source_b": "RUNNING",
+            }
+            executor.release("source_b")
+            return
+        if executor.started_event("source_a").wait(timeout=1):
+            executor.release("source_a")
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_mode="threaded",
+        sleep_func=check_only_one_source_running,
+    )
+
+    assert exit_code == 0
+    assert sleep_calls >= 2
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
 
 
 def test_workflow_process_with_threaded_pool_keeps_failure_after_late_success(
@@ -1337,6 +1462,7 @@ def test_workflow_process_with_threaded_pool_keeps_failure_after_late_success(
         heartbeat_interval_seconds=0,
         executor_factory=lambda _task: executor,
         execution_pool=execution_pool,
+        max_concurrent_node_tasks=2,
         sleep_func=release_failure_then_late_success,
     )
 

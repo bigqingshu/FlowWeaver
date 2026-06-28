@@ -66,6 +66,10 @@ class Supervisor:
             str(process.process_generation),
             "--heartbeat-interval-seconds",
             str(self._config.workflow_process_heartbeat_interval_seconds),
+            "--execution-mode",
+            self._config.workflow_process_execution_mode,
+            "--max-concurrent-node-tasks",
+            str(self._config.workflow_process_max_concurrent_node_tasks),
             "--runtime-event-path",
             str(runtime_event_path),
         ]

@@ -9,6 +9,11 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import NoReturn, Protocol, runtime_checkable
 
+from flowweaver.common.config import (
+    WorkflowProcessExecutionMode,
+    resolve_workflow_process_execution_mode,
+    resolve_workflow_process_max_concurrent_node_tasks,
+)
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import (
     DatabaseEventSink,
@@ -47,6 +52,7 @@ from flowweaver.workflow_process.executor_pool import (
     ExecutorTaskCompletion,
     ImmediateNodeTaskExecutionPool,
     NodeTaskExecutionPool,
+    ThreadedNodeTaskExecutionPool,
 )
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
@@ -129,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--process-generation", type=int, required=True)
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
     parser.add_argument("--runtime-event-path")
+    parser.add_argument("--execution-mode")
+    parser.add_argument("--max-concurrent-node-tasks")
     args = parser.parse_args(argv)
     store = RuntimeStore(args.database_url)
     try:
@@ -144,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             process_generation=args.process_generation,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
             event_sink=event_sink,
+            execution_mode=args.execution_mode,
+            max_concurrent_node_tasks=args.max_concurrent_node_tasks,
         )
     except Exception:
         traceback.print_exc()
@@ -164,11 +174,16 @@ def run_workflow_process(
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
     cancel_grace_seconds: float = 5.0,
     max_ready_dispatch_per_cycle: int | None = None,
-    max_concurrent_node_tasks: int | None = None,
+    max_concurrent_node_tasks: int | str | None = None,
+    execution_mode: WorkflowProcessExecutionMode | str | None = None,
     execution_pool: NodeTaskExecutionPool | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
+    resolved_execution_mode = resolve_workflow_process_execution_mode(execution_mode)
+    resolved_max_concurrent_node_tasks = (
+        resolve_workflow_process_max_concurrent_node_tasks(max_concurrent_node_tasks)
+    )
     reusable_executor_owner: _ReusableSubprocessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
@@ -188,7 +203,8 @@ def run_workflow_process(
             close_executor_after_task=close_executor_after_task,
             cancel_grace_seconds=cancel_grace_seconds,
             max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
-            max_concurrent_node_tasks=max_concurrent_node_tasks,
+            max_concurrent_node_tasks=resolved_max_concurrent_node_tasks,
+            execution_mode=resolved_execution_mode,
             execution_pool=execution_pool,
             sleep_func=sleep_func,
         )
@@ -212,6 +228,7 @@ def _run_workflow_process_loop(
     cancel_grace_seconds: float,
     max_ready_dispatch_per_cycle: int | None,
     max_concurrent_node_tasks: int | None,
+    execution_mode: WorkflowProcessExecutionMode,
     execution_pool: NodeTaskExecutionPool | None,
     sleep_func: Callable[[float], None],
 ) -> int:
@@ -292,28 +309,20 @@ def _run_workflow_process_loop(
     )
     task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
     if execution_pool is None:
-        if process_generation is None:
-            execution_pool = ImmediateNodeTaskExecutionPool(
-                execute_task=lambda _dispatched_task: None
-            )
+        execute_task = _build_node_task_execute(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            process_id=process_id,
+            process_generation=process_generation,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            task_manager=task_manager,
+            cleanup_staging_for_node=cleanup_staging_for_node,
+            cancel_grace_seconds=cancel_grace_seconds,
+        )
+        if execution_mode == "threaded":
+            execution_pool = ThreadedNodeTaskExecutionPool(execute_task=execute_task)
         else:
-            active_generation = process_generation
-            execution_pool = ImmediateNodeTaskExecutionPool(
-                execute_task=lambda dispatched_task: (
-                    _execute_node_task_with_supervision(
-                        store=store,
-                        workflow_run_id=workflow_run_id,
-                        workflow_process_id=process_id,
-                        process_generation=active_generation,
-                        heartbeat_interval_seconds=heartbeat_interval_seconds,
-                        task_manager=task_manager,
-                        executor=dispatched_task.executor,
-                        cleanup_staging_for_node=cleanup_staging_for_node,
-                        cancel_grace_seconds=cancel_grace_seconds,
-                        task=dispatched_task.task,
-                    )
-                )
-            )
+            execution_pool = ImmediateNodeTaskExecutionPool(execute_task=execute_task)
 
     while True:
         heartbeat = store.record_workflow_process_heartbeat(
@@ -380,6 +389,39 @@ def _run_workflow_process_loop(
             return 0
         if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
+
+
+def _build_node_task_execute(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    process_id: str,
+    process_generation: int | None,
+    heartbeat_interval_seconds: float,
+    task_manager: NodeTaskManager,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
+    cancel_grace_seconds: float,
+) -> Callable[[DispatchedNodeTask], NodeTaskResultModel | None]:
+    if process_generation is None:
+        return lambda _dispatched_task: None
+
+    active_generation = process_generation
+
+    def execute_task(dispatched_task: DispatchedNodeTask) -> NodeTaskResultModel | None:
+        return _execute_node_task_with_supervision(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=process_id,
+            process_generation=active_generation,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            task_manager=task_manager,
+            executor=dispatched_task.executor,
+            cleanup_staging_for_node=cleanup_staging_for_node,
+            cancel_grace_seconds=cancel_grace_seconds,
+            task=dispatched_task.task,
+        )
+
+    return execute_task
 
 
 def _workflow_run_is_terminal(
