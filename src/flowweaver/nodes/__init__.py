@@ -1,8 +1,6 @@
-"""Node registry metadata.
+"""Node registry metadata and first-stage builtin node implementations."""
 
-This package intentionally does not contain executable business nodes yet.
-"""
-
+from flowweaver.nodes.builtin_table import BuiltinTableNodeRunner
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
 
-__all__ = ["NodeDefinitionSpec", "NodeRegistry"]
+__all__ = ["BuiltinTableNodeRunner", "NodeDefinitionSpec", "NodeRegistry"]

@@ -1,6 +1,7 @@
 """Node executor skeletons for the first-stage runtime."""
 
 from flowweaver.node_executor.base import NodeExecutor, NodeExecutorFactory
+from flowweaver.node_executor.builtin import BuiltinTableNodeExecutor
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.node_executor.ipc_client import (
     LocalNodeExecutorIpcClient,
@@ -12,6 +13,7 @@ from flowweaver.node_executor.process import (
 )
 
 __all__ = [
+    "BuiltinTableNodeExecutor",
     "FakeNodeExecutor",
     "LocalNodeExecutorIpcClient",
     "NodeExecutor",
