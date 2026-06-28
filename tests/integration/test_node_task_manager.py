@@ -111,6 +111,45 @@ def diamond_definition() -> dict:
     }
 
 
+def independent_branch_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "source_a",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "source_b",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "merge",
+                "node_type": "core.merge",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "a-to-merge",
+                "source_node_id": "source_a",
+                "source_port": "out",
+                "target_node_id": "merge",
+                "target_port": "left",
+            },
+            {
+                "connection_id": "b-to-merge",
+                "source_node_id": "source_b",
+                "source_port": "out",
+                "target_node_id": "merge",
+                "target_port": "right",
+            },
+        ],
+    }
+
+
 def create_running_process(store: RuntimeStore, definition: dict):
     workflow = store.create_workflow_definition(
         name="Node task workflow",
@@ -615,11 +654,11 @@ def test_node_task_manager_defaults_to_fail_fast_policy(
     assert manager.failure_policy_mode == FailurePolicyMode.FAIL_FAST
 
 
-def test_continue_independent_policy_is_read_without_changing_failure_behavior(
+def test_continue_independent_failure_keeps_workflow_running_and_skips_dependents(
     tmp_path: Path,
 ) -> None:
     store = make_store(tmp_path)
-    definition = linear_definition() | {
+    definition = independent_branch_definition() | {
         "failure_policy": {"mode": "CONTINUE_INDEPENDENT"}
     }
     run, process, manager = create_running_process(store, definition)
@@ -629,7 +668,7 @@ def test_continue_independent_policy_is_read_without_changing_failure_behavior(
         workflow_run_id=run.workflow_run_id,
         workflow_process_id=process.process_id,
         process_generation=process.process_generation,
-        node_instance_id="source",
+        node_instance_id="source_a",
     )
     result = FakeNodeExecutor(
         executor_id="executor-1",
@@ -641,8 +680,21 @@ def test_continue_independent_policy_is_read_without_changing_failure_behavior(
 
     assert manager.failure_policy_mode == FailurePolicyMode.CONTINUE_INDEPENDENT
     assert applied.status == NodeTaskApplyStatus.APPLIED
-    assert store.get_node_run(task.node_run_id).status == "FAILED"
-    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+    assert {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    } == {
+        "source_a": "FAILED",
+        "source_b": "READY",
+        "merge": "SKIPPED",
+    }
+    assert [event.event_type for event in store.list_runtime_events()][-1:] == [
+        "NODE_FAILED"
+    ]
+    assert "WORKFLOW_FAILED" not in {
+        event.event_type for event in store.list_runtime_events()
+    }
 
 
 def test_fork_and_join_dag_waits_for_all_upstreams(tmp_path: Path) -> None:

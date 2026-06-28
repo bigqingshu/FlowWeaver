@@ -71,6 +71,35 @@ class InjectedFailingExecutor:
         )
 
 
+class NodeOutcomeExecutor:
+    executor_id = "node-outcome-executor"
+
+    def __init__(self, *, failed_nodes: set[str] | None = None) -> None:
+        self._failed_nodes = failed_nodes or set()
+        self.executed_nodes: list[str] = []
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.executed_nodes.append(task.node_instance_id)
+        now = utc_now()
+        failed = task.node_instance_id in self._failed_nodes
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.FAILED if failed else NodeResultStatus.SUCCEEDED,
+            output_refs=[] if failed else [f"{task.node_instance_id}-output"],
+            error=(
+                {"message": f"{task.node_instance_id} injected failure"}
+                if failed
+                else None
+            ),
+            started_at=now,
+            finished_at=now,
+        )
+
+
 class InjectedRaisingExecutor:
     executor_id = "injected-raising-executor"
 
@@ -2597,6 +2626,72 @@ def test_workflow_process_applies_injected_executor_failure_result(
         "NODE_FAILED",
         "WORKFLOW_FAILED",
     ]
+
+
+def test_workflow_process_continue_independent_dispatches_unrelated_ready_node(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition_data = multi_upstream_definition() | {
+        "failure_policy": {"mode": "CONTINUE_INDEPENDENT"}
+    }
+    workflow = store.create_workflow_definition(
+        name="Continue independent workflow",
+        definition=definition_data,
+        workflow_id="workflow-continue-independent",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-continue-independent",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-continue-independent",
+    )
+    assert process is not None
+    executor = NodeOutcomeExecutor(failed_nodes={"source_b"})
+    sleep_calls = 0
+
+    def stop_after_independent_branch(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        store.request_workflow_process_cancel(run.workflow_run_id)
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        sleep_func=stop_after_independent_branch,
+    )
+
+    events = store.list_runtime_events()
+    node_statuses = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    assert exit_code == 0
+    assert sleep_calls == 1
+    assert executor.executed_nodes == ["source_b", "source_a"]
+    assert node_statuses == {
+        "source_a": "SUCCEEDED",
+        "source_b": "FAILED",
+        "merge": "SKIPPED",
+    }
+    assert store.get_workflow_run(run.workflow_run_id).status == "CANCELLED"
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_CANCELLED",
+    ]
+    assert "WORKFLOW_FAILED" not in {event.event_type for event in events}
 
 
 def test_workflow_process_ignores_stale_executor_result_without_failing(
