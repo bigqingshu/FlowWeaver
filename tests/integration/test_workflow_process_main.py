@@ -99,6 +99,29 @@ class InjectedReportingExecutor:
         )
 
 
+class NodeAwareOutputExecutor:
+    executor_id = "node-aware-output-executor"
+
+    def __init__(self, output_refs_by_node: dict[str, list[str]]) -> None:
+        self._output_refs_by_node = output_refs_by_node
+        self.seen_input_refs_by_node: dict[str, list[str]] = {}
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.seen_input_refs_by_node[task.node_instance_id] = list(task.input_refs)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=list(self._output_refs_by_node.get(task.node_instance_id, [])),
+            started_at=now,
+            finished_at=now,
+        )
+
+
 class TrackingSubprocessNodeExecutor(SubprocessNodeExecutorIpcClient):
     def __init__(
         self,
@@ -206,6 +229,45 @@ def table_ref_definition() -> dict:
                 "target_node_id": "filter",
                 "target_port": "in",
             }
+        ],
+    }
+
+
+def multi_upstream_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "source_b",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "source_a",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "merge",
+                "node_type": "core.merge",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "b-to-merge",
+                "source_node_id": "source_b",
+                "source_port": "out",
+                "target_node_id": "merge",
+                "target_port": "right",
+            },
+            {
+                "connection_id": "a-to-merge",
+                "source_node_id": "source_a",
+                "source_port": "out",
+                "target_node_id": "merge",
+                "target_port": "left",
+            },
         ],
     }
 
@@ -353,6 +415,94 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_passes_multiple_upstream_table_refs_in_stable_order(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = NodeAwareOutputExecutor(
+        {
+            "source_b": ["table-b1"],
+            "source_a": ["table-a1", "table-a2"],
+            "merge": ["merged-table"],
+        }
+    )
+    workflow = store.create_workflow_definition(
+        name="Multi upstream TableRef workflow",
+        definition=multi_upstream_definition(),
+        workflow_id="workflow-multi-upstream",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-multi-upstream",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-multi-upstream",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert executor.seen_input_refs_by_node["source_a"] == []
+    assert executor.seen_input_refs_by_node["source_b"] == []
+    assert executor.seen_input_refs_by_node["merge"] == [
+        "table-a1",
+        "table-a2",
+        "table-b1",
+    ]
+
+
+def test_workflow_process_passes_empty_input_refs_when_upstream_has_no_outputs(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = NodeAwareOutputExecutor(
+        {
+            "source": [],
+            "transform": ["transform-output"],
+        }
+    )
+    workflow = store.create_workflow_definition(
+        name="Empty upstream output workflow",
+        definition=definition(),
+        workflow_id="workflow-empty-upstream-output",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-empty-upstream-output",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-empty-upstream-output",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert executor.seen_input_refs_by_node == {
+        "source": [],
+        "transform": [],
+    }
 
 
 def test_workflow_process_reuses_default_executor_for_run(
