@@ -9,9 +9,19 @@ from alembic.config import Config
 
 import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.common.time import utc_now
+from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_event_sink import IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
-from flowweaver.node_executor import FakeNodeExecutor, SubprocessNodeExecutorIpcClient
+from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.node_executor import (
+    BuiltinTableNodeExecutor,
+    FakeNodeExecutor,
+    SubprocessNodeExecutorIpcClient,
+)
+from flowweaver.nodes.builtin_table import (
+    FILTER_ROWS_NODE_TYPE,
+    GENERATE_TEST_TABLE_NODE_TYPE,
+)
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -167,6 +177,39 @@ def single_node_definition() -> dict:
     }
 
 
+def table_ref_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "generate",
+                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "rows": 5,
+                    "columns": ["row_id", "amount", "label"],
+                    "seed": 0,
+                },
+            },
+            {
+                "node_instance_id": "filter",
+                "node_type": FILTER_ROWS_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {"field": "amount", "operator": "GT", "value": 2.0},
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "generate-to-filter",
+                "source_node_id": "generate",
+                "source_port": "out",
+                "target_node_id": "filter",
+                "target_port": "in",
+            }
+        ],
+    }
+
+
 def test_workflow_process_executes_ready_nodes_with_default_subprocess_executor(
     tmp_path: Path,
 ) -> None:
@@ -207,6 +250,100 @@ def test_workflow_process_executes_ready_nodes_with_default_subprocess_executor(
     }
     assert {node.executor_id for node in node_runs} == {"subprocess-node-executor"}
     assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-mainloop",
+        registry=registry,
+        table_provider=provider,
+    )
+    workflow = store.create_workflow_definition(
+        name="TableRef workflow",
+        definition=table_ref_definition(),
+        workflow_id="workflow-table-ref",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-table-ref",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-table-ref",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    events = store.list_runtime_events()
+    queued_events = {
+        event.payload["node_instance_id"]: event
+        for event in events
+        if event.event_type == "NODE_QUEUED"
+    }
+    generate_task = store.get_node_task(queued_events["generate"].payload["task_id"])
+    filter_task = store.get_node_task(queued_events["filter"].payload["task_id"])
+    generate_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+    )
+    filter_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="filter",
+    )
+    assert generate_task is not None
+    assert filter_task is not None
+    assert generate_run is not None
+    assert filter_run is not None
+    generate_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        generate_run.node_run_id
+    )
+    filter_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        filter_run.node_run_id
+    )
+    assert generate_result is not None
+    assert filter_result is not None
+    filtered_ref = registry.get(filter_result.output_refs[0])
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert generate_task.input_refs == []
+    assert filter_task.input_refs == generate_result.output_refs
+    assert len(generate_result.output_refs) == 1
+    assert len(filter_result.output_refs) == 1
+    filtered_rows = provider.read_rows(
+        filtered_ref,
+        offset=0,
+        limit=10,
+        order_by=["row_id"],
+    )
+    assert filtered_rows == [
+        {"row_id": 3, "amount": 3.0, "label": "label_0_3"},
+        {"row_id": 4, "amount": 4.0, "label": "label_0_4"},
+        {"row_id": 5, "amount": 5.0, "label": "label_0_5"},
+    ]
+    assert [event.event_type for event in events] == [
         "WORKFLOW_STARTED",
         "NODE_QUEUED",
         "NODE_STARTED",

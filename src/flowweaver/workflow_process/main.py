@@ -35,7 +35,7 @@ from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
 )
-from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
@@ -288,6 +288,7 @@ def _run_workflow_process_loop(
             workflow_run_id=workflow_run_id,
             workflow_process_id=process_id,
             process_generation=process_generation,
+            dag=dag,
             task_manager=task_manager,
             executor_factory=executor_factory,
             close_executor_after_task=close_executor_after_task,
@@ -341,6 +342,7 @@ def _dispatch_ready_nodes(
     workflow_run_id: str,
     workflow_process_id: str,
     process_generation: int | None,
+    dag: WorkflowDag,
     task_manager: NodeTaskManager,
     executor_factory: NodeExecutorFactory,
     close_executor_after_task: bool,
@@ -355,11 +357,20 @@ def _dispatch_ready_nodes(
         if node_run.status == NodeRunStatus.READY.value
     ]
     for node_run in ready_nodes:
+        input_refs = _input_refs_for_ready_node(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            dag=dag,
+            node_instance_id=node_run.node_instance_id,
+        )
+        if input_refs is None:
+            continue
         task = task_manager.submit_ready_node(
             workflow_run_id=workflow_run_id,
             workflow_process_id=workflow_process_id,
             process_generation=process_generation,
             node_instance_id=node_run.node_instance_id,
+            input_refs=input_refs,
         )
         if task is None:
             continue
@@ -398,6 +409,36 @@ def _dispatch_ready_nodes(
             if close_executor_after_task:
                 _close_executor(executor)
     return dispatched_count
+
+
+def _input_refs_for_ready_node(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    dag: WorkflowDag,
+    node_instance_id: str,
+) -> list[str] | None:
+    dag_node = next(
+        (node for node in dag.nodes if node.node_instance_id == node_instance_id),
+        None,
+    )
+    if dag_node is None:
+        return None
+    input_refs: list[str] = []
+    for upstream_node_id in dag_node.upstream_node_ids:
+        upstream_node = store.get_node_run_for_instance(
+            workflow_run_id=workflow_run_id,
+            node_instance_id=upstream_node_id,
+        )
+        if upstream_node is None:
+            return None
+        result = store.get_latest_succeeded_node_task_result_for_node_run(
+            upstream_node.node_run_id
+        )
+        if result is None:
+            return None
+        input_refs.extend(result.output_refs)
+    return input_refs
 
 
 def _configure_executor_event_handler(

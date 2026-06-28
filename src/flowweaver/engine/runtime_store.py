@@ -1015,6 +1015,24 @@ class RuntimeStore:
                 return None
             return _node_task_result_from_record(record)
 
+    def get_latest_succeeded_node_task_result_for_node_run(
+        self,
+        node_run_id: str,
+    ) -> NodeTaskResultModel | None:
+        with self._session_factory() as session:
+            record = session.scalar(
+                select(NodeTaskResultRecord)
+                .where(NodeTaskResultRecord.node_run_id == node_run_id)
+                .where(NodeTaskResultRecord.status == NodeResultStatus.SUCCEEDED.value)
+                .order_by(
+                    NodeTaskResultRecord.finished_at.desc(),
+                    NodeTaskResultRecord.result_id.desc(),
+                )
+            )
+            if record is None:
+                return None
+            return _node_task_result_from_record(record)
+
     def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
         with self._session_factory() as session:
             records = session.scalars(
