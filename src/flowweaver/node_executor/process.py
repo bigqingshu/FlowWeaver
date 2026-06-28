@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from typing import TextIO
 
 from flowweaver.common.time import utc_now
@@ -28,11 +29,13 @@ class NodeExecutorProcess:
         *,
         executor_id: str,
         executor_factory: NodeExecutorFactory | None = None,
+        event_writer: Callable[[IPCEnvelope], None] | None = None,
     ) -> None:
         self.executor_id = executor_id
         self._executor_factory = executor_factory or (
             lambda _task: FakeNodeExecutor(executor_id=executor_id)
         )
+        self._event_writer = event_writer
         self._active_task_ids: set[str] = set()
         self._active_task_correlations: dict[str, str] = {}
         self._pending_task_events: list[IPCEnvelope] = []
@@ -101,7 +104,7 @@ class NodeExecutorProcess:
         *,
         correlation_id: str | None = None,
     ) -> None:
-        self._pending_task_events.append(
+        self._emit_or_queue_task_event(
             self.task_heartbeat_envelope(task, correlation_id=correlation_id)
         )
 
@@ -114,7 +117,7 @@ class NodeExecutorProcess:
         metrics: dict[str, int | float | str] | None = None,
         correlation_id: str | None = None,
     ) -> None:
-        self._pending_task_events.append(
+        self._emit_or_queue_task_event(
             self.task_progress_envelope(
                 task,
                 progress=progress,
@@ -128,6 +131,10 @@ class NodeExecutorProcess:
         if envelope.message_type != IPCMessageType.NODE_TASK_SUBMIT:
             return ()
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
+        executor = self._executor_factory(task)
+        self._active_task_ids.add(task.task_id)
+        self._active_task_correlations[task.task_id] = envelope.message_id
+        self._pending_task_events = []
         accepted = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_ACCEPTED,
             workflow_run_id=task.workflow_run_id,
@@ -139,10 +146,7 @@ class NodeExecutorProcess:
                 "node_run_id": task.node_run_id,
             },
         )
-        executor = self._executor_factory(task)
-        self._active_task_ids.add(task.task_id)
-        self._active_task_correlations[task.task_id] = envelope.message_id
-        self._pending_task_events = []
+        accepted_events = self._emit_or_return(accepted)
         try:
             result = executor.execute(task)
             task_events = tuple(self._pending_task_events)
@@ -162,7 +166,7 @@ class NodeExecutorProcess:
                     error_type=type(exc).__name__,
                 ).model_dump(mode="json"),
             )
-            return (accepted, *task_events, failed)
+            return (*accepted_events, *task_events, failed)
         finally:
             self._active_task_ids.discard(task.task_id)
             self._active_task_correlations.pop(task.task_id, None)
@@ -174,7 +178,19 @@ class NodeExecutorProcess:
             correlation_id=envelope.message_id,
             payload=NodeTaskCompletedPayload(result=result).model_dump(mode="json"),
         )
-        return (accepted, *task_events, completed)
+        return (*accepted_events, *task_events, completed)
+
+    def _emit_or_queue_task_event(self, envelope: IPCEnvelope) -> None:
+        if self._event_writer is not None:
+            self._event_writer(envelope)
+            return
+        self._pending_task_events.append(envelope)
+
+    def _emit_or_return(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
+        if self._event_writer is not None:
+            self._event_writer(envelope)
+            return ()
+        return (envelope,)
 
 
 def run_node_executor_process(
@@ -191,6 +207,7 @@ def run_node_executor_process(
     process = NodeExecutorProcess(
         executor_id=executor_id,
         executor_factory=executor_factory,
+        event_writer=lambda envelope: _write_envelope(stdout, envelope),
     )
     _write_envelope(stdout, process.ready_envelope())
     for line in stdin:

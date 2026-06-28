@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from threading import Event, Thread
 
 from alembic import command
 from alembic.config import Config
@@ -94,6 +95,68 @@ class InjectedReportingExecutor:
             executor_id=self.executor_id,
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
+            started_at=now,
+            finished_at=now,
+        )
+
+
+class BlockingReportingExecutor:
+    executor_id = "blocking-reporting-executor"
+
+    def __init__(self, *, progress_reported: Event, finish_task: Event) -> None:
+        self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
+        self._progress_reported = progress_reported
+        self._finish_task = finish_task
+
+    def set_event_handler(
+        self,
+        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
+    ) -> None:
+        self._event_handler = handler
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        if self._event_handler is not None:
+            self._event_handler(
+                task,
+                IPCEnvelope(
+                    message_type=IPCMessageType.NODE_TASK_HEARTBEAT,
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    payload={
+                        "executor_id": self.executor_id,
+                        "task_id": task.task_id,
+                        "attempt": task.attempt,
+                    },
+                ),
+            )
+            self._event_handler(
+                task,
+                IPCEnvelope(
+                    message_type=IPCMessageType.NODE_TASK_PROGRESS,
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    payload={
+                        "progress": 0.25,
+                        "current_stage": "streaming",
+                        "metrics": {"ticks": 1},
+                    },
+                ),
+            )
+        self._progress_reported.set()
+        completed = self._finish_task.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=(
+                NodeResultStatus.SUCCEEDED
+                if completed
+                else NodeResultStatus.FAILED
+            ),
+            error=None if completed else {"message": "test did not release task"},
             started_at=now,
             finished_at=now,
         )
@@ -688,6 +751,66 @@ def test_workflow_process_records_executor_heartbeat_and_progress(
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_workflow_process_records_task_events_while_executor_is_still_running(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Streaming executor workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    assert process is not None
+    progress_reported = Event()
+    finish_task = Event()
+    exit_codes: list[int] = []
+
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0,
+                executor_factory=lambda _task: BlockingReportingExecutor(
+                    progress_reported=progress_reported,
+                    finish_task=finish_task,
+                ),
+            )
+        )
+    )
+    worker.start()
+    try:
+        assert progress_reported.wait(timeout=5)
+        node_run = store.list_node_runs(run.workflow_run_id)[0]
+        live_process = store.get_workflow_process(process.process_id)
+
+        assert node_run.status == "RUNNING"
+        assert node_run.executor_id == "blocking-reporting-executor"
+        assert node_run.last_heartbeat is not None
+        assert node_run.progress == 0.25
+        assert node_run.current_stage == "streaming"
+        assert live_process is not None
+        assert live_process.last_heartbeat_at is not None
+        assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+        assert exit_codes == []
+    finally:
+        finish_task.set()
+        worker.join(timeout=5)
+
+    assert exit_codes == [0]
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
 
 
 def test_workflow_process_applies_injected_executor_failure_result(

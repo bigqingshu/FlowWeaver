@@ -377,7 +377,10 @@ def _dispatch_ready_nodes(
         executor = executor_factory(task)
         _configure_executor_event_handler(
             executor,
+            store=store,
             task_manager=task_manager,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
         )
         try:
             accepted = task_manager.accept_task(
@@ -444,12 +447,19 @@ def _input_refs_for_ready_node(
 def _configure_executor_event_handler(
     executor: object,
     *,
+    store: RuntimeStore,
     task_manager: NodeTaskManager,
+    workflow_process_id: str,
+    process_generation: int,
 ) -> None:
     if not isinstance(executor, _NodeTaskIpcEventAwareExecutor):
         return
 
     def handle_event(task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        store.record_workflow_process_heartbeat(
+            workflow_process_id,
+            process_generation=process_generation,
+        )
         _record_node_task_ipc_event(
             task_manager=task_manager,
             executor_id=executor.executor_id,

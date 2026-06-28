@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
+from threading import Event, Thread
 
 from flowweaver.common.time import utc_now
 from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorProcess
@@ -222,6 +223,71 @@ def test_node_executor_process_emits_task_heartbeat_and_progress() -> None:
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_node_executor_process_realtime_writer_streams_before_completion() -> None:
+    task = make_task()
+    emitted: list[IPCEnvelope] = []
+    progress_seen = Event()
+    finish_task = Event()
+    process_ref: list[NodeExecutorProcess] = []
+
+    class LongRunningExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            process_ref[0].emit_task_heartbeat(task)
+            process_ref[0].emit_task_progress(
+                task,
+                progress=0.25,
+                current_stage="working",
+            )
+            progress_seen.set()
+            assert finish_task.wait(timeout=2)
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: LongRunningExecutor(),
+        event_writer=emitted.append,
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+    responses: list[IPCEnvelope] = []
+
+    worker = Thread(
+        target=lambda: responses.extend(process.handle_envelope(envelope))
+    )
+    worker.start()
+    try:
+        assert progress_seen.wait(timeout=2)
+        assert [event.message_type for event in emitted] == [
+            IPCMessageType.NODE_TASK_ACCEPTED,
+            IPCMessageType.NODE_TASK_HEARTBEAT,
+            IPCMessageType.NODE_TASK_PROGRESS,
+        ]
+        assert responses == []
+    finally:
+        finish_task.set()
+        worker.join(timeout=2)
+
+    assert len(responses) == 1
+    assert responses[0].message_type == IPCMessageType.NODE_TASK_COMPLETED
 
 
 def test_node_executor_process_emits_failed_envelope_when_executor_raises() -> None:
