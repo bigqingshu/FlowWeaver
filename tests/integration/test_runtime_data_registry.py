@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -86,6 +87,44 @@ def test_runtime_data_registry_registers_and_publishes_table_refs(
         staging.table_ref_id,
         published.table_ref_id,
     }
+
+
+def test_runtime_data_registry_cleans_staging_refs_for_node(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    staging = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-1",
+        output_name="orders",
+        schema=table_schema(),
+    )
+    other_staging = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-2",
+        output_name="other_orders",
+        schema=table_schema(),
+    )
+    provider.insert_rows(staging, [{"row_id": 1, "amount": 12.5}])
+    provider.insert_rows(other_staging, [{"row_id": 2, "amount": 3.0}])
+    registry.register_staging(staging)
+    registry.register_staging(other_staging)
+
+    cleaned = registry.cleanup_staging_for_node(
+        workflow_run_id="run-1",
+        node_run_id="node-run-1",
+    )
+
+    cleaned_ref = registry.get(staging.table_ref_id)
+    other_ref = registry.get(other_staging.table_ref_id)
+    assert [item.table_ref_id for item in cleaned] == [staging.table_ref_id]
+    assert cleaned_ref.lifecycle_status == LifecycleStatus.RELEASED
+    assert other_ref.lifecycle_status == LifecycleStatus.STAGING
+    assert provider.count_rows(other_ref) == 1
+    with pytest.raises(sqlite3.OperationalError):
+        provider.count_rows(staging)
 
 
 def test_runtime_data_registry_rejects_non_staging_registration(

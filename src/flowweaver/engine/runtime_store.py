@@ -1136,6 +1136,37 @@ class RuntimeStore:
             ).all()
             return [_table_ref_from_record(record) for record in records]
 
+    def list_table_refs_by_node_run(
+        self,
+        *,
+        workflow_run_id: str,
+        node_run_id: str,
+    ) -> list[TableRefModel]:
+        with self._session_factory() as session:
+            records = session.scalars(
+                select(DataRefRecord)
+                .where(DataRefRecord.workflow_run_id == workflow_run_id)
+                .where(DataRefRecord.node_run_id == node_run_id)
+                .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
+            ).all()
+            return [_table_ref_from_record(record) for record in records]
+
+    def mark_staging_table_ref_released(
+        self,
+        table_ref_id: str,
+    ) -> TableRefModel | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.get(DataRefRecord, table_ref_id)
+            if (
+                record is None
+                or record.lifecycle_status != LifecycleStatus.STAGING.value
+            ):
+                return None
+            record.lifecycle_status = LifecycleStatus.RELEASED.value
+            record.released_at = _datetime_to_text(now)
+            return _table_ref_from_record(record)
+
     def append_runtime_event(self, event: EventModel) -> int:
         with self._session_factory.begin() as session:
             record = RuntimeEventRecord(

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Thread
 
+import pytest
 from alembic import command
 from alembic.config import Config
 
@@ -29,9 +31,14 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
-from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
+from flowweaver.protocols.enums import (
+    IPCMessageType,
+    LifecycleStatus,
+    NodeResultStatus,
+)
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.table_ref import FieldSchemaModel
 from flowweaver.workflow_process.main import run_workflow_process
 
 
@@ -223,6 +230,58 @@ class CloseableBlockingSuccessExecutor:
             executor_id=self.executor_id,
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
+            started_at=now,
+            finished_at=now,
+        )
+
+    def close(self) -> None:
+        self.closed.set()
+
+
+class BlockingStagingExecutor:
+    executor_id = "blocking-staging-executor"
+
+    def __init__(
+        self,
+        *,
+        registry: RuntimeDataRegistry,
+        table_provider: SQLiteRuntimeTableProvider,
+    ) -> None:
+        self._registry = registry
+        self._table_provider = table_provider
+        self.started = Event()
+        self.closed = Event()
+        self.staging_ref_ids: list[str] = []
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        staging_ref = self._table_provider.create_staging_table(
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            output_name="partial_output",
+            schema=[
+                FieldSchemaModel(
+                    field_id="row_id",
+                    name="row_id",
+                    data_type="INTEGER",
+                    nullable=False,
+                    ordinal=0,
+                )
+            ],
+        )
+        self._table_provider.insert_rows(staging_ref, [{"row_id": 1}])
+        self._registry.register_staging(staging_ref)
+        self.staging_ref_ids.append(staging_ref.table_ref_id)
+        self.started.set()
+        self.closed.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=list(self.staging_ref_ids),
             started_at=now,
             finished_at=now,
         )
@@ -1252,6 +1311,69 @@ def test_workflow_process_times_out_task_while_executor_is_still_running(
         "NODE_TIMEOUT",
         "WORKFLOW_FAILED",
     ]
+
+
+def test_workflow_process_cleans_staging_refs_when_task_times_out(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    workflow = store.create_workflow_definition(
+        name="Timeout cleanup workflow",
+        definition={
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                    "config": {"timeout_seconds": 1},
+                }
+            ],
+            "connections": [],
+        },
+        workflow_id="workflow-timeout-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-timeout-cleanup",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-timeout-cleanup",
+    )
+    assert process is not None
+    executor = BlockingStagingExecutor(
+        registry=registry,
+        table_provider=provider,
+    )
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        cleanup_staging_for_node=lambda workflow_run_id, node_run_id: (
+            registry.cleanup_staging_for_node(
+                workflow_run_id=workflow_run_id,
+                node_run_id=node_run_id,
+            )
+        ),
+    )
+
+    assert exit_code == 0
+    assert executor.started.is_set()
+    assert executor.closed.is_set()
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    assert node_run.status == "TIMED_OUT"
+    assert executor.staging_ref_ids
+    cleaned_ref = registry.get(executor.staging_ref_ids[0])
+    assert cleaned_ref.lifecycle_status == LifecycleStatus.RELEASED
+    with pytest.raises(sqlite3.OperationalError):
+        provider.count_rows(cleaned_ref)
 
 
 def test_workflow_process_applies_injected_executor_failure_result(

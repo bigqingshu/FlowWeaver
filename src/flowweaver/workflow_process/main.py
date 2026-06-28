@@ -23,6 +23,7 @@ from flowweaver.node_executor import (
 from flowweaver.protocols.enums import (
     EventType,
     IPCMessageType,
+    NodeResultStatus,
     NodeRunStatus,
     WorkflowRunStatus,
 )
@@ -45,6 +46,8 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
     NodeTaskTimeoutStatus,
 )
+
+CleanupStagingForNode = Callable[[str, str], None]
 
 _TERMINAL_WORKFLOW_STATUSES = frozenset(
     {
@@ -145,6 +148,7 @@ def run_workflow_process(
     process_generation: int | None = None,
     event_sink: RuntimeEventSink | None = None,
     executor_factory: NodeExecutorFactory | None = None,
+    cleanup_staging_for_node: CleanupStagingForNode | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -163,6 +167,7 @@ def run_workflow_process(
             process_generation=process_generation,
             event_sink=event_sink,
             executor_factory=executor_factory,
+            cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
             sleep_func=sleep_func,
         )
@@ -180,6 +185,7 @@ def _run_workflow_process_loop(
     process_generation: int | None,
     event_sink: RuntimeEventSink,
     executor_factory: NodeExecutorFactory,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
     sleep_func: Callable[[float], None],
 ) -> int:
@@ -296,6 +302,7 @@ def _run_workflow_process_loop(
             dag=dag,
             task_manager=task_manager,
             executor_factory=executor_factory,
+            cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
             event_sink=event_sink,
         )
@@ -351,6 +358,7 @@ def _dispatch_ready_nodes(
     dag: WorkflowDag,
     task_manager: NodeTaskManager,
     executor_factory: NodeExecutorFactory,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
     event_sink: RuntimeEventSink,
 ) -> int:
@@ -414,10 +422,11 @@ def _dispatch_ready_nodes(
                 heartbeat_interval_seconds=heartbeat_interval_seconds,
                 task_manager=task_manager,
                 executor=executor,
+                cleanup_staging_for_node=cleanup_staging_for_node,
                 task=accepted,
             )
             if result is not None:
-                _apply_node_task_result(
+                apply_result = _apply_node_task_result(
                     store=store,
                     workflow_run_id=workflow_run_id,
                     workflow_process_id=workflow_process_id,
@@ -427,6 +436,15 @@ def _dispatch_ready_nodes(
                     task=accepted,
                     result=result,
                 )
+                if (
+                    result.status != NodeResultStatus.SUCCEEDED
+                    and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
+                ):
+                    _cleanup_staging_for_node(
+                        cleanup_staging_for_node,
+                        workflow_run_id=workflow_run_id,
+                        node_run_id=accepted.node_run_id,
+                    )
             dispatched_count += 1
             if _workflow_run_is_terminal(store, workflow_run_id):
                 break
@@ -445,6 +463,7 @@ def _execute_node_task_with_supervision(
     heartbeat_interval_seconds: float,
     task_manager: NodeTaskManager,
     executor: NodeExecutor,
+    cleanup_staging_for_node: CleanupStagingForNode | None,
     task: NodeTaskModel,
 ) -> NodeTaskResultModel | None:
     results: Queue[NodeTaskResultModel | Exception] = Queue(maxsize=1)
@@ -484,6 +503,11 @@ def _execute_node_task_with_supervision(
         timeout_result = task_manager.mark_timed_out_task(task)
         if timeout_result.status == NodeTaskTimeoutStatus.TIMED_OUT:
             _close_executor(executor)
+            _cleanup_staging_for_node(
+                cleanup_staging_for_node,
+                workflow_run_id=workflow_run_id,
+                node_run_id=task.node_run_id,
+            )
             worker.join(timeout=0.2)
             late_result = _get_node_task_execution_result(
                 results,
@@ -552,6 +576,20 @@ def _apply_node_task_result(
             apply_result=apply_result,
         )
     return apply_result
+
+
+def _cleanup_staging_for_node(
+    cleanup_staging_for_node: CleanupStagingForNode | None,
+    *,
+    workflow_run_id: str,
+    node_run_id: str,
+) -> None:
+    if cleanup_staging_for_node is None:
+        return
+    try:
+        cleanup_staging_for_node(workflow_run_id, node_run_id)
+    except Exception:
+        pass
 
 
 def _timeout_seconds_from_node_config(config: dict[str, object]) -> int:

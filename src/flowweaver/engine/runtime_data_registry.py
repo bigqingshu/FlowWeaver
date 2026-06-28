@@ -37,6 +37,30 @@ class RuntimeDataRegistry:
     def list_by_workflow_run(self, workflow_run_id: str) -> list[TableRefModel]:
         return self._store.list_table_refs_by_workflow_run(workflow_run_id)
 
+    def cleanup_staging_for_node(
+        self,
+        *,
+        workflow_run_id: str,
+        node_run_id: str,
+    ) -> list[TableRefModel]:
+        cleaned: list[TableRefModel] = []
+        for table_ref in self._store.list_table_refs_by_node_run(
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
+        ):
+            if (
+                table_ref.provider_id != self._table_provider.provider_id
+                or table_ref.lifecycle_status != LifecycleStatus.STAGING
+            ):
+                continue
+            self._table_provider.drop_table(table_ref)
+            released = self._store.mark_staging_table_ref_released(
+                table_ref.table_ref_id
+            )
+            if released is not None:
+                cleaned.append(released)
+        return cleaned
+
     def _ensure_staging_ref(self, table_ref: TableRefModel) -> None:
         if table_ref.provider_id != self._table_provider.provider_id:
             raise ValueError("table_ref belongs to a different provider")
