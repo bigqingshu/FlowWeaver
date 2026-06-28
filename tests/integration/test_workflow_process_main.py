@@ -442,7 +442,8 @@ class ReleasableBlockingExecutor:
 class ReleasableMultiNodeExecutor:
     executor_id = "releasable-multi-node-executor"
 
-    def __init__(self) -> None:
+    def __init__(self, *, failed_nodes: set[str] | None = None) -> None:
+        self._failed_nodes = failed_nodes or set()
         self.started_by_node: dict[str, Event] = {}
         self.release_by_node: dict[str, Event] = {}
         self.executed_nodes: list[str] = []
@@ -462,8 +463,17 @@ class ReleasableMultiNodeExecutor:
             attempt=task.attempt,
             executor_id=self.executor_id,
             process_generation=task.process_generation,
-            status=NodeResultStatus.SUCCEEDED,
-            output_refs=[f"{node_id}-output"],
+            status=(
+                NodeResultStatus.FAILED
+                if node_id in self._failed_nodes
+                else NodeResultStatus.SUCCEEDED
+            ),
+            output_refs=[] if node_id in self._failed_nodes else [f"{node_id}-output"],
+            error=(
+                {"message": f"{node_id} injected failure"}
+                if node_id in self._failed_nodes
+                else None
+            ),
             started_at=now,
             finished_at=now,
         )
@@ -1260,6 +1270,103 @@ def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order
         "NODE_STARTED",
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_with_threaded_pool_keeps_failure_after_late_success(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = ReleasableMultiNodeExecutor(failed_nodes={"source_a"})
+    execution_pool = ThreadedNodeTaskExecutionPool()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution pool failure isolation workflow",
+        definition=multi_upstream_definition(),
+        workflow_id="workflow-threaded-execution-pool-failure-isolation",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-pool-failure-isolation",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-pool-failure-isolation",
+    )
+    assert process is not None
+
+    def release_failure_then_late_success(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        assert executor.started_event("source_a").wait(timeout=1)
+        assert executor.started_event("source_b").wait(timeout=1)
+        if sleep_calls == 1:
+            executor.release("source_a")
+            return
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+        sleep_func=release_failure_then_late_success,
+    )
+
+    node_runs_before_late_success = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    assert node_runs_before_late_success == {
+        "merge": "WAITING_DEPENDENCY",
+        "source_a": "FAILED",
+        "source_b": "RUNNING",
+    }
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert execution_pool.in_flight_count() == 1
+
+    executor.release("source_b")
+    deadline = time.monotonic() + 1
+    late_completion = None
+    while time.monotonic() < deadline:
+        late_completion = execution_pool.pop_completed()
+        if late_completion is not None:
+            break
+        time.sleep(0.01)
+
+    node_runs = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+
+    assert exit_code == 0
+    assert sleep_calls >= 1
+    assert late_completion is not None
+    assert late_completion.dispatched_task.node_instance_id == "source_b"
+    assert late_completion.result is not None
+    assert late_completion.result.status == NodeResultStatus.SUCCEEDED
+    assert execution_pool.in_flight_count() == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert node_runs == {
+        "merge": "WAITING_DEPENDENCY",
+        "source_a": "FAILED",
+        "source_b": "RUNNING",
+    }
+    assert executor.seen_input_refs_by_node == {
+        "source_a": [],
+        "source_b": [],
+    }
+    assert executor.executed_nodes == ["source_a", "source_b"]
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
     ]
 
 
