@@ -6,6 +6,14 @@ from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.protocols.enums import NodeRunStatus
 from flowweaver.workflow_process.dag import DagNode, WorkflowDag
 
+_IN_FLIGHT_NODE_RUN_STATUSES = frozenset(
+    {
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+        NodeRunStatus.CANCEL_REQUESTED.value,
+    }
+)
+
 
 @dataclass(frozen=True)
 class ReadyNodeCandidate:
@@ -46,6 +54,18 @@ def collect_ready_node_candidates(
             )
         )
     return tuple(candidates)
+
+
+def count_in_flight_node_runs(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+) -> int:
+    return sum(
+        1
+        for node_run in store.list_node_runs(workflow_run_id)
+        if node_run.status in _IN_FLIGHT_NODE_RUN_STATUSES
+    )
 
 
 def _input_refs_for_ready_node(

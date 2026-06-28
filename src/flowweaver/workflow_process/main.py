@@ -48,7 +48,10 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
     NodeTaskTimeoutStatus,
 )
-from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
+from flowweaver.workflow_process.ready_queue import (
+    collect_ready_node_candidates,
+    count_in_flight_node_runs,
+)
 
 CleanupStagingForNode = Callable[[str, str], None]
 
@@ -154,6 +157,7 @@ def run_workflow_process(
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
     cancel_grace_seconds: float = 5.0,
     max_ready_dispatch_per_cycle: int | None = None,
+    max_concurrent_node_tasks: int | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -176,6 +180,7 @@ def run_workflow_process(
             close_executor_after_task=close_executor_after_task,
             cancel_grace_seconds=cancel_grace_seconds,
             max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
+            max_concurrent_node_tasks=max_concurrent_node_tasks,
             sleep_func=sleep_func,
         )
     finally:
@@ -196,6 +201,7 @@ def _run_workflow_process_loop(
     close_executor_after_task: bool,
     cancel_grace_seconds: float,
     max_ready_dispatch_per_cycle: int | None,
+    max_concurrent_node_tasks: int | None,
     sleep_func: Callable[[float], None],
 ) -> int:
     if (
@@ -315,6 +321,7 @@ def _run_workflow_process_loop(
             close_executor_after_task=close_executor_after_task,
             cancel_grace_seconds=cancel_grace_seconds,
             max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
+            max_concurrent_node_tasks=max_concurrent_node_tasks,
             event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
@@ -373,21 +380,27 @@ def _dispatch_ready_nodes(
     close_executor_after_task: bool,
     cancel_grace_seconds: float,
     max_ready_dispatch_per_cycle: int | None,
+    max_concurrent_node_tasks: int | None,
     event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
         return 0
     dispatched_count = 0
+    max_dispatch_count = _available_ready_dispatch_slots(
+        store=store,
+        workflow_run_id=workflow_run_id,
+        max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
+        max_concurrent_node_tasks=max_concurrent_node_tasks,
+    )
+    if max_dispatch_count == 0:
+        return 0
     ready_candidates = collect_ready_node_candidates(
         store=store,
         workflow_run_id=workflow_run_id,
         dag=dag,
     )
     for candidate in ready_candidates:
-        if (
-            max_ready_dispatch_per_cycle is not None
-            and dispatched_count >= max_ready_dispatch_per_cycle
-        ):
+        if max_dispatch_count is not None and dispatched_count >= max_dispatch_count:
             break
         task = task_manager.submit_ready_node(
             workflow_run_id=workflow_run_id,
@@ -455,6 +468,27 @@ def _dispatch_ready_nodes(
             if close_executor_after_task:
                 _close_executor(executor)
     return dispatched_count
+
+
+def _available_ready_dispatch_slots(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    max_ready_dispatch_per_cycle: int | None,
+    max_concurrent_node_tasks: int | None,
+) -> int | None:
+    limits: list[int] = []
+    if max_ready_dispatch_per_cycle is not None:
+        limits.append(max(0, max_ready_dispatch_per_cycle))
+    if max_concurrent_node_tasks is not None:
+        in_flight_count = count_in_flight_node_runs(
+            store=store,
+            workflow_run_id=workflow_run_id,
+        )
+        limits.append(max(0, max_concurrent_node_tasks - in_flight_count))
+    if not limits:
+        return None
+    return min(limits)
 
 
 def _execute_node_task_with_supervision(

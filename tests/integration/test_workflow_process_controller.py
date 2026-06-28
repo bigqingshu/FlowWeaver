@@ -21,7 +21,10 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
-from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
+from flowweaver.workflow_process.ready_queue import (
+    collect_ready_node_candidates,
+    count_in_flight_node_runs,
+)
 
 
 def migrate(database_path: Path) -> None:
@@ -517,6 +520,54 @@ def test_ready_queue_passes_upstream_result_refs(tmp_path: Path) -> None:
     assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
     assert candidates[0].input_refs == ("table-source-1", "table-source-2")
     assert candidates[0].dependency_count == 1
+
+
+def test_ready_queue_counts_in_flight_node_runs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=diamond_definition(),
+        workflow_id="workflow-in-flight-count",
+        workflow_run_id="run-in-flight-count",
+        process_id="process-in-flight-count",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    for node_instance_id, status in (
+        ("a", NodeRunStatus.RUNNING),
+        ("b", NodeRunStatus.LONG_RUNNING),
+        ("c", NodeRunStatus.CANCEL_REQUESTED),
+    ):
+        node = store.get_node_run_for_instance(
+            workflow_run_id=run.workflow_run_id,
+            node_instance_id=node_instance_id,
+        )
+        assert node is not None
+        if node.status == NodeRunStatus.WAITING_DEPENDENCY.value:
+            ready = store.update_node_run_status(
+                node.node_run_id,
+                NodeRunStatus.READY,
+                expected_state_version=node.state_version,
+                allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+            )
+            assert ready is not None
+            node = ready
+        updated = store.update_node_run_status(
+            node.node_run_id,
+            status,
+            expected_state_version=node.state_version,
+            allowed_source_statuses=[NodeRunStatus.READY],
+        )
+        assert updated is not None
+
+    assert count_in_flight_node_runs(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+    ) == 3
 
 
 def test_ready_queue_exposes_fork_candidates_after_source_success(

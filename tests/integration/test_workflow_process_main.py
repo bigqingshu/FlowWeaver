@@ -35,6 +35,7 @@ from flowweaver.protocols.enums import (
     IPCMessageType,
     LifecycleStatus,
     NodeResultStatus,
+    NodeRunStatus,
 )
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -799,6 +800,7 @@ def test_workflow_process_limits_ready_dispatch_per_cycle(
         close_executor_after_task=True,
         cancel_grace_seconds=5,
         max_ready_dispatch_per_cycle=1,
+        max_concurrent_node_tasks=None,
         event_sink=event_sink,
     )
 
@@ -819,6 +821,80 @@ def test_workflow_process_limits_ready_dispatch_per_cycle(
         "NODE_STARTED",
         "NODE_FINISHED",
     ]
+
+
+def test_workflow_process_does_not_dispatch_when_capacity_is_full(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    event_sink = DatabaseEventSink(store)
+    definition_data = multi_upstream_definition()
+    workflow = store.create_workflow_definition(
+        name="Capacity limited ready dispatch workflow",
+        definition=definition_data,
+        workflow_id="workflow-capacity-limited-ready-dispatch",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-capacity-limited-ready-dispatch",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-capacity-limited-ready-dispatch",
+    )
+    assert process is not None
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition_data))
+    initialize_node_runs(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        dag=dag,
+    )
+    source_b = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source_b",
+    )
+    assert source_b is not None
+    running_source_b = store.update_node_run_status(
+        source_b.node_run_id,
+        NodeRunStatus.RUNNING,
+        expected_state_version=source_b.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    assert running_source_b is not None
+    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    executor = RecordingSuccessExecutor()
+
+    dispatched_count = workflow_process_main._dispatch_ready_nodes(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        dag=dag,
+        task_manager=task_manager,
+        executor_factory=lambda _task: executor,
+        cleanup_staging_for_node=None,
+        close_executor_after_task=True,
+        cancel_grace_seconds=5,
+        max_ready_dispatch_per_cycle=None,
+        max_concurrent_node_tasks=1,
+        event_sink=event_sink,
+    )
+
+    node_runs = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    assert dispatched_count == 0
+    assert executor.executed_nodes == []
+    assert node_runs == {
+        "source_a": "READY",
+        "source_b": "RUNNING",
+        "merge": "WAITING_DEPENDENCY",
+    }
+    assert store.list_runtime_events() == []
 
 
 def test_workflow_process_passes_empty_input_refs_when_upstream_has_no_outputs(
