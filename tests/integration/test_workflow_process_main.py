@@ -6,6 +6,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -161,6 +162,74 @@ def test_workflow_process_executes_ready_nodes_with_default_subprocess_executor(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_reuses_default_executor_for_run(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    created_executor_ids: list[str] = []
+    executed_task_ids: list[str] = []
+    closed_executor_ids: list[str] = []
+
+    class TrackingReusableDefaultExecutor:
+        def __init__(self) -> None:
+            self.executor_id = f"default-reusable-{len(created_executor_ids) + 1}"
+            created_executor_ids.append(self.executor_id)
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            executed_task_ids.append(task.task_id)
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+        def close(self) -> None:
+            closed_executor_ids.append(self.executor_id)
+
+    monkeypatch.setattr(
+        workflow_process_main,
+        "SubprocessNodeExecutorIpcClient",
+        TrackingReusableDefaultExecutor,
+    )
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Reusable default executor workflow",
+        definition=definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    assert process is not None
+
+    exit_code = workflow_process_main.run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+    )
+
+    node_runs = store.list_node_runs(run.workflow_run_id)
+    assert exit_code == 0
+    assert created_executor_ids == ["default-reusable-1"]
+    assert len(executed_task_ids) == 2
+    assert closed_executor_ids == ["default-reusable-1"]
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert {node.executor_id for node in node_runs} == {"default-reusable-1"}
 
 
 def test_workflow_process_runs_single_node_with_subprocess_executor(

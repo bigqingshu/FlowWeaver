@@ -61,6 +61,25 @@ class _ClosableExecutor(Protocol):
         ...
 
 
+class _ReusableSubprocessExecutorOwner:
+    def __init__(self) -> None:
+        self._executor: SubprocessNodeExecutorIpcClient | None = None
+
+    def executor_for_task(
+        self,
+        _task: NodeTaskModel,
+    ) -> SubprocessNodeExecutorIpcClient:
+        if self._executor is None:
+            self._executor = SubprocessNodeExecutorIpcClient()
+        return self._executor
+
+    def close(self) -> None:
+        if self._executor is None:
+            return
+        _close_executor(self._executor)
+        self._executor = None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--database-url", required=True)
@@ -104,9 +123,41 @@ def run_workflow_process(
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
-    executor_factory = executor_factory or (
-        lambda _task: SubprocessNodeExecutorIpcClient()
-    )
+    reusable_executor_owner: _ReusableSubprocessExecutorOwner | None = None
+    close_executor_after_task = True
+    if executor_factory is None:
+        reusable_executor_owner = _ReusableSubprocessExecutorOwner()
+        executor_factory = reusable_executor_owner.executor_for_task
+        close_executor_after_task = False
+    try:
+        return _run_workflow_process_loop(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            process_id=process_id,
+            heartbeat_interval_seconds=heartbeat_interval_seconds,
+            process_generation=process_generation,
+            event_sink=event_sink,
+            executor_factory=executor_factory,
+            close_executor_after_task=close_executor_after_task,
+            sleep_func=sleep_func,
+        )
+    finally:
+        if reusable_executor_owner is not None:
+            reusable_executor_owner.close()
+
+
+def _run_workflow_process_loop(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    process_id: str,
+    heartbeat_interval_seconds: float,
+    process_generation: int | None,
+    event_sink: RuntimeEventSink,
+    executor_factory: NodeExecutorFactory,
+    close_executor_after_task: bool,
+    sleep_func: Callable[[float], None],
+) -> int:
     if (
         process_generation is not None
         and not store.workflow_run_is_owned_by(
@@ -139,11 +190,9 @@ def run_workflow_process(
         process_id,
         process_generation=process_generation,
     )
-    current_run = store.get_workflow_run(workflow_run_id)
     if (
-        current_run is not None
-        and current_run.status == WorkflowRunStatus.PENDING.value
-    ):
+        current_run := store.get_workflow_run(workflow_run_id)
+    ) is not None and current_run.status == WorkflowRunStatus.PENDING.value:
         store.update_workflow_run_status(
             workflow_run_id,
             WorkflowRunStatus.RUNNING,
@@ -220,6 +269,7 @@ def run_workflow_process(
             process_generation=process_generation,
             task_manager=task_manager,
             executor_factory=executor_factory,
+            close_executor_after_task=close_executor_after_task,
             event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
@@ -272,6 +322,7 @@ def _dispatch_ready_nodes(
     process_generation: int | None,
     task_manager: NodeTaskManager,
     executor_factory: NodeExecutorFactory,
+    close_executor_after_task: bool,
     event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
@@ -319,7 +370,8 @@ def _dispatch_ready_nodes(
             if _workflow_run_is_terminal(store, workflow_run_id):
                 break
         finally:
-            _close_executor(executor)
+            if close_executor_after_task:
+                _close_executor(executor)
     return dispatched_count
 
 
