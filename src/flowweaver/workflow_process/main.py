@@ -32,6 +32,7 @@ from flowweaver.protocols.enums import (
     IPCMessageType,
     NodeResultStatus,
     NodeRunStatus,
+    WorkflowRunCompletionReason,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
@@ -41,7 +42,7 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskProgressPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow.definition import FailurePolicyMode, WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
@@ -87,6 +88,14 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT,
         NodeTaskApplyStatus.REJECTED_STALE_GENERATION,
         NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
+    }
+)
+_CONTINUE_INDEPENDENT_IN_PROGRESS_NODE_STATUSES = frozenset(
+    {
+        NodeRunStatus.QUEUED.value,
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
+        NodeRunStatus.CANCEL_REQUESTED.value,
     }
 )
 
@@ -392,6 +401,16 @@ def _run_workflow_process_loop(
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
             return 0
+        if _complete_continue_independent_partial_failure_if_finished(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=process_id,
+            process_generation=process_generation,
+            failure_policy_mode=definition.failure_policy.mode,
+            dag=dag,
+            event_sink=event_sink,
+        ):
+            return 0
         if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
 
@@ -435,6 +454,64 @@ def _workflow_run_is_terminal(
 ) -> bool:
     current = store.get_workflow_run(workflow_run_id)
     return current is not None and current.status in _TERMINAL_WORKFLOW_STATUSES
+
+
+def _complete_continue_independent_partial_failure_if_finished(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int | None,
+    failure_policy_mode: FailurePolicyMode,
+    dag: WorkflowDag,
+    event_sink: RuntimeEventSink,
+) -> bool:
+    if failure_policy_mode != FailurePolicyMode.CONTINUE_INDEPENDENT:
+        return False
+    run = store.get_workflow_run(workflow_run_id)
+    if run is None or run.status != WorkflowRunStatus.RUNNING.value:
+        return False
+    node_runs = store.list_node_runs(workflow_run_id)
+    if not any(node.status == NodeRunStatus.FAILED.value for node in node_runs):
+        return False
+    if any(
+        node.status in _CONTINUE_INDEPENDENT_IN_PROGRESS_NODE_STATUSES
+        for node in node_runs
+    ):
+        return False
+    if collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+    ):
+        return False
+    completed = store.update_workflow_run_status(
+        workflow_run_id,
+        WorkflowRunStatus.FAILED,
+        finished_at=utc_now(),
+        completion_reason=WorkflowRunCompletionReason.PARTIAL_FAILURE,
+        expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+        owner_process_id=(
+            workflow_process_id if process_generation is not None else None
+        ),
+        process_generation=process_generation,
+    )
+    if completed is None:
+        return False
+    event_sink.emit(
+        EventModel(
+            event_type=EventType.WORKFLOW_FAILED,
+            workflow_run_id=workflow_run_id,
+            payload={
+                "process_id": workflow_process_id,
+                "completion_reason": (
+                    WorkflowRunCompletionReason.PARTIAL_FAILURE.value
+                ),
+            },
+        )
+    )
+    return True
 
 
 def _complete_empty_workflow(

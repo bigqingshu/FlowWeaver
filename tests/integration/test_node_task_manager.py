@@ -19,6 +19,7 @@ from flowweaver.workflow.definition import (
     FailurePolicyMode,
     WorkflowDefinitionModel,
 )
+from flowweaver.workflow_process import main as workflow_process_main
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import (
@@ -695,6 +696,82 @@ def test_continue_independent_failure_keeps_workflow_running_and_skips_dependent
     assert "WORKFLOW_FAILED" not in {
         event.event_type for event in store.list_runtime_events()
     }
+
+
+def test_continue_independent_partial_failure_waits_until_ready_nodes_finish(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = independent_branch_definition() | {
+        "failure_policy": {"mode": "CONTINUE_INDEPENDENT"}
+    }
+    run, process, manager = create_running_process(store, definition)
+    definition_model = WorkflowDefinitionModel.model_validate(definition)
+    dag = build_workflow_dag(definition_model)
+    event_sink = DatabaseEventSink(store)
+    failed_task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source_a",
+    )
+    failed_result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={"message": "failed"},
+    ).execute(failed_task)
+    assert manager.apply_result(failed_result).status == NodeTaskApplyStatus.APPLIED
+
+    premature = (
+        workflow_process_main
+        ._complete_continue_independent_partial_failure_if_finished(
+            store=store,
+            workflow_run_id=run.workflow_run_id,
+            workflow_process_id=process.process_id,
+            process_generation=process.process_generation,
+            failure_policy_mode=FailurePolicyMode.CONTINUE_INDEPENDENT,
+            dag=dag,
+            event_sink=event_sink,
+        )
+    )
+    success_task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source_b",
+    )
+    success_result = FakeNodeExecutor(
+        executor_id="executor-1",
+        output_refs=["source-b-output"],
+    ).execute(success_task)
+    assert manager.apply_result(success_result).status == NodeTaskApplyStatus.APPLIED
+
+    completed = (
+        workflow_process_main
+        ._complete_continue_independent_partial_failure_if_finished(
+            store=store,
+            workflow_run_id=run.workflow_run_id,
+            workflow_process_id=process.process_id,
+            process_generation=process.process_generation,
+            failure_policy_mode=FailurePolicyMode.CONTINUE_INDEPENDENT,
+            dag=dag,
+            event_sink=event_sink,
+        )
+    )
+
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    events = store.list_runtime_events()
+    assert premature is False
+    assert completed is True
+    assert loaded_run is not None
+    assert loaded_run.status == "FAILED"
+    assert loaded_run.completion_reason == "PARTIAL_FAILURE"
+    assert events[-1].event_type == "WORKFLOW_FAILED"
+    assert events[-1].payload["completion_reason"] == "PARTIAL_FAILURE"
 
 
 def test_fork_and_join_dag_waits_for_all_upstreams(tmp_path: Path) -> None:

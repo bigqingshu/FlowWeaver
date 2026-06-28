@@ -2628,7 +2628,7 @@ def test_workflow_process_applies_injected_executor_failure_result(
     ]
 
 
-def test_workflow_process_continue_independent_dispatches_unrelated_ready_node(
+def test_workflow_process_continue_independent_fails_after_unrelated_ready_node(
     tmp_path: Path,
 ) -> None:
     store = make_store(tmp_path)
@@ -2650,12 +2650,6 @@ def test_workflow_process_continue_independent_dispatches_unrelated_ready_node(
     )
     assert process is not None
     executor = NodeOutcomeExecutor(failed_nodes={"source_b"})
-    sleep_calls = 0
-
-    def stop_after_independent_branch(_seconds: float) -> None:
-        nonlocal sleep_calls
-        sleep_calls += 1
-        store.request_workflow_process_cancel(run.workflow_run_id)
 
     exit_code = run_workflow_process(
         store=store,
@@ -2664,23 +2658,24 @@ def test_workflow_process_continue_independent_dispatches_unrelated_ready_node(
         process_generation=process.process_generation,
         heartbeat_interval_seconds=0,
         executor_factory=lambda _task: executor,
-        sleep_func=stop_after_independent_branch,
     )
 
     events = store.list_runtime_events()
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
     node_statuses = {
         node.node_instance_id: node.status
         for node in store.list_node_runs(run.workflow_run_id)
     }
     assert exit_code == 0
-    assert sleep_calls == 1
     assert executor.executed_nodes == ["source_b", "source_a"]
+    assert loaded_run is not None
+    assert loaded_run.status == "FAILED"
+    assert loaded_run.completion_reason == "PARTIAL_FAILURE"
     assert node_statuses == {
         "source_a": "SUCCEEDED",
         "source_b": "FAILED",
         "merge": "SKIPPED",
     }
-    assert store.get_workflow_run(run.workflow_run_id).status == "CANCELLED"
     assert [event.event_type for event in events] == [
         "WORKFLOW_STARTED",
         "NODE_QUEUED",
@@ -2689,9 +2684,9 @@ def test_workflow_process_continue_independent_dispatches_unrelated_ready_node(
         "NODE_QUEUED",
         "NODE_STARTED",
         "NODE_FINISHED",
-        "WORKFLOW_CANCELLED",
+        "WORKFLOW_FAILED",
     ]
-    assert "WORKFLOW_FAILED" not in {event.event_type for event in events}
+    assert events[-1].payload["completion_reason"] == "PARTIAL_FAILURE"
 
 
 def test_workflow_process_ignores_stale_executor_result_without_failing(
