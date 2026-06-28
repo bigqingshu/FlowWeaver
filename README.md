@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已进入 J.0 权限审计边界确认。
 
 阶段 A 范围包括：
 
@@ -269,6 +269,65 @@ A发布V2后B当前运行仍固定V1
 .\python312\python.exe -m mypy
 .\python312\python.exe -m pytest -q
 ```
+
+## 阶段 J 计划
+
+阶段 J 对应第一阶段规范中的“权限与审计”部分，目标是验证：
+
+```text
+无权限节点无法写入目标表
+审计记录包含节点、表、字段和影响行数
+权限检查始终开启
+审计等级默认 STANDARD
+```
+
+J.0 只确认语义和接口范围，不落 Store/API/节点执行检查。
+
+### J.0：权限审计边界清单
+
+范围：
+
+- 第一阶段只管理工作流内部数据权限
+- 权限检查始终开启，不允许为了性能完全关闭
+- 审计等级可以切换，默认 `STANDARD`
+- “关闭审计”后续只允许降为最低运行记录，不等于关闭权限检查
+- 权限层判断节点是否允许读取、写入、追加、覆盖、清空、结构修改、输出发布和共享表读取
+- 审计层记录允许/拒绝、节点、表、字段、写入模式、影响行数和 ChangeSet 摘要
+- 节点或插件负责具体资源操作，平台负责权限声明、授权结果、标准数据引用和审计记录
+
+已有基础：
+
+- `EngineConfig.audit_level` 已有默认 `STANDARD`
+- `audit_events` 表已存在
+- `NodeTask.permission_handle_id` 字段已存在
+- `TableLeaseManager` 已有表级 READ / WRITE 租约与轻量审计记录
+- `RuntimeEvent` 与 `NodeTaskResult` 已能承载运行状态和节点失败结果
+
+J.0 暂不进入：
+
+- 不新增 `permissions/` 模块
+- 不新增或修改数据库迁移
+- 不改 Store 写入权限强制逻辑
+- 不改 API 权限端点
+- 不改 NodeTask 分发时的权限句柄签发
+- 不改内置节点执行器的权限校验
+- 不实现 UI 权限审批或审计页面
+- 不为文件、Web、Office、串口、屏幕等外部系统建立统一强制规则
+- 不实现 `FULL` / `DEBUG` 级字段差分或行级差分
+
+建议后续小步：
+
+| 小步 | 执行方向 | 主要产出 | 暂不进入 |
+| --- | --- | --- | --- |
+| J.1 | 协议模型 | PermissionRequest / PermissionGrant / AuditEvent 最小模型 | Store 强制拦截 |
+| J.2 | Store 边界 | 权限句柄与审计事件 CRUD | API 和节点执行接入 |
+| J.3 | 节点权限声明 | 节点配置解析出本次运行需要的内部数据权限 | 外部系统统一权限 |
+| J.4 | 主循环接入 | 创建 NodeTask 前校验并绑定 permission_handle_id | UI 审批 |
+| J.5 | 节点执行检查 | 内置表节点写入前校验权限句柄 | 所有插件沙盒 |
+| J.6 | STANDARD 审计 | 写入节点审计节点、表、字段、影响行数和摘要 | FULL 行级差分 |
+| J.7 | 阶段验收 | 无权限写入拒绝和审计记录完整性测试 | 权限页面 |
+
+当前建议下一步是 J.1：先补协议模型和测试，不直接改主循环或 Store 强制逻辑。
 
 ## 环境
 
