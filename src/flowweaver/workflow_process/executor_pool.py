@@ -40,6 +40,9 @@ class NodeTaskExecutionPool(Protocol):
     def in_flight_count(self) -> int:
         ...
 
+    def in_flight_tasks(self) -> tuple[DispatchedNodeTask, ...]:
+        ...
+
 
 class ImmediateNodeTaskExecutionPool:
     def __init__(self, execute_task: NodeTaskExecute | None = None) -> None:
@@ -63,6 +66,9 @@ class ImmediateNodeTaskExecutionPool:
 
     def in_flight_count(self) -> int:
         return 0
+
+    def in_flight_tasks(self) -> tuple[DispatchedNodeTask, ...]:
+        return ()
 
 
 class ThreadedNodeTaskExecutionPool:
@@ -113,6 +119,10 @@ class ThreadedNodeTaskExecutionPool:
     def in_flight_count(self) -> int:
         with self._lock:
             return len(self._in_flight)
+
+    def in_flight_tasks(self) -> tuple[DispatchedNodeTask, ...]:
+        with self._lock:
+            return tuple(self._in_flight.values())
 
     def _execute_in_thread(
         self,
@@ -171,6 +181,9 @@ class ManualNodeTaskExecutionPool:
 
     def in_flight_count(self) -> int:
         return len(self._in_flight)
+
+    def in_flight_tasks(self) -> tuple[DispatchedNodeTask, ...]:
+        return tuple(self._in_flight.values())
 
 
 def _execute_directly(

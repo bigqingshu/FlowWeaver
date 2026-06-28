@@ -1079,6 +1079,65 @@ def test_workflow_process_with_threaded_pool_applies_executor_error_completion(
     ]
 
 
+def test_workflow_process_with_threaded_pool_requests_cancel_for_in_flight_task(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    executor = CooperativeCancelExecutor()
+    execution_pool = ThreadedNodeTaskExecutionPool()
+    sleep_calls = 0
+    workflow = store.create_workflow_definition(
+        name="Threaded execution pool cancel workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-threaded-execution-pool-cancel",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-pool-cancel",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-pool-cancel",
+    )
+    assert process is not None
+
+    def request_cancel_during_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        assert sleep_calls == 1
+        assert executor.started.wait(timeout=1)
+        assert execution_pool.in_flight_count() == 1
+        store.request_workflow_process_cancel(run.workflow_run_id)
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+        execution_pool=execution_pool,
+        sleep_func=request_cancel_during_sleep,
+    )
+
+    loaded_node = store.list_node_runs(run.workflow_run_id)[0]
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+
+    assert exit_code == 0
+    assert sleep_calls == 1
+    assert executor.cancel_requested.is_set()
+    assert executor.cancelled_task_id is not None
+    assert loaded_workflow is not None
+    assert loaded_workflow.status == "CANCELLED"
+    assert loaded_node.status == "CANCEL_REQUESTED"
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "WORKFLOW_CANCELLED",
+    ]
+
+
 def test_workflow_process_drains_pending_pool_completions_before_dispatch(
     tmp_path: Path,
 ) -> None:

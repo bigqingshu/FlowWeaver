@@ -175,6 +175,7 @@ def test_threaded_node_task_execution_pool_runs_task_until_completion() -> None:
     assert pool.in_flight_count() == 1
     assert executor.started.wait(timeout=1)
     assert pool.pop_completed() is None
+    assert pool.in_flight_tasks() == (dispatched,)
 
     executor.release.set()
     completion = pop_completion_until_available(pool)
@@ -185,6 +186,7 @@ def test_threaded_node_task_execution_pool_runs_task_until_completion() -> None:
     assert completion.result is not None
     assert completion.result.status == NodeResultStatus.SUCCEEDED
     assert completion.result.output_refs == ["source-threaded-output"]
+    assert pool.in_flight_tasks() == ()
     assert pool.pop_completed() is None
 
 
@@ -219,6 +221,7 @@ def test_threaded_node_task_execution_pool_rejects_submit_after_close() -> None:
     assert pool.closed is True
     assert pool.submit(make_dispatched_task()) is False
     assert pool.in_flight_count() == 0
+    assert pool.in_flight_tasks() == ()
     assert pool.pop_completed() is None
 
 

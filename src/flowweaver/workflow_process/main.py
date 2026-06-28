@@ -323,6 +323,10 @@ def _run_workflow_process_loop(
             return 1
         process = store.get_workflow_process(process_id)
         if process is not None and process.cancel_requested_at is not None:
+            _request_cancel_for_in_flight_tasks(
+                store=store,
+                execution_pool=execution_pool,
+            )
             store.update_workflow_run_status(
                 workflow_run_id,
                 WorkflowRunStatus.CANCELLED,
@@ -816,6 +820,20 @@ def _request_cancel(
         executor.request_cancel(task)
     except Exception:
         pass
+
+
+def _request_cancel_for_in_flight_tasks(
+    *,
+    store: RuntimeStore,
+    execution_pool: NodeTaskExecutionPool,
+) -> None:
+    for dispatched in execution_pool.in_flight_tasks():
+        _mark_node_cancel_requested(
+            store=store,
+            task=dispatched.task,
+            executor_id=dispatched.executor_id,
+        )
+        _request_cancel(dispatched.executor, dispatched.task)
 
 
 def _cancelled_task_result(
