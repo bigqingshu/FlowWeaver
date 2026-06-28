@@ -196,6 +196,56 @@ def test_supervisor_rejects_duplicate_active_workflow_process_and_writes_logs(
         supervisor.close()
 
 
+def test_supervisor_completes_workflow_with_default_subprocess_executor(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run = create_run(store, definition=non_empty_definition())
+    supervisor = Supervisor(
+        config=EngineConfig(
+            data_dir=tmp_path / "runtime",
+            enforce_single_instance=False,
+            workflow_process_heartbeat_interval_seconds=0,
+            workflow_process_lost_threshold_seconds=60,
+            supervisor_maintenance_interval_seconds=60,
+        ),
+        runtime_store=store,
+        python_executable=sys.executable,
+    )
+
+    process_id = supervisor.start_workflow_process(run.workflow_run_id)
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    loaded_process = store.get_workflow_process(process_id)
+    node_runs = []
+    try:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            supervisor.sweep_exited_children()
+            loaded_run = store.get_workflow_run(run.workflow_run_id)
+            loaded_process = store.get_workflow_process(process_id)
+            node_runs = store.list_node_runs(run.workflow_run_id)
+            if (
+                loaded_run is not None
+                and loaded_run.status == "SUCCEEDED"
+                and loaded_process is not None
+                and loaded_process.status == "EXITED"
+            ):
+                break
+            time.sleep(0.05)
+    finally:
+        supervisor.close()
+
+    assert loaded_run is not None
+    assert loaded_run.status == "SUCCEEDED"
+    assert loaded_process is not None
+    assert loaded_process.status == "EXITED"
+    assert loaded_process.exit_code == 0
+    assert {node.node_instance_id: node.status for node in node_runs} == {
+        "source": "SUCCEEDED",
+    }
+    assert {node.executor_id for node in node_runs} == {"subprocess-node-executor"}
+
+
 def test_supervisor_close_terminates_running_child_and_aborts_run(
     tmp_path: Path,
 ) -> None:
