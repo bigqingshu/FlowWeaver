@@ -15,6 +15,7 @@ from flowweaver.node_executor.builtin_fault import (
     FAULT_TEST_NODE_TYPE,
     BuiltinFaultNodeExecutor,
 )
+from flowweaver.node_executor.builtin_shared_table import BuiltinSharedTableNodeExecutor
 from flowweaver.node_executor.cancel_token import CancelToken
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.node_executor.ipc_client import (
@@ -28,6 +29,7 @@ from flowweaver.node_executor.process import (
 
 __all__ = [
     "BUILTIN_FAULT_NODE_TYPES",
+    "BuiltinSharedTableNodeExecutor",
     "BuiltinTableNodeExecutor",
     "BuiltinFaultNodeExecutor",
     "CancelToken",
