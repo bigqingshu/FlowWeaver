@@ -6,7 +6,9 @@ from queue import Empty, Queue
 from threading import Lock, Thread
 from typing import Protocol
 
+from flowweaver.common.time import utc_now
 from flowweaver.node_executor import NodeExecutor
+from flowweaver.protocols.enums import NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
@@ -100,21 +102,20 @@ class ThreadedNodeTaskExecutionPool:
         task_id: str,
         dispatched_task: DispatchedNodeTask,
     ) -> None:
-        completed = False
         result: NodeTaskResultModel | None = None
         try:
             result = self._execute_task(dispatched_task)
-            completed = True
+        except Exception as exc:
+            result = _failed_task_result(dispatched_task, exc)
         finally:
             with self._lock:
                 self._in_flight.pop(task_id, None)
-            if completed:
-                self._completed.put(
-                    ExecutorTaskCompletion(
-                        dispatched_task=dispatched_task,
-                        result=result,
-                    )
+            self._completed.put(
+                ExecutorTaskCompletion(
+                    dispatched_task=dispatched_task,
+                    result=result,
                 )
+            )
 
 
 class ManualNodeTaskExecutionPool:
@@ -158,3 +159,25 @@ def _execute_directly(
     dispatched_task: DispatchedNodeTask,
 ) -> NodeTaskResultModel:
     return dispatched_task.executor.execute(dispatched_task.task)
+
+
+def _failed_task_result(
+    dispatched_task: DispatchedNodeTask,
+    error: Exception,
+) -> NodeTaskResultModel:
+    task = dispatched_task.task
+    now = utc_now()
+    return NodeTaskResultModel(
+        task_id=task.task_id,
+        node_run_id=task.node_run_id,
+        attempt=task.attempt,
+        executor_id=dispatched_task.executor_id,
+        process_generation=task.process_generation,
+        status=NodeResultStatus.FAILED,
+        error={
+            "message": str(error),
+            "error_type": type(error).__name__,
+        },
+        started_at=now,
+        finished_at=now,
+    )

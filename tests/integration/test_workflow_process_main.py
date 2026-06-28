@@ -71,6 +71,13 @@ class InjectedFailingExecutor:
         )
 
 
+class InjectedRaisingExecutor:
+    executor_id = "injected-raising-executor"
+
+    def execute(self, _task: NodeTaskModel) -> NodeTaskResultModel:
+        raise RuntimeError("injected threaded failure")
+
+
 class InjectedReportingExecutor:
     executor_id = "injected-reporting-executor"
 
@@ -1020,6 +1027,55 @@ def test_workflow_process_with_threaded_pool_does_not_block_after_dispatch(
         "NODE_STARTED",
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_with_threaded_pool_applies_executor_error_completion(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    execution_pool = ThreadedNodeTaskExecutionPool()
+    workflow = store.create_workflow_definition(
+        name="Threaded execution pool failure workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-threaded-execution-pool-failure",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-threaded-execution-pool-failure",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-threaded-execution-pool-failure",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedRaisingExecutor(),
+        execution_pool=execution_pool,
+    )
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+
+    assert exit_code == 0
+    assert execution_pool.in_flight_count() == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert node_run.status == "FAILED"
+    assert node_run.error == {
+        "message": "injected threaded failure",
+        "error_type": "RuntimeError",
+    }
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
     ]
 
 

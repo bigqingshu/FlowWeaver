@@ -61,6 +61,13 @@ class BlockingPoolExecutor:
         )
 
 
+class RaisingPoolExecutor:
+    executor_id = "raising-pool-executor"
+
+    def execute(self, _task: NodeTaskModel) -> NodeTaskResultModel:
+        raise RuntimeError("threaded executor exploded")
+
+
 def make_task(task_id: str = "task-1") -> NodeTaskModel:
     return NodeTaskModel(
         task_id=task_id,
@@ -104,6 +111,20 @@ def make_blocking_dispatched_task(
             executor_id=executor.executor_id,
         ),
         executor,
+    )
+
+
+def make_raising_dispatched_task(
+    task_id: str = "task-1",
+) -> DispatchedNodeTask:
+    task = make_task(task_id)
+    executor = RaisingPoolExecutor()
+    return DispatchedNodeTask(
+        task=task,
+        executor=executor,
+        node_run_id=task.node_run_id,
+        node_instance_id=task.node_instance_id,
+        executor_id=executor.executor_id,
     )
 
 
@@ -164,6 +185,29 @@ def test_threaded_node_task_execution_pool_runs_task_until_completion() -> None:
     assert completion.result is not None
     assert completion.result.status == NodeResultStatus.SUCCEEDED
     assert completion.result.output_refs == ["source-threaded-output"]
+    assert pool.pop_completed() is None
+
+
+def test_threaded_node_task_execution_pool_converts_executor_error_to_failure() -> None:
+    dispatched = make_raising_dispatched_task()
+    pool = ThreadedNodeTaskExecutionPool()
+
+    assert pool.submit(dispatched) is True
+    completion = pop_completion_until_available(pool)
+
+    assert pool.in_flight_count() == 0
+    assert completion is not None
+    assert completion.dispatched_task == dispatched
+    assert completion.result is not None
+    assert completion.result.status == NodeResultStatus.FAILED
+    assert completion.result.task_id == dispatched.task.task_id
+    assert completion.result.node_run_id == dispatched.task.node_run_id
+    assert completion.result.executor_id == dispatched.executor_id
+    assert completion.result.process_generation == dispatched.task.process_generation
+    assert completion.result.error == {
+        "message": "threaded executor exploded",
+        "error_type": "RuntimeError",
+    }
     assert pool.pop_completed() is None
 
 
