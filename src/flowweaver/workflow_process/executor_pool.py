@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from queue import Empty, Queue
+from threading import Lock, Thread
 from typing import Protocol
 
 from flowweaver.node_executor import NodeExecutor
@@ -59,6 +61,60 @@ class ImmediateNodeTaskExecutionPool:
 
     def in_flight_count(self) -> int:
         return 0
+
+
+class ThreadedNodeTaskExecutionPool:
+    def __init__(self, execute_task: NodeTaskExecute | None = None) -> None:
+        self._completed: Queue[ExecutorTaskCompletion] = Queue()
+        self._execute_task = execute_task or _execute_directly
+        self._in_flight: dict[str, DispatchedNodeTask] = {}
+        self._lock = Lock()
+
+    def submit(self, dispatched_task: DispatchedNodeTask) -> bool:
+        task_id = dispatched_task.task.task_id
+        with self._lock:
+            if task_id in self._in_flight:
+                return False
+            self._in_flight[task_id] = dispatched_task
+        worker = Thread(
+            target=self._execute_in_thread,
+            args=(task_id, dispatched_task),
+            name=f"flowweaver-node-task-pool-{task_id}",
+            daemon=True,
+        )
+        worker.start()
+        return True
+
+    def pop_completed(self) -> ExecutorTaskCompletion | None:
+        try:
+            return self._completed.get_nowait()
+        except Empty:
+            return None
+
+    def in_flight_count(self) -> int:
+        with self._lock:
+            return len(self._in_flight)
+
+    def _execute_in_thread(
+        self,
+        task_id: str,
+        dispatched_task: DispatchedNodeTask,
+    ) -> None:
+        completed = False
+        result: NodeTaskResultModel | None = None
+        try:
+            result = self._execute_task(dispatched_task)
+            completed = True
+        finally:
+            with self._lock:
+                self._in_flight.pop(task_id, None)
+            if completed:
+                self._completed.put(
+                    ExecutorTaskCompletion(
+                        dispatched_task=dispatched_task,
+                        result=result,
+                    )
+                )
 
 
 class ManualNodeTaskExecutionPool:

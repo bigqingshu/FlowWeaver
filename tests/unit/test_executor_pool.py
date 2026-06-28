@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from threading import Event
+from time import monotonic, sleep
+
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.enums import NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow_process.executor_pool import (
     DispatchedNodeTask,
+    ExecutorTaskCompletion,
     ImmediateNodeTaskExecutionPool,
     ManualNodeTaskExecutionPool,
+    ThreadedNodeTaskExecutionPool,
 )
 
 
@@ -27,6 +32,30 @@ class FakePoolExecutor:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=[f"{task.node_instance_id}-output"],
+            started_at=now,
+            finished_at=now,
+        )
+
+
+class BlockingPoolExecutor:
+    executor_id = "blocking-pool-executor"
+
+    def __init__(self) -> None:
+        self.started = Event()
+        self.release = Event()
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.started.set()
+        self.release.wait(timeout=2)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=[f"{task.node_instance_id}-threaded-output"],
             started_at=now,
             finished_at=now,
         )
@@ -61,6 +90,35 @@ def make_dispatched_task(task_id: str = "task-1") -> DispatchedNodeTask:
     )
 
 
+def make_blocking_dispatched_task(
+    task_id: str = "task-1",
+) -> tuple[DispatchedNodeTask, BlockingPoolExecutor]:
+    task = make_task(task_id)
+    executor = BlockingPoolExecutor()
+    return (
+        DispatchedNodeTask(
+            task=task,
+            executor=executor,
+            node_run_id=task.node_run_id,
+            node_instance_id=task.node_instance_id,
+            executor_id=executor.executor_id,
+        ),
+        executor,
+    )
+
+
+def pop_completion_until_available(
+    pool: ThreadedNodeTaskExecutionPool,
+) -> ExecutorTaskCompletion | None:
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        completion = pool.pop_completed()
+        if completion is not None:
+            return completion
+        sleep(0.01)
+    return None
+
+
 def test_immediate_node_task_execution_pool_records_completion() -> None:
     task = make_task()
     executor = FakePoolExecutor()
@@ -84,6 +142,28 @@ def test_immediate_node_task_execution_pool_records_completion() -> None:
     assert completion.result is not None
     assert completion.result.status == NodeResultStatus.SUCCEEDED
     assert completion.result.output_refs == ["source-output"]
+    assert pool.pop_completed() is None
+
+
+def test_threaded_node_task_execution_pool_runs_task_until_completion() -> None:
+    dispatched, executor = make_blocking_dispatched_task()
+    pool = ThreadedNodeTaskExecutionPool()
+
+    assert pool.submit(dispatched) is True
+    assert pool.submit(dispatched) is False
+    assert pool.in_flight_count() == 1
+    assert executor.started.wait(timeout=1)
+    assert pool.pop_completed() is None
+
+    executor.release.set()
+    completion = pop_completion_until_available(pool)
+
+    assert pool.in_flight_count() == 0
+    assert completion is not None
+    assert completion.dispatched_task == dispatched
+    assert completion.result is not None
+    assert completion.result.status == NodeResultStatus.SUCCEEDED
+    assert completion.result.output_refs == ["source-threaded-output"]
     assert pool.pop_completed() is None
 
 
