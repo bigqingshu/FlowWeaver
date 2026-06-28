@@ -112,12 +112,12 @@ def single_node_definition() -> dict:
     }
 
 
-def test_workflow_process_executes_ready_nodes_with_fake_executor(
+def test_workflow_process_executes_ready_nodes_with_default_subprocess_executor(
     tmp_path: Path,
 ) -> None:
     store = make_store(tmp_path)
     workflow = store.create_workflow_definition(
-        name="Fake executor workflow",
+        name="Default executor workflow",
         definition=definition(),
         workflow_id="workflow-1",
     )
@@ -150,7 +150,7 @@ def test_workflow_process_executes_ready_nodes_with_fake_executor(
         "source": "SUCCEEDED",
         "transform": "SUCCEEDED",
     }
-    assert {node.executor_id for node in node_runs} == {"local-node-executor"}
+    assert {node.executor_id for node in node_runs} == {"subprocess-node-executor"}
     assert [event.event_type for event in store.list_runtime_events()] == [
         "WORKFLOW_STARTED",
         "NODE_QUEUED",

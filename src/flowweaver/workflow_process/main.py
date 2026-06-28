@@ -13,7 +13,10 @@ from flowweaver.engine.runtime_event_sink import (
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.node_executor import LocalNodeExecutorIpcClient, NodeExecutorFactory
+from flowweaver.node_executor import (
+    NodeExecutorFactory,
+    SubprocessNodeExecutorIpcClient,
+)
 from flowweaver.protocols.enums import EventType, NodeRunStatus, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -102,7 +105,7 @@ def run_workflow_process(
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
     executor_factory = executor_factory or (
-        lambda _task: LocalNodeExecutorIpcClient()
+        lambda _task: SubprocessNodeExecutorIpcClient()
     )
     if (
         process_generation is not None
