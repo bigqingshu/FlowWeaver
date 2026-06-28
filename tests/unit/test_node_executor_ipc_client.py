@@ -4,6 +4,9 @@ import sys
 from textwrap import dedent
 
 from flowweaver.node_executor import (
+    DELAY_TEST_NODE_TYPE,
+    FAULT_MODE_PROCESS_EXIT,
+    FAULT_TEST_NODE_TYPE,
     LocalNodeExecutorIpcClient,
     SubprocessNodeExecutorIpcClient,
 )
@@ -110,6 +113,70 @@ def test_subprocess_node_executor_ipc_client_emits_intermediate_events() -> None
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_subprocess_node_executor_ipc_client_streams_delay_test_node_events() -> None:
+    task = make_task().model_copy(
+        update={
+            "node_type": DELAY_TEST_NODE_TYPE,
+            "config": {
+                "duration_seconds": 0.02,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+        }
+    )
+    events: list[IPCEnvelope] = []
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="delay-executor-1",
+        python_executable=sys.executable,
+        event_handler=lambda _task, envelope: events.append(envelope),
+    )
+    try:
+        result = executor.execute(task)
+    finally:
+        executor.close()
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert result.executor_id == "delay-executor-1"
+    assert events[0].message_type == IPCMessageType.NODE_TASK_ACCEPTED
+    assert IPCMessageType.NODE_TASK_HEARTBEAT in {
+        event.message_type for event in events
+    }
+    assert IPCMessageType.NODE_TASK_PROGRESS in {
+        event.message_type for event in events
+    }
+    assert events[-1].message_type == IPCMessageType.NODE_TASK_PROGRESS
+    assert events[-1].payload["progress"] == 1.0
+
+
+def test_subprocess_node_executor_ipc_client_reports_process_exit_fault() -> None:
+    task = make_task().model_copy(
+        update={
+            "node_type": FAULT_TEST_NODE_TYPE,
+            "config": {"mode": FAULT_MODE_PROCESS_EXIT, "exit_code": 7},
+        }
+    )
+    events: list[IPCEnvelope] = []
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="process-exit-fault-executor-1",
+        python_executable=sys.executable,
+        event_handler=lambda _task, envelope: events.append(envelope),
+    )
+    try:
+        result = executor.execute(task)
+    finally:
+        executor.close()
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.error is not None
+    assert result.error["message"] == (
+        "Node executor subprocess exited before completing task"
+    )
+    assert result.error["exit_code"] == 7
+    assert [event.message_type for event in events] == [
+        IPCMessageType.NODE_TASK_ACCEPTED
+    ]
 
 
 def test_subprocess_node_executor_ipc_client_returns_failed_result_on_eof() -> None:

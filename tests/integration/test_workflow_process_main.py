@@ -15,6 +15,10 @@ from flowweaver.engine.runtime_event_sink import IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import (
+    DELAY_TEST_NODE_TYPE,
+    FAULT_MODE_PROCESS_EXIT,
+    FAULT_MODE_RAISE_EXCEPTION,
+    FAULT_TEST_NODE_TYPE,
     BuiltinTableNodeExecutor,
     FakeNodeExecutor,
     SubprocessNodeExecutorIpcClient,
@@ -257,6 +261,25 @@ def single_node_definition() -> dict:
                 "node_instance_id": "source",
                 "node_type": "core.source",
                 "node_version": "1.0",
+            }
+        ],
+        "connections": [],
+    }
+
+
+def single_test_node_definition(
+    *,
+    node_type: str,
+    config: dict,
+) -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "test-node",
+                "node_type": node_type,
+                "node_version": "1.0",
+                "config": config,
             }
         ],
         "connections": [],
@@ -696,6 +719,143 @@ def test_workflow_process_runs_single_node_with_subprocess_executor(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_runs_delay_test_node_with_default_executor(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Delay test node workflow",
+        definition=single_test_node_definition(
+            node_type=DELAY_TEST_NODE_TYPE,
+            config={
+                "duration_seconds": 0.02,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+        ),
+        workflow_id="workflow-delay-test",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-delay-test",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-delay-test",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+    )
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    events = store.list_runtime_events()
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert node_run.status == "SUCCEEDED"
+    assert node_run.executor_id == "subprocess-node-executor"
+    assert node_run.last_heartbeat is not None
+    assert node_run.progress == 1.0
+    assert node_run.current_stage == "completed"
+    assert "NODE_PROGRESS" in [event.event_type for event in events]
+
+
+def test_workflow_process_marks_raise_exception_fault_node_failed(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Raise exception fault workflow",
+        definition=single_test_node_definition(
+            node_type=FAULT_TEST_NODE_TYPE,
+            config={
+                "mode": FAULT_MODE_RAISE_EXCEPTION,
+                "message": "expected workflow fault",
+            },
+        ),
+        workflow_id="workflow-raise-fault",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-raise-fault",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-raise-fault",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+    )
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert node_run.status == "FAILED"
+    assert node_run.error == {
+        "message": "expected workflow fault",
+        "error_type": "RuntimeError",
+    }
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FAILED",
+        "WORKFLOW_FAILED",
+    ]
+
+
+def test_workflow_process_marks_process_exit_fault_node_failed(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Process exit fault workflow",
+        definition=single_test_node_definition(
+            node_type=FAULT_TEST_NODE_TYPE,
+            config={"mode": FAULT_MODE_PROCESS_EXIT, "exit_code": 7},
+        ),
+        workflow_id="workflow-process-exit-fault",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-process-exit-fault",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-exit-fault",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+    )
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
+    assert node_run.status == "FAILED"
+    assert node_run.error is not None
+    assert node_run.error["message"] == (
+        "Node executor subprocess exited before completing task"
+    )
+    assert node_run.error["exit_code"] == 7
 
 
 def test_workflow_process_records_executor_heartbeat_and_progress(

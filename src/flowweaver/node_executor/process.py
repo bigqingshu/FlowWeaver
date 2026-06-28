@@ -7,6 +7,10 @@ from typing import TextIO
 
 from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
+from flowweaver.node_executor.builtin_fault import (
+    BUILTIN_FAULT_NODE_TYPES,
+    BuiltinFaultNodeExecutor,
+)
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
@@ -32,9 +36,7 @@ class NodeExecutorProcess:
         event_writer: Callable[[IPCEnvelope], None] | None = None,
     ) -> None:
         self.executor_id = executor_id
-        self._executor_factory = executor_factory or (
-            lambda _task: FakeNodeExecutor(executor_id=executor_id)
-        )
+        self._executor_factory = executor_factory
         self._event_writer = event_writer
         self._active_task_ids: set[str] = set()
         self._active_task_correlations: dict[str, str] = {}
@@ -131,7 +133,7 @@ class NodeExecutorProcess:
         if envelope.message_type != IPCMessageType.NODE_TASK_SUBMIT:
             return ()
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
-        executor = self._executor_factory(task)
+        executor = self._executor_for_task(task)
         self._active_task_ids.add(task.task_id)
         self._active_task_correlations[task.task_id] = envelope.message_id
         self._pending_task_events = []
@@ -191,6 +193,16 @@ class NodeExecutorProcess:
             self._event_writer(envelope)
             return ()
         return (envelope,)
+
+    def _executor_for_task(self, task: NodeTaskModel):
+        if self._executor_factory is not None:
+            return self._executor_factory(task)
+        if task.node_type in BUILTIN_FAULT_NODE_TYPES:
+            return BuiltinFaultNodeExecutor(
+                executor_id=self.executor_id,
+                event_emitter=self,
+            )
+        return FakeNodeExecutor(executor_id=self.executor_id)
 
 
 def run_node_executor_process(

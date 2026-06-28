@@ -4,7 +4,13 @@ from io import StringIO
 from threading import Event, Thread
 
 from flowweaver.common.time import utc_now
-from flowweaver.node_executor import FakeNodeExecutor, NodeExecutorProcess
+from flowweaver.node_executor import (
+    DELAY_TEST_NODE_TYPE,
+    FAULT_MODE_RAISE_EXCEPTION,
+    FAULT_TEST_NODE_TYPE,
+    FakeNodeExecutor,
+    NodeExecutorProcess,
+)
 from flowweaver.node_executor.process import (
     EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE,
     run_node_executor_process,
@@ -288,6 +294,74 @@ def test_node_executor_process_realtime_writer_streams_before_completion() -> No
 
     assert len(responses) == 1
     assert responses[0].message_type == IPCMessageType.NODE_TASK_COMPLETED
+
+
+def test_node_executor_process_runs_delay_test_node_with_realtime_events() -> None:
+    task = make_task().model_copy(
+        update={
+            "node_type": DELAY_TEST_NODE_TYPE,
+            "config": {
+                "duration_seconds": 0.01,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+        }
+    )
+    emitted: list[IPCEnvelope] = []
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        event_writer=emitted.append,
+    )
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    (completed,) = process.handle_envelope(envelope)
+
+    assert [event.message_type for event in emitted[:3]] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_PROGRESS,
+    ]
+    assert completed.message_type == IPCMessageType.NODE_TASK_COMPLETED
+    assert completed.payload["result"]["status"] == NodeResultStatus.SUCCEEDED.value
+    assert completed.payload["result"]["executor_id"] == "executor-1"
+    assert emitted[-1].message_type == IPCMessageType.NODE_TASK_PROGRESS
+    assert emitted[-1].payload["progress"] == 1.0
+    assert emitted[-1].payload["current_stage"] == "completed"
+
+
+def test_node_executor_process_returns_failed_raise_exception_fault() -> None:
+    task = make_task().model_copy(
+        update={
+            "node_type": FAULT_TEST_NODE_TYPE,
+            "config": {
+                "mode": FAULT_MODE_RAISE_EXCEPTION,
+                "message": "expected fault",
+            },
+        }
+    )
+    process = NodeExecutorProcess(executor_id="executor-1")
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, failed = process.handle_envelope(envelope)
+
+    assert accepted.message_type == IPCMessageType.NODE_TASK_ACCEPTED
+    assert failed.message_type == IPCMessageType.NODE_TASK_FAILED
+    assert failed.payload["error_type"] == "RuntimeError"
+    assert failed.payload["result"]["status"] == NodeResultStatus.FAILED.value
+    assert failed.payload["result"]["error"] == {
+        "message": "expected fault",
+        "error_type": "RuntimeError",
+    }
 
 
 def test_node_executor_process_emits_failed_envelope_when_executor_raises() -> None:
