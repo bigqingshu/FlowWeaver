@@ -14,7 +14,7 @@ from alembic.config import Config
 import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
-from flowweaver.engine.runtime_event_sink import IPCEventSink
+from flowweaver.engine.runtime_event_sink import DatabaseEventSink, IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import (
@@ -39,7 +39,11 @@ from flowweaver.protocols.enums import (
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow_process.controller import initialize_node_runs
+from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.main import run_workflow_process
+from flowweaver.workflow_process.node_tasks import NodeTaskManager
 
 
 class InjectedFailingExecutor:
@@ -364,6 +368,28 @@ class NodeAwareOutputExecutor:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=list(self._output_refs_by_node.get(task.node_instance_id, [])),
+            started_at=now,
+            finished_at=now,
+        )
+
+
+class RecordingSuccessExecutor:
+    executor_id = "recording-success-executor"
+
+    def __init__(self) -> None:
+        self.executed_nodes: list[str] = []
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.executed_nodes.append(task.node_instance_id)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=[f"{task.node_instance_id}-output"],
             started_at=now,
             finished_at=now,
         )
@@ -726,6 +752,72 @@ def test_workflow_process_passes_multiple_upstream_table_refs_in_stable_order(
         "table-a1",
         "table-a2",
         "table-b1",
+    ]
+
+
+def test_workflow_process_limits_ready_dispatch_per_cycle(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    event_sink = DatabaseEventSink(store)
+    definition_data = multi_upstream_definition()
+    workflow = store.create_workflow_definition(
+        name="Limited ready dispatch workflow",
+        definition=definition_data,
+        workflow_id="workflow-limited-ready-dispatch",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-limited-ready-dispatch",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-limited-ready-dispatch",
+    )
+    assert process is not None
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition_data))
+    initialize_node_runs(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        dag=dag,
+    )
+    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    executor = RecordingSuccessExecutor()
+
+    dispatched_count = workflow_process_main._dispatch_ready_nodes(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        dag=dag,
+        task_manager=task_manager,
+        executor_factory=lambda _task: executor,
+        cleanup_staging_for_node=None,
+        close_executor_after_task=True,
+        cancel_grace_seconds=5,
+        max_ready_dispatch_per_cycle=1,
+        event_sink=event_sink,
+    )
+
+    node_runs = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    assert dispatched_count == 1
+    assert executor.executed_nodes == ["source_b"]
+    assert node_runs == {
+        "source_a": "READY",
+        "source_b": "SUCCEEDED",
+        "merge": "WAITING_DEPENDENCY",
+    }
+    assert store.get_workflow_run(run.workflow_run_id).status == "PENDING"
+    assert [event.event_type for event in store.list_runtime_events()] == [
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
     ]
 
 

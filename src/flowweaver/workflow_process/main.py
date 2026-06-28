@@ -153,6 +153,7 @@ def run_workflow_process(
     executor_factory: NodeExecutorFactory | None = None,
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
     cancel_grace_seconds: float = 5.0,
+    max_ready_dispatch_per_cycle: int | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -174,6 +175,7 @@ def run_workflow_process(
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
             cancel_grace_seconds=cancel_grace_seconds,
+            max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
             sleep_func=sleep_func,
         )
     finally:
@@ -193,6 +195,7 @@ def _run_workflow_process_loop(
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
     cancel_grace_seconds: float,
+    max_ready_dispatch_per_cycle: int | None,
     sleep_func: Callable[[float], None],
 ) -> int:
     if (
@@ -311,6 +314,7 @@ def _run_workflow_process_loop(
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
             cancel_grace_seconds=cancel_grace_seconds,
+            max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
             event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
@@ -368,6 +372,7 @@ def _dispatch_ready_nodes(
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
     cancel_grace_seconds: float,
+    max_ready_dispatch_per_cycle: int | None,
     event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
@@ -379,6 +384,11 @@ def _dispatch_ready_nodes(
         dag=dag,
     )
     for candidate in ready_candidates:
+        if (
+            max_ready_dispatch_per_cycle is not None
+            and dispatched_count >= max_ready_dispatch_per_cycle
+        ):
+            break
         task = task_manager.submit_ready_node(
             workflow_run_id=workflow_run_id,
             workflow_process_id=workflow_process_id,
