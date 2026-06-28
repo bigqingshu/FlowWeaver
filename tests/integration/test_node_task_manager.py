@@ -151,6 +151,50 @@ def independent_branch_definition() -> dict:
     }
 
 
+def cascading_dependents_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "source_a",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "source_b",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "middle",
+                "node_type": "core.middle",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "sink",
+                "node_type": "core.sink",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "source-a-to-middle",
+                "source_node_id": "source_a",
+                "source_port": "out",
+                "target_node_id": "middle",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "middle-to-sink",
+                "source_node_id": "middle",
+                "source_port": "out",
+                "target_node_id": "sink",
+                "target_port": "in",
+            },
+        ],
+    }
+
+
 def create_running_process(store: RuntimeStore, definition: dict):
     workflow = store.create_workflow_definition(
         name="Node task workflow",
@@ -695,6 +739,53 @@ def test_continue_independent_failure_keeps_workflow_running_and_skips_dependent
     ]
     assert "WORKFLOW_FAILED" not in {
         event.event_type for event in store.list_runtime_events()
+    }
+
+
+def test_continue_independent_skips_direct_and_indirect_dependents(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = cascading_dependents_definition() | {
+        "failure_policy": {"mode": "CONTINUE_INDEPENDENT"}
+    }
+    run, process, manager = create_running_process(store, definition)
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source_a",
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={"message": "failed"},
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    node_runs = {
+        node.node_instance_id: node
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert {node_id: node.status for node_id, node in node_runs.items()} == {
+        "source_a": "FAILED",
+        "source_b": "READY",
+        "middle": "SKIPPED",
+        "sink": "SKIPPED",
+    }
+    assert node_runs["middle"].error == {
+        "reason": "UPSTREAM_FAILED",
+        "failed_node_instance_id": "source_a",
+        "failed_node_run_id": task.node_run_id,
+    }
+    assert node_runs["sink"].error == {
+        "reason": "UPSTREAM_FAILED",
+        "failed_node_instance_id": "source_a",
+        "failed_node_run_id": task.node_run_id,
     }
 
 

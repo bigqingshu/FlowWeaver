@@ -20,7 +20,7 @@ from flowweaver.engine.runtime_event_sink import (
     IPCEventSink,
     RuntimeEventSink,
 )
-from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.node_executor import (
     CancellableNodeExecutor,
     NodeExecutor,
@@ -499,6 +499,7 @@ def _complete_continue_independent_partial_failure_if_finished(
     )
     if completed is None:
         return False
+    failure_summary = _continue_independent_failure_summary(node_runs)
     event_sink.emit(
         EventModel(
             event_type=EventType.WORKFLOW_FAILED,
@@ -508,10 +509,34 @@ def _complete_continue_independent_partial_failure_if_finished(
                 "completion_reason": (
                     WorkflowRunCompletionReason.PARTIAL_FAILURE.value
                 ),
+                **failure_summary,
             },
         )
     )
     return True
+
+
+def _continue_independent_failure_summary(
+    node_runs: list[NodeRun],
+) -> dict[str, list[str]]:
+    failed_nodes = [
+        node for node in node_runs if node.status == NodeRunStatus.FAILED.value
+    ]
+    skipped_nodes = [
+        node for node in node_runs if node.status == NodeRunStatus.SKIPPED.value
+    ]
+    failed_nodes.sort(key=lambda node: node.node_instance_id)
+    skipped_nodes.sort(key=lambda node: node.node_instance_id)
+    return {
+        "failed_node_instance_ids": [
+            node.node_instance_id for node in failed_nodes
+        ],
+        "failed_node_run_ids": [node.node_run_id for node in failed_nodes],
+        "skipped_node_instance_ids": [
+            node.node_instance_id for node in skipped_nodes
+        ],
+        "skipped_node_run_ids": [node.node_run_id for node in skipped_nodes],
+    }
 
 
 def _complete_empty_workflow(

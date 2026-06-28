@@ -2687,6 +2687,8 @@ def test_workflow_process_continue_independent_fails_after_unrelated_ready_node(
         "WORKFLOW_FAILED",
     ]
     assert events[-1].payload["completion_reason"] == "PARTIAL_FAILURE"
+    assert events[-1].payload["failed_node_instance_ids"] == ["source_b"]
+    assert events[-1].payload["skipped_node_instance_ids"] == ["merge"]
 
 
 def test_workflow_process_ignores_stale_executor_result_without_failing(
