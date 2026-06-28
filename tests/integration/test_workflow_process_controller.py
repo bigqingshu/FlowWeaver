@@ -8,7 +8,12 @@ from alembic.config import Config
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
-from flowweaver.protocols.enums import NodeRunStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    NodeResultStatus,
+    NodeRunStatus,
+    WorkflowRunStatus,
+)
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     apply_node_success,
@@ -16,6 +21,7 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
 
 
 def migrate(database_path: Path) -> None:
@@ -54,6 +60,33 @@ def definition() -> dict:
                 "target_node_id": "transform",
                 "target_port": "in",
             }
+        ],
+    }
+
+
+def fork_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {"node_instance_id": "a", "node_type": "core.a", "node_version": "1.0"},
+            {"node_instance_id": "b", "node_type": "core.b", "node_version": "1.0"},
+            {"node_instance_id": "c", "node_type": "core.c", "node_version": "1.0"},
+        ],
+        "connections": [
+            {
+                "connection_id": "ab",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "b",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "ac",
+                "source_node_id": "a",
+                "source_port": "out",
+                "target_node_id": "c",
+                "target_port": "in",
+            },
         ],
     }
 
@@ -195,6 +228,164 @@ def test_recover_ready_nodes_uses_persisted_state(tmp_path: Path) -> None:
 
     assert [node.node_instance_id for node in recovered] == ["transform"]
     assert recovered[0].status == NodeRunStatus.READY.value
+
+
+def test_ready_queue_uses_dag_order_for_ready_nodes(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Ready queue workflow",
+        definition=fork_definition(),
+        workflow_id="workflow-ready-queue",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-ready-queue",
+    )
+    store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-ready-queue",
+    )
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(fork_definition()))
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert [item.node_run.node_instance_id for item in candidates] == ["a"]
+    assert candidates[0].input_refs == ()
+
+
+def test_ready_queue_waits_for_upstream_result_refs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    assert source is not None
+    assert transform is not None
+    store.update_node_run_status(
+        source.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        finished_at=utc_now(),
+        expected_state_version=source.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    store.update_node_run_status(
+        transform.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=transform.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert candidates == ()
+
+
+def test_ready_queue_passes_upstream_result_refs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    assert source is not None
+    assert transform is not None
+    running_source = store.update_node_run_status(
+        source.node_run_id,
+        NodeRunStatus.RUNNING,
+        expected_state_version=source.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    assert running_source is not None
+    task = NodeTaskModel(
+        task_id="source-task-1",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=source.node_run_id,
+        node_instance_id=source.node_instance_id,
+        node_type=source.node_type,
+        node_version="1.0",
+        attempt=source.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        result_id="source-result-1",
+        task_id=task.task_id,
+        node_run_id=source.node_run_id,
+        attempt=source.attempt,
+        executor_id="executor-1",
+        process_generation=process.process_generation,
+        status=NodeResultStatus.SUCCEEDED,
+        output_refs=["table-source-1", "table-source-2"],
+    )
+    store.create_node_task(task)
+    succeeded_source = store.record_node_task_result_and_update_node_run_status(
+        result,
+        NodeRunStatus.SUCCEEDED,
+        finished_at=result.finished_at,
+        expected_state_version=running_source.state_version,
+        allowed_source_statuses=[NodeRunStatus.RUNNING],
+    )
+    assert succeeded_source is not None
+    ready_transform = store.update_node_run_status(
+        transform.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=transform.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert ready_transform is not None
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
+    assert candidates[0].input_refs == ("table-source-1", "table-source-2")
 
 
 def test_all_successful_nodes_complete_workflow(tmp_path: Path) -> None:

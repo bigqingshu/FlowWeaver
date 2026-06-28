@@ -48,6 +48,7 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
     NodeTaskTimeoutStatus,
 )
+from flowweaver.workflow_process.ready_queue import collect_ready_node_candidates
 
 CleanupStagingForNode = Callable[[str, str], None]
 
@@ -372,37 +373,21 @@ def _dispatch_ready_nodes(
     if process_generation is None:
         return 0
     dispatched_count = 0
-    ready_nodes = [
-        node_run
-        for node_run in store.list_node_runs(workflow_run_id)
-        if node_run.status == NodeRunStatus.READY.value
-    ]
-    for node_run in ready_nodes:
-        dag_node = next(
-            (
-                node
-                for node in dag.nodes
-                if node.node_instance_id == node_run.node_instance_id
-            ),
-            None,
-        )
-        if dag_node is None:
-            continue
-        input_refs = _input_refs_for_ready_node(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            dag=dag,
-            node_instance_id=node_run.node_instance_id,
-        )
-        if input_refs is None:
-            continue
+    ready_candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+    )
+    for candidate in ready_candidates:
         task = task_manager.submit_ready_node(
             workflow_run_id=workflow_run_id,
             workflow_process_id=workflow_process_id,
             process_generation=process_generation,
-            node_instance_id=node_run.node_instance_id,
-            input_refs=input_refs,
-            timeout_seconds=_timeout_seconds_from_node_config(dag_node.config),
+            node_instance_id=candidate.node_run.node_instance_id,
+            input_refs=list(candidate.input_refs),
+            timeout_seconds=_timeout_seconds_from_node_config(
+                candidate.dag_node.config
+            ),
         )
         if task is None:
             continue
@@ -410,8 +395,8 @@ def _dispatch_ready_nodes(
         _configure_executor_event_handler(
             executor,
             store=store,
-            task_manager=task_manager,
             workflow_process_id=workflow_process_id,
+            task_manager=task_manager,
             process_generation=process_generation,
         )
         try:
@@ -727,36 +712,6 @@ def _timeout_seconds_from_node_config(config: dict[str, object]) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         return 60
     return max(0, value)
-
-
-def _input_refs_for_ready_node(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    dag: WorkflowDag,
-    node_instance_id: str,
-) -> list[str] | None:
-    dag_node = next(
-        (node for node in dag.nodes if node.node_instance_id == node_instance_id),
-        None,
-    )
-    if dag_node is None:
-        return None
-    input_refs: list[str] = []
-    for upstream_node_id in dag_node.upstream_node_ids:
-        upstream_node = store.get_node_run_for_instance(
-            workflow_run_id=workflow_run_id,
-            node_instance_id=upstream_node_id,
-        )
-        if upstream_node is None:
-            return None
-        result = store.get_latest_succeeded_node_task_result_for_node_run(
-            upstream_node.node_run_id
-        )
-        if result is None:
-            return None
-        input_refs.extend(result.output_refs)
-    return input_refs
 
 
 def _configure_executor_event_handler(
