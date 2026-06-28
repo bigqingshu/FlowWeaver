@@ -59,6 +59,24 @@ def test_valid_dag_passes_validation() -> None:
     assert result.errors == []
 
 
+def test_reserved_skip_dependents_policy_is_rejected() -> None:
+    result = validate_workflow_definition(
+        {
+            "schema_version": "1.0",
+            "nodes": [],
+            "connections": [],
+            "failure_policy": {"mode": "SKIP_DEPENDENTS"},
+        },
+        registry(),
+    )
+
+    assert result.valid is False
+    assert [(error.code, error.path) for error in result.errors] == [
+        ("UNAVAILABLE_FAILURE_POLICY", "failure_policy.mode")
+    ]
+    assert "reserved and not available yet" in result.errors[0].message
+
+
 def test_cycle_is_rejected() -> None:
     node_registry = registry()
     node_registry.register(

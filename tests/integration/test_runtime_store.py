@@ -11,7 +11,13 @@ from alembic.config import Config
 from sqlalchemy import text
 
 from flowweaver.common.time import utc_now
-from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
+from flowweaver.engine.runtime_store import (
+    InputSnapshotEntry,
+    NodeRun,
+    RuntimeStore,
+    WorkflowRun,
+    sqlite_url,
+)
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
@@ -52,10 +58,97 @@ def foreign_keys(database_path: Path, table_name: str) -> set[tuple[str, str, st
     return {(row[3], row[2], row[4]) for row in rows}
 
 
+def indexes(database_path: Path, table_name: str) -> dict[str, list[str]]:
+    with sqlite3.connect(database_path) as connection:
+        index_rows = connection.execute(f"PRAGMA index_list({table_name})").fetchall()
+        result = {}
+        for index_row in index_rows:
+            index_name = index_row[1]
+            column_rows = connection.execute(
+                f"PRAGMA index_info({index_name})"
+            ).fetchall()
+            result[index_name] = [column_row[2] for column_row in column_rows]
+    return result
+
+
 def column_names(database_path: Path, table_name: str) -> set[str]:
     with sqlite3.connect(database_path) as connection:
         rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
     return {row[1] for row in rows}
+
+
+def row_count(database_path: Path, table_name: str) -> int:
+    with sqlite3.connect(database_path) as connection:
+        row = connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+        return int(row[0])
+
+
+def make_table_ref(
+    *,
+    table_ref_id: str,
+    workflow_run_id: str,
+    node_run_id: str,
+    logical_table_id: str,
+    version: int,
+    mutability: TableMutability = TableMutability.PUBLISHED_IMMUTABLE,
+    lifecycle_status: LifecycleStatus = LifecycleStatus.PUBLISHED,
+) -> TableRefModel:
+    return TableRefModel(
+        table_ref_id=table_ref_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        scope=TableScope.WORKFLOW_SCOPE,
+        mutability=mutability,
+        provider_id="sqlite_runtime",
+        resource_profile_id=None,
+        mount_id=None,
+        logical_table_id=logical_table_id,
+        opaque_handle={
+            "database_path": "runtime/run.db",
+            "table_name": f"{logical_table_id}_v{version}",
+        },
+        schema=[
+            FieldSchemaModel(
+                field_id=f"{logical_table_id}-field-1",
+                name="amount",
+                data_type="FLOAT",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+        schema_fingerprint=f"{logical_table_id}-fingerprint-{version}",
+        version=version,
+        capabilities={"READ"},
+        lifecycle_status=lifecycle_status,
+        created_by_workflow_run_id=workflow_run_id,
+        created_by_node_run_id=node_run_id,
+        created_at=utc_now(),
+    )
+
+
+def create_producer_context(
+    store: RuntimeStore,
+    *,
+    workflow_id: str = "workflow-1",
+    workflow_run_id: str = "run-1",
+    node_run_id: str = "node-1",
+) -> tuple[WorkflowRun, NodeRun]:
+    workflow = store.create_workflow_definition(
+        name=f"Producer workflow {workflow_id}",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id=workflow_id,
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id=workflow_run_id,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id=f"{workflow_id}-producer-node",
+        node_type="builtin.producer",
+        node_run_id=node_run_id,
+    )
+    return run, node
 
 
 def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
@@ -81,6 +174,56 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "audit_events",
         "runtime_events",
     }.issubset(table_names(database_path))
+
+
+def test_shared_publication_prerequisite_schema_is_available(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+
+    migrate(database_path)
+
+    assert column_names(database_path, "shared_publications") == {
+        "publication_id",
+        "share_name",
+        "publication_version",
+        "producer_workflow_id",
+        "producer_run_id",
+        "status",
+        "input_snapshot_id",
+        "retention_policy_json",
+        "created_at",
+    }
+    assert column_names(database_path, "shared_publication_members") == {
+        "publication_id",
+        "export_name",
+        "table_ref_id",
+        "exact_table_version",
+    }
+    assert column_names(database_path, "input_snapshots") == {
+        "input_snapshot_id",
+        "workflow_run_id",
+        "snapshot_json",
+        "created_at",
+    }
+    assert column_names(database_path, "read_leases") == {
+        "lease_id",
+        "publication_id",
+        "publication_version",
+        "consumer_workflow_run_id",
+        "selected_members_json",
+        "acquired_at",
+        "expires_at",
+        "released_at",
+    }
+    assert {
+        ("publication_id", "shared_publications", "publication_id"),
+        ("table_ref_id", "data_refs", "table_ref_id"),
+    }.issubset(foreign_keys(database_path, "shared_publication_members"))
+    assert ["share_name", "publication_version"] in indexes(
+        database_path,
+        "shared_publications",
+    ).values()
 
 
 def test_workflow_run_foreign_keys_target_canonical_tables(tmp_path: Path) -> None:
@@ -852,6 +995,435 @@ def test_runtime_store_table_ref_round_trip(tmp_path: Path) -> None:
     loaded = store.get_table_ref("table-1")
 
     assert loaded == table_ref
+
+
+def test_runtime_store_shared_publication_round_trip_and_latest(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Producer workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="producer-node",
+        node_type="builtin.producer",
+        node_run_id="node-1",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v3",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=3,
+    )
+    customers = make_table_ref(
+        table_ref_id="table-customers-v5",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="customers",
+        version=5,
+    )
+    store.register_table_ref(orders)
+    store.register_table_ref(customers)
+
+    first = store.create_shared_publication(
+        publication_id="publication-1",
+        share_name="daily_report",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={
+            "orders": orders.table_ref_id,
+            "customers": customers.table_ref_id,
+        },
+        retention_policy={"retention_seconds": 3600},
+    )
+    second = store.create_shared_publication(
+        publication_id="publication-2",
+        share_name="daily_report",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    assert first.publication_version == 1
+    assert first.status == "PUBLISHED"
+    assert first.retention_policy == {"retention_seconds": 3600}
+    assert [
+        (member.export_name, member.table_ref_id, member.exact_table_version)
+        for member in first.members
+    ] == [
+        ("customers", customers.table_ref_id, 5),
+        ("orders", orders.table_ref_id, 3),
+    ]
+    assert second.publication_version == 2
+    assert store.get_shared_publication("publication-1") == first
+    assert store.get_shared_publication_version(
+        share_name="daily_report",
+        publication_version=1,
+    ) == first
+    assert store.get_latest_shared_publication("daily_report") == second
+
+
+def test_runtime_store_shared_publication_rejects_missing_member_atomically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, _node = create_producer_context(store)
+
+    with pytest.raises(ValueError, match="TableRef not found: missing-table"):
+        store.create_shared_publication(
+            publication_id="publication-1",
+            share_name="daily_report",
+            producer_workflow_id="workflow-1",
+            producer_run_id=run.workflow_run_id,
+            members={
+                "orders": "missing-table",
+            },
+        )
+
+    assert store.get_shared_publication("publication-1") is None
+    assert row_count(database_path, "shared_publications") == 0
+    assert row_count(database_path, "shared_publication_members") == 0
+
+
+def test_runtime_store_shared_publication_rejects_unpublished_member_atomically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    table_ref = make_table_ref(
+        table_ref_id="table-staging",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+        mutability=TableMutability.WORKING_MUTABLE,
+        lifecycle_status=LifecycleStatus.STAGING,
+    )
+    store.register_table_ref(table_ref)
+
+    with pytest.raises(
+        ValueError,
+        match="Shared publication member must be PUBLISHED: table-staging",
+    ):
+        store.create_shared_publication(
+            publication_id="publication-1",
+            share_name="daily_report",
+            producer_workflow_id="workflow-1",
+            producer_run_id=run.workflow_run_id,
+            members={"orders": table_ref.table_ref_id},
+        )
+
+    assert store.get_shared_publication("publication-1") is None
+    assert row_count(database_path, "shared_publications") == 0
+    assert row_count(database_path, "shared_publication_members") == 0
+
+
+def test_runtime_store_shared_publication_rejects_mutable_member_atomically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    table_ref = make_table_ref(
+        table_ref_id="table-mutable",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+        mutability=TableMutability.WORKING_MUTABLE,
+        lifecycle_status=LifecycleStatus.PUBLISHED,
+    )
+    store.register_table_ref(table_ref)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Shared publication member must be PUBLISHED_IMMUTABLE: "
+            "table-mutable"
+        ),
+    ):
+        store.create_shared_publication(
+            publication_id="publication-1",
+            share_name="daily_report",
+            producer_workflow_id="workflow-1",
+            producer_run_id=run.workflow_run_id,
+            members={"orders": table_ref.table_ref_id},
+        )
+
+    assert store.get_shared_publication("publication-1") is None
+    assert row_count(database_path, "shared_publications") == 0
+    assert row_count(database_path, "shared_publication_members") == 0
+
+
+def test_runtime_store_shared_publication_rejects_cross_run_member_atomically(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, _producer_node = create_producer_context(store)
+    other_run, other_node = create_producer_context(
+        store,
+        workflow_id="workflow-2",
+        workflow_run_id="run-2",
+        node_run_id="node-2",
+    )
+    table_ref = make_table_ref(
+        table_ref_id="table-other-run",
+        workflow_run_id=other_run.workflow_run_id,
+        node_run_id=other_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(table_ref)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Shared publication member does not belong to producer run: "
+            "table-other-run"
+        ),
+    ):
+        store.create_shared_publication(
+            publication_id="publication-1",
+            share_name="daily_report",
+            producer_workflow_id="workflow-1",
+            producer_run_id=producer_run.workflow_run_id,
+            members={"orders": table_ref.table_ref_id},
+        )
+
+    assert store.get_shared_publication("publication-1") is None
+    assert row_count(database_path, "shared_publications") == 0
+    assert row_count(database_path, "shared_publication_members") == 0
+
+
+def test_runtime_store_shared_publication_rejects_mismatched_producer_workflow(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    table_ref = make_table_ref(
+        table_ref_id="table-orders",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(table_ref)
+
+    with pytest.raises(
+        ValueError,
+        match="Producer run does not belong to workflow: run-1",
+    ):
+        store.create_shared_publication(
+            publication_id="publication-1",
+            share_name="daily_report",
+            producer_workflow_id="workflow-other",
+            producer_run_id=run.workflow_run_id,
+            members={"orders": table_ref.table_ref_id},
+        )
+
+    assert store.get_shared_publication("publication-1") is None
+    assert row_count(database_path, "shared_publications") == 0
+    assert row_count(database_path, "shared_publication_members") == 0
+
+
+def test_runtime_store_input_snapshot_round_trip_and_workflow_run_link(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    customers = make_table_ref(
+        table_ref_id="table-customers-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="customers",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    store.register_table_ref(customers)
+    v1 = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={
+            "orders": orders.table_ref_id,
+            "customers": customers.table_ref_id,
+        },
+    )
+    v2 = store.create_shared_publication(
+        publication_id="publication-v2",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    snapshot = store.create_input_snapshot(
+        input_snapshot_id="snapshot-1",
+        workflow_run_id=consumer_run.workflow_run_id,
+        inputs=[
+            InputSnapshotEntry(
+                source_name="daily_report",
+                publication_id=v1.publication_id,
+                publication_version=v1.publication_version,
+                selected_members=("orders", "customers"),
+            )
+        ],
+    )
+
+    assert v1.publication_version == 1
+    assert v2.publication_version == 2
+    assert snapshot.inputs == (
+        InputSnapshotEntry(
+            source_name="daily_report",
+            publication_id="publication-v1",
+            publication_version=1,
+            selected_members=("orders", "customers"),
+        ),
+    )
+    assert store.get_input_snapshot("snapshot-1") == snapshot
+    loaded_consumer_run = store.get_workflow_run(consumer_run.workflow_run_id)
+    assert loaded_consumer_run is not None
+    assert loaded_consumer_run.input_snapshot_id == snapshot.input_snapshot_id
+    assert store.get_latest_shared_publication("daily_report") == v2
+    assert store.get_input_snapshot("snapshot-1") == snapshot
+
+
+def test_runtime_store_input_snapshot_rejects_missing_workflow_run(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+
+    with pytest.raises(ValueError, match="Workflow run not found: missing-run"):
+        store.create_input_snapshot(
+            input_snapshot_id="snapshot-1",
+            workflow_run_id="missing-run",
+            inputs=[],
+        )
+
+    assert store.get_input_snapshot("snapshot-1") is None
+    assert row_count(database_path, "input_snapshots") == 0
+
+
+def test_runtime_store_input_snapshot_rejects_missing_publication(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    consumer_run, _consumer_node = create_producer_context(store)
+
+    with pytest.raises(
+        ValueError,
+        match="Input snapshot publication not found: missing-publication",
+    ):
+        store.create_input_snapshot(
+            input_snapshot_id="snapshot-1",
+            workflow_run_id=consumer_run.workflow_run_id,
+            inputs=[
+                InputSnapshotEntry(
+                    source_name="daily_report",
+                    publication_id="missing-publication",
+                    publication_version=1,
+                    selected_members=("orders",),
+                )
+            ],
+        )
+
+    assert store.get_input_snapshot("snapshot-1") is None
+    assert row_count(database_path, "input_snapshots") == 0
+    loaded_run = store.get_workflow_run(consumer_run.workflow_run_id)
+    assert loaded_run is not None
+    assert loaded_run.input_snapshot_id is None
+
+
+def test_runtime_store_input_snapshot_rejects_publication_version_mismatch(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    producer_run, producer_node = create_producer_context(store)
+    consumer_run, _consumer_node = create_producer_context(
+        store,
+        workflow_id="workflow-consumer",
+        workflow_run_id="run-consumer",
+        node_run_id="node-consumer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id=producer_run.workflow_run_id,
+        node_run_id=producer_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    publication = store.create_shared_publication(
+        publication_id="publication-v1",
+        share_name="daily_report",
+        producer_workflow_id="workflow-1",
+        producer_run_id=producer_run.workflow_run_id,
+        members={"orders": orders.table_ref_id},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Input snapshot publication version mismatch: publication-v1",
+    ):
+        store.create_input_snapshot(
+            input_snapshot_id="snapshot-1",
+            workflow_run_id=consumer_run.workflow_run_id,
+            inputs=[
+                InputSnapshotEntry(
+                    source_name="daily_report",
+                    publication_id=publication.publication_id,
+                    publication_version=publication.publication_version + 1,
+                    selected_members=("orders",),
+                )
+            ],
+        )
+
+    assert store.get_input_snapshot("snapshot-1") is None
+    assert row_count(database_path, "input_snapshots") == 0
+    loaded_run = store.get_workflow_run(consumer_run.workflow_run_id)
+    assert loaded_run is not None
+    assert loaded_run.input_snapshot_id is None
 
 
 def test_runtime_event_sequence_numbers_are_persisted(tmp_path: Path) -> None:

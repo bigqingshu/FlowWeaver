@@ -177,6 +177,28 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
     assert deleted == {"workflow_id": workflow_id, "deleted": True}
 
 
+def test_create_workflow_rejects_reserved_skip_dependents_policy(
+    tmp_path: Path,
+) -> None:
+    client, _store, _container = make_client(tmp_path)
+
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": "Reserved failure policy",
+            "definition": valid_definition()
+            | {"failure_policy": {"mode": "SKIP_DEPENDENTS"}},
+        },
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    error = response_error(response)
+    assert error["error_code"] == "WORKFLOW_VALIDATION_FAILED"
+    assert error["details"]["errors"][0]["code"] == "UNAVAILABLE_FAILURE_POLICY"
+    assert error["details"]["errors"][0]["path"] == "failure_policy.mode"
+
+
 def test_workflow_not_found_uses_error_envelope(tmp_path: Path) -> None:
     client, _store, _container = make_client(tmp_path)
 

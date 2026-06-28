@@ -7,7 +7,11 @@ from pydantic import ValidationError
 
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
 from flowweaver.protocols.base import StrictModel
-from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow.definition import (
+    UNAVAILABLE_FAILURE_POLICY_MODES,
+    WorkflowDefinitionModel,
+    failure_policy_unavailable_message,
+)
 
 
 class WorkflowValidationIssue(StrictModel):
@@ -45,6 +49,17 @@ def validate_workflow_definition(
         )
 
     errors: list[WorkflowValidationIssue] = []
+    if model.failure_policy.mode in UNAVAILABLE_FAILURE_POLICY_MODES:
+        errors.append(
+            WorkflowValidationIssue(
+                code="UNAVAILABLE_FAILURE_POLICY",
+                path="failure_policy.mode",
+                message=failure_policy_unavailable_message(
+                    model.failure_policy.mode
+                ),
+            )
+        )
+
     node_ids = [node.node_instance_id for node in model.nodes]
     node_id_set = set(node_ids)
     if len(node_ids) != len(node_id_set):

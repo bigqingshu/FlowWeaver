@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已实现第一阶段的阶段 A、阶段 B、阶段 C 和阶段 C.5 的控制面基础收口，并已进入阶段 D 的 WorkflowRunProcess 第一小步。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界和 I.3 `InputSnapshot` Store 边界，尚未接入读取租约、共享表节点和主循环执行。
 
 阶段 A 范围包括：
 
@@ -58,7 +58,215 @@
 - 运行进程心跳、取消请求和失联识别
 - 空工作流可启动并完成
 
-尚未完成 WorkflowRunProcess 的完整 DAG 调度、NodeExecutor、SQLite 运行表数据面、共享表执行逻辑、权限审计服务和 UI。
+阶段 E 到阶段 H 已完成或收口的范围包括：
+
+- NodeTask / NodeExecutor 最小任务模型
+- NodeTaskResult 应用、迟到结果拒绝、generation / attempt / executor 边界
+- heartbeat / progress 在 executor 执行期间实时上报
+- 异常退出、超时、取消和 STAGING 清理边界
+- 真实子进程 IPC 往返和单子进程客户端接入主循环
+- READY 队列、输入 `TableRef` / `input_refs` 传递和下游推进
+- `ImmediateNodeTaskExecutionPool` 与显式 `threaded` 模式配置
+- `max_concurrent_node_tasks` 保守配置，默认仍为 `1`
+- 多 READY 并发完成顺序、并行失败隔离和执行池 close 边界
+- `CONTINUE_INDEPENDENT` 失败分支隔离与 `PARTIAL_FAILURE` 汇总
+- `SKIP_DEPENDENTS` 明确保留但不可用，显式配置时拒绝
+
+已具备阶段 I 的前置基础：
+
+- 数据库模型和迁移中已有 `shared_publications`、`shared_publication_members`、`input_snapshots`、`read_leases`
+- `RuntimeStore` 已具备 `TableRef` 注册、查询和 STAGING 释放能力
+- `RuntimeStore` 已具备 `SharedPublication` 创建、发布输入校验、版本分配和查询能力
+- `RuntimeStore` 已具备 `InputSnapshot` 创建、查询和 workflow run 关联能力
+- `RuntimeDataRegistry` 已具备单表 STAGING 注册、发布为 PUBLISHED、按 workflow/node 查询和节点失败清理
+- `TableLeaseManager` 已具备表级 READ / WRITE 租约基础能力
+- EngineHost、Supervisor、WorkflowRunProcess 和默认 NodeExecutor 子进程入口已能串通
+
+尚未完成：
+
+- `ReadLease` 的 RuntimeStore 服务接口
+- 读取共享表版本的 LATEST / EXACT_VERSION 解析
+- 发布共享表节点和读取共享表节点
+- 工作流结束后的共享表租约释放与生命周期清理
+- 权限审计服务和 UI
+
+## 阶段 I 计划
+
+阶段 I 对应第一阶段规范中的“共享表”部分，目标是验证：
+
+```text
+工作流A发布两张表
+工作流B一次读取完整版本
+A发布V2后B当前运行仍固定V1
+租约释放后状态正确
+```
+
+结合当前代码，建议按以下小步执行。
+
+执行方向总览：
+
+| 小步 | 执行方向 | 主要产出 | 暂不进入 |
+| --- | --- | --- | --- |
+| I.0 | 语义和测试边界 | 阶段 I 最小语义、测试夹具和不做事项固定 | 运行时代码实现 |
+| I.1 | Store 读写模型 | `SharedPublication` 与成员表的创建、版本分配、查询接口 | 节点执行和主循环接入 |
+| I.2 | 原子发布边界 | 多成员发布的校验和同事务落库 | 读取节点、租约清理 |
+| I.3 | 固定读取版本 | `InputSnapshot` 记录和 workflow run 关联 | 完整血缘、跨工作流触发 |
+| I.4 | 读取租约边界 | `ReadLease` 创建、查询、释放 | 复杂 DependencyPin |
+| I.5 | 读取共享表服务 | `LATEST` / `EXACT_VERSION` 解析和一次性完整返回 | 更多版本等待策略 |
+| I.6 | 节点骨架 | 发布共享表节点、读取共享表节点的最小执行入口 | UI 配置器 |
+| I.7 | 主循环接入 | 共享表节点可在 WorkflowRunProcess 中执行 | EngineHost 复制大表数据 |
+| I.8 | 生命周期收口 | workflow 结束时释放读取租约 | 删除已发布真实数据 |
+| I.9 | 阶段验收 | A 发布 V1/V2、B 固定 V1、租约释放的端到端测试 | 阶段 J 权限审计 |
+
+建议执行方向：
+
+1. 先做 I.0，写清阶段 I 的最小测试夹具和模型边界，避免把讨论文档中的扩展策略提前实现。
+2. 然后做 I.1 到 I.2，先把 `SharedPublication` 的 Store 层和多表原子发布打稳。
+3. 再做 I.3 到 I.5，补齐读取固定版本需要的 `InputSnapshot`、`ReadLease` 和读取服务。
+4. 最后做 I.6 到 I.9，把能力接到节点和 WorkflowRunProcess，再做生命周期与总体验收。
+
+当前最推荐的第一步是 I.0。如果已经确认不需要再补文档边界，也可以直接进入 I.1，但仍应保持 Store 层小步，不先做节点或主循环接入。
+
+### I.0：边界确认
+
+范围：
+
+- 继续使用现有 `shared_publications`、`shared_publication_members`、`input_snapshots`、`read_leases` 表结构
+- 第一阶段只支持 `LATEST` 和 `EXACT_VERSION`
+- 不实现 `NEXT_VERSION`、`NEWER_THAN_CURRENT`、`SAME_AS_UPSTREAM`、`FOLLOW_LINEAGE`
+- 不实现触发下游工作流
+- 不引入跨数据库事务或完整 DependencyPin
+
+验收：
+
+- 文档和测试用例明确阶段 I 的最小语义
+- 不改变阶段 H 既有调度、取消和失败策略行为
+
+### I.1：SharedPublication Store 边界
+
+范围：
+
+- 增加共享发布记录的数据模型或返回对象
+- 支持按 `share_name` 分配递增 `publication_version`
+- 支持原子写入 publication 与 members
+- 支持按 id、按 `share_name + version`、按 latest 查询
+
+验收：
+
+- 创建包含两张表的 publication 后，members 要么全部存在，要么全部不存在
+- 同一 `share_name` 的版本单调递增
+
+### I.2：发布输入校验与多表原子发布
+
+范围：
+
+- 校验所有成员 `TableRef` 存在
+- 固定每个 member 的 `exact_table_version`
+- 将发布状态最小落为 `PUBLISHED`
+- 写入 `retention_policy_json`
+
+验收：
+
+- 任一成员不存在时不产生半套 publication
+- 发布成功后可完整读回两张成员表
+
+### I.3：InputSnapshot Store 边界
+
+范围：
+
+- 记录一次 workflow run 实际读取的 publication 版本和成员选择
+- 支持把 `workflow_runs.input_snapshot_id` 关联到当前 run
+- snapshot 内容用 JSON 保留可扩展结构
+
+验收：
+
+- workflow B 读取 A@V1 后，snapshot 固定为 A@V1
+- 后续 A 发布 V2 不改变 B 已保存的 snapshot
+
+### I.4：ReadLease Store 边界
+
+范围：
+
+- 为读取 workflow run 创建 read lease
+- 记录 `publication_id`、`publication_version`、`selected_members`
+- 支持释放 lease
+- 支持查询 active / released 状态
+
+验收：
+
+- 读取共享表时产生 read lease
+- workflow 释放后 lease 状态正确
+
+### I.5：读取共享表服务
+
+范围：
+
+- 支持 `LATEST` 解析为当前 latest publication
+- 支持 `EXACT_VERSION` 读取指定版本
+- 返回完整 `TableRef` 列表、`InputSnapshot` 和 `ReadLease`
+
+验收：
+
+- B 一次读取完整两张表
+- A 发布 V2 后，B 当前运行仍固定 V1
+- 不会出现读取一张 V1、一张 V2 的半套版本
+
+### I.6：共享表节点最小骨架
+
+范围：
+
+- 增加发布共享表节点的最小配置和执行入口
+- 增加读取共享表节点的最小配置和执行入口
+- 节点输出继续通过 `NodeTaskResult.output_refs` 传递引用
+
+验收：
+
+- 发布节点可把输入 TableRef 发布为 SharedPublication
+- 读取节点可输出固定版本 TableRef 列表
+
+### I.7：WorkflowRunProcess 接入
+
+范围：
+
+- 将共享表服务接入节点执行上下文
+- 保持 WorkflowRunProcess 只管 DAG、状态和任务分发
+- 不让 EngineHost 复制大表数据
+
+验收：
+
+- 现有普通节点和表节点测试不回退
+- 共享表节点可以在主循环中完成发布和读取
+
+### I.8：生命周期清理
+
+范围：
+
+- workflow 成功、失败、取消、ABORTED 时释放当前 run 的 read lease
+- 保留已发布版本，不在第一小步删除真实数据
+- 为后续 orphan / retention 清理预留接口
+
+验收：
+
+- workflow 结束后 read lease 可释放
+- 异常退出或失联后不会留下 active lease 误判
+
+### I.9：阶段 I 总体验收
+
+范围：
+
+- 工作流 A 生成并发布两张表为 V1
+- 工作流 B 读取 V1 并形成 InputSnapshot
+- 工作流 A 发布 V2
+- 工作流 B 当前运行仍读取 V1
+- B 结束后释放 ReadLease
+
+验收命令：
+
+```powershell
+.\python312\python.exe -m ruff check src tests migrations
+.\python312\python.exe -m mypy
+.\python312\python.exe -m pytest -q
+```
 
 ## 环境
 

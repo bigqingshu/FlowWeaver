@@ -14,6 +14,14 @@ class FailurePolicyMode(str, Enum):
     SKIP_DEPENDENTS = "SKIP_DEPENDENTS"
 
 
+UNAVAILABLE_FAILURE_POLICY_MODES = frozenset({FailurePolicyMode.SKIP_DEPENDENTS})
+
+
+def failure_policy_unavailable_message(mode: FailurePolicyMode | str) -> str:
+    value = mode.value if isinstance(mode, FailurePolicyMode) else mode
+    return f"{value} failure policy is reserved and not available yet"
+
+
 class FailurePolicyModel(StrictModel):
     mode: FailurePolicyMode = FailurePolicyMode.FAIL_FAST
 

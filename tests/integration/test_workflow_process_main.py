@@ -2691,6 +2691,48 @@ def test_workflow_process_continue_independent_fails_after_unrelated_ready_node(
     assert events[-1].payload["skipped_node_instance_ids"] == ["merge"]
 
 
+def test_workflow_process_rejects_reserved_skip_dependents_policy(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Reserved failure policy workflow",
+        definition=single_node_definition()
+        | {"failure_policy": {"mode": "SKIP_DEPENDENTS"}},
+        workflow_id="workflow-reserved-failure-policy",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-reserved-failure-policy",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-reserved-failure-policy",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: RecordingSuccessExecutor(),
+    )
+
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    assert exit_code == 1
+    assert loaded_run is not None
+    assert loaded_run.status == "FAILED"
+    assert loaded_run.error is not None
+    assert (
+        loaded_run.error["message"]
+        == "SKIP_DEPENDENTS failure policy is reserved and not available yet"
+    )
+    assert store.list_node_runs(run.workflow_run_id) == []
+    assert store.list_runtime_events() == []
+
+
 def test_workflow_process_ignores_stale_executor_result_without_failing(
     tmp_path: Path,
 ) -> None:

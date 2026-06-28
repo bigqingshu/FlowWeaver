@@ -42,7 +42,12 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskProgressPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.workflow.definition import FailurePolicyMode, WorkflowDefinitionModel
+from flowweaver.workflow.definition import (
+    UNAVAILABLE_FAILURE_POLICY_MODES,
+    FailurePolicyMode,
+    WorkflowDefinitionModel,
+    failure_policy_unavailable_message,
+)
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
@@ -269,6 +274,16 @@ def _run_workflow_process_loop(
             process_generation=process_generation,
         )
 
+    definition = WorkflowDefinitionModel.model_validate(revision.definition)
+    if definition.failure_policy.mode in UNAVAILABLE_FAILURE_POLICY_MODES:
+        return _fail(
+            store,
+            workflow_run_id,
+            process_id,
+            failure_policy_unavailable_message(definition.failure_policy.mode),
+            process_generation=process_generation,
+        )
+
     store.record_workflow_process_heartbeat(
         process_id,
         process_generation=process_generation,
@@ -292,7 +307,6 @@ def _run_workflow_process_loop(
         )
     )
 
-    definition = WorkflowDefinitionModel.model_validate(revision.definition)
     dag = build_workflow_dag(definition)
     if not dag.nodes:
         return _complete_empty_workflow(
