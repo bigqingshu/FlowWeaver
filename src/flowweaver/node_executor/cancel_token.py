@@ -26,3 +26,20 @@ class CancelToken:
     def reason(self) -> str | None:
         with self._reason_lock:
             return self._reason
+
+
+class NodeExecutionCancelled(RuntimeError):
+    pass
+
+
+class NodeExecutionContext:
+    def __init__(self, cancel_token: CancelToken) -> None:
+        self._cancel_token = cancel_token
+
+    def is_cancelled(self) -> bool:
+        return self._cancel_token.is_cancelled()
+
+    def check_cancelled(self) -> None:
+        if self.is_cancelled():
+            reason = self._cancel_token.reason or "NODE_TASK_CANCEL_REQUEST"
+            raise NodeExecutionCancelled(reason)

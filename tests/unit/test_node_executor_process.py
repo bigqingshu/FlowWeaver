@@ -11,6 +11,11 @@ from flowweaver.node_executor import (
     FakeNodeExecutor,
     NodeExecutorProcess,
 )
+from flowweaver.node_executor.cancel_token import (
+    CancelToken,
+    NodeExecutionCancelled,
+    NodeExecutionContext,
+)
 from flowweaver.node_executor.process import (
     EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE,
     run_node_executor_process,
@@ -35,6 +40,22 @@ def make_task() -> NodeTaskSubmitPayload:
         config={"rows": 3},
         timeout_seconds=60,
     )
+
+
+def test_node_execution_context_reports_cancel_request() -> None:
+    token = CancelToken()
+    context = NodeExecutionContext(token)
+
+    assert not context.is_cancelled()
+    token.request_cancel(reason="test-cancel")
+
+    assert context.is_cancelled()
+    try:
+        context.check_cancelled()
+    except NodeExecutionCancelled as exc:
+        assert str(exc) == "test-cancel"
+    else:
+        raise AssertionError("expected cancellation")
 
 
 def test_node_executor_process_accepts_and_completes_task_envelope() -> None:

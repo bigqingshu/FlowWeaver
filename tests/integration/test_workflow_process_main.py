@@ -252,6 +252,48 @@ class CloseableBlockingSuccessExecutor:
         return True
 
 
+class CooperativeCancelExecutor:
+    executor_id = "cooperative-cancel-executor"
+
+    def __init__(self) -> None:
+        self.started = Event()
+        self.closed = Event()
+        self.cancel_requested = Event()
+        self.cancelled_task_id: str | None = None
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self.started.set()
+        self.cancel_requested.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.CANCELLED,
+            error={
+                "message": "Node task cancelled cooperatively",
+                "reason": "WORKFLOW_CANCEL_REQUESTED",
+            },
+            started_at=now,
+            finished_at=now,
+        )
+
+    def request_cancel(
+        self,
+        task: NodeTaskModel,
+        *,
+        reason: str = "WORKFLOW_CANCEL_REQUESTED",
+    ) -> bool:
+        self.cancelled_task_id = task.task_id
+        self.cancel_requested.set()
+        return True
+
+    def close(self) -> None:
+        self.closed.set()
+
+
 class BlockingStagingExecutor:
     executor_id = "blocking-staging-executor"
 
@@ -1355,6 +1397,7 @@ def test_workflow_process_cancels_running_task_with_cancel_request(
                 process_id=process.process_id,
                 process_generation=process.process_generation,
                 heartbeat_interval_seconds=0,
+                cancel_grace_seconds=0.05,
                 executor_factory=lambda _task: executor,
             )
         )
@@ -1382,7 +1425,7 @@ def test_workflow_process_cancels_running_task_with_cancel_request(
     assert loaded_node.status == "CANCELLED"
     assert loaded_node.error == {
         "message": "Node task cancelled",
-        "reason": "WORKFLOW_CANCEL_REQUESTED",
+        "reason": "WORKFLOW_CANCEL_GRACE_EXPIRED",
     }
     assert store.get_latest_succeeded_node_task_result_for_node_run(
         loaded_node.node_run_id
@@ -1394,6 +1437,63 @@ def test_workflow_process_cancels_running_task_with_cancel_request(
         "NODE_PROGRESS",
         "WORKFLOW_CANCELLED",
     ]
+
+
+def test_workflow_process_accepts_cooperative_cancel_before_grace_expires(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cooperative execution cancel workflow",
+        definition=single_node_definition(),
+        workflow_id="workflow-cooperative-cancel",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cooperative-cancel",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-cooperative-cancel",
+    )
+    assert process is not None
+    executor = CooperativeCancelExecutor()
+    exit_codes: list[int] = []
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0,
+                cancel_grace_seconds=5,
+                executor_factory=lambda _task: executor,
+            )
+        )
+    )
+    worker.start()
+    try:
+        assert executor.started.wait(timeout=5)
+        store.request_workflow_process_cancel(run.workflow_run_id)
+        worker.join(timeout=5)
+    finally:
+        if worker.is_alive():
+            executor.close()
+            worker.join(timeout=5)
+
+    loaded_node = store.list_node_runs(run.workflow_run_id)[0]
+    loaded_workflow = store.get_workflow_run(run.workflow_run_id)
+    assert exit_codes == [0]
+    assert executor.cancel_requested.is_set()
+    assert executor.cancelled_task_id is not None
+    assert loaded_workflow is not None
+    assert loaded_workflow.status == "CANCELLED"
+    assert loaded_node.status == "CANCELLED"
+    assert loaded_node.error == {
+        "message": "Node task cancelled cooperatively",
+        "reason": "WORKFLOW_CANCEL_REQUESTED",
+    }
 
 
 def test_workflow_process_cleans_staging_refs_when_task_times_out(

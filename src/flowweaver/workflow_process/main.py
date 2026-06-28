@@ -4,6 +4,7 @@ import argparse
 import time
 import traceback
 from collections.abc import Callable
+from datetime import datetime
 from queue import Empty, Queue
 from threading import Thread
 from typing import NoReturn, Protocol, runtime_checkable
@@ -150,6 +151,7 @@ def run_workflow_process(
     event_sink: RuntimeEventSink | None = None,
     executor_factory: NodeExecutorFactory | None = None,
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
+    cancel_grace_seconds: float = 5.0,
     sleep_func: Callable[[float], None] = time.sleep,
 ) -> int:
     event_sink = event_sink or DatabaseEventSink(store)
@@ -170,6 +172,7 @@ def run_workflow_process(
             executor_factory=executor_factory,
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
+            cancel_grace_seconds=cancel_grace_seconds,
             sleep_func=sleep_func,
         )
     finally:
@@ -188,6 +191,7 @@ def _run_workflow_process_loop(
     executor_factory: NodeExecutorFactory,
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
+    cancel_grace_seconds: float,
     sleep_func: Callable[[float], None],
 ) -> int:
     if (
@@ -305,6 +309,7 @@ def _run_workflow_process_loop(
             executor_factory=executor_factory,
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
+            cancel_grace_seconds=cancel_grace_seconds,
             event_sink=event_sink,
         )
         if _workflow_run_is_terminal(store, workflow_run_id):
@@ -361,6 +366,7 @@ def _dispatch_ready_nodes(
     executor_factory: NodeExecutorFactory,
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
+    cancel_grace_seconds: float,
     event_sink: RuntimeEventSink,
 ) -> int:
     if process_generation is None:
@@ -424,6 +430,7 @@ def _dispatch_ready_nodes(
                 task_manager=task_manager,
                 executor=executor,
                 cleanup_staging_for_node=cleanup_staging_for_node,
+                cancel_grace_seconds=cancel_grace_seconds,
                 task=accepted,
             )
             if result is not None:
@@ -465,9 +472,11 @@ def _execute_node_task_with_supervision(
     task_manager: NodeTaskManager,
     executor: NodeExecutor,
     cleanup_staging_for_node: CleanupStagingForNode | None,
+    cancel_grace_seconds: float,
     task: NodeTaskModel,
 ) -> NodeTaskResultModel | None:
     results: Queue[NodeTaskResultModel | Exception] = Queue(maxsize=1)
+    cancel_requested_at: datetime | None = None
 
     def run_executor() -> None:
         try:
@@ -488,6 +497,24 @@ def _execute_node_task_with_supervision(
             timeout_seconds=poll_seconds,
         )
         if result is not None:
+            if _workflow_cancel_was_requested(
+                store=store,
+                workflow_process_id=workflow_process_id,
+            ) or cancel_requested_at is not None:
+                if cancel_requested_at is None:
+                    cancel_requested_at = utc_now()
+                    _mark_node_cancel_requested(
+                        store=store,
+                        task=task,
+                        executor_id=executor.executor_id,
+                    )
+                    _request_cancel(executor, task)
+                if result.status == NodeResultStatus.CANCELLED:
+                    return result
+                return _cancelled_task_result(
+                    task,
+                    executor_id=executor.executor_id,
+                )
             return result
         if not worker.is_alive():
             result = _get_node_task_execution_result(results, timeout_seconds=0)
@@ -525,10 +552,25 @@ def _execute_node_task_with_supervision(
             store=store,
             workflow_process_id=workflow_process_id,
         ):
-            _request_cancel(executor, task)
-            _close_executor(executor)
-            worker.join(timeout=0.2)
-            return _cancelled_task_result(task, executor_id=executor.executor_id)
+            if cancel_requested_at is None:
+                cancel_requested_at = utc_now()
+                _mark_node_cancel_requested(
+                    store=store,
+                    task=task,
+                    executor_id=executor.executor_id,
+                )
+                _request_cancel(executor, task)
+            if _cancel_grace_period_expired(
+                cancel_requested_at,
+                cancel_grace_seconds=cancel_grace_seconds,
+            ):
+                _close_executor(executor)
+                worker.join(timeout=0.2)
+                return _cancelled_task_result(
+                    task,
+                    executor_id=executor.executor_id,
+                    reason="WORKFLOW_CANCEL_GRACE_EXPIRED",
+                )
 
 
 def _get_node_task_execution_result(
@@ -567,6 +609,41 @@ def _workflow_cancel_was_requested(
     return process is not None and process.cancel_requested_at is not None
 
 
+def _mark_node_cancel_requested(
+    *,
+    store: RuntimeStore,
+    task: NodeTaskModel,
+    executor_id: str,
+) -> None:
+    node_run = store.get_node_run(task.node_run_id)
+    if node_run is None:
+        return
+    if node_run.status == NodeRunStatus.CANCEL_REQUESTED.value:
+        return
+    store.update_node_run_status(
+        task.node_run_id,
+        NodeRunStatus.CANCEL_REQUESTED,
+        executor_id=executor_id,
+        expected_state_version=node_run.state_version,
+        allowed_source_statuses=[
+            NodeRunStatus.RUNNING,
+            NodeRunStatus.LONG_RUNNING,
+        ],
+        owner_process_id=task.workflow_process_id,
+        process_generation=task.process_generation,
+    )
+
+
+def _cancel_grace_period_expired(
+    cancel_requested_at: datetime,
+    *,
+    cancel_grace_seconds: float,
+) -> bool:
+    return (
+        utc_now() - cancel_requested_at
+    ).total_seconds() >= cancel_grace_seconds
+
+
 def _request_cancel(
     executor: NodeExecutor,
     task: NodeTaskModel,
@@ -583,6 +660,7 @@ def _cancelled_task_result(
     task: NodeTaskModel,
     *,
     executor_id: str,
+    reason: str = "WORKFLOW_CANCEL_REQUESTED",
 ) -> NodeTaskResultModel:
     now = utc_now()
     return NodeTaskResultModel(
@@ -594,7 +672,7 @@ def _cancelled_task_result(
         status=NodeResultStatus.CANCELLED,
         error={
             "message": "Node task cancelled",
-            "reason": "WORKFLOW_CANCEL_REQUESTED",
+            "reason": reason,
         },
         started_at=now,
         finished_at=now,

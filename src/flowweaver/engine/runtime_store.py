@@ -173,10 +173,16 @@ _NODE_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
     NodeRunStatus.CANCELLED.value: (
         NodeRunStatus.RUNNING.value,
         NodeRunStatus.LONG_RUNNING.value,
+        NodeRunStatus.CANCEL_REQUESTED.value,
+    ),
+    NodeRunStatus.CANCEL_REQUESTED.value: (
+        NodeRunStatus.RUNNING.value,
+        NodeRunStatus.LONG_RUNNING.value,
     ),
     NodeRunStatus.TIMED_OUT.value: (
         NodeRunStatus.RUNNING.value,
         NodeRunStatus.LONG_RUNNING.value,
+        NodeRunStatus.CANCEL_REQUESTED.value,
     ),
 }
 _ACTIVE_WORKFLOW_PROCESS_STATUSES = frozenset(
@@ -191,6 +197,7 @@ _INTERRUPTED_NODE_STATUSES = frozenset(
         NodeRunStatus.QUEUED.value,
         NodeRunStatus.RUNNING.value,
         NodeRunStatus.LONG_RUNNING.value,
+        NodeRunStatus.CANCEL_REQUESTED.value,
     }
 )
 
@@ -902,6 +909,7 @@ class RuntimeStore:
                 .where(NodeRunRecord.status.in_([
                     NodeRunStatus.RUNNING.value,
                     NodeRunStatus.LONG_RUNNING.value,
+                    NodeRunStatus.CANCEL_REQUESTED.value,
                 ]))
                 .where(NodeRunRecord.executor_id == executor_id)
                 .where(NodeRunRecord.attempt == task.attempt)

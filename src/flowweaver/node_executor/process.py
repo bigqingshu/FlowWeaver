@@ -13,7 +13,7 @@ from flowweaver.node_executor.builtin_fault import (
     BUILTIN_FAULT_NODE_TYPES,
     BuiltinFaultNodeExecutor,
 )
-from flowweaver.node_executor.cancel_token import CancelToken
+from flowweaver.node_executor.cancel_token import CancelToken, NodeExecutionContext
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
@@ -45,6 +45,7 @@ class NodeExecutorProcess:
         self._active_task_ids: set[str] = set()
         self._active_task_correlations: dict[str, str] = {}
         self._cancel_tokens: dict[str, CancelToken] = {}
+        self._execution_contexts: dict[str, NodeExecutionContext] = {}
         self._pending_task_events: list[IPCEnvelope] = []
         self._state_lock = Lock()
 
@@ -145,9 +146,13 @@ class NodeExecutorProcess:
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
         executor = self._executor_for_task(task)
         with self._state_lock:
+            cancel_token = CancelToken()
             self._active_task_ids.add(task.task_id)
             self._active_task_correlations[task.task_id] = envelope.message_id
-            self._cancel_tokens[task.task_id] = CancelToken()
+            self._cancel_tokens[task.task_id] = cancel_token
+            self._execution_contexts[task.task_id] = NodeExecutionContext(
+                cancel_token
+            )
         self._pending_task_events = []
         accepted = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_ACCEPTED,
@@ -186,6 +191,7 @@ class NodeExecutorProcess:
                 self._active_task_ids.discard(task.task_id)
                 self._active_task_correlations.pop(task.task_id, None)
                 self._cancel_tokens.pop(task.task_id, None)
+                self._execution_contexts.pop(task.task_id, None)
             self._pending_task_events = []
         completed = IPCEnvelope(
             message_type=IPCMessageType.NODE_TASK_COMPLETED,
@@ -197,9 +203,12 @@ class NodeExecutorProcess:
         return (*accepted_events, *task_events, completed)
 
     def task_is_cancelled(self, task: NodeTaskModel) -> bool:
+        context = self.task_context(task)
+        return context is not None and context.is_cancelled()
+
+    def task_context(self, task: NodeTaskModel) -> NodeExecutionContext | None:
         with self._state_lock:
-            token = self._cancel_tokens.get(task.task_id)
-        return token is not None and token.is_cancelled()
+            return self._execution_contexts.get(task.task_id)
 
     def _handle_cancel_request(
         self,

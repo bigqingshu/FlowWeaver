@@ -233,6 +233,7 @@ class NodeTaskManager:
         if node_run.status not in {
             NodeRunStatus.RUNNING.value,
             NodeRunStatus.LONG_RUNNING.value,
+            NodeRunStatus.CANCEL_REQUESTED.value,
         }:
             return NodeTaskTimeoutResult(
                 NodeTaskTimeoutStatus.REJECTED_NODE_NOT_RUNNING,
@@ -363,6 +364,7 @@ class NodeTaskManager:
         if node_run.status not in {
             NodeRunStatus.RUNNING.value,
             NodeRunStatus.LONG_RUNNING.value,
+            NodeRunStatus.CANCEL_REQUESTED.value,
         }:
             return NodeTaskApplyResult(
                 NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
@@ -431,6 +433,7 @@ class NodeTaskManager:
             allowed_source_statuses=[
                 NodeRunStatus.RUNNING,
                 NodeRunStatus.LONG_RUNNING,
+                NodeRunStatus.CANCEL_REQUESTED,
             ],
             owner_process_id=task.workflow_process_id,
             process_generation=task.process_generation,

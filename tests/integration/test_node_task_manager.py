@@ -533,6 +533,42 @@ def test_late_result_cannot_revive_terminal_node(tmp_path: Path) -> None:
     assert len(store.list_runtime_events()) == event_count
 
 
+def test_success_result_is_rejected_after_cancel_requested(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    running_node = store.get_node_run(task.node_run_id)
+    assert running_node is not None
+    cancel_requested = store.update_node_run_status(
+        task.node_run_id,
+        NodeRunStatus.CANCEL_REQUESTED,
+        expected_state_version=running_node.state_version,
+        allowed_source_statuses=[NodeRunStatus.RUNNING],
+        owner_process_id=process.process_id,
+        process_generation=process.process_generation,
+    )
+    assert cancel_requested is not None
+    result = FakeNodeExecutor(executor_id="executor-1").execute(task)
+
+    rejected = manager.apply_result(result)
+
+    loaded_node = store.get_node_run(task.node_run_id)
+    assert rejected.status == NodeTaskApplyStatus.REJECTED_NODE_TERMINAL
+    assert loaded_node is not None
+    assert loaded_node.status == "CANCEL_REQUESTED"
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) is None
+
+
 def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     run, process, manager = create_running_process(store, linear_definition())

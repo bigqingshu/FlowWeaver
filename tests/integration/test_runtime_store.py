@@ -530,6 +530,76 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
     ) == result
 
 
+def test_runtime_store_records_cancelled_result_from_cancel_requested_node(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Atomic cancel result workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-1",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="node-1",
+        node_type="core.test",
+        node_run_id="node-run-1",
+        status=NodeRunStatus.CANCEL_REQUESTED,
+        executor_id="executor-1",
+    )
+    task = NodeTaskModel(
+        task_id="task-1",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    result = NodeTaskResultModel(
+        result_id="cancel-result-1",
+        task_id=task.task_id,
+        node_run_id=node.node_run_id,
+        attempt=node.attempt,
+        executor_id="executor-1",
+        process_generation=process.process_generation,
+        status=NodeResultStatus.CANCELLED,
+        error={"message": "cancelled"},
+    )
+    store.create_node_task(task)
+
+    updated = store.record_node_task_result_and_update_node_run_status(
+        result,
+        NodeRunStatus.CANCELLED,
+        finished_at=result.finished_at,
+        error=result.error,
+        expected_state_version=node.state_version,
+        allowed_source_statuses=[NodeRunStatus.CANCEL_REQUESTED],
+    )
+
+    assert updated is not None
+    assert updated.status == NodeRunStatus.CANCELLED.value
+    assert store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    ) == result
+
+
 def test_runtime_store_rolls_back_node_task_result_when_terminal_update_rejected(
     tmp_path: Path,
 ) -> None:
