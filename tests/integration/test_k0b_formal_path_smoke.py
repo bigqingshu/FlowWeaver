@@ -13,7 +13,11 @@ from flowweaver.common.config import EngineConfig
 from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowRun
 from flowweaver.engine.service_container import ServiceContainer
-from flowweaver.protocols.enums import LifecycleStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    WorkflowProcessStatus,
+    WorkflowRunStatus,
+)
 
 TOKEN = "test-token"
 
@@ -51,6 +55,7 @@ def wait_for_terminal_run(
     timeout_seconds: float = 10,
 ) -> WorkflowRun:
     deadline = time.monotonic() + timeout_seconds
+    terminal_run: WorkflowRun | None = None
     while time.monotonic() < deadline:
         container.supervisor.sweep_exited_children()
         container.supervisor.drain_runtime_events()
@@ -61,8 +66,25 @@ def wait_for_terminal_run(
             WorkflowRunStatus.CANCELLED.value,
             WorkflowRunStatus.ABORTED.value,
         }:
-            return run
+            terminal_run = run
+            process = store.get_workflow_process_for_run(workflow_run_id)
+            if process is None or process.status in {
+                WorkflowProcessStatus.EXITED.value,
+                WorkflowProcessStatus.FAILED.value,
+                WorkflowProcessStatus.LOST.value,
+            }:
+                return run
         time.sleep(0.05)
+    if terminal_run is not None:
+        process = store.get_workflow_process_for_run(workflow_run_id)
+        raise AssertionError(
+            {
+                "message": "Workflow run finished before process cleanup completed",
+                "workflow_run_id": workflow_run_id,
+                "run_status": terminal_run.status,
+                "process_status": process.status if process is not None else None,
+            }
+        )
     raise AssertionError(f"Workflow run did not finish: {workflow_run_id}")
 
 

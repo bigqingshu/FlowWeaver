@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L 已完成 L.0 桌面端运行入口与配置边界清单、L.1a 后端运行入口收口、L.1b 桌面端运行入口收口、L.1c 组合开发脚本边界、L.2 UI连接配置持久化边界、L.2a 连接配置模型与 Store 边界、L.2b UI接入前复核、L.2c UI启动加载/health成功保存 BaseUrl 和 L.2d 连接配置失败场景验收复核。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L 已完成 L.0 桌面端运行入口与配置边界清单、L.1a 后端运行入口收口、L.1b 桌面端运行入口收口、L.1c 组合开发脚本边界、L.2 UI连接配置持久化边界、L.2a 连接配置模型与 Store 边界、L.2b UI接入前复核、L.2c UI启动加载/health成功保存 BaseUrl、L.2d 连接配置失败场景验收复核和 L.3 正式路径烟雾清单。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
 
 阶段 A 范围包括：
 
@@ -106,7 +106,8 @@
 - L.2b 已新增 `FlowWeaver_阶段L.2b_UI接入前复核.md`，确认只加载/保存 BaseUrl，不接入 token 持久化
 - L.2c 已完成 UI启动加载 BaseUrl、health 成功后保存 BaseUrl 的最小接入
 - L.2d 已新增 `FlowWeaver_阶段L.2d_连接配置失败场景验收复核.md`，完成损坏配置、非法 URL 和保存失败场景复核
-- L.3 建议进入正式路径烟雾清单，覆盖空数据库、已有工作流和 EngineHost 重启三类验收
+- L.3 已新增 `FlowWeaver_阶段L.3_正式路径烟雾清单.md`，覆盖空数据库、已有工作流和 EngineHost 重启三类验收清单
+- L.3a 建议进入空数据库正式路径烟雾执行，只执行并记录空数据库场景
 
 ## 阶段 I 计划
 
