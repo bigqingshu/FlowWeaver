@@ -103,6 +103,8 @@ class EngineHostLaunchSpec:
 class DesktopLaunchSpec:
     command: tuple[str, ...]
     cwd: Path
+    stdout_path: Path
+    stderr_path: Path
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,8 @@ def build_desktop_launch_spec(layout: PortableLayout) -> DesktopLaunchSpec:
     return DesktopLaunchSpec(
         command=(str(layout.desktop_exe),),
         cwd=layout.desktop_dir,
+        stdout_path=layout.log_dir / "desktop.stdout.log",
+        stderr_path=layout.log_dir / "desktop.stderr.log",
     )
 
 
@@ -302,11 +306,6 @@ def start_enginehost_process(spec: EngineHostLaunchSpec) -> subprocess.Popen[byt
     spec.stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_file = spec.stdout_path.open("ab")
     stderr_file = spec.stderr_path.open("ab")
-    popen_kwargs = {}
-    if os.name == "nt":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        popen_kwargs["start_new_session"] = True
     try:
         return subprocess.Popen(
             spec.command,
@@ -314,11 +313,38 @@ def start_enginehost_process(spec: EngineHostLaunchSpec) -> subprocess.Popen[byt
             stdin=subprocess.DEVNULL,
             stdout=stdout_file,
             stderr=stderr_file,
-            **popen_kwargs,
+            **process_group_popen_kwargs(),
         )
     finally:
         stdout_file.close()
         stderr_file.close()
+
+
+def start_desktop_process(spec: DesktopLaunchSpec) -> subprocess.Popen[bytes]:
+    spec.stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_file = spec.stdout_path.open("ab")
+    stderr_file = spec.stderr_path.open("ab")
+    try:
+        try:
+            return subprocess.Popen(
+                spec.command,
+                cwd=spec.cwd,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                **process_group_popen_kwargs(),
+            )
+        except OSError as exc:
+            raise LauncherRuntimeError(f"Failed to start Desktop: {exc}") from exc
+    finally:
+        stdout_file.close()
+        stderr_file.close()
+
+
+def process_group_popen_kwargs() -> dict[str, object]:
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
 
 
 def enginehost_health_is_ok(base_url: str, *, timeout_seconds: float = 1.0) -> bool:
@@ -374,6 +400,25 @@ def stop_process(process: PollableProcess, *, timeout_seconds: float = 5.0) -> N
         process.wait(timeout=timeout_seconds)
 
 
+def wait_for_desktop_exit(
+    enginehost_process: PollableProcess,
+    desktop_process: PollableProcess,
+    *,
+    poll_interval_seconds: float = 0.5,
+) -> int:
+    while True:
+        desktop_exit_code = desktop_process.poll()
+        if desktop_exit_code is not None:
+            return desktop_exit_code
+        enginehost_exit_code = enginehost_process.poll()
+        if enginehost_exit_code is not None:
+            raise LauncherRuntimeError(
+                "EngineHost exited while Desktop was running. "
+                f"Exit code: {enginehost_exit_code}"
+            )
+        time.sleep(poll_interval_seconds)
+
+
 def handle_interrupt_signal(signum: int, frame: object) -> None:
     raise KeyboardInterrupt
 
@@ -385,28 +430,25 @@ def install_launcher_signal_handlers() -> None:
 
 
 def run_launch_plan(plan: PortableLaunchPlan) -> int:
-    if plan.desktop is not None:
-        raise LauncherConfigurationError(
-            "Desktop launch is implemented in a later stage. Use --no-desktop."
-        )
-
     append_launcher_log(plan.layout, f"Starting EngineHost at {plan.base_url}")
     ensure_port_available(plan.settings.host, plan.settings.port)
-    process = start_enginehost_process(plan.enginehost)
+    enginehost_process = start_enginehost_process(plan.enginehost)
+    desktop_process: PollableProcess | None = None
+    should_stop_enginehost = True
     token: str | None = None
     try:
         append_launcher_log(
             plan.layout,
-            f"EngineHost pid={process.pid} cwd={plan.enginehost.cwd}",
+            f"EngineHost pid={enginehost_process.pid} cwd={plan.enginehost.cwd}",
         )
         wait_for_enginehost_health(
             plan.base_url,
-            process,
+            enginehost_process,
             timeout_seconds=plan.settings.health_timeout_seconds,
         )
         token = wait_for_local_api_token(
             plan.layout.token_path,
-            process,
+            enginehost_process,
             timeout_seconds=plan.settings.health_timeout_seconds,
         )
         append_launcher_log(
@@ -418,10 +460,37 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
         print("EngineHost ready.")
         print(f"BaseUrl: {plan.base_url}")
         print(f"Token file: {plan.layout.token_path}")
-        print("Press Ctrl+C to stop EngineHost.")
-        while process.poll() is None:
-            time.sleep(0.5)
-        return process.returncode or 0
+        if plan.desktop is None:
+            print("Press Ctrl+C to stop EngineHost.")
+            while enginehost_process.poll() is None:
+                time.sleep(0.5)
+            return enginehost_process.returncode or 0
+
+        append_launcher_log(
+            plan.layout,
+            f"Starting Desktop cwd={plan.desktop.cwd}",
+            token=token,
+        )
+        desktop_process = start_desktop_process(plan.desktop)
+        append_launcher_log(
+            plan.layout,
+            f"Desktop pid={desktop_process.pid} cwd={plan.desktop.cwd}",
+            token=token,
+        )
+        print("Desktop started.")
+        print("Close Desktop or press Ctrl+C to stop FlowWeaver.")
+        desktop_exit_code = wait_for_desktop_exit(
+            enginehost_process,
+            desktop_process,
+        )
+        append_launcher_log(
+            plan.layout,
+            f"Desktop exited. Exit code: {desktop_exit_code}",
+            token=token,
+        )
+        if plan.settings.keep_enginehost_on_desktop_exit:
+            should_stop_enginehost = False
+        return desktop_exit_code
     except KeyboardInterrupt:
         append_launcher_log(plan.layout, "Launcher interrupted by user", token=token)
         return 130
@@ -430,11 +499,14 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
         print(f"FlowWeaver portable launcher runtime error: {exc}", file=sys.stderr)
         return 1
     finally:
+        if desktop_process is not None and desktop_process.poll() is None:
+            stop_process(desktop_process)
+            append_launcher_log(plan.layout, "Desktop stopped", token=token)
         if (
-            process.poll() is None
-            and not plan.settings.keep_enginehost_on_desktop_exit
+            enginehost_process.poll() is None
+            and should_stop_enginehost
         ):
-            stop_process(process)
+            stop_process(enginehost_process)
             append_launcher_log(plan.layout, "EngineHost stopped", token=token)
 
 

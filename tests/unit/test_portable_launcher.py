@@ -147,6 +147,8 @@ def test_build_launch_plan_constructs_enginehost_and_desktop_specs(
     assert plan.desktop is not None
     assert plan.desktop.command == (str(layout.desktop_exe),)
     assert plan.desktop.cwd == layout.desktop_dir
+    assert plan.desktop.stdout_path == layout.log_dir / "desktop.stdout.log"
+    assert plan.desktop.stderr_path == layout.log_dir / "desktop.stderr.log"
 
 
 def test_build_launch_plan_omits_desktop_when_no_desktop(
@@ -281,20 +283,169 @@ def test_handle_interrupt_signal_raises_keyboard_interrupt() -> None:
         launcher().handle_interrupt_signal(2, None)
 
 
-def test_run_launch_plan_rejects_desktop_until_later_stage(tmp_path: Path) -> None:
+def test_wait_for_desktop_exit_rejects_enginehost_exit() -> None:
+    with pytest.raises(launcher().LauncherRuntimeError, match="EngineHost exited"):
+        launcher().wait_for_desktop_exit(
+            FakeProcess(returncode=9),
+            FakeProcess(returncode=None),
+            poll_interval_seconds=0,
+        )
+
+
+def test_run_launch_plan_runs_fake_desktop_and_stops_enginehost(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     layout = _create_minimal_layout(tmp_path, include_desktop=True)
     plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
 
-    with pytest.raises(
-        launcher().LauncherConfigurationError,
-        match="Desktop launch is implemented",
-    ):
-        launcher().run_launch_plan(plan)
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    assert enginehost_process.terminated is True
+    assert desktop_process.terminated is False
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Starting Desktop" in log_content
+    assert "Desktop exited. Exit code: 0" in log_content
+    assert "EngineHost stopped" in log_content
+    assert "secret-token" not in log_content
+
+
+def test_run_launch_plan_keeps_enginehost_after_desktop_exit_when_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(
+        layout.root,
+        launcher().LauncherSettings(keep_enginehost_on_desktop_exit=True),
+    )
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
+
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    assert enginehost_process.terminated is False
+    assert desktop_process.terminated is False
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Desktop exited. Exit code: 0" in log_content
+    assert "EngineHost stopped" not in log_content
+
+
+def test_run_launch_plan_stops_enginehost_when_desktop_start_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+
+    def fail_desktop_start(spec):
+        raise launcher().LauncherRuntimeError("Failed to start Desktop: fake")
+
+    monkeypatch.setattr(launcher(), "start_desktop_process", fail_desktop_start)
+
+    assert launcher().run_launch_plan(plan) == 1
+    assert enginehost_process.terminated is True
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Launcher runtime error: Failed to start Desktop: fake" in log_content
+    assert "EngineHost stopped" in log_content
+
+
+def test_run_launch_plan_no_desktop_keep_flag_still_stops_on_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=False)
+    plan = launcher().build_launch_plan(
+        layout.root,
+        launcher().LauncherSettings(
+            no_desktop=True,
+            keep_enginehost_on_desktop_exit=True,
+        ),
+    )
+    enginehost_process = InterruptingProcess(returncode=None, pid=101)
+
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+
+    assert launcher().run_launch_plan(plan) == 130
+    assert enginehost_process.terminated is True
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Launcher interrupted by user" in log_content
+    assert "EngineHost stopped" in log_content
 
 
 class FakeProcess:
-    def __init__(self, *, returncode: int | None) -> None:
+    def __init__(self, *, returncode: int | None, pid: int = 123) -> None:
         self.returncode = returncode
+        self.pid = pid
         self.terminated = False
         self.killed = False
 
@@ -311,6 +462,14 @@ class FakeProcess:
 
     def wait(self, timeout: float | None = None) -> int:
         return self.returncode or 0
+
+
+class InterruptingProcess(FakeProcess):
+    def poll(self) -> int | None:
+        if not hasattr(self, "_interrupted"):
+            self._interrupted = True
+            raise KeyboardInterrupt
+        return self.returncode
 
 
 def _create_minimal_layout(
