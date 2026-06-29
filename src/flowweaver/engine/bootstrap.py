@@ -23,7 +23,7 @@ from flowweaver.nodes.default_registry import create_default_node_registry
 
 class EngineHostBootstrap:
     def __init__(self, config: EngineConfig) -> None:
-        self.config = config
+        self.config = _resolve_config_paths(config)
 
     def initialize(self) -> ServiceContainer:
         self._ensure_directories()
@@ -98,3 +98,32 @@ def bootstrap_default(
         ),
     )
     return EngineHostBootstrap(config).initialize()
+
+
+def _resolve_config_paths(config: EngineConfig) -> EngineConfig:
+    data_dir = config.data_dir.resolve()
+    return config.model_copy(
+        update={
+            "data_dir": data_dir,
+            "metadata_db_path": (
+                config.metadata_db_path.resolve()
+                if config.metadata_db_path is not None
+                else data_dir / "metadata" / "flowweaver.db"
+            ),
+            "runtime_dir": (
+                config.runtime_dir.resolve()
+                if config.runtime_dir is not None
+                else data_dir / "workflow_runs"
+            ),
+            "log_dir": (
+                config.log_dir.resolve()
+                if config.log_dir is not None
+                else data_dir / "logs"
+            ),
+            "temp_dir": (
+                config.temp_dir.resolve()
+                if config.temp_dir is not None
+                else data_dir / "temp"
+            ),
+        }
+    )

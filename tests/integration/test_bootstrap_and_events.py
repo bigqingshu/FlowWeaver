@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,32 @@ def test_bootstrap_default_accepts_workflow_process_execution_config(
             container.supervisor._config.workflow_process_max_concurrent_node_tasks
             == 2
         )
+    finally:
+        container.close()
+
+
+def test_bootstrap_default_resolves_runtime_paths_to_absolute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    shutil.copy2(repo_root / "alembic.ini", tmp_path / "alembic.ini")
+    shutil.copytree(repo_root / "migrations", tmp_path / "migrations")
+    monkeypatch.chdir(tmp_path)
+
+    container = bootstrap_default("relative-runtime")
+    try:
+        expected_data_dir = (tmp_path / "relative-runtime").resolve()
+        assert container.config.data_dir == expected_data_dir
+        assert container.config.resolved_metadata_db_path() == (
+            expected_data_dir / "metadata" / "flowweaver.db"
+        )
+        assert container.config.resolved_runtime_dir() == (
+            expected_data_dir / "workflow_runs"
+        )
+        assert container.config.resolved_log_dir() == expected_data_dir / "logs"
+        assert container.config.resolved_temp_dir() == expected_data_dir / "temp"
+        assert container.supervisor._config.data_dir == expected_data_dir
     finally:
         container.close()
 
