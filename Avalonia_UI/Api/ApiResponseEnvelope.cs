@@ -34,4 +34,16 @@ public sealed record ApiResponseEnvelope<TData>
             RequestId = requestId,
         };
     }
+
+    public static ApiResponseEnvelope<TData> Success(
+        TData data,
+        string requestId = "client")
+    {
+        return new ApiResponseEnvelope<TData>
+        {
+            Ok = true,
+            Data = data,
+            RequestId = requestId,
+        };
+    }
 }

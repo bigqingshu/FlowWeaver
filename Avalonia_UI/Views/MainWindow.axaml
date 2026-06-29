@@ -3,22 +3,22 @@
         xmlns:vm="using:Avalonia_UI.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="680"
         x:Class="Avalonia_UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="FlowWeaver"
-        Width="760"
-        Height="430"
-        MinWidth="640"
-        MinHeight="380"
+        Width="980"
+        Height="680"
+        MinWidth="760"
+        MinHeight="540"
         Background="#F6F7F9">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid Margin="28" RowDefinitions="Auto,*" RowSpacing="20">
+    <Grid Margin="24" RowDefinitions="Auto,Auto,*" RowSpacing="18">
         <StackPanel Spacing="4">
             <TextBlock Text="FlowWeaver"
                        FontSize="26"
@@ -34,10 +34,10 @@
                 BorderBrush="#D9DEE5"
                 BorderThickness="1"
                 CornerRadius="8"
-                Padding="20">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*"
-                  ColumnDefinitions="140,*"
-                  RowSpacing="14"
+                Padding="18">
+            <Grid RowDefinitions="Auto,Auto,Auto"
+                  ColumnDefinitions="110,*,Auto"
+                  RowSpacing="12"
                   ColumnSpacing="12">
                 <TextBlock Grid.Row="0"
                            Grid.Column="0"
@@ -48,6 +48,11 @@
                          Grid.Column="1"
                          Text="{Binding BaseUrl}"
                          Watermark="http://127.0.0.1:8000"/>
+                <Button Grid.Row="0"
+                        Grid.Column="2"
+                        Content="Check"
+                        Command="{Binding CheckConnectionCommand}"
+                        MinWidth="92"/>
 
                 <TextBlock Grid.Row="1"
                            Grid.Column="0"
@@ -56,40 +61,116 @@
                            Foreground="#2F3742"/>
                 <TextBox Grid.Row="1"
                          Grid.Column="1"
+                         Grid.ColumnSpan="2"
                          Text="{Binding Token}"
                          PasswordChar="*"/>
 
-                <StackPanel Grid.Row="2"
-                            Grid.Column="1"
-                            Orientation="Horizontal"
-                            Spacing="12">
-                    <Button Content="Check"
-                            Command="{Binding CheckConnectionCommand}"
-                            MinWidth="96"/>
-                    <ProgressBar Width="130"
-                                 Height="8"
-                                 VerticalAlignment="Center"
-                                 IsIndeterminate="True"
-                                 IsVisible="{Binding IsChecking}"/>
-                </StackPanel>
-
-                <TextBlock Grid.Row="3"
+                <TextBlock Grid.Row="2"
                            Grid.Column="0"
                            Text="Status"
                            VerticalAlignment="Center"
                            Foreground="#2F3742"/>
-                <TextBlock Grid.Row="3"
-                           Grid.Column="1"
-                           Text="{Binding StatusMessage}"
-                           VerticalAlignment="Center"
-                           Foreground="#166534"/>
+                <StackPanel Grid.Row="2"
+                            Grid.Column="1"
+                            Grid.ColumnSpan="2"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                    <TextBlock Text="{Binding StatusMessage}"
+                               VerticalAlignment="Center"
+                               Foreground="#166534"/>
+                    <ProgressBar Width="120"
+                                 Height="8"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsChecking}"/>
+                    <TextBlock Text="{Binding ErrorMessage}"
+                               TextWrapping="Wrap"
+                               Foreground="#B42318"
+                               IsVisible="{Binding HasError}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
 
-                <TextBlock Grid.Row="4"
-                           Grid.Column="1"
-                           Text="{Binding ErrorMessage}"
-                           TextWrapping="Wrap"
-                           Foreground="#B42318"
-                           IsVisible="{Binding HasError}"/>
+        <Border Grid.Row="2"
+                Background="White"
+                BorderBrush="#D9DEE5"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="18">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                    <TextBlock Text="Workflows"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="#14171A"/>
+                    <ProgressBar Grid.Column="1"
+                                 Width="120"
+                                 Height="8"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsWorkflowBusy}"/>
+                    <Button Grid.Column="2"
+                            Content="Refresh"
+                            Command="{Binding RefreshWorkflowsCommand}"
+                            MinWidth="92"/>
+                    <Button Grid.Column="3"
+                            Content="Run"
+                            Command="{Binding StartSelectedWorkflowCommand}"
+                            MinWidth="92"/>
+                </Grid>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Workflows}"
+                         SelectedItem="{Binding SelectedWorkflow}"
+                         BorderBrush="#E1E5EA"
+                         BorderThickness="1">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:WorkflowListItemViewModel"
+                                      x:DataType="vm:WorkflowListItemViewModel">
+                            <Grid ColumnDefinitions="2*,Auto,Auto,Auto"
+                                  ColumnSpacing="16"
+                                  Margin="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               Foreground="#1F2933"/>
+                                    <TextBlock Text="{Binding WorkflowId}"
+                                               FontSize="12"
+                                               Foreground="#697586"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding VersionText}"
+                                           VerticalAlignment="Center"
+                                           Foreground="#4B5563"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Status}"
+                                           VerticalAlignment="Center"
+                                           Foreground="#4B5563"/>
+                                <TextBlock Grid.Column="3"
+                                           Text="{Binding UpdatedAtText}"
+                                           VerticalAlignment="Center"
+                                           Foreground="#697586"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding WorkflowMessage}"
+                                   Foreground="#344054"/>
+                        <TextBlock Text="{Binding WorkflowErrorMessage}"
+                                   TextWrapping="Wrap"
+                                   Foreground="#B42318"
+                                   IsVisible="{Binding HasWorkflowError}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding LastStartedRunId}"
+                               VerticalAlignment="Center"
+                               Foreground="#166534"
+                               IsVisible="{Binding HasLastStartedRun}"/>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

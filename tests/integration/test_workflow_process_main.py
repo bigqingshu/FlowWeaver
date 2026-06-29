@@ -2013,6 +2013,14 @@ def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order
     )
     assert process is not None
 
+    def wait_for_executed_nodes(expected_nodes: list[str]) -> bool:
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            if executor.executed_nodes == expected_nodes:
+                return True
+            time.sleep(0.001)
+        return executor.executed_nodes == expected_nodes
+
     def release_sources_out_of_order(_seconds: float) -> None:
         nonlocal sleep_calls
         sleep_calls += 1
@@ -2023,7 +2031,7 @@ def test_workflow_process_with_threaded_pool_applies_parallel_ready_out_of_order
             executor.release("source_a")
             return
         if sleep_calls == 2:
-            assert executor.executed_nodes == ["source_a"]
+            assert wait_for_executed_nodes(["source_a"])
             assert {
                 node.node_instance_id: node.status
                 for node in store.list_node_runs(run.workflow_run_id)

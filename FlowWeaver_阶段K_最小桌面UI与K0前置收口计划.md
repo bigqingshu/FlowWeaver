@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.2 UI API Client已完成，下一步 K.3 工作流列表与运行入口
+> 当前执行点：K.3 工作流列表与运行入口已完成，下一步 K.4 运行和节点状态
 
 ## 1. 阶段K目标
 
@@ -456,6 +456,21 @@ K.2 验收结果：
 - 可从UI启动workflow run
 - 不实现复杂workflow编辑器
 - UI通过HTTP调用EngineHost，不直接创建本地运行状态
+
+K.3 完成记录：
+
+- 主窗口接入工作流列表、刷新按钮和运行按钮
+- `MainWindowViewModel` 通过 `EngineHostApiClient` 拉取 workflow 列表并启动 run
+- 启动运行后展示返回的 `workflow_run_id` 和 run `status`
+- 增加 `WorkflowListItemViewModel` 作为列表展示模型
+- 为 API Client 增加 `IEngineHostApiClient` 抽象，便于 ViewModel 测试
+- C#测试覆盖刷新列表、保留选择、刷新失败、启动运行和无选择时禁用运行
+- K.3不实现 Run列表、停止按钮、NodeRun状态、事件流或重连
+
+K.3 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.4：运行和节点状态
 

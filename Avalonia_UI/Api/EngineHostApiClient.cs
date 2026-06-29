@@ -11,7 +11,7 @@ using Avalonia_UI.Models;
 
 namespace Avalonia_UI.Api;
 
-public sealed class EngineHostApiClient
+public sealed class EngineHostApiClient : IEngineHostApiClient
 {
     private readonly HttpClient _httpClient;
 

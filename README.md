@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.3 工作流列表与运行入口。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.4 运行和节点状态。
 
 阶段 A 范围包括：
 
@@ -366,7 +366,15 @@ K.2 验收结果：
 - 已补 C# 单元测试覆盖鉴权失败、连接失败、事件过滤查询、错误 envelope 和 RuntimeEvent 解析
 - 暂未实现工作流列表 UI、运行按钮和事件视图
 
-当前建议下一步是 K.3：接入工作流列表与运行入口。
+K.3 验收结果：
+
+- 主窗口已接入工作流列表、刷新按钮和运行按钮
+- UI通过 `EngineHostApiClient` 访问 EngineHost，不直接创建本地运行状态
+- 启动运行后仅展示本次返回的 `workflow_run_id` 和状态
+- 已补 ViewModel 测试覆盖刷新列表、保留选择、刷新失败、启动运行和无选择时禁用运行
+- 暂未实现 Run列表、停止按钮、NodeRun状态、事件流和重连
+
+当前建议下一步是 K.4：接入运行列表、停止按钮和 NodeRun 状态。
 
 ## 环境
 

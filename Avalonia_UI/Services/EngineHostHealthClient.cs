@@ -9,7 +9,7 @@ namespace Avalonia_UI.Services;
 
 public sealed class EngineHostHealthClient
 {
-    private readonly EngineHostApiClient _apiClient;
+    private readonly IEngineHostApiClient _apiClient;
 
     public EngineHostHealthClient()
         : this(new EngineHostApiClient())
@@ -21,7 +21,7 @@ public sealed class EngineHostHealthClient
     {
     }
 
-    public EngineHostHealthClient(EngineHostApiClient apiClient)
+    public EngineHostHealthClient(IEngineHostApiClient apiClient)
     {
         _apiClient = apiClient;
     }
