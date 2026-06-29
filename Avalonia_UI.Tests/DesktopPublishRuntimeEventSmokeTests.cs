@@ -22,13 +22,30 @@ public sealed class DesktopPublishRuntimeEventSmokeTests
     {
         var repoRoot = FindRepoRoot();
         var pythonExe = RepoPythonExe(repoRoot);
+        var portableRoot = Path.Combine(
+            repoRoot,
+            ".tmp",
+            $"FlowWeaverPortableDesktopPublishRuntimeEvent-{Guid.NewGuid():N}");
         RunCommand(
             pythonExe,
-            new[] { "tools\\create_portable_layout.py", "--no-desktop-build" },
+            new[]
+            {
+                "tools\\create_portable_layout.py",
+                "--output",
+                portableRoot,
+                "--no-desktop-build",
+            },
             repoRoot);
-        RunCommand(pythonExe, new[] { "tools\\publish_desktop.py" }, repoRoot);
+        RunCommand(
+            pythonExe,
+            new[]
+            {
+                "tools\\publish_desktop.py",
+                "--output",
+                Path.Combine(portableRoot, "Desktop"),
+            },
+            repoRoot);
 
-        var portableRoot = Path.Combine(repoRoot, ".tmp", "FlowWeaverPortable");
         var engineHostDir = Path.Combine(portableRoot, "EngineHost");
         var desktopDir = Path.Combine(portableRoot, "Desktop");
         var publishedAssemblyPath = Path.Combine(desktopDir, "Avalonia_UI.dll");
@@ -90,6 +107,7 @@ public sealed class DesktopPublishRuntimeEventSmokeTests
         finally
         {
             StopProcess(process);
+            TryDeleteDirectory(portableRoot);
         }
     }
 
@@ -327,6 +345,20 @@ public sealed class DesktopPublishRuntimeEventSmokeTests
     {
         var pythonExe = Path.Combine(repoRoot, "python312", "python.exe");
         return File.Exists(pythonExe) ? pythonExe : "python";
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private static int FreePort()
