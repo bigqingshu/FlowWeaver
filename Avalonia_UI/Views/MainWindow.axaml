@@ -626,7 +626,7 @@
                                 CornerRadius="8"
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
                                     <TextBlock Text="Draft JSON"
                                                FontSize="16"
                                                FontWeight="SemiBold"
@@ -642,6 +642,10 @@
                                             Content="Validate"
                                             Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
                                             MinWidth="92"/>
+                                    <Button Grid.Column="3"
+                                            Content="Save"
+                                            Command="{Binding SaveWorkflowDefinitionDraftCommand}"
+                                            MinWidth="78"/>
                                 </Grid>
 
                                 <TextBox Grid.Row="1"

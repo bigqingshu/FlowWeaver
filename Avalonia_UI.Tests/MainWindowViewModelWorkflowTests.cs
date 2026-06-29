@@ -337,6 +337,90 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task SaveWorkflowDefinitionDraftUsesLoadedRevisionAndRefreshesDetail()
+    {
+        var v1Json =
+            """
+            {"schema_version":"1.0","nodes":[],"connections":[]}
+            """;
+        var v2Json =
+            """
+            {"schema_version":"1.0","nodes":[{"node_instance_id":"a","node_type":"GenerateTestTableNode","node_version":"1.0"}],"connections":[]}
+            """;
+        var v1 = Workflow("wf-1", "Daily Load", 1, v1Json);
+        var v2 = Workflow("wf-1", "Daily Load", 2, v2Json) with
+        {
+            RevisionId = "rev-wf-1-v2",
+            DefinitionHash = "hash-wf-1-v2",
+        };
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { v1 }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v1),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto> { Revision("rev-wf-1", "wf-1", 1, v1Json) }),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = v2Json;
+        apiClient.WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+            new List<WorkflowDefinitionDto> { v2 });
+        apiClient.WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2);
+        apiClient.WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+            new List<WorkflowRevisionDto>
+            {
+                Revision("rev-wf-1", "wf-1", 1, v1Json),
+                Revision("rev-wf-1-v2", "wf-1", 2, v2Json),
+            });
+
+        await viewModel.SaveWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.UpdatedWorkflowId);
+        Assert.AreEqual("Daily Load", apiClient.UpdatedWorkflowName);
+        Assert.AreEqual("rev-wf-1", apiClient.UpdatedWorkflowBaseRevisionId);
+        Assert.IsNotNull(apiClient.UpdatedWorkflowDefinition);
+        Assert.AreEqual(
+            "a",
+            apiClient.UpdatedWorkflowDefinition.Value
+                .GetProperty("nodes")[0]
+                .GetProperty("node_instance_id")
+                .GetString());
+        Assert.AreEqual("rev-wf-1-v2", viewModel.WorkflowDefinitionDetail?.RevisionId);
+        Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task SaveWorkflowDefinitionDraftShowsRevisionConflict()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_REVISION_CONFLICT",
+                "Workflow revision has changed."),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.SaveWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Workflow draft save failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "WORKFLOW_REVISION_CONFLICT: Workflow revision has changed.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionShowsErrorEnvelope()
     {
         var apiClient = new FakeApiClient
@@ -611,6 +695,11 @@ public sealed class MainWindowViewModelWorkflowTests
                 "NOT_CONFIGURED",
                 "No validate response configured.");
 
+        public ApiResponseEnvelope<WorkflowDefinitionDto> UpdateWorkflowResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No update response configured.");
+
         public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
 
@@ -635,6 +724,14 @@ public sealed class MainWindowViewModelWorkflowTests
         public JsonElement? CreatedWorkflowDefinition { get; private set; }
 
         public JsonElement? ValidatedWorkflowDraftDefinition { get; private set; }
+
+        public string? UpdatedWorkflowId { get; private set; }
+
+        public string? UpdatedWorkflowName { get; private set; }
+
+        public JsonElement? UpdatedWorkflowDefinition { get; private set; }
+
+        public string? UpdatedWorkflowBaseRevisionId { get; private set; }
 
         public string? LastWorkflowRevisionsWorkflowId { get; private set; }
 
@@ -689,6 +786,22 @@ public sealed class MainWindowViewModelWorkflowTests
             LastSettings = settings;
             ValidatedWorkflowDraftDefinition = definition.Clone();
             return Task.FromResult(ValidateWorkflowDraftResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> UpdateWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string? name,
+            JsonElement definition,
+            string baseRevisionId,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            UpdatedWorkflowId = workflowId;
+            UpdatedWorkflowName = name;
+            UpdatedWorkflowDefinition = definition.Clone();
+            UpdatedWorkflowBaseRevisionId = baseRevisionId;
+            return Task.FromResult(UpdateWorkflowResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(

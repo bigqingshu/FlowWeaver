@@ -93,6 +93,27 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> UpdateWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string? name,
+        JsonElement definition,
+        string baseRevisionId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowDefinitionDto>(
+            settings,
+            HttpMethod.Put,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}",
+            payload: new WorkflowUpdateRequestDto
+            {
+                Name = name,
+                Definition = definition,
+                BaseRevisionId = baseRevisionId,
+            },
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

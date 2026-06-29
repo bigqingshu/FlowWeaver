@@ -194,6 +194,17 @@ public sealed class MainWindowViewModelLogTests
             throw new NotSupportedException();
         }
 
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> UpdateWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string? name,
+            JsonElement definition,
+            string baseRevisionId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
             EngineHostConnectionSettings settings,
             string workflowId,

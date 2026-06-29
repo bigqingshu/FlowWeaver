@@ -31,6 +31,14 @@ public interface IEngineHostApiClient
         JsonElement definition,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowDefinitionDto>> UpdateWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string? name,
+        JsonElement definition,
+        string baseRevisionId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

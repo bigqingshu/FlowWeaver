@@ -18,7 +18,7 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
-from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_store import RuntimeStore, WorkflowRevisionConflict
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.nodes.registry import NodeRegistry
 from flowweaver.protocols.enums import WorkflowRunStatus
@@ -135,6 +135,13 @@ def update_workflow(
     store: Annotated[RuntimeStore, Depends(get_runtime_store)],
     registry: Annotated[NodeRegistry, Depends(get_node_registry)],
 ):
+    if payload.base_revision_id is None:
+        return error_response(
+            request,
+            error_code="BASE_REVISION_REQUIRED",
+            message="base_revision_id is required",
+            status_code=400,
+        )
     if payload.definition is not None:
         validation = validate_workflow_definition(payload.definition, registry)
         if not validation.valid:
@@ -149,7 +156,20 @@ def update_workflow(
         workflow_id,
         name=payload.name,
         definition=payload.definition,
+        base_revision_id=payload.base_revision_id,
     )
+    if isinstance(workflow, WorkflowRevisionConflict):
+        return error_response(
+            request,
+            error_code="WORKFLOW_REVISION_CONFLICT",
+            message="Workflow revision has changed",
+            status_code=409,
+            details={
+                "workflow_id": workflow.workflow_id,
+                "expected_revision_id": workflow.expected_revision_id,
+                "current_revision_id": workflow.current_revision_id,
+            },
+        )
     if workflow is None:
         return error_response(
             request,

@@ -32,6 +32,7 @@ class WorkflowValidateRequest(StrictModel):
 class WorkflowUpdateRequest(StrictModel):
     name: str | None = None
     definition: dict[str, Any] | None = None
+    base_revision_id: str | None = None
 
 
 class WorkflowDefinitionData(StrictModel):

@@ -207,6 +207,7 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
         client.put(
             f"/api/v1/workflows/{workflow_id}",
             json={
+                "base_revision_id": created["revision_id"],
                 "definition": {
                     "schema_version": "1.0",
                     "nodes": [],
@@ -240,6 +241,67 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
     assert [revision["version"] for revision in revisions] == [1, 2]
     assert first_revision["definition"] == valid_definition()
     assert deleted == {"workflow_id": workflow_id, "deleted": True}
+
+
+def test_update_workflow_requires_base_revision_id(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+    created = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={"name": "API workflow", "definition": valid_definition()},
+            headers=auth_headers(),
+        )
+    )
+
+    response = client.put(
+        f"/api/v1/workflows/{created['workflow_id']}",
+        json={"definition": valid_definition()},
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 400
+    assert response_error(response)["error_code"] == "BASE_REVISION_REQUIRED"
+
+
+def test_update_workflow_rejects_stale_base_revision_id(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+    created = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={"name": "API workflow", "definition": valid_definition()},
+            headers=auth_headers(),
+        )
+    )
+    workflow_id = created["workflow_id"]
+    first_revision_id = created["revision_id"]
+    updated = response_data(
+        client.put(
+            f"/api/v1/workflows/{workflow_id}",
+            json={
+                "base_revision_id": first_revision_id,
+                "definition": valid_definition() | {"outputs": []},
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    response = client.put(
+        f"/api/v1/workflows/{workflow_id}",
+        json={
+            "base_revision_id": first_revision_id,
+            "definition": valid_definition() | {"inputs": []},
+        },
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 409
+    error = response_error(response)
+    assert error["error_code"] == "WORKFLOW_REVISION_CONFLICT"
+    assert error["details"] == {
+        "workflow_id": workflow_id,
+        "expected_revision_id": first_revision_id,
+        "current_revision_id": updated["revision_id"],
+    }
 
 
 def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> None:

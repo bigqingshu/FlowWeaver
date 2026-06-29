@@ -83,6 +83,13 @@ class WorkflowRevision:
 
 
 @dataclass(frozen=True)
+class WorkflowRevisionConflict:
+    workflow_id: str
+    expected_revision_id: str
+    current_revision_id: str | None
+
+
+@dataclass(frozen=True)
 class WorkflowRun:
     workflow_run_id: str
     workflow_id: str
@@ -374,13 +381,23 @@ class RuntimeStore:
         *,
         name: str | None = None,
         definition: dict[str, Any] | None = None,
+        base_revision_id: str | None = None,
         created_by: str | None = None,
-    ) -> WorkflowDefinition | None:
-        updated: WorkflowDefinition | None = None
+    ) -> WorkflowDefinition | WorkflowRevisionConflict | None:
+        updated: WorkflowDefinition | WorkflowRevisionConflict | None = None
         with self._session_factory.begin() as session:
             workflow = session.get(WorkflowRecord, workflow_id)
             if workflow is None or workflow.status == "DELETED":
                 return None
+            if (
+                base_revision_id is not None
+                and workflow.current_revision_id != base_revision_id
+            ):
+                return WorkflowRevisionConflict(
+                    workflow_id=workflow_id,
+                    expected_revision_id=base_revision_id,
+                    current_revision_id=workflow.current_revision_id,
+                )
             if name is not None:
                 workflow.name = name
             current_revision = session.get(

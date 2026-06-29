@@ -95,6 +95,18 @@ public sealed record WorkflowValidateRequestDto
     public JsonElement Definition { get; init; }
 }
 
+public sealed record WorkflowUpdateRequestDto
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; init; }
+
+    [JsonPropertyName("definition")]
+    public JsonElement Definition { get; init; }
+
+    [JsonPropertyName("base_revision_id")]
+    public string BaseRevisionId { get; init; } = string.Empty;
+}
+
 public sealed record WorkflowValidationIssueDto
 {
     [JsonPropertyName("code")]

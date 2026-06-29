@@ -87,6 +87,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
+    private bool isSavingWorkflowDefinitionDraft;
+
+    [ObservableProperty]
     private string workflowDefinitionValidationMessage = "Load definition to edit draft JSON.";
 
     [ObservableProperty]
@@ -282,7 +285,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasWorkflowDefinitionError =>
         !string.IsNullOrWhiteSpace(WorkflowDefinitionErrorMessage);
 
-    public bool IsWorkflowDefinitionDraftBusy => IsValidatingWorkflowDefinitionDraft;
+    public bool IsWorkflowDefinitionDraftBusy =>
+        IsValidatingWorkflowDefinitionDraft || IsSavingWorkflowDefinitionDraft;
 
     public bool HasWorkflowDefinitionValidationError =>
         !string.IsNullOrWhiteSpace(WorkflowDefinitionValidationErrorMessage);
@@ -367,6 +371,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanValidateWorkflowDefinitionDraft()
     {
         return !IsWorkflowDefinitionDraftBusy && HasWorkflowDefinitionDraft;
+    }
+
+    private bool CanSaveWorkflowDefinitionDraft()
+    {
+        return WorkflowDefinitionDetail is not null
+            && !IsWorkflowDefinitionDraftBusy
+            && HasWorkflowDefinitionDraft;
     }
 
     private bool CanRefreshRuns()
@@ -613,6 +624,56 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowDefinitionValidationMessage = "Workflow draft validation failed.";
         WorkflowDefinitionValidationErrorMessage = DescribeError(response);
         IsValidatingWorkflowDefinitionDraft = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSaveWorkflowDefinitionDraft))]
+    private async Task SaveWorkflowDefinitionDraftAsync()
+    {
+        if (WorkflowDefinitionDetail is null)
+        {
+            WorkflowDefinitionValidationMessage = "Workflow draft save rejected.";
+            WorkflowDefinitionValidationErrorMessage = "Load workflow definition before saving.";
+            return;
+        }
+
+        JsonElement definition;
+        try
+        {
+            using var parsed = JsonDocument.Parse(WorkflowDefinitionDraftJson);
+            definition = parsed.RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            WorkflowDefinitionValidationMessage = "Workflow draft JSON is invalid.";
+            WorkflowDefinitionValidationErrorMessage = ex.Message;
+            return;
+        }
+
+        IsSavingWorkflowDefinitionDraft = true;
+        WorkflowDefinitionValidationMessage = "Saving workflow draft...";
+        WorkflowDefinitionValidationErrorMessage = null;
+
+        var saved = await _apiClient.UpdateWorkflowAsync(
+            BuildSettings(),
+            WorkflowDefinitionDetail.WorkflowId,
+            WorkflowDefinitionDetail.Name,
+            definition,
+            WorkflowDefinitionDetail.RevisionId,
+            _shutdown.Token);
+
+        if (saved.Ok && saved.Data is not null)
+        {
+            WorkflowDefinitionValidationMessage =
+                $"Saved workflow {saved.Data.Name} v{saved.Data.Version}.";
+            IsSavingWorkflowDefinitionDraft = false;
+            await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
+            await LoadSelectedWorkflowDefinitionAsync();
+            return;
+        }
+
+        WorkflowDefinitionValidationMessage = "Workflow draft save failed.";
+        WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
+        IsSavingWorkflowDefinitionDraft = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -1372,6 +1433,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinition));
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
@@ -1383,12 +1445,21 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsValidatingWorkflowDefinitionDraftChanged(bool value)
     {
         OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsSavingWorkflowDefinitionDraftChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
+        ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnWorkflowDefinitionValidationErrorMessageChanged(string? value)
