@@ -19,6 +19,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly EngineHostHealthClient _healthClient;
     private readonly IEngineHostRuntimeEventStreamClient _runtimeEventStreamClient;
     private readonly Func<CancellationToken, Task> _runtimeEventReconnectDelay;
+    private readonly IConnectionSettingsStore _connectionSettingsStore;
 
     private readonly CancellationTokenSource _shutdown = new();
     private CancellationTokenSource? _runtimeEventStreamCancellation;
@@ -204,13 +205,15 @@ public partial class MainWindowViewModel : ViewModelBase
         EngineHostHealthClient healthClient,
         IEngineHostApiClient apiClient,
         IEngineHostRuntimeEventStreamClient runtimeEventStreamClient,
-        Func<CancellationToken, Task>? runtimeEventReconnectDelay = null)
+        Func<CancellationToken, Task>? runtimeEventReconnectDelay = null,
+        IConnectionSettingsStore? connectionSettingsStore = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
         _runtimeEventStreamClient = runtimeEventStreamClient;
         _runtimeEventReconnectDelay = runtimeEventReconnectDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromSeconds(2), cancellationToken));
+        _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
     }
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
@@ -274,6 +277,24 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsDataBusy =>
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
+
+    public async Task LoadConnectionSettingsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var settings = await _connectionSettingsStore.LoadAsync(cancellationToken);
+            BaseUrl = settings.LastSuccessfulBaseUrl;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Connection settings were not loaded: {ex.Message}";
+        }
+    }
 
     private bool CanCheckConnection()
     {
@@ -360,6 +381,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ConnectionStatus = ConnectionStatus.Connected;
             StatusMessage = result.Message;
             ErrorMessage = null;
+            await SaveConnectionSettingsAsync(settings);
             return;
         }
 
@@ -937,6 +959,25 @@ public partial class MainWindowViewModel : ViewModelBase
             BaseUrl = BaseUrl,
             Token = Token,
         };
+    }
+
+    private async Task SaveConnectionSettingsAsync(
+        EngineHostConnectionSettings settings)
+    {
+        try
+        {
+            await _connectionSettingsStore.SaveAsync(
+                PersistedConnectionSettings.FromBaseUrl(settings.BaseUrl),
+                _shutdown.Token);
+        }
+        catch (OperationCanceledException) when (_shutdown.Token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Connection settings were not saved: {ex.Message}";
+        }
     }
 
     private static string DescribeError<TData>(ApiResponseEnvelope<TData> response)

@@ -1,9 +1,9 @@
 # FlowWeaver 阶段L.2：UI连接配置持久化边界
 
-> 文档状态：阶段L.2边界确认
+> 文档状态：阶段L.2边界已确认，L.2a/L.2b/L.2c已完成
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md`、`01_第一阶段执行方案.md`、阶段K验收基线、阶段L.0边界清单和阶段L.1运行入口收口
 > 适用范围：Avalonia UI 的 EngineHost BaseUrl、token 输入和本地连接偏好持久化
-> 当前执行点：L.2，只确认持久化边界，不实现配置落盘
+> 当前执行点：L.2c已完成最小UI接入，下一步进入L.2d失败场景补充测试
 
 ## 1. L.2目标
 
@@ -17,14 +17,18 @@ L.2只解决一个问题：Avalonia UI 是否可以记住用户连接 EngineHost
 - 明确 token 默认不落盘的原则
 - 明确后续最小实现顺序和验收条件
 
-L.2不做：
+L.2边界确认阶段不做：
 
-- 不新增配置 Store 代码
-- 不新增 JSON 配置文件
 - 不修改 Avalonia UI
 - 不保存 token
 - 不读取或修改 `runtime/config/local_api_token`
 - 不让 UI 直接访问 SQLite 或 EngineHost 内部运行目录
+
+后续小步状态：
+
+- L.2a 已新增连接配置模型、用户级路径解析、Store接口、文件实现和单元测试
+- L.2b 已完成 UI 接入前复核
+- L.2c 已把 Store 接入 `MainWindowViewModel`
 
 ## 2. 当前状态
 
@@ -35,7 +39,9 @@ L.2不做：
 - `MainWindowViewModel.Token` 默认为空字符串
 - `EngineHostConnectionSettings` 只负责构造 HTTP / WebSocket URI
 - UI 关闭后，BaseUrl 和 token 输入不会持久化
-- 当前没有 appsettings、用户配置文件、凭据存储或连接历史
+- L.2a 已有用户级连接配置 Store 代码，但尚未接入 `MainWindowViewModel`
+- L.2c 已支持 UI 启动加载 BaseUrl，并在 health 成功后保存 BaseUrl
+- 当前仍没有 appsettings、凭据存储或连接历史 UI
 
 当前代码事实：
 
@@ -48,6 +54,10 @@ L.2不做：
 | health检查 | `EngineHostHealthClient` | 不需要 token |
 | 业务API | `EngineHostApiClient` | 需要 Bearer token |
 | WebSocket | `EngineHostRuntimeEventStreamClient` | query string token |
+| 连接配置模型 | `Avalonia_UI/Models/PersistedConnectionSettings.cs` | L.2a已新增 |
+| 连接配置Store | `Avalonia_UI/Services/FileConnectionSettingsStore.cs` | L.2a已新增 |
+| UI加载入口 | `Avalonia_UI/App.axaml.cs` | L.2c启动后异步加载 |
+| ViewModel接入 | `Avalonia_UI/ViewModels/MainWindowViewModel.cs` | L.2c加载/保存 BaseUrl |
 
 ## 3. 可持久化数据
 
@@ -224,7 +234,25 @@ PersistedConnectionSettings
 └─ updated_at_utc
 ```
 
-## 10. L.2验收清单
+## 10. L.2b复核结论
+
+L.2b已形成独立复核文档：
+
+```text
+FlowWeaver_阶段L.2b_UI接入前复核.md
+```
+
+复核结论：
+
+- UI 接入点为 `App.axaml.cs` 创建 `MainWindowViewModel`
+- 启动加载建议通过 ViewModel 可测试异步方法写入 `BaseUrl`
+- health 成功分支是保存 BaseUrl 的唯一最小触发点
+- 保存失败不应把 `ConnectionStatus` 从 `Connected` 改成 `Error`
+- 保存失败可复用现有 `ErrorMessage` 显示非阻断提示
+- `BuildSettings()`、业务 API 和 RuntimeEvent WebSocket 不应读写配置 Store
+- token 仍不加载、不保存、不写 JSON、不写完整 WebSocket URL
+
+## 11. L.2验收清单
 
 L.2完成条件：
 
@@ -235,7 +263,24 @@ L.2完成条件：
 - 已明确用户级配置路径建议
 - 已明确读取、保存和失败处理边界
 - 已明确后续代码实现的小步顺序
+- 已完成 L.2a 连接配置模型和 Store 边界
+- 已完成 L.2b UI 接入前复核
+- 已完成 L.2c UI 启动加载 BaseUrl 和 health 成功保存 BaseUrl
 
-## 11. 下一步建议
+## 12. L.2c实现结论
 
-L.2a已完成连接配置模型、用户级路径解析、Store接口、文件实现和单元测试。下一步建议进入 L.2b：UI接入前复核，确认只加载/保存 BaseUrl，不接入 token 持久化。
+L.2c已完成最小代码接入：
+
+- `MainWindowViewModel` 接收可选 `IConnectionSettingsStore`
+- 默认构造继续可用，未引入新的 DI 框架
+- `App.axaml.cs` 创建 ViewModel 后触发 `LoadConnectionSettingsAsync()`
+- `LoadConnectionSettingsAsync()` 只恢复 `LastSuccessfulBaseUrl`
+- `Token` 仍保持仅内存输入，不从 Store 恢复
+- `CheckConnectionAsync()` 仅在 health 成功后保存 BaseUrl
+- health 失败不保存 BaseUrl
+- 保存失败不改变 `Connected` 状态，只显示非阻断错误
+- 业务 API 和 RuntimeEvent WebSocket 不读写连接配置 Store
+
+## 13. 下一步建议
+
+L.2c已完成 UI 启动加载 BaseUrl 和 health 成功后保存 BaseUrl。下一步建议进入 L.2d：补充损坏配置、非法 URL 和保存失败场景的验收复核；仍不保存 token，不增加 recent列表UI，不引入凭据存储。
