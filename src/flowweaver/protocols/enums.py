@@ -74,6 +74,26 @@ class TableLeaseStatus(str, Enum):
     EXPIRED = "EXPIRED"
 
 
+class PermissionAction(str, Enum):
+    READ_TABLE = "READ_TABLE"
+    READ_FIELDS = "READ_FIELDS"
+    WRITE_TABLE = "WRITE_TABLE"
+    WRITE_FIELDS = "WRITE_FIELDS"
+    APPEND = "APPEND"
+    OVERWRITE = "OVERWRITE"
+    CLEAR = "CLEAR"
+    ALTER_SCHEMA = "ALTER_SCHEMA"
+    PUBLISH = "PUBLISH"
+    READ_SHARED = "READ_SHARED"
+
+
+class AuditLevel(str, Enum):
+    MINIMAL = "MINIMAL"
+    STANDARD = "STANDARD"
+    FULL = "FULL"
+    DEBUG = "DEBUG"
+
+
 class LifecycleStatus(str, Enum):
     STAGING = "STAGING"
     PUBLISHED = "PUBLISHED"

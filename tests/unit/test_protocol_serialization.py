@@ -6,6 +6,8 @@ from pydantic import ValidationError
 from flowweaver.common.serialization import from_msgpack, to_msgpack
 from flowweaver.common.time import utc_now
 from flowweaver.protocols import (
+    AuditEventModel,
+    AuditLevel,
     ErrorModel,
     ErrorOrigin,
     FieldSchemaModel,
@@ -16,6 +18,10 @@ from flowweaver.protocols import (
     NodeTaskCancelRequestPayload,
     NodeTaskModel,
     NodeTaskResultModel,
+    PermissionAction,
+    PermissionGrantModel,
+    PermissionRequestModel,
+    PermissionScopeModel,
     TableMutability,
     TableRefModel,
     TableRole,
@@ -141,6 +147,67 @@ def test_node_task_cancel_request_payload_msgpack_round_trip() -> None:
     assert restored.reason == "WORKFLOW_CANCEL_REQUESTED"
 
 
+def test_permission_request_and_grant_msgpack_round_trip() -> None:
+    scope = PermissionScopeModel(
+        action=PermissionAction.WRITE_FIELDS,
+        resource_type="TABLE_REF",
+        resource_id="table-1",
+        fields=["amount", "status"],
+        write_mode="OVERWRITE",
+        constraints={"max_rows": 100},
+    )
+    request = PermissionRequestModel(
+        workflow_run_id="run-1",
+        node_run_id="node-run-1",
+        node_instance_id="write-node",
+        node_type="core.write",
+        scopes=[scope],
+        reason="write selected fields",
+    )
+    grant = PermissionGrantModel(
+        request_id=request.request_id,
+        workflow_run_id=request.workflow_run_id,
+        node_run_id=request.node_run_id,
+        scopes=request.scopes,
+        granted=True,
+    )
+
+    restored_request = from_msgpack(to_msgpack(request), PermissionRequestModel)
+    restored_grant = from_msgpack(to_msgpack(grant), PermissionGrantModel)
+
+    assert restored_request == request
+    assert restored_request.audit_level == AuditLevel.STANDARD
+    assert restored_request.scopes[0].action == PermissionAction.WRITE_FIELDS
+    assert restored_grant == grant
+    assert restored_grant.permission_handle_id
+
+
+def test_audit_event_msgpack_round_trip() -> None:
+    event = AuditEventModel(
+        event_type="PERMISSION_CHECK",
+        workflow_run_id="run-1",
+        node_run_id="node-run-1",
+        subject_type="NODE",
+        subject_id="node-run-1",
+        resource_type="TABLE_REF",
+        resource_id="table-1",
+        action=PermissionAction.WRITE_TABLE,
+        result="granted",
+        summary={
+            "fields": ["amount"],
+            "affected_rows": 5,
+            "change_set_summary": {"updated": 5},
+        },
+    )
+
+    restored = from_msgpack(to_msgpack(event), AuditEventModel)
+
+    assert restored == event
+    assert restored.audit_level == AuditLevel.STANDARD
+    assert restored.action == PermissionAction.WRITE_TABLE
+    assert restored.summary["affected_rows"] == 5
+
+
 def test_protocol_models_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         FieldSchemaModel(
@@ -149,5 +216,13 @@ def test_protocol_models_reject_unknown_fields() -> None:
             data_type="number",
             nullable=False,
             ordinal=0,
+            unexpected=True,
+        )
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PermissionScopeModel(
+            action=PermissionAction.READ_TABLE,
+            resource_type="TABLE_REF",
+            resource_id="table-1",
             unexpected=True,
         )
