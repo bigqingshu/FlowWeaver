@@ -132,6 +132,49 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? auditEventLogErrorMessage;
 
+    [ObservableProperty]
+    private bool isLoadingTableRefs;
+
+    [ObservableProperty]
+    private string tableRefMessage = "Select a run to load table refs.";
+
+    [ObservableProperty]
+    private string? tableRefErrorMessage;
+
+    [ObservableProperty]
+    private string sharedPublicationShareNameFilter = string.Empty;
+
+    [ObservableProperty]
+    private string sharedPublicationLimitFilter = "100";
+
+    [ObservableProperty]
+    private bool isLoadingSharedPublications;
+
+    [ObservableProperty]
+    private SharedPublicationListItemViewModel? selectedSharedPublication;
+
+    [ObservableProperty]
+    private string sharedPublicationMessage = "No shared publications loaded.";
+
+    [ObservableProperty]
+    private string? sharedPublicationErrorMessage;
+
+    [ObservableProperty]
+    private string sharedPublicationVersionShareNameFilter = string.Empty;
+
+    [ObservableProperty]
+    private string sharedPublicationVersionLimitFilter = "100";
+
+    [ObservableProperty]
+    private bool isLoadingSharedPublicationVersions;
+
+    [ObservableProperty]
+    private string sharedPublicationVersionMessage =
+        "Select or enter a share name to load versions.";
+
+    [ObservableProperty]
+    private string? sharedPublicationVersionErrorMessage;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -182,6 +225,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<AuditEventListItemViewModel> AuditEvents { get; } = new();
 
+    public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
+
+    public ObservableCollection<SharedPublicationListItemViewModel> SharedPublications { get; } =
+        new();
+
+    public ObservableCollection<SharedPublicationListItemViewModel> SharedPublicationVersions { get; } =
+        new();
+
     public bool IsChecking => ConnectionStatus == ConnectionStatus.Connecting;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -212,6 +263,17 @@ public partial class MainWindowViewModel : ViewModelBase
         !string.IsNullOrWhiteSpace(AuditEventLogErrorMessage);
 
     public bool IsLogBusy => IsLoadingRuntimeEventLog || IsLoadingAuditEventLog;
+
+    public bool HasTableRefError => !string.IsNullOrWhiteSpace(TableRefErrorMessage);
+
+    public bool HasSharedPublicationError =>
+        !string.IsNullOrWhiteSpace(SharedPublicationErrorMessage);
+
+    public bool HasSharedPublicationVersionError =>
+        !string.IsNullOrWhiteSpace(SharedPublicationVersionErrorMessage);
+
+    public bool IsDataBusy =>
+        IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
 
     private bool CanCheckConnection()
     {
@@ -261,6 +323,21 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanRefreshAuditEvents()
     {
         return !IsLoadingAuditEventLog;
+    }
+
+    private bool CanRefreshTableRefs()
+    {
+        return SelectedRun is not null && !IsLoadingTableRefs;
+    }
+
+    private bool CanRefreshSharedPublications()
+    {
+        return !IsLoadingSharedPublications;
+    }
+
+    private bool CanRefreshSharedPublicationVersions()
+    {
+        return !IsLoadingSharedPublicationVersions;
     }
 
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
@@ -540,6 +617,141 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingAuditEventLog = false;
     }
 
+    [RelayCommand(CanExecute = nameof(CanRefreshTableRefs))]
+    private async Task RefreshTableRefsAsync()
+    {
+        if (SelectedRun is null)
+        {
+            return;
+        }
+
+        IsLoadingTableRefs = true;
+        TableRefMessage = $"Loading table refs for {SelectedRun.WorkflowRunId}...";
+        TableRefErrorMessage = null;
+
+        var response = await _apiClient.ListTableRefsAsync(
+            BuildSettings(),
+            SelectedRun.WorkflowRunId,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            TableRefs.Clear();
+            foreach (var tableRef in response.Data)
+            {
+                TableRefs.Add(new TableRefListItemViewModel(tableRef));
+            }
+
+            TableRefMessage = $"Loaded {TableRefs.Count} table ref(s).";
+            IsLoadingTableRefs = false;
+            return;
+        }
+
+        TableRefMessage = "Table ref refresh failed.";
+        TableRefErrorMessage = DescribeError(response);
+        IsLoadingTableRefs = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshSharedPublications))]
+    private async Task RefreshSharedPublicationsAsync()
+    {
+        if (!TryParseLimit(
+            SharedPublicationLimitFilter,
+            "Shared publication limit",
+            out var limit,
+            out var error))
+        {
+            SharedPublicationMessage = "Shared publication refresh rejected.";
+            SharedPublicationErrorMessage = error;
+            return;
+        }
+
+        IsLoadingSharedPublications = true;
+        SharedPublicationMessage = "Loading shared publications...";
+        SharedPublicationErrorMessage = null;
+
+        var response = await _apiClient.ListSharedPublicationsAsync(
+            BuildSettings(),
+            NormalizeFilter(SharedPublicationShareNameFilter),
+            limit,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            var previousPublicationId = SelectedSharedPublication?.PublicationId;
+            SharedPublications.Clear();
+            foreach (var publication in response.Data)
+            {
+                SharedPublications.Add(new SharedPublicationListItemViewModel(publication));
+            }
+
+            SelectedSharedPublication = SharedPublications.FirstOrDefault(
+                publication => publication.PublicationId == previousPublicationId)
+                ?? SharedPublications.FirstOrDefault();
+            SharedPublicationMessage =
+                $"Loaded {SharedPublications.Count} shared publication(s).";
+            IsLoadingSharedPublications = false;
+            return;
+        }
+
+        SharedPublicationMessage = "Shared publication refresh failed.";
+        SharedPublicationErrorMessage = DescribeError(response);
+        IsLoadingSharedPublications = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshSharedPublicationVersions))]
+    private async Task RefreshSharedPublicationVersionsAsync()
+    {
+        var shareName = NormalizeFilter(SharedPublicationVersionShareNameFilter)
+            ?? SelectedSharedPublication?.ShareName;
+        if (string.IsNullOrWhiteSpace(shareName))
+        {
+            SharedPublicationVersionMessage = "Shared publication versions rejected.";
+            SharedPublicationVersionErrorMessage =
+                "Share name is required to load shared publication versions.";
+            return;
+        }
+
+        if (!TryParseLimit(
+            SharedPublicationVersionLimitFilter,
+            "Shared publication version limit",
+            out var limit,
+            out var error))
+        {
+            SharedPublicationVersionMessage = "Shared publication versions rejected.";
+            SharedPublicationVersionErrorMessage = error;
+            return;
+        }
+
+        IsLoadingSharedPublicationVersions = true;
+        SharedPublicationVersionMessage = $"Loading versions for {shareName}...";
+        SharedPublicationVersionErrorMessage = null;
+
+        var response = await _apiClient.ListSharedPublicationVersionsAsync(
+            BuildSettings(),
+            shareName,
+            limit,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            SharedPublicationVersions.Clear();
+            foreach (var publication in response.Data)
+            {
+                SharedPublicationVersions.Add(new SharedPublicationListItemViewModel(publication));
+            }
+
+            SharedPublicationVersionMessage =
+                $"Loaded {SharedPublicationVersions.Count} version(s) for {shareName}.";
+            IsLoadingSharedPublicationVersions = false;
+            return;
+        }
+
+        SharedPublicationVersionMessage = "Shared publication versions refresh failed.";
+        SharedPublicationVersionErrorMessage = DescribeError(response);
+        IsLoadingSharedPublicationVersions = false;
+    }
+
     private async Task LoadNodeRunsForSelectedRunAsync()
     {
         if (SelectedRun is null)
@@ -776,6 +988,32 @@ public partial class MainWindowViewModel : ViewModelBase
         return true;
     }
 
+    private static bool TryParseLimit(
+        string limitFilter,
+        string label,
+        out int limit,
+        out string? error)
+    {
+        limit = 100;
+        error = null;
+
+        var limitText = NormalizeFilter(limitFilter);
+        if (limitText is null)
+        {
+            return true;
+        }
+
+        if (!int.TryParse(limitText, out var parsedLimit)
+            || parsedLimit is < 1 or > 1000)
+        {
+            error = $"{label} must be between 1 and 1000.";
+            return false;
+        }
+
+        limit = parsedLimit;
+        return true;
+    }
+
     private static string? NormalizeFilter(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -836,12 +1074,18 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedRunChanged(WorkflowRunListItemViewModel? value)
     {
         NodeRuns.Clear();
+        TableRefs.Clear();
         NodeRunMessage = value is null
             ? "Select a run to load node status."
             : $"Selected run {value.WorkflowRunId}. Refresh nodes to load status.";
         NodeRunErrorMessage = null;
+        TableRefMessage = value is null
+            ? "Select a run to load table refs."
+            : $"Selected run {value.WorkflowRunId}. Refresh table refs to load data outputs.";
+        TableRefErrorMessage = null;
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
+        RefreshTableRefsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnRunErrorMessageChanged(string? value)
@@ -891,6 +1135,47 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnAuditEventLogErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasAuditEventLogError));
+    }
+
+    partial void OnIsLoadingTableRefsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDataBusy));
+        RefreshTableRefsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnTableRefErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasTableRefError));
+    }
+
+    partial void OnIsLoadingSharedPublicationsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDataBusy));
+        RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedSharedPublicationChanged(SharedPublicationListItemViewModel? value)
+    {
+        if (value is not null)
+        {
+            SharedPublicationVersionShareNameFilter = value.ShareName;
+        }
+    }
+
+    partial void OnSharedPublicationErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasSharedPublicationError));
+    }
+
+    partial void OnIsLoadingSharedPublicationVersionsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDataBusy));
+        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSharedPublicationVersionErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasSharedPublicationVersionError));
     }
 
     private void NotifyWorkflowCommandStateChanged()

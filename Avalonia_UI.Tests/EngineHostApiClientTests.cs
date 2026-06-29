@@ -175,6 +175,65 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListTableRefsAsyncUsesRunPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListTableRefsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/table-refs"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task ListSharedPublicationsAsyncBuildsFilterQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSharedPublicationsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            shareName: "daily report",
+            limit: 25);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications?share_name=daily%20report&limit=25"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task ListSharedPublicationVersionsAsyncUsesSharePath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSharedPublicationVersionsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "daily report",
+            limit: 10);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/daily%20report/versions?limit=10"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
     public async Task ErrorEnvelopeIsReturned()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)

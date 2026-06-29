@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.6 日志和审计最小视图已完成，下一步 K.7 TableRef和SharedPublication摘要
+> 当前执行点：K.7 TableRef和SharedPublication摘要已完成，下一步 K.8 阶段K验收
 
 ## 1. 阶段K目标
 
@@ -575,6 +575,23 @@ K.6 验收结果：
 - UI可查看输出引用和共享发布版本
 - 不展示完整大表编辑能力
 - 不加载完整表数据内容
+
+K.7 完成记录：
+
+- 主窗口增加 `Data` 页签，独立展示数据摘要
+- 当前 selected run 可通过 `GET /api/v1/runs/{run_id}/table-refs` 查询 TableRef 摘要
+- TableRef 摘要展示 logical_table_id、table_ref_id、node_run_id、version、lifecycle_status、storage_kind 和 capabilities
+- SharedPublication 列表通过 `GET /api/v1/shared-publications` 查询，支持 `share_name` 和 `limit`
+- 指定 share_name 的版本通过 `GET /api/v1/shared-publications/{share_name}/versions` 查询
+- SharedPublication 版本摘要展示 publication version、publication_id、member count 和 members 的 export_name/exact_table_version
+- SharedPublication limit 和版本 limit 在 UI 层按 1 到 1000 校验，非法显式输入直接拒绝
+- C#测试覆盖 TableRef 摘要查询、SharedPublication 过滤查询、非法 limit 拒绝、版本 members 摘要和三条 API路径
+- K.7不实现完整大表内容加载、表格编辑、ReadLease 明细页或跨 workflow 触发能力
+
+K.7 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.8：阶段K验收
 
