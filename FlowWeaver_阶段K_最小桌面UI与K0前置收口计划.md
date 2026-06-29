@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.7 TableRef和SharedPublication摘要已完成，下一步 K.8 阶段K验收
+> 当前执行点：K.8 阶段K验收已完成
 
 ## 1. 阶段K目标
 
@@ -612,3 +612,41 @@ K.7 验收结果：
 .\python312\python.exe -m mypy
 .\python312\python.exe -m pytest -q
 ```
+
+K.8 完成矩阵：
+
+| 阶段 | 状态 | 完成内容 | 仍不包含 |
+| --- | --- | --- | --- |
+| K.0a | 已完成 | A-J架构与验收基线固化 | 运行时代码实现 |
+| K.0b | 已完成 | 默认正式路径烟雾测试与后端组合根缺口修正 | UI绕过后端缺口 |
+| K.0c | 已完成 | 审计、TableRef、SharedPublication、RuntimeEvent过滤等只读API补齐 | UI控件实现 |
+| K.1 | 已完成 | Avalonia_UI工程骨架、EngineHost health连接检查 | 业务视图 |
+| K.2 | 已完成 | C# REST/WebSocket客户端、统一响应模型和DTO | 控件内直写HTTP |
+| K.3 | 已完成 | 工作流列表与启动run入口 | 工作流画布 |
+| K.4 | 已完成 | Run列表、cancel、NodeRun状态和REST恢复视图 | 节点调试器 |
+| K.5 | 已完成 | RuntimeEvent WebSocket、断线提示、重连后REST补状态 | 长期离线缓存 |
+| K.6 | 已完成 | RuntimeEvent/AuditEvent只读日志与基础过滤 | 权限审批页面 |
+| K.7 | 已完成 | TableRef、SharedPublication和版本members摘要 | 完整大表编辑 |
+| K.8 | 已完成 | 阶段K总体验收、验证命令通过和边界固化 | 后续阶段功能 |
+
+K.8 验收结果：
+
+- Avalonia UI通过 HTTP 和 WebSocket 访问 EngineHost
+- Avalonia UI 不直接访问 SQLite，不嵌入或重写 Python EngineHost
+- UI断开后后台 EngineHost/WorkflowRunProcess 继续运行
+- RuntimeEvent WebSocket 断开后可重连，并通过 REST 恢复 Run/NodeRun 当前状态
+- K.0b正式路径烟雾测试通过：`.\python312\python.exe -m pytest -q tests\integration\test_k0b_formal_path_smoke.py`
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过，42 个 C# 测试通过
+- `.\python312\python.exe -m ruff check src tests migrations` 通过
+- `.\python312\python.exe -m mypy` 通过
+- `.\python312\python.exe -m pytest -q` 通过
+
+阶段K后仍明确不支持：
+
+- 工作流画布编辑和复杂 workflow 编辑器
+- 完整大表内容加载、表格编辑和数据集仓库能力
+- 权限审批页面和交互式授权流程
+- 长期离线缓存、增量事件回放和复杂冲突合并
+- 安装包发布、自动升级和系统托盘能力
+- 跨 workflow 触发、调度、通知和生产级多用户权限体系

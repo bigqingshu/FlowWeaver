@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.8 阶段K验收。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
 
 阶段 A 范围包括：
 
@@ -413,7 +413,18 @@ K.7 验收结果：
 - 已补 C# 测试覆盖 TableRef 摘要查询、SharedPublication 过滤查询、非法 limit 拒绝、版本 members 摘要和三条 API 路径
 - 暂未实现完整大表内容加载、表格编辑、ReadLease 明细页和跨 workflow 触发能力
 
-当前建议下一步是 K.8：阶段K总体验收复核。
+K.8 验收结果：
+
+- K.0a 到 K.7 已完成并形成阶段 K 最小桌面 UI 基线
+- Avalonia UI 仅通过 HTTP + WebSocket 访问 Python FastAPI EngineHost，不直接访问 SQLite，不绕过后端正式边界
+- UI 已具备 health、workflow 列表、启动 run、Run/NodeRun 状态、取消、RuntimeEvent WebSocket、断线重连 REST 恢复、日志审计只读查询和数据摘要视图
+- K.0b 默认正式路径烟雾测试通过
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过，42 个 C# 测试通过
+- `ruff`、`mypy` 和全量 `pytest -q` 通过
+- 阶段 K 仍不包含工作流画布编辑、完整大表内容加载、表格编辑、权限审批页面、长期离线缓存、安装包发布和跨 workflow 触发能力
+
+当前建议下一步是先推送阶段 K 后续提交；推送后再进入下一阶段边界分析。
 
 ## 环境
 
