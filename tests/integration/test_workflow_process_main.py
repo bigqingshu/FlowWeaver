@@ -38,6 +38,7 @@ from flowweaver.nodes.builtin_table import (
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
+    AuditLevel,
     IPCMessageType,
     LifecycleStatus,
     NodeResultStatus,
@@ -1099,6 +1100,35 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
         PermissionAction.READ_FIELDS,
         PermissionAction.PUBLISH,
     ]
+    audit_events = store.list_audit_events(
+        workflow_run_id=run.workflow_run_id,
+        event_type="PERMISSION_CHECK",
+    )
+    audit_events_by_node_run = {event.node_run_id: event for event in audit_events}
+    assert len(audit_events) == 2
+    assert audit_events_by_node_run[generate_task.node_run_id].result == "granted"
+    assert audit_events_by_node_run[generate_task.node_run_id].audit_level == (
+        AuditLevel.STANDARD
+    )
+    assert audit_events_by_node_run[generate_task.node_run_id].resource_type == (
+        "NODE_OUTPUT"
+    )
+    assert audit_events_by_node_run[generate_task.node_run_id].resource_id == (
+        "run-table-ref:generate:output"
+    )
+    assert audit_events_by_node_run[filter_task.node_run_id].result == "granted"
+    assert audit_events_by_node_run[filter_task.node_run_id].audit_level == (
+        AuditLevel.STANDARD
+    )
+    assert audit_events_by_node_run[filter_task.node_run_id].resource_type == (
+        "NODE_OUTPUT"
+    )
+    assert audit_events_by_node_run[filter_task.node_run_id].resource_id == (
+        "run-table-ref:filter:output"
+    )
+    assert audit_events_by_node_run[filter_task.node_run_id].summary[
+        "permission_handle_id"
+    ] == filter_task.permission_handle_id
     assert len(generate_result.output_refs) == 1
     assert len(filter_result.output_refs) == 1
     filtered_rows = provider.read_rows(
