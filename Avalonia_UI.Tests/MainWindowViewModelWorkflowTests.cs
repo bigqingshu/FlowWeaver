@@ -86,6 +86,110 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task LoadSelectedWorkflowDefinitionLoadsDetailNodesConnectionsAndRevisions()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "display_name": "Source",
+                  "config": {"rows": 3}
+                },
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "enabled": false
+                }
+              ],
+              "connections": [
+                {
+                  "connection_id": "c1",
+                  "source_node_id": "source",
+                  "source_port": "out",
+                  "target_node_id": "filter",
+                  "target_port": "in"
+                }
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 2) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 2, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>
+                {
+                    Revision("rev-wf-1", "wf-1", 1, definitionJson),
+                    Revision("rev-wf-1-2", "wf-1", 2, definitionJson),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.LastWorkflowDetailId);
+        Assert.AreEqual("wf-1", apiClient.LastWorkflowRevisionsWorkflowId);
+        Assert.IsTrue(viewModel.HasWorkflowDefinition);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionError);
+        var detail = viewModel.WorkflowDefinitionDetail;
+        Assert.IsNotNull(detail);
+        Assert.AreEqual("Daily Load", detail.Name);
+        Assert.AreEqual("rev-wf-1", detail.RevisionId);
+        Assert.AreEqual("hash-wf-1", detail.DefinitionHash);
+        Assert.HasCount(2, detail.Nodes);
+        Assert.HasCount(1, detail.Connections);
+        Assert.HasCount(2, detail.Revisions);
+        Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
+        Assert.AreEqual("disabled", detail.Nodes[1].EnabledText);
+        Assert.AreEqual(
+            "source.out -> filter.in",
+            detail.Connections[0].EdgeText);
+        StringAssert.Contains(
+            detail.RawDefinitionJson,
+            "\"schema_version\": \"1.0\"");
+        Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
+    }
+
+    [TestMethod]
+    public async Task LoadSelectedWorkflowDefinitionShowsErrorEnvelope()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_NOT_FOUND",
+                "Workflow not found."),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.HasWorkflowDefinition);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionError);
+        Assert.AreEqual("Workflow definition load failed.", viewModel.WorkflowDefinitionMessage);
+        Assert.AreEqual("WORKFLOW_NOT_FOUND: Workflow not found.", viewModel.WorkflowDefinitionErrorMessage);
+    }
+
+    [TestMethod]
+    public void LoadSelectedWorkflowDefinitionIsDisabledWithoutSelection()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        Assert.IsFalse(viewModel.LoadSelectedWorkflowDefinitionCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task StartSelectedWorkflowStoresRunFeedback()
     {
         var apiClient = new FakeApiClient
@@ -236,7 +340,11 @@ public sealed class MainWindowViewModelWorkflowTests
         };
     }
 
-    private static WorkflowDefinitionDto Workflow(string workflowId, string name, int version)
+    private static WorkflowDefinitionDto Workflow(
+        string workflowId,
+        string name,
+        int version,
+        string definitionJson = """{"nodes":[]}""")
     {
         return new WorkflowDefinitionDto
         {
@@ -248,7 +356,25 @@ public sealed class MainWindowViewModelWorkflowTests
             Status = "ACTIVE",
             UpdatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
             CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
-            Definition = JsonDocument.Parse("""{"nodes":[]}""").RootElement.Clone(),
+            Definition = JsonDocument.Parse(definitionJson).RootElement.Clone(),
+        };
+    }
+
+    private static WorkflowRevisionDto Revision(
+        string revisionId,
+        string workflowId,
+        int version,
+        string definitionJson)
+    {
+        return new WorkflowRevisionDto
+        {
+            RevisionId = revisionId,
+            WorkflowId = workflowId,
+            Version = version,
+            DefinitionHash = $"hash-{workflowId}-{version}",
+            Definition = JsonDocument.Parse(definitionJson).RootElement.Clone(),
+            CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+            CreatedBy = "tester",
         };
     }
 
@@ -293,6 +419,14 @@ public sealed class MainWindowViewModelWorkflowTests
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
 
+        public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No workflow detail response configured.");
+
+        public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
+            ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
+
         public ApiResponseEnvelope<WorkflowRunDto> StartWorkflowResponse { get; set; } =
             ApiResponseEnvelope<WorkflowRunDto>.Failure("NOT_CONFIGURED", "No run response configured.");
 
@@ -306,6 +440,10 @@ public sealed class MainWindowViewModelWorkflowTests
             ApiResponseEnvelope<WorkflowProcessDto>.Failure("NOT_CONFIGURED", "No cancel response configured.");
 
         public EngineHostConnectionSettings? LastSettings { get; private set; }
+
+        public string? LastWorkflowDetailId { get; private set; }
+
+        public string? LastWorkflowRevisionsWorkflowId { get; private set; }
 
         public string? StartedWorkflowId { get; private set; }
 
@@ -343,7 +481,9 @@ public sealed class MainWindowViewModelWorkflowTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            LastWorkflowDetailId = workflowId;
+            return Task.FromResult(WorkflowDetailResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
@@ -351,7 +491,9 @@ public sealed class MainWindowViewModelWorkflowTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            LastWorkflowRevisionsWorkflowId = workflowId;
+            return Task.FromResult(WorkflowRevisionsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(

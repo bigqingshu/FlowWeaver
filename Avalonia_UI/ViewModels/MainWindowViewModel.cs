@@ -62,6 +62,18 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? lastStartedRunStatus;
 
     [ObservableProperty]
+    private bool isLoadingWorkflowDefinition;
+
+    [ObservableProperty]
+    private WorkflowDefinitionDetailViewModel? workflowDefinitionDetail;
+
+    [ObservableProperty]
+    private string workflowDefinitionMessage = "Select a workflow to load definition.";
+
+    [ObservableProperty]
+    private string? workflowDefinitionErrorMessage;
+
+    [ObservableProperty]
     private bool isLoadingRuns;
 
     [ObservableProperty]
@@ -246,6 +258,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
+    public bool HasWorkflowDefinition => WorkflowDefinitionDetail is not null;
+
+    public bool HasWorkflowDefinitionError =>
+        !string.IsNullOrWhiteSpace(WorkflowDefinitionErrorMessage);
+
     public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
 
     public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
@@ -309,6 +326,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanStartSelectedWorkflow()
     {
         return SelectedWorkflow is not null && !IsWorkflowBusy;
+    }
+
+    private bool CanLoadSelectedWorkflowDefinition()
+    {
+        return SelectedWorkflow is not null && !IsLoadingWorkflowDefinition;
     }
 
     private bool CanRefreshRuns()
@@ -421,6 +443,55 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowMessage = "Workflow refresh failed.";
         WorkflowErrorMessage = DescribeError(response);
         IsLoadingWorkflows = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadSelectedWorkflowDefinition))]
+    private async Task LoadSelectedWorkflowDefinitionAsync()
+    {
+        if (SelectedWorkflow is null)
+        {
+            return;
+        }
+
+        var workflowId = SelectedWorkflow.WorkflowId;
+        IsLoadingWorkflowDefinition = true;
+        WorkflowDefinitionMessage = $"Loading definition for {SelectedWorkflow.Name}...";
+        WorkflowDefinitionErrorMessage = null;
+
+        var workflowResponse = await _apiClient.GetWorkflowAsync(
+            BuildSettings(),
+            workflowId,
+            _shutdown.Token);
+
+        if (!workflowResponse.Ok || workflowResponse.Data is null)
+        {
+            WorkflowDefinitionDetail = null;
+            WorkflowDefinitionMessage = "Workflow definition load failed.";
+            WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
+            IsLoadingWorkflowDefinition = false;
+            return;
+        }
+
+        var revisionsResponse = await _apiClient.ListWorkflowRevisionsAsync(
+            BuildSettings(),
+            workflowId,
+            _shutdown.Token);
+
+        if (!revisionsResponse.Ok || revisionsResponse.Data is null)
+        {
+            WorkflowDefinitionDetail = null;
+            WorkflowDefinitionMessage = "Workflow revisions load failed.";
+            WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
+            IsLoadingWorkflowDefinition = false;
+            return;
+        }
+
+        WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
+            workflowResponse.Data,
+            revisionsResponse.Data);
+        WorkflowDefinitionMessage =
+            $"Loaded {WorkflowDefinitionDetail.Name} {WorkflowDefinitionDetail.VersionText}.";
+        IsLoadingWorkflowDefinition = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -1084,12 +1155,22 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
         Runs.Clear();
         SelectedRun = null;
         RunMessage = value is null
             ? "No workflow selected. Refresh runs will load all runs."
             : $"Selected {value.Name}. Refresh runs to load matching runs.";
         RunErrorMessage = null;
+        if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
+        {
+            WorkflowDefinitionDetail = null;
+            WorkflowDefinitionMessage = value is null
+                ? "Select a workflow to load definition."
+                : $"Selected {value.Name}. Load definition to inspect.";
+        }
+
+        WorkflowDefinitionErrorMessage = null;
     }
 
     partial void OnWorkflowErrorMessageChanged(string? value)
@@ -1100,6 +1181,21 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnLastStartedRunIdChanged(string? value)
     {
         OnPropertyChanged(nameof(HasLastStartedRun));
+    }
+
+    partial void OnIsLoadingWorkflowDefinitionChanged(bool value)
+    {
+        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
+    {
+        OnPropertyChanged(nameof(HasWorkflowDefinition));
+    }
+
+    partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasWorkflowDefinitionError));
     }
 
     partial void OnIsLoadingRunsChanged(bool value)
