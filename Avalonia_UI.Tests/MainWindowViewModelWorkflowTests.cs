@@ -223,6 +223,117 @@ public sealed class MainWindowViewModelWorkflowTests
             detail.RawDefinitionJson,
             "\"schema_version\": \"1.0\"");
         Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
+        StringAssert.Contains(viewModel.WorkflowDefinitionDraftJson, "\"schema_version\": \"1.0\"");
+        Assert.IsTrue(viewModel.ValidateWorkflowDefinitionDraftCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task ValidateWorkflowDefinitionDraftSendsCurrentDraftJson()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            ValidateWorkflowDraftResponse =
+                ApiResponseEnvelope<WorkflowValidationResultDto>.Success(
+                    new WorkflowValidationResultDto { Valid = true }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [{"node_instance_id": "a", "node_type": "GenerateTestTableNode", "node_version": "1.0"}],
+              "connections": []
+            }
+            """;
+
+        await viewModel.ValidateWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.IsNotNull(apiClient.ValidatedWorkflowDraftDefinition);
+        Assert.AreEqual(
+            "a",
+            apiClient.ValidatedWorkflowDraftDefinition.Value
+                .GetProperty("nodes")[0]
+                .GetProperty("node_instance_id")
+                .GetString());
+        Assert.AreEqual("Workflow draft is valid.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task ValidateWorkflowDefinitionDraftRejectsInvalidJsonBeforeApi()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = "{";
+
+        await viewModel.ValidateWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.IsNull(apiClient.ValidatedWorkflowDraftDefinition);
+        Assert.AreEqual("Workflow draft JSON is invalid.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task ValidateWorkflowDefinitionDraftShowsBackendIssues()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+            ValidateWorkflowDraftResponse =
+                ApiResponseEnvelope<WorkflowValidationResultDto>.Success(
+                    new WorkflowValidationResultDto
+                    {
+                        Valid = false,
+                        Errors =
+                        [
+                            new WorkflowValidationIssueDto
+                            {
+                                Code = "UNKNOWN_NODE_TYPE",
+                                Path = "nodes[0]",
+                                Message = "Unknown node type/version: Missing@1.0",
+                            },
+                        ],
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.ValidateWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(
+            "Workflow draft has validation issues.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "UNKNOWN_NODE_TYPE at nodes[0]: Unknown node type/version: Missing@1.0",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
     }
 
     [TestMethod]
@@ -495,6 +606,11 @@ public sealed class MainWindowViewModelWorkflowTests
                 "NOT_CONFIGURED",
                 "No create response configured.");
 
+        public ApiResponseEnvelope<WorkflowValidationResultDto> ValidateWorkflowDraftResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowValidationResultDto>.Failure(
+                "NOT_CONFIGURED",
+                "No validate response configured.");
+
         public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
 
@@ -517,6 +633,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? CreatedWorkflowName { get; private set; }
 
         public JsonElement? CreatedWorkflowDefinition { get; private set; }
+
+        public JsonElement? ValidatedWorkflowDraftDefinition { get; private set; }
 
         public string? LastWorkflowRevisionsWorkflowId { get; private set; }
 
@@ -561,6 +679,16 @@ public sealed class MainWindowViewModelWorkflowTests
             CreatedWorkflowName = name;
             CreatedWorkflowDefinition = definition.Clone();
             return Task.FromResult(CreateWorkflowResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowValidationResultDto>> ValidateWorkflowDraftAsync(
+            EngineHostConnectionSettings settings,
+            JsonElement definition,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            ValidatedWorkflowDraftDefinition = definition.Clone();
+            return Task.FromResult(ValidateWorkflowDraftResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(

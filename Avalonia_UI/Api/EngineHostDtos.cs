@@ -89,6 +89,36 @@ public sealed record WorkflowCreateRequestDto
     public JsonElement Definition { get; init; }
 }
 
+public sealed record WorkflowValidateRequestDto
+{
+    [JsonPropertyName("definition")]
+    public JsonElement Definition { get; init; }
+}
+
+public sealed record WorkflowValidationIssueDto
+{
+    [JsonPropertyName("code")]
+    public string Code { get; init; } = string.Empty;
+
+    [JsonPropertyName("path")]
+    public string Path { get; init; } = string.Empty;
+
+    [JsonPropertyName("message")]
+    public string Message { get; init; } = string.Empty;
+}
+
+public sealed record WorkflowValidationResultDto
+{
+    [JsonPropertyName("valid")]
+    public bool Valid { get; init; }
+
+    [JsonPropertyName("errors")]
+    public WorkflowValidationIssueDto[] Errors { get; init; } = [];
+
+    [JsonPropertyName("warnings")]
+    public WorkflowValidationIssueDto[] Warnings { get; init; } = [];
+}
+
 public sealed record WorkflowRevisionDto
 {
     [JsonPropertyName("revision_id")]

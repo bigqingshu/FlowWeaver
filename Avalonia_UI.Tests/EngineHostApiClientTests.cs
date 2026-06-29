@@ -135,6 +135,42 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ValidateWorkflowDraftAsyncPostsDraftPayload()
+    {
+        HttpMethod? method = null;
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            method = request.Method;
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"valid":false,"errors":[{"code":"UNKNOWN_NODE_TYPE","path":"nodes[0]","message":"Unknown node type/version: Missing@1.0"}],"warnings":[]},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+        using var definition = JsonDocument.Parse("""{"schema_version":"1.0","nodes":[],"connections":[]}""");
+
+        var result = await client.ValidateWorkflowDraftAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            definition.RootElement);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, method);
+        Assert.AreEqual("Bearer", handler.Authorization?.Scheme);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/validate"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual(
+            "1.0",
+            payload.RootElement.GetProperty("definition").GetProperty("schema_version").GetString());
+        Assert.IsFalse(result.Data?.Valid);
+        Assert.AreEqual("UNKNOWN_NODE_TYPE", result.Data?.Errors[0].Code);
+    }
+
+    [TestMethod]
     public async Task ListWorkflowRevisionsAsyncUsesRevisionsPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

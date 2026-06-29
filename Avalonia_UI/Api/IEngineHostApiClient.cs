@@ -26,6 +26,11 @@ public interface IEngineHostApiClient
         JsonElement definition,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowValidationResultDto>> ValidateWorkflowDraftAsync(
+        EngineHostConnectionSettings settings,
+        JsonElement definition,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

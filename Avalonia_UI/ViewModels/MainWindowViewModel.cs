@@ -81,6 +81,18 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? workflowDefinitionErrorMessage;
 
     [ObservableProperty]
+    private string workflowDefinitionDraftJson = string.Empty;
+
+    [ObservableProperty]
+    private bool isValidatingWorkflowDefinitionDraft;
+
+    [ObservableProperty]
+    private string workflowDefinitionValidationMessage = "Load definition to edit draft JSON.";
+
+    [ObservableProperty]
+    private string? workflowDefinitionValidationErrorMessage;
+
+    [ObservableProperty]
     private bool isLoadingRuns;
 
     [ObservableProperty]
@@ -270,6 +282,13 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasWorkflowDefinitionError =>
         !string.IsNullOrWhiteSpace(WorkflowDefinitionErrorMessage);
 
+    public bool IsWorkflowDefinitionDraftBusy => IsValidatingWorkflowDefinitionDraft;
+
+    public bool HasWorkflowDefinitionValidationError =>
+        !string.IsNullOrWhiteSpace(WorkflowDefinitionValidationErrorMessage);
+
+    public bool HasWorkflowDefinitionDraft => !string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson);
+
     public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
 
     public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
@@ -343,6 +362,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanLoadSelectedWorkflowDefinition()
     {
         return SelectedWorkflow is not null && !IsLoadingWorkflowDefinition;
+    }
+
+    private bool CanValidateWorkflowDefinitionDraft()
+    {
+        return !IsWorkflowDefinitionDraftBusy && HasWorkflowDefinitionDraft;
     }
 
     private bool CanRefreshRuns()
@@ -536,9 +560,59 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
             workflowResponse.Data,
             revisionsResponse.Data);
+        WorkflowDefinitionDraftJson = WorkflowDefinitionDetail.RawDefinitionJson;
+        WorkflowDefinitionValidationMessage = "Draft JSON loaded. Validate before saving in a later stage.";
+        WorkflowDefinitionValidationErrorMessage = null;
         WorkflowDefinitionMessage =
             $"Loaded {WorkflowDefinitionDetail.Name} {WorkflowDefinitionDetail.VersionText}.";
         IsLoadingWorkflowDefinition = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
+    private async Task ValidateWorkflowDefinitionDraftAsync()
+    {
+        if (string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson))
+        {
+            WorkflowDefinitionValidationMessage = "Workflow draft validation rejected.";
+            WorkflowDefinitionValidationErrorMessage = "Definition draft JSON is required.";
+            return;
+        }
+
+        JsonElement definition;
+        try
+        {
+            using var parsed = JsonDocument.Parse(WorkflowDefinitionDraftJson);
+            definition = parsed.RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            WorkflowDefinitionValidationMessage = "Workflow draft JSON is invalid.";
+            WorkflowDefinitionValidationErrorMessage = ex.Message;
+            return;
+        }
+
+        IsValidatingWorkflowDefinitionDraft = true;
+        WorkflowDefinitionValidationMessage = "Validating workflow draft...";
+        WorkflowDefinitionValidationErrorMessage = null;
+
+        var response = await _apiClient.ValidateWorkflowDraftAsync(
+            BuildSettings(),
+            definition,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            WorkflowDefinitionValidationMessage = response.Data.Valid
+                ? "Workflow draft is valid."
+                : "Workflow draft has validation issues.";
+            WorkflowDefinitionValidationErrorMessage = FormatValidationIssues(response.Data);
+            IsValidatingWorkflowDefinitionDraft = false;
+            return;
+        }
+
+        WorkflowDefinitionValidationMessage = "Workflow draft validation failed.";
+        WorkflowDefinitionValidationErrorMessage = DescribeError(response);
+        IsValidatingWorkflowDefinitionDraft = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -1138,6 +1212,21 @@ public partial class MainWindowViewModel : ViewModelBase
         return $"{response.Error.ErrorCode}: {response.Error.Message}";
     }
 
+    private static string? FormatValidationIssues(WorkflowValidationResultDto result)
+    {
+        var issueLines = result.Errors
+            .Concat(result.Warnings)
+            .Select(issue =>
+                string.IsNullOrWhiteSpace(issue.Path)
+                    ? $"{issue.Code}: {issue.Message}"
+                    : $"{issue.Code} at {issue.Path}: {issue.Message}")
+            .ToArray();
+
+        return issueLines.Length == 0
+            ? null
+            : string.Join(Environment.NewLine, issueLines);
+    }
+
     private bool TryParseRuntimeEventLogFilters(
         out long? afterSequenceNumber,
         out int limit,
@@ -1252,12 +1341,17 @@ public partial class MainWindowViewModel : ViewModelBase
         if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
         {
             WorkflowDefinitionDetail = null;
+            WorkflowDefinitionDraftJson = string.Empty;
             WorkflowDefinitionMessage = value is null
                 ? "Select a workflow to load definition."
                 : $"Selected {value.Name}. Load definition to inspect.";
         }
 
         WorkflowDefinitionErrorMessage = null;
+        WorkflowDefinitionValidationMessage = value is null
+            ? "Load definition to edit draft JSON."
+            : "Load definition before editing draft JSON.";
+        WorkflowDefinitionValidationErrorMessage = null;
     }
 
     partial void OnWorkflowErrorMessageChanged(string? value)
@@ -1283,6 +1377,23 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionError));
+    }
+
+    partial void OnWorkflowDefinitionDraftJsonChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
+        ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsValidatingWorkflowDefinitionDraftChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
+        ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnWorkflowDefinitionValidationErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasWorkflowDefinitionValidationError));
     }
 
     partial void OnIsLoadingRunsChanged(bool value)

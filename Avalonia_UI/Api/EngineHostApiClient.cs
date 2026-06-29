@@ -77,6 +77,22 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowValidationResultDto>> ValidateWorkflowDraftAsync(
+        EngineHostConnectionSettings settings,
+        JsonElement definition,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowValidationResultDto>(
+            settings,
+            HttpMethod.Post,
+            "api/v1/workflows/validate",
+            payload: new WorkflowValidateRequestDto
+            {
+                Definition = definition,
+            },
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

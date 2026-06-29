@@ -625,18 +625,40 @@
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="14">
-                            <Grid RowDefinitions="Auto,*" RowSpacing="10">
-                                <TextBlock Text="Definition JSON"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="#14171A"/>
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                    <TextBlock Text="Draft JSON"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               Foreground="#14171A"/>
+                                    <ProgressBar Grid.Column="1"
+                                                 Width="88"
+                                                 Height="8"
+                                                 VerticalAlignment="Center"
+                                                 IsIndeterminate="True"
+                                                 IsVisible="{Binding IsWorkflowDefinitionDraftBusy}"/>
+                                    <Button Grid.Column="2"
+                                            Content="Validate"
+                                            Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
+                                            MinWidth="92"/>
+                                </Grid>
+
                                 <TextBox Grid.Row="1"
-                                         Text="{Binding WorkflowDefinitionDetail.RawDefinitionJson}"
-                                         IsReadOnly="True"
+                                         Text="{Binding WorkflowDefinitionDraftJson}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          FontFamily="Consolas"
                                          FontSize="12"/>
+
+                                <StackPanel Grid.Row="2" Spacing="4">
+                                    <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
+                                               Foreground="#344054"/>
+                                    <TextBlock Text="{Binding WorkflowDefinitionValidationErrorMessage}"
+                                               TextWrapping="Wrap"
+                                               Foreground="#B42318"
+                                               IsVisible="{Binding HasWorkflowDefinitionValidationError}"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
                     </Grid>

@@ -243,6 +243,14 @@ public sealed class MainWindowViewModelDataTests
             throw new NotSupportedException();
         }
 
+        public Task<ApiResponseEnvelope<WorkflowValidationResultDto>> ValidateWorkflowDraftAsync(
+            EngineHostConnectionSettings settings,
+            JsonElement definition,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
             EngineHostConnectionSettings settings,
             string workflowId,
