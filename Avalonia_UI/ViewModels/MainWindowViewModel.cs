@@ -53,6 +53,30 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? lastStartedRunStatus;
 
+    [ObservableProperty]
+    private bool isLoadingRuns;
+
+    [ObservableProperty]
+    private bool isCancellingRun;
+
+    [ObservableProperty]
+    private WorkflowRunListItemViewModel? selectedRun;
+
+    [ObservableProperty]
+    private string runMessage = "No runs loaded.";
+
+    [ObservableProperty]
+    private string? runErrorMessage;
+
+    [ObservableProperty]
+    private bool isLoadingNodeRuns;
+
+    [ObservableProperty]
+    private string nodeRunMessage = "Select a run to load node status.";
+
+    [ObservableProperty]
+    private string? nodeRunErrorMessage;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -78,6 +102,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
+    public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
+
+    public ObservableCollection<NodeRunListItemViewModel> NodeRuns { get; } = new();
+
     public bool IsChecking => ConnectionStatus == ConnectionStatus.Connecting;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -87,6 +115,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsWorkflowBusy => IsLoadingWorkflows || IsStartingWorkflow;
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
+
+    public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
+
+    public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
+
+    public bool IsNodeRunBusy => IsLoadingNodeRuns;
+
+    public bool HasNodeRunError => !string.IsNullOrWhiteSpace(NodeRunErrorMessage);
 
     private bool CanCheckConnection()
     {
@@ -101,6 +137,21 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanStartSelectedWorkflow()
     {
         return SelectedWorkflow is not null && !IsWorkflowBusy;
+    }
+
+    private bool CanRefreshRuns()
+    {
+        return !IsRunBusy;
+    }
+
+    private bool CanCancelSelectedRun()
+    {
+        return SelectedRun is not null && !IsRunBusy;
+    }
+
+    private bool CanRefreshNodeRuns()
+    {
+        return SelectedRun is not null && !IsNodeRunBusy;
     }
 
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
@@ -190,12 +241,130 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowMessage =
                 $"Started run {response.Data.WorkflowRunId} ({response.Data.Status}).";
             IsStartingWorkflow = false;
+            await LoadRunsAsync(response.Data.WorkflowRunId);
             return;
         }
 
         WorkflowMessage = "Workflow start failed.";
         WorkflowErrorMessage = DescribeError(response);
         IsStartingWorkflow = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshRuns))]
+    private Task RefreshRunsAsync()
+    {
+        return LoadRunsAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCancelSelectedRun))]
+    private async Task CancelSelectedRunAsync()
+    {
+        if (SelectedRun is null)
+        {
+            return;
+        }
+
+        var workflowRunId = SelectedRun.WorkflowRunId;
+        IsCancellingRun = true;
+        RunMessage = $"Cancelling run {workflowRunId}...";
+        RunErrorMessage = null;
+
+        var response = await _apiClient.CancelRunAsync(
+            BuildSettings(),
+            workflowRunId,
+            _shutdown.Token);
+
+        IsCancellingRun = false;
+
+        if (response.Ok)
+        {
+            var processStatus = response.Data?.Status;
+            var cancelMessage = string.IsNullOrWhiteSpace(processStatus)
+                ? $"Cancel requested for run {workflowRunId}."
+                : $"Cancel requested for run {workflowRunId} ({processStatus}).";
+            await LoadRunsAsync(workflowRunId);
+            if (!HasRunError)
+            {
+                RunMessage = cancelMessage;
+            }
+
+            return;
+        }
+
+        RunMessage = "Run cancel failed.";
+        RunErrorMessage = DescribeError(response);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshNodeRuns))]
+    private async Task RefreshNodeRunsAsync()
+    {
+        if (SelectedRun is null)
+        {
+            return;
+        }
+
+        IsLoadingNodeRuns = true;
+        NodeRunMessage = $"Loading nodes for {SelectedRun.WorkflowRunId}...";
+        NodeRunErrorMessage = null;
+
+        var response = await _apiClient.ListNodeRunsAsync(
+            BuildSettings(),
+            SelectedRun.WorkflowRunId,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            NodeRuns.Clear();
+            foreach (var nodeRun in response.Data)
+            {
+                NodeRuns.Add(new NodeRunListItemViewModel(nodeRun));
+            }
+
+            NodeRunMessage = $"Loaded {NodeRuns.Count} node run(s).";
+            IsLoadingNodeRuns = false;
+            return;
+        }
+
+        NodeRunMessage = "Node status refresh failed.";
+        NodeRunErrorMessage = DescribeError(response);
+        IsLoadingNodeRuns = false;
+    }
+
+    private async Task LoadRunsAsync(string? selectWorkflowRunId = null)
+    {
+        IsLoadingRuns = true;
+        RunMessage = SelectedWorkflow is null
+            ? "Loading runs..."
+            : $"Loading runs for {SelectedWorkflow.Name}...";
+        RunErrorMessage = null;
+
+        var workflowId = SelectedWorkflow?.WorkflowId;
+        var response = await _apiClient.ListRunsAsync(
+            BuildSettings(),
+            workflowId,
+            cancellationToken: _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            var previousRunId = selectWorkflowRunId ?? SelectedRun?.WorkflowRunId;
+            Runs.Clear();
+            foreach (var run in response.Data)
+            {
+                Runs.Add(new WorkflowRunListItemViewModel(run));
+            }
+
+            SelectedRun = Runs.FirstOrDefault(run => run.WorkflowRunId == previousRunId)
+                ?? Runs.FirstOrDefault();
+            RunMessage = workflowId is null
+                ? $"Loaded {Runs.Count} run(s)."
+                : $"Loaded {Runs.Count} run(s) for {SelectedWorkflow?.Name}.";
+            IsLoadingRuns = false;
+            return;
+        }
+
+        RunMessage = "Run refresh failed.";
+        RunErrorMessage = DescribeError(response);
+        IsLoadingRuns = false;
     }
 
     private EngineHostConnectionSettings BuildSettings()
@@ -241,6 +410,12 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        Runs.Clear();
+        SelectedRun = null;
+        RunMessage = value is null
+            ? "No workflow selected. Refresh runs will load all runs."
+            : $"Selected {value.Name}. Refresh runs to load matching runs.";
+        RunErrorMessage = null;
     }
 
     partial void OnWorkflowErrorMessageChanged(string? value)
@@ -253,10 +428,54 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasLastStartedRun));
     }
 
+    partial void OnIsLoadingRunsChanged(bool value)
+    {
+        NotifyRunCommandStateChanged();
+    }
+
+    partial void OnIsCancellingRunChanged(bool value)
+    {
+        NotifyRunCommandStateChanged();
+    }
+
+    partial void OnSelectedRunChanged(WorkflowRunListItemViewModel? value)
+    {
+        NodeRuns.Clear();
+        NodeRunMessage = value is null
+            ? "Select a run to load node status."
+            : $"Selected run {value.WorkflowRunId}. Refresh nodes to load status.";
+        NodeRunErrorMessage = null;
+        CancelSelectedRunCommand.NotifyCanExecuteChanged();
+        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnRunErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasRunError));
+    }
+
+    partial void OnIsLoadingNodeRunsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNodeRunBusy));
+        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNodeRunErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasNodeRunError));
+    }
+
     private void NotifyWorkflowCommandStateChanged()
     {
         OnPropertyChanged(nameof(IsWorkflowBusy));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyRunCommandStateChanged()
+    {
+        OnPropertyChanged(nameof(IsRunBusy));
+        RefreshRunsCommand.NotifyCanExecuteChanged();
+        CancelSelectedRunCommand.NotifyCanExecuteChanged();
     }
 }

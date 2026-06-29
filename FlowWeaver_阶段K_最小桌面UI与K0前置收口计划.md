@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.3 工作流列表与运行入口已完成，下一步 K.4 运行和节点状态
+> 当前执行点：K.4 运行和节点状态 REST 恢复视图已完成，下一步 K.5 事件流和重连
 
 ## 1. 阶段K目标
 
@@ -483,8 +483,24 @@ K.3 验收结果：
 验收：
 
 - 可取消运行
-- 可查看节点状态变化
-- 状态刷新来源为REST恢复和WebSocket事件合并
+- 可通过REST刷新查看节点状态、progress和current_stage
+- WebSocket事件合并、断线提示和重连恢复留到K.5
+
+K.4 完成记录：
+
+- 主窗口接入 Run 列表、Cancel 按钮和 NodeRun 列表
+- `MainWindowViewModel` 通过 `EngineHostApiClient` 查询 runs、取消 selected run、查询 selected run 的 node runs
+- Run 列表按当前 selected workflow 过滤；未选 workflow 时仍保留客户端调用全量 runs 的边界
+- NodeRun 列表展示 `status`、`progress` 百分比和 `current_stage`
+- 启动 workflow run 成功后会刷新 Run 列表并选中新建 run
+- C#测试覆盖 Run 刷新、cancel 请求、无选择时禁用 cancel、NodeRun progress/current_stage 展示
+- API Client 测试覆盖 `GET /api/v1/runs`、`GET /api/v1/runs/{run_id}/nodes` 和 `POST /api/v1/runs/{run_id}/cancel`
+- K.4不实现 WebSocket RuntimeEvent 合并、断线重连、日志审计视图或 TableRef/SharedPublication 摘要
+
+K.4 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.5：事件流与重连
 

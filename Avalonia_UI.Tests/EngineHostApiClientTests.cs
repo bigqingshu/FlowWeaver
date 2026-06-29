@@ -90,6 +90,70 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListRunsAsyncBuildsWorkflowFilterQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListRunsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            workflowId: "wf-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs?workflow_id=wf-1"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task ListNodeRunsAsyncUsesRunPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListNodeRunsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/nodes"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task CancelRunAsyncPostsToCancelPath()
+    {
+        HttpMethod? method = null;
+        var handler = new StubHandler(request =>
+        {
+            method = request.Method;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"process_id":"proc","workflow_run_id":"run-1","os_pid":null,"process_generation":1,"fencing_token":null,"status":"CANCEL_REQUESTED","started_at":"2026-06-29T01:02:03Z","last_heartbeat_at":null,"cancel_requested_at":"2026-06-29T01:03:03Z","exited_at":null,"exit_code":null,"error":null},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.CancelRunAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, method);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/cancel"),
+            handler.RequestUri);
+        Assert.AreEqual("CANCEL_REQUESTED", result.Data?.Status);
+    }
+
+    [TestMethod]
     public async Task ErrorEnvelopeIsReturned()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
