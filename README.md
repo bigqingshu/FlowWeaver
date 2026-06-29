@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L.0 已开始固化桌面端运行入口与配置边界。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L 已完成 L.0 桌面端运行入口与配置边界清单、L.1a 后端运行入口收口和 L.1b 桌面端运行入口收口。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
 
 阶段 A 范围包括：
 
@@ -98,6 +98,8 @@
 - 阶段 L 先做桌面端集成稳定化与运行入口收口
 - L.0 已新增 `FlowWeaver_阶段L.0_运行入口与配置边界清单.md`
 - L.1 建议拆分为后端运行入口、桌面端运行入口和组合开发脚本边界
+- L.1a 已新增 `FlowWeaver_阶段L.1a_后端运行入口收口.md`
+- L.1b 已新增 `FlowWeaver_阶段L.1b_桌面端运行入口收口.md`
 - L.3 正式路径烟雾清单建议覆盖空数据库、已有工作流和 EngineHost 重启三类验收
 
 ## 阶段 I 计划
@@ -441,13 +443,13 @@ K.8 验收结果：
 同步依赖：
 
 ```powershell
-py -3.12 -m uv sync --extra dev
+.\python312\python.exe -m uv sync --extra dev
 ```
 
 如果本机还没有 `uv`，可以先在当前 Python 3.12 环境中安装：
 
 ```powershell
-py -3.12 -m pip install uv
+.\python312\python.exe -m pip install uv
 ```
 
 运行测试：
@@ -466,18 +468,46 @@ py -3.12 -m pip install uv
 对指定 SQLite 元数据库执行迁移：
 
 ```powershell
-.\python312\Scripts\alembic.exe -c alembic.ini -x database_url=sqlite:///runtime/metadata/flowweaver.db upgrade head
+.\python312\python.exe -m alembic -c alembic.ini -x database_url=sqlite:///runtime/metadata/flowweaver.db upgrade head
 ```
 
 启动本机 EngineHost API：
 
 ```powershell
-.\python312\Scripts\uvicorn.exe --app-dir src flowweaver.api.app:create_default_app --factory --host 127.0.0.1 --port 8000
+.\python312\python.exe -m uvicorn --app-dir src flowweaver.api.app:create_default_app --factory --host 127.0.0.1 --port 8000
 ```
 
-首次启动会在 `runtime/config/local_api_token` 生成本地 API token。
+默认启动会创建 `runtime/` 目录、执行 Alembic 迁移，并在 `runtime/config/local_api_token` 生成或复用本地 API token。
+`/api/v1/health` 不需要 token：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/health
+```
+
 除 `/api/v1/health` 外，HTTP API 需要携带：
 
 ```powershell
 Authorization: Bearer <local_api_token>
 ```
+
+PowerShell 中可这样读取本机 token 并做最小鉴权检查：
+
+```powershell
+$token = (Get-Content -Raw runtime\config\local_api_token).Trim()
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Headers $headers http://127.0.0.1:8000/api/v1/workflows
+```
+
+构建桌面端：
+
+```powershell
+dotnet build Avalonia_UI/Avalonia_UI.sln
+```
+
+启动桌面端：
+
+```powershell
+dotnet run --project Avalonia_UI/Avalonia_UI.csproj
+```
+
+桌面端启动后，在主窗口输入 EngineHost `Base URL` 和本机 token，点击 `Check` 只验证 `/api/v1/health`；业务 API 和 RuntimeEvent WebSocket 仍需要 token。
