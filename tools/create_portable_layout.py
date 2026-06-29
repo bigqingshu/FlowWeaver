@@ -40,6 +40,7 @@ def create_portable_layout(
         output_dir / "portable_launcher.py",
     )
     _write_start_cmd(output_dir / "start_flowweaver.cmd")
+    _write_start_desktop_cmd(output_dir / "start_flowweaver_desktop.cmd")
     _write_readme(output_dir / "docs" / "README.txt")
 
     if include_python:
@@ -108,24 +109,52 @@ def _write_start_cmd(path: Path) -> None:
     )
 
 
+def _write_start_desktop_cmd(path: Path) -> None:
+    path.write_text(
+        "\r\n".join(
+            [
+                "@echo off",
+                "setlocal",
+                'cd /d "%~dp0"',
+                (
+                    '"EngineHost\\python312\\python.exe" '
+                    '"portable_launcher.py" %*'
+                ),
+                "exit /b %ERRORLEVEL%",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_readme(path: Path) -> None:
     path.write_text(
         "\n".join(
             [
                 "FlowWeaver Portable Layout",
                 "",
-                "Start the current backend-only launcher on Windows:",
+                "Start the backend-only launcher on Windows:",
                 "start_flowweaver.cmd",
                 "",
-                "Equivalent command:",
+                "Backend-only equivalent command:",
                 "EngineHost/python312/python.exe portable_launcher.py --no-desktop",
                 "",
-                "Optional launcher arguments can be passed through the cmd wrapper.",
-                "Example:",
-                "start_flowweaver.cmd --port 8000 --health-timeout-seconds 30",
+                "Start the Desktop combo launcher on Windows:",
+                "start_flowweaver_desktop.cmd",
                 "",
-                "The current portable launcher does not start Desktop",
-                "automatically yet.",
+                "Desktop combo equivalent command:",
+                "EngineHost/python312/python.exe portable_launcher.py",
+                "",
+                "Optional launcher arguments can be passed through both cmd wrappers.",
+                "Backend-only example:",
+                "start_flowweaver.cmd --port 8000 --health-timeout-seconds 30",
+                "Desktop combo example:",
+                (
+                    "start_flowweaver_desktop.cmd --port 8000 "
+                    "--health-timeout-seconds 30"
+                ),
+                "",
                 "Default EngineHost BaseUrl: http://127.0.0.1:8000",
                 "Local API token is generated at:",
                 "EngineHost/runtime/config/local_api_token.",
