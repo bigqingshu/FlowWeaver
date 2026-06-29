@@ -421,6 +421,102 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task WorkflowDefinitionEditSaveAndRunLoopUsesCurrentRevision()
+    {
+        var v1Json =
+            """
+            {"schema_version":"1.0","nodes":[],"connections":[]}
+            """;
+        var v2Json =
+            """
+            {"schema_version":"1.0","nodes":[{"node_instance_id":"generate","node_type":"GenerateTestTableNode","node_version":"1.0","config":{"rows":3}}],"connections":[]}
+            """;
+        var created = Workflow("wf-loop", "Generated table workflow", 1, v1Json) with
+        {
+            RevisionId = "rev-loop-v1",
+            DefinitionHash = "hash-loop-v1",
+        };
+        var saved = Workflow("wf-loop", "Generated table workflow", 2, v2Json) with
+        {
+            RevisionId = "rev-loop-v2",
+            DefinitionHash = "hash-loop-v2",
+        };
+        var apiClient = new FakeApiClient
+        {
+            CreateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(created),
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { created }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(created),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>
+                {
+                    Revision("rev-loop-v1", "wf-loop", 1, v1Json),
+                }),
+            ValidateWorkflowDraftResponse =
+                ApiResponseEnvelope<WorkflowValidationResultDto>.Success(
+                    new WorkflowValidationResultDto { Valid = true }),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(saved),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                new WorkflowRunDto
+                {
+                    WorkflowRunId = "run-loop",
+                    WorkflowId = "wf-loop",
+                    RevisionId = "rev-loop-v2",
+                    WorkflowVersion = 2,
+                    DefinitionHash = "hash-loop-v2",
+                    Status = "PENDING",
+                }),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto>
+                {
+                    Run("run-loop", "wf-loop", "PENDING") with
+                    {
+                        RevisionId = "rev-loop-v2",
+                        WorkflowVersion = 2,
+                        DefinitionHash = "hash-loop-v2",
+                    },
+                }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-loop", "run-loop", "generate", "READY", 0, "waiting"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.CreateTemplateWorkflowCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = v2Json;
+        await viewModel.ValidateWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        apiClient.WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+            new List<WorkflowDefinitionDto> { saved });
+        apiClient.WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(saved);
+        apiClient.WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+            new List<WorkflowRevisionDto>
+            {
+                Revision("rev-loop-v1", "wf-loop", 1, v1Json),
+                Revision("rev-loop-v2", "wf-loop", 2, v2Json),
+            });
+
+        await viewModel.SaveWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+        await viewModel.StartSelectedWorkflowCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeRunsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Generated table workflow", apiClient.CreatedWorkflowName);
+        Assert.AreEqual("rev-loop-v1", apiClient.UpdatedWorkflowBaseRevisionId);
+        Assert.AreEqual("wf-loop", apiClient.StartedWorkflowId);
+        Assert.AreEqual("rev-loop-v2", viewModel.WorkflowDefinitionDetail?.RevisionId);
+        Assert.AreEqual("run-loop", viewModel.LastStartedRunId);
+        Assert.AreEqual("PENDING", viewModel.LastStartedRunStatus);
+        Assert.AreEqual("run-loop", viewModel.SelectedRun?.WorkflowRunId);
+        Assert.AreEqual("generate", viewModel.NodeRuns[0].NodeInstanceId);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsFalse(viewModel.HasRunError);
+        Assert.IsFalse(viewModel.HasNodeRunError);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionShowsErrorEnvelope()
     {
         var apiClient = new FakeApiClient
