@@ -18,11 +18,13 @@ from flowweaver.common.database import create_sqlite_engine, sqlite_url
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
+    AuditEventRecord,
     DataRefRecord,
     InputSnapshotRecord,
     NodeRunRecord,
     NodeTaskRecord,
     NodeTaskResultRecord,
+    PermissionGrantRecord,
     ReadLeaseRecord,
     RuntimeEventRecord,
     SharedPublicationMemberRecord,
@@ -34,6 +36,7 @@ from flowweaver.engine.db_models import (
     WorkflowRunRecord,
 )
 from flowweaver.protocols.enums import (
+    AuditLevel,
     LifecycleStatus,
     NodeResultStatus,
     NodeRunStatus,
@@ -47,6 +50,11 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.permissions import (
+    AuditEventModel,
+    PermissionGrantModel,
+    PermissionScopeModel,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -1584,6 +1592,105 @@ class RuntimeStore:
             session.flush()
             return [_read_lease_from_record(record) for record in records]
 
+    def create_permission_grant(
+        self,
+        grant: PermissionGrantModel,
+    ) -> PermissionGrantModel:
+        with self._session_factory.begin() as session:
+            record = _permission_grant_to_record(grant)
+            session.add(record)
+            session.flush()
+            return _permission_grant_from_record(record)
+
+    def get_permission_grant(
+        self,
+        permission_handle_id: str,
+    ) -> PermissionGrantModel | None:
+        with self._session_factory() as session:
+            record = session.get(PermissionGrantRecord, permission_handle_id)
+            if record is None:
+                return None
+            return _permission_grant_from_record(record)
+
+    def list_permission_grants_by_workflow_run(
+        self,
+        workflow_run_id: str,
+        *,
+        active_only: bool = False,
+    ) -> list[PermissionGrantModel]:
+        statement = (
+            select(PermissionGrantRecord)
+            .where(PermissionGrantRecord.workflow_run_id == workflow_run_id)
+            .order_by(PermissionGrantRecord.issued_at, PermissionGrantRecord.request_id)
+        )
+        if active_only:
+            statement = statement.where(PermissionGrantRecord.granted.is_(True))
+            statement = statement.where(PermissionGrantRecord.revoked_at.is_(None))
+            statement = statement.where(
+                (PermissionGrantRecord.expires_at.is_(None))
+                | (PermissionGrantRecord.expires_at > _datetime_to_text(utc_now()))
+            )
+        with self._session_factory() as session:
+            return [
+                _permission_grant_from_record(record)
+                for record in session.scalars(statement)
+            ]
+
+    def revoke_permission_grant(
+        self,
+        permission_handle_id: str,
+    ) -> PermissionGrantModel | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.get(PermissionGrantRecord, permission_handle_id)
+            if record is None:
+                return None
+            if record.revoked_at is None:
+                record.revoked_at = _datetime_to_text(now)
+            return _permission_grant_from_record(record)
+
+    def append_audit_event(
+        self,
+        event: AuditEventModel,
+    ) -> AuditEventModel:
+        with self._session_factory.begin() as session:
+            record = _audit_event_to_record(event)
+            session.add(record)
+            session.flush()
+            return _audit_event_from_record(record)
+
+    def get_audit_event(self, event_id: str) -> AuditEventModel | None:
+        with self._session_factory() as session:
+            record = session.get(AuditEventRecord, event_id)
+            if record is None:
+                return None
+            return _audit_event_from_record(record)
+
+    def list_audit_events(
+        self,
+        *,
+        workflow_run_id: str | None = None,
+        node_run_id: str | None = None,
+        event_type: str | None = None,
+    ) -> list[AuditEventModel]:
+        statement = select(AuditEventRecord).order_by(
+            AuditEventRecord.timestamp,
+            AuditEventRecord.event_id,
+        )
+        if workflow_run_id is not None:
+            statement = statement.where(
+                AuditEventRecord.workflow_run_id == workflow_run_id
+            )
+        if node_run_id is not None:
+            statement = statement.where(AuditEventRecord.node_run_id == node_run_id)
+        if event_type is not None:
+            statement = statement.where(AuditEventRecord.event_type == event_type)
+        with self._session_factory() as session:
+            return [
+                _audit_event_from_record(record)
+                for record in session.scalars(statement)
+            ]
+
     def append_runtime_event(self, event: EventModel) -> int:
         with self._session_factory.begin() as session:
             record = RuntimeEventRecord(
@@ -1792,6 +1899,95 @@ def _node_task_result_from_record(
         error=json.loads(record.error_json) if record.error_json else None,
         started_at=_datetime_from_text(record.started_at),
         finished_at=_datetime_from_text(record.finished_at),
+    )
+
+
+def _permission_grant_to_record(
+    grant: PermissionGrantModel,
+) -> PermissionGrantRecord:
+    return PermissionGrantRecord(
+        permission_handle_id=grant.permission_handle_id,
+        request_id=grant.request_id,
+        workflow_run_id=grant.workflow_run_id,
+        node_run_id=grant.node_run_id,
+        scopes_json=_permission_scopes_json(grant.scopes),
+        granted=grant.granted,
+        issued_at=_datetime_to_text(grant.issued_at),
+        expires_at=_optional_datetime_to_text(grant.expires_at),
+        revoked_at=_optional_datetime_to_text(grant.revoked_at),
+        denial_reason=grant.denial_reason,
+        audit_level=grant.audit_level.value,
+    )
+
+
+def _permission_grant_from_record(
+    record: PermissionGrantRecord,
+) -> PermissionGrantModel:
+    return PermissionGrantModel(
+        permission_handle_id=record.permission_handle_id,
+        request_id=record.request_id,
+        workflow_run_id=record.workflow_run_id,
+        node_run_id=record.node_run_id,
+        scopes=[
+            PermissionScopeModel.model_validate(item)
+            for item in json.loads(record.scopes_json)
+        ],
+        granted=bool(record.granted),
+        issued_at=_datetime_from_text(record.issued_at),
+        expires_at=_optional_datetime_from_text(record.expires_at),
+        revoked_at=_optional_datetime_from_text(record.revoked_at),
+        denial_reason=record.denial_reason,
+        audit_level=AuditLevel(record.audit_level),
+    )
+
+
+def _permission_scopes_json(scopes: list[PermissionScopeModel]) -> str:
+    return json.dumps(
+        [scope.model_dump(mode="json") for scope in scopes],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _audit_event_to_record(event: AuditEventModel) -> AuditEventRecord:
+    action = (
+        event.action.value
+        if event.action is not None and hasattr(event.action, "value")
+        else event.action
+    )
+    return AuditEventRecord(
+        event_id=event.event_id,
+        event_type=event.event_type,
+        timestamp=_datetime_to_text(event.timestamp),
+        workflow_run_id=event.workflow_run_id,
+        node_run_id=event.node_run_id,
+        subject_type=event.subject_type,
+        subject_id=event.subject_id,
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
+        action=action,
+        result=event.result,
+        audit_level=event.audit_level.value,
+        summary_json=_json_dumps(event.summary),
+    )
+
+
+def _audit_event_from_record(record: AuditEventRecord) -> AuditEventModel:
+    return AuditEventModel(
+        event_id=record.event_id,
+        event_type=record.event_type,
+        timestamp=_datetime_from_text(record.timestamp),
+        workflow_run_id=record.workflow_run_id,
+        node_run_id=record.node_run_id,
+        subject_type=record.subject_type,
+        subject_id=record.subject_id,
+        resource_type=record.resource_type,
+        resource_id=record.resource_id,
+        action=record.action,
+        result=record.result,
+        audit_level=AuditLevel(record.audit_level),
+        summary=json.loads(record.summary_json),
     )
 
 

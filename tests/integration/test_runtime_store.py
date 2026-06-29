@@ -19,9 +19,11 @@ from flowweaver.engine.runtime_store import (
     sqlite_url,
 )
 from flowweaver.protocols.enums import (
+    AuditLevel,
     LifecycleStatus,
     NodeResultStatus,
     NodeRunStatus,
+    PermissionAction,
     TableMutability,
     TableRole,
     TableScope,
@@ -30,6 +32,11 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.permissions import (
+    AuditEventModel,
+    PermissionGrantModel,
+    PermissionScopeModel,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -170,6 +177,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "input_snapshots",
         "read_leases",
         "table_leases",
+        "permission_grants",
         "workflow_processes",
         "audit_events",
         "runtime_events",
@@ -216,6 +224,20 @@ def test_shared_publication_prerequisite_schema_is_available(
         "expires_at",
         "released_at",
     }
+    assert column_names(database_path, "permission_grants") == {
+        "permission_handle_id",
+        "request_id",
+        "workflow_run_id",
+        "node_run_id",
+        "scopes_json",
+        "granted",
+        "issued_at",
+        "expires_at",
+        "revoked_at",
+        "denial_reason",
+        "audit_level",
+    }
+    assert "audit_level" in column_names(database_path, "audit_events")
     assert {
         ("publication_id", "shared_publications", "publication_id"),
         ("table_ref_id", "data_refs", "table_ref_id"),
@@ -235,6 +257,80 @@ def test_workflow_run_foreign_keys_target_canonical_tables(tmp_path: Path) -> No
         ("workflow_id", "workflows", "workflow_id"),
         ("revision_id", "workflow_revisions", "revision_id"),
     }.issubset(foreign_keys(database_path, "workflow_runs"))
+
+
+def test_runtime_store_permission_grant_and_audit_event_round_trip(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    scope = PermissionScopeModel(
+        action=PermissionAction.WRITE_FIELDS,
+        resource_type="TABLE_REF",
+        resource_id="table-1",
+        fields=["amount"],
+        write_mode="OVERWRITE",
+        constraints={"max_rows": 10},
+    )
+    grant = PermissionGrantModel(
+        permission_handle_id="permission-handle-1",
+        request_id="permission-request-1",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        scopes=[scope],
+        granted=True,
+    )
+
+    created = store.create_permission_grant(grant)
+
+    assert created == grant
+    assert store.get_permission_grant(grant.permission_handle_id) == grant
+    assert store.list_permission_grants_by_workflow_run(
+        run.workflow_run_id,
+        active_only=True,
+    ) == [grant]
+
+    revoked = store.revoke_permission_grant(grant.permission_handle_id)
+
+    assert revoked is not None
+    assert revoked.revoked_at is not None
+    assert store.get_permission_grant(grant.permission_handle_id) == revoked
+    assert store.list_permission_grants_by_workflow_run(
+        run.workflow_run_id,
+        active_only=True,
+    ) == []
+
+    audit_event = AuditEventModel(
+        event_id="audit-event-1",
+        event_type="PERMISSION_CHECK",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        subject_type="NODE",
+        subject_id=node.node_run_id,
+        resource_type="TABLE_REF",
+        resource_id="table-1",
+        action=PermissionAction.WRITE_FIELDS,
+        result="granted",
+        audit_level=AuditLevel.STANDARD,
+        summary={
+            "fields": ["amount"],
+            "affected_rows": 3,
+            "change_set_summary": {"updated": 3},
+        },
+    )
+
+    appended = store.append_audit_event(audit_event)
+
+    assert appended == audit_event
+    assert store.get_audit_event(audit_event.event_id) == audit_event
+    assert store.list_audit_events(workflow_run_id=run.workflow_run_id) == [
+        audit_event
+    ]
+    assert store.list_audit_events(node_run_id=node.node_run_id) == [audit_event]
+    assert store.list_audit_events(event_type="PERMISSION_CHECK") == [audit_event]
+    assert store.list_audit_events(event_type="TABLE_LEASE") == []
 
 
 def test_workflow_run_completion_reason_column_is_available(

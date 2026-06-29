@@ -246,6 +246,7 @@ class TableLeaseManager:
                 resource_id=lease.table_ref_id,
                 action=action,
                 result=result,
+                audit_level="STANDARD",
                 summary_json=_json_dumps(
                     {
                         "lease_id": lease.lease_id,
@@ -278,6 +279,7 @@ class TableLeaseManager:
                 resource_id=table_ref_id,
                 action=f"acquire_{lease_type.value.lower()}",
                 result="conflict",
+                audit_level="STANDARD",
                 summary_json=_json_dumps(
                     {
                         "lease_type": lease_type.value,

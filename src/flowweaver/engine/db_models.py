@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -282,6 +282,22 @@ class TableLeaseRecord(Base):
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class PermissionGrantRecord(Base):
+    __tablename__ = "permission_grants"
+
+    permission_handle_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    workflow_run_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    node_run_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    scopes_json: Mapped[str] = mapped_column(Text, nullable=False)
+    granted: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+    issued_at: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[str | None] = mapped_column(Text)
+    revoked_at: Mapped[str | None] = mapped_column(Text)
+    denial_reason: Mapped[str | None] = mapped_column(Text)
+    audit_level: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class AuditEventRecord(Base):
     __tablename__ = "audit_events"
 
@@ -296,6 +312,7 @@ class AuditEventRecord(Base):
     resource_id: Mapped[str | None] = mapped_column(Text)
     action: Mapped[str | None] = mapped_column(Text)
     result: Mapped[str] = mapped_column(Text, nullable=False)
+    audit_level: Mapped[str] = mapped_column(Text, nullable=False, default="STANDARD")
     summary_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 

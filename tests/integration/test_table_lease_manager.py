@@ -179,3 +179,4 @@ def test_table_lease_operations_write_audit_events(tmp_path: Path) -> None:
         "heartbeat",
         "release",
     ]
+    assert {record.audit_level for record in records} == {"STANDARD"}
