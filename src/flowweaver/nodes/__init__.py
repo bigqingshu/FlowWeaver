@@ -6,6 +6,7 @@ from flowweaver.nodes.builtin_shared_table import (
     BuiltinSharedTableNodeRunner,
 )
 from flowweaver.nodes.builtin_table import BuiltinTableNodeRunner
+from flowweaver.nodes.permissions import resolve_builtin_node_permissions
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "NodeRegistry",
     "PUBLISH_SHARED_TABLES_NODE_TYPE",
     "READ_SHARED_TABLES_NODE_TYPE",
+    "resolve_builtin_node_permissions",
 ]
