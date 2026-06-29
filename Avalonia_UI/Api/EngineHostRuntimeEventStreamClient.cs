@@ -9,14 +9,29 @@ using Avalonia_UI.Models;
 
 namespace Avalonia_UI.Api;
 
-public sealed class EngineHostRuntimeEventStreamClient
+public interface IEngineHostRuntimeEventStreamClient
+{
+    Uri BuildEventsUri(EngineHostConnectionSettings settings);
+
+    Task<IEngineHostRuntimeEventStream> ConnectAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IEngineHostRuntimeEventStream : IAsyncDisposable
+{
+    Task<RuntimeEventDto?> ReadNextAsync(
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class EngineHostRuntimeEventStreamClient : IEngineHostRuntimeEventStreamClient
 {
     public Uri BuildEventsUri(EngineHostConnectionSettings settings)
     {
         return settings.BuildRuntimeEventsWebSocketUri();
     }
 
-    public async Task<EngineHostRuntimeEventStream> ConnectAsync(
+    public async Task<IEngineHostRuntimeEventStream> ConnectAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default)
     {
@@ -26,7 +41,7 @@ public sealed class EngineHostRuntimeEventStreamClient
     }
 }
 
-public sealed class EngineHostRuntimeEventStream : IAsyncDisposable
+public sealed class EngineHostRuntimeEventStream : IEngineHostRuntimeEventStream
 {
     private readonly ClientWebSocket _webSocket;
 

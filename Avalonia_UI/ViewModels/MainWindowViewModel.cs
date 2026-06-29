@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -12,10 +13,16 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
+    private const int MaxRuntimeEvents = 50;
+
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
+    private readonly IEngineHostRuntimeEventStreamClient _runtimeEventStreamClient;
+    private readonly Func<CancellationToken, Task> _runtimeEventReconnectDelay;
 
     private readonly CancellationTokenSource _shutdown = new();
+    private CancellationTokenSource? _runtimeEventStreamCancellation;
+    private Task? _runtimeEventStreamTask;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -77,6 +84,21 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? nodeRunErrorMessage;
 
+    [ObservableProperty]
+    private bool isRuntimeEventStreamRunning;
+
+    [ObservableProperty]
+    private bool isRuntimeEventStreamConnected;
+
+    [ObservableProperty]
+    private string runtimeEventStreamMessage = "Event stream disconnected.";
+
+    [ObservableProperty]
+    private string? runtimeEventStreamErrorMessage;
+
+    [ObservableProperty]
+    private long? lastRuntimeEventSequenceNumber;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -95,9 +117,24 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(
         EngineHostHealthClient healthClient,
         IEngineHostApiClient apiClient)
+        : this(
+            healthClient,
+            apiClient,
+            new EngineHostRuntimeEventStreamClient())
+    {
+    }
+
+    public MainWindowViewModel(
+        EngineHostHealthClient healthClient,
+        IEngineHostApiClient apiClient,
+        IEngineHostRuntimeEventStreamClient runtimeEventStreamClient,
+        Func<CancellationToken, Task>? runtimeEventReconnectDelay = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
+        _runtimeEventStreamClient = runtimeEventStreamClient;
+        _runtimeEventReconnectDelay = runtimeEventReconnectDelay
+            ?? (cancellationToken => Task.Delay(TimeSpan.FromSeconds(2), cancellationToken));
     }
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
@@ -105,6 +142,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
 
     public ObservableCollection<NodeRunListItemViewModel> NodeRuns { get; } = new();
+
+    public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
 
     public bool IsChecking => ConnectionStatus == ConnectionStatus.Connecting;
 
@@ -123,6 +162,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsNodeRunBusy => IsLoadingNodeRuns;
 
     public bool HasNodeRunError => !string.IsNullOrWhiteSpace(NodeRunErrorMessage);
+
+    public bool HasRuntimeEventStreamError =>
+        !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
+
+    public bool HasRuntimeEvents => RuntimeEvents.Count > 0;
 
     private bool CanCheckConnection()
     {
@@ -152,6 +196,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanRefreshNodeRuns()
     {
         return SelectedRun is not null && !IsNodeRunBusy;
+    }
+
+    private bool CanStartRuntimeEventStream()
+    {
+        return !IsRuntimeEventStreamRunning;
+    }
+
+    private bool CanStopRuntimeEventStream()
+    {
+        return IsRuntimeEventStreamRunning;
     }
 
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
@@ -298,6 +352,67 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRefreshNodeRuns))]
     private async Task RefreshNodeRunsAsync()
     {
+        await LoadNodeRunsForSelectedRunAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStartRuntimeEventStream))]
+    private Task StartRuntimeEventStreamAsync()
+    {
+        try
+        {
+            _runtimeEventStreamClient.BuildEventsUri(BuildSettings());
+        }
+        catch (InvalidOperationException ex)
+        {
+            RuntimeEventStreamMessage = "Event stream configuration invalid.";
+            RuntimeEventStreamErrorMessage = ex.Message;
+            return Task.CompletedTask;
+        }
+
+        RuntimeEventStreamErrorMessage = null;
+        RuntimeEventStreamMessage = "Connecting event stream...";
+        RuntimeEvents.Clear();
+        OnPropertyChanged(nameof(HasRuntimeEvents));
+        LastRuntimeEventSequenceNumber = null;
+
+        _runtimeEventStreamCancellation?.Cancel();
+        _runtimeEventStreamCancellation?.Dispose();
+        _runtimeEventStreamCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        IsRuntimeEventStreamRunning = true;
+        IsRuntimeEventStreamConnected = false;
+        _runtimeEventStreamTask = RunRuntimeEventStreamLoopAsync(
+            _runtimeEventStreamCancellation.Token);
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStopRuntimeEventStream))]
+    private async Task StopRuntimeEventStreamAsync()
+    {
+        var cancellation = _runtimeEventStreamCancellation;
+        var streamTask = _runtimeEventStreamTask;
+        if (cancellation is null || streamTask is null)
+        {
+            return;
+        }
+
+        RuntimeEventStreamMessage = "Stopping event stream...";
+        cancellation.Cancel();
+
+        try
+        {
+            await streamTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        RuntimeEventStreamMessage = "Event stream stopped.";
+        RuntimeEventStreamErrorMessage = null;
+    }
+
+    private async Task LoadNodeRunsForSelectedRunAsync()
+    {
         if (SelectedRun is null)
         {
             return;
@@ -328,6 +443,113 @@ public partial class MainWindowViewModel : ViewModelBase
         NodeRunMessage = "Node status refresh failed.";
         NodeRunErrorMessage = DescribeError(response);
         IsLoadingNodeRuns = false;
+    }
+
+    private async Task RunRuntimeEventStreamLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    RuntimeEventStreamMessage = "Connecting event stream...";
+                    RuntimeEventStreamErrorMessage = null;
+
+                    await using var stream = await _runtimeEventStreamClient.ConnectAsync(
+                        BuildSettings(),
+                        cancellationToken);
+                    IsRuntimeEventStreamConnected = true;
+                    RuntimeEventStreamMessage = "Event stream connected.";
+                    await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
+
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        var runtimeEvent = await stream.ReadNextAsync(cancellationToken);
+                        if (runtimeEvent is null)
+                        {
+                            IsRuntimeEventStreamConnected = false;
+                            RuntimeEventStreamMessage =
+                                "Event stream disconnected. Reconnecting...";
+                            await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
+                            break;
+                        }
+
+                        await AcceptRuntimeEventAsync(runtimeEvent, cancellationToken);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    IsRuntimeEventStreamConnected = false;
+                    RuntimeEventStreamMessage = "Event stream error. Reconnecting...";
+                    RuntimeEventStreamErrorMessage = ex.Message;
+                    await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
+                }
+
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await _runtimeEventReconnectDelay(cancellationToken);
+                }
+            }
+        }
+        finally
+        {
+            IsRuntimeEventStreamConnected = false;
+            IsRuntimeEventStreamRunning = false;
+            if (_runtimeEventStreamCancellation?.Token == cancellationToken)
+            {
+                _runtimeEventStreamCancellation.Dispose();
+                _runtimeEventStreamCancellation = null;
+                _runtimeEventStreamTask = null;
+            }
+        }
+    }
+
+    private async Task AcceptRuntimeEventAsync(
+        RuntimeEventDto runtimeEvent,
+        CancellationToken cancellationToken)
+    {
+        RuntimeEvents.Insert(0, new RuntimeEventListItemViewModel(runtimeEvent));
+        while (RuntimeEvents.Count > MaxRuntimeEvents)
+        {
+            RuntimeEvents.RemoveAt(RuntimeEvents.Count - 1);
+        }
+
+        OnPropertyChanged(nameof(HasRuntimeEvents));
+        LastRuntimeEventSequenceNumber = runtimeEvent.SequenceNumber;
+        RuntimeEventStreamMessage =
+            $"Received {runtimeEvent.EventType} #{runtimeEvent.SequenceNumber}.";
+        RuntimeEventStreamErrorMessage = null;
+
+        await RecoverRuntimeStateAsync(
+            runtimeEvent.WorkflowRunId,
+            cancellationToken);
+    }
+
+    private async Task RecoverRuntimeStateAsync(
+        string? selectWorkflowRunId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await LoadRunsAsync(selectWorkflowRunId);
+            if (SelectedRun is not null)
+            {
+                await LoadNodeRunsForSelectedRunAsync();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            RuntimeEventStreamErrorMessage = ex.Message;
+        }
     }
 
     private async Task LoadRunsAsync(string? selectWorkflowRunId = null)
@@ -463,6 +685,17 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnNodeRunErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasNodeRunError));
+    }
+
+    partial void OnIsRuntimeEventStreamRunningChanged(bool value)
+    {
+        StartRuntimeEventStreamCommand.NotifyCanExecuteChanged();
+        StopRuntimeEventStreamCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnRuntimeEventStreamErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasRuntimeEventStreamError));
     }
 
     private void NotifyWorkflowCommandStateChanged()

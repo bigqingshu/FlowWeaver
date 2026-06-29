@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.4 运行和节点状态 REST 恢复视图已完成，下一步 K.5 事件流和重连
+> 当前执行点：K.5 事件流和重连已完成，下一步 K.6 日志和审计最小视图
 
 ## 1. 阶段K目标
 
@@ -515,6 +515,22 @@ K.4 验收结果：
 - UI断开后后台继续运行
 - UI重连后状态可恢复
 - WebSocket断开不会导致EngineHost运行中断
+
+K.5 完成记录：
+
+- `EngineHostRuntimeEventStreamClient` 抽象为 `IEngineHostRuntimeEventStreamClient` 和 `IEngineHostRuntimeEventStream`
+- 主窗口增加 RuntimeEvent Stream/Stop 控制和事件流状态提示
+- `MainWindowViewModel` 支持启动/停止 RuntimeEvent WebSocket 监听
+- 收到 RuntimeEvent 后写入最近事件队列，并通过 REST 刷新 Run 和 NodeRun 当前状态
+- WebSocket 正常关闭或异常时提示断线，先执行 REST 状态恢复，再进入最小重连循环
+- 缺少 token 时启动事件流会明确拒绝，不进入后台重连
+- C#测试覆盖缺 token 拒绝、收到事件后刷新状态、断线后重连并恢复状态
+- K.5不实现 RuntimeEvent/AuditEvent 可过滤日志视图、长期离线缓存、事件详情展开或审计页面
+
+K.5 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.6：日志和审计最小视图
 

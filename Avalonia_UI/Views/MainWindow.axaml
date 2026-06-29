@@ -35,8 +35,8 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="18">
-            <Grid RowDefinitions="Auto,Auto,Auto"
-                  ColumnDefinitions="110,*,Auto"
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+                  ColumnDefinitions="110,*,Auto,Auto"
                   RowSpacing="12"
                   ColumnSpacing="12">
                 <TextBlock Grid.Row="0"
@@ -61,7 +61,7 @@
                            Foreground="#2F3742"/>
                 <TextBox Grid.Row="1"
                          Grid.Column="1"
-                         Grid.ColumnSpan="2"
+                         Grid.ColumnSpan="3"
                          Text="{Binding Token}"
                          PasswordChar="*"/>
 
@@ -72,7 +72,7 @@
                            Foreground="#2F3742"/>
                 <StackPanel Grid.Row="2"
                             Grid.Column="1"
-                            Grid.ColumnSpan="2"
+                            Grid.ColumnSpan="3"
                             Orientation="Horizontal"
                             Spacing="12">
                     <TextBlock Text="{Binding StatusMessage}"
@@ -88,6 +88,36 @@
                                Foreground="#B42318"
                                IsVisible="{Binding HasError}"/>
                 </StackPanel>
+
+                <TextBlock Grid.Row="3"
+                           Grid.Column="0"
+                           Text="Events"
+                           VerticalAlignment="Center"
+                           Foreground="#2F3742"/>
+                <StackPanel Grid.Row="3"
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                    <TextBlock Text="{Binding RuntimeEventStreamMessage}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="#344054"/>
+                    <TextBlock Text="{Binding RuntimeEventStreamErrorMessage}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="#B42318"
+                               IsVisible="{Binding HasRuntimeEventStreamError}"/>
+                </StackPanel>
+                <Button Grid.Row="3"
+                        Grid.Column="2"
+                        Content="Stream"
+                        Command="{Binding StartRuntimeEventStreamCommand}"
+                        MinWidth="92"/>
+                <Button Grid.Row="3"
+                        Grid.Column="3"
+                        Content="Stop"
+                        Command="{Binding StopRuntimeEventStreamCommand}"
+                        MinWidth="76"/>
             </Grid>
         </Border>
 
