@@ -154,6 +154,27 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListAuditEventsAsyncBuildsFilterQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListAuditEventsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            workflowRunId: "run-1",
+            nodeRunId: "node-run-1",
+            eventType: "PERMISSION_CHECK");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/audit-events?workflow_run_id=run-1&node_run_id=node-run-1&event_type=PERMISSION_CHECK"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
     public async Task ErrorEnvelopeIsReturned()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)

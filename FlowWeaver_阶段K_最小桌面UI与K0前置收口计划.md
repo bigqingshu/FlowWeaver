@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.5 事件流和重连已完成，下一步 K.6 日志和审计最小视图
+> 当前执行点：K.6 日志和审计最小视图已完成，下一步 K.7 TableRef和SharedPublication摘要
 
 ## 1. 阶段K目标
 
@@ -545,6 +545,22 @@ K.5 验收结果：
 - 可查询基础审计日志
 - 不实现权限审批页面
 - 只读视图使用K.0c补齐的REST API
+
+K.6 完成记录：
+
+- 主窗口增加 `Execution` 和 `Logs` 页签，避免日志视图挤占运行视图
+- `Logs` 页签提供 RuntimeEvent REST 只读查询
+- RuntimeEvent 查询支持 `workflow_run_id`、`node_run_id`、`event_type`、`after_sequence_number` 和 `limit`
+- RuntimeEvent `limit` 在 UI 层按 1 到 1000 校验，非法显式输入直接拒绝
+- `Logs` 页签提供 AuditEvent REST 只读查询
+- AuditEvent 查询支持 `workflow_run_id`、`node_run_id` 和 `event_type`
+- C#测试覆盖 RuntimeEvent 过滤查询、非法 limit 拒绝、AuditEvent 过滤查询和 audit API路径
+- K.6不实现权限审批页面、事件详情展开、长期离线缓存或完整大表查看
+
+K.6 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.7：TableRef和SharedPublication摘要
 

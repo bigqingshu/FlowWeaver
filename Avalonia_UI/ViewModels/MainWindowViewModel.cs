@@ -99,6 +99,39 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private long? lastRuntimeEventSequenceNumber;
 
+    [ObservableProperty]
+    private string logWorkflowRunIdFilter = string.Empty;
+
+    [ObservableProperty]
+    private string logNodeRunIdFilter = string.Empty;
+
+    [ObservableProperty]
+    private string logEventTypeFilter = string.Empty;
+
+    [ObservableProperty]
+    private string runtimeEventAfterSequenceNumberFilter = string.Empty;
+
+    [ObservableProperty]
+    private string runtimeEventLimitFilter = "100";
+
+    [ObservableProperty]
+    private bool isLoadingRuntimeEventLog;
+
+    [ObservableProperty]
+    private string runtimeEventLogMessage = "No runtime events loaded.";
+
+    [ObservableProperty]
+    private string? runtimeEventLogErrorMessage;
+
+    [ObservableProperty]
+    private bool isLoadingAuditEventLog;
+
+    [ObservableProperty]
+    private string auditEventLogMessage = "No audit events loaded.";
+
+    [ObservableProperty]
+    private string? auditEventLogErrorMessage;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -145,6 +178,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
 
+    public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEventLogEntries { get; } = new();
+
+    public ObservableCollection<AuditEventListItemViewModel> AuditEvents { get; } = new();
+
     public bool IsChecking => ConnectionStatus == ConnectionStatus.Connecting;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -167,6 +204,14 @@ public partial class MainWindowViewModel : ViewModelBase
         !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
 
     public bool HasRuntimeEvents => RuntimeEvents.Count > 0;
+
+    public bool HasRuntimeEventLogError =>
+        !string.IsNullOrWhiteSpace(RuntimeEventLogErrorMessage);
+
+    public bool HasAuditEventLogError =>
+        !string.IsNullOrWhiteSpace(AuditEventLogErrorMessage);
+
+    public bool IsLogBusy => IsLoadingRuntimeEventLog || IsLoadingAuditEventLog;
 
     private bool CanCheckConnection()
     {
@@ -206,6 +251,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanStopRuntimeEventStream()
     {
         return IsRuntimeEventStreamRunning;
+    }
+
+    private bool CanRefreshRuntimeEventLog()
+    {
+        return !IsLoadingRuntimeEventLog;
+    }
+
+    private bool CanRefreshAuditEvents()
+    {
+        return !IsLoadingAuditEventLog;
     }
 
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
@@ -411,6 +466,80 @@ public partial class MainWindowViewModel : ViewModelBase
         RuntimeEventStreamErrorMessage = null;
     }
 
+    [RelayCommand(CanExecute = nameof(CanRefreshRuntimeEventLog))]
+    private async Task RefreshRuntimeEventLogAsync()
+    {
+        if (!TryParseRuntimeEventLogFilters(out var afterSequenceNumber, out var limit, out var error))
+        {
+            RuntimeEventLogMessage = "Runtime event refresh rejected.";
+            RuntimeEventLogErrorMessage = error;
+            return;
+        }
+
+        IsLoadingRuntimeEventLog = true;
+        RuntimeEventLogMessage = "Loading runtime events...";
+        RuntimeEventLogErrorMessage = null;
+
+        var response = await _apiClient.ListEventsAsync(
+            BuildSettings(),
+            afterSequenceNumber,
+            NormalizeFilter(LogWorkflowRunIdFilter),
+            NormalizeFilter(LogNodeRunIdFilter),
+            NormalizeFilter(LogEventTypeFilter),
+            limit,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            RuntimeEventLogEntries.Clear();
+            foreach (var runtimeEvent in response.Data)
+            {
+                RuntimeEventLogEntries.Add(new RuntimeEventListItemViewModel(runtimeEvent));
+            }
+
+            RuntimeEventLogMessage =
+                $"Loaded {RuntimeEventLogEntries.Count} runtime event(s).";
+            IsLoadingRuntimeEventLog = false;
+            return;
+        }
+
+        RuntimeEventLogMessage = "Runtime event refresh failed.";
+        RuntimeEventLogErrorMessage = DescribeError(response);
+        IsLoadingRuntimeEventLog = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshAuditEvents))]
+    private async Task RefreshAuditEventsAsync()
+    {
+        IsLoadingAuditEventLog = true;
+        AuditEventLogMessage = "Loading audit events...";
+        AuditEventLogErrorMessage = null;
+
+        var response = await _apiClient.ListAuditEventsAsync(
+            BuildSettings(),
+            NormalizeFilter(LogWorkflowRunIdFilter),
+            NormalizeFilter(LogNodeRunIdFilter),
+            NormalizeFilter(LogEventTypeFilter),
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            AuditEvents.Clear();
+            foreach (var auditEvent in response.Data)
+            {
+                AuditEvents.Add(new AuditEventListItemViewModel(auditEvent));
+            }
+
+            AuditEventLogMessage = $"Loaded {AuditEvents.Count} audit event(s).";
+            IsLoadingAuditEventLog = false;
+            return;
+        }
+
+        AuditEventLogMessage = "Audit event refresh failed.";
+        AuditEventLogErrorMessage = DescribeError(response);
+        IsLoadingAuditEventLog = false;
+    }
+
     private async Task LoadNodeRunsForSelectedRunAsync()
     {
         if (SelectedRun is null)
@@ -608,6 +737,50 @@ public partial class MainWindowViewModel : ViewModelBase
         return $"{response.Error.ErrorCode}: {response.Error.Message}";
     }
 
+    private bool TryParseRuntimeEventLogFilters(
+        out long? afterSequenceNumber,
+        out int limit,
+        out string? error)
+    {
+        afterSequenceNumber = null;
+        limit = 100;
+        error = null;
+
+        var afterSequenceNumberText = NormalizeFilter(RuntimeEventAfterSequenceNumberFilter);
+        if (afterSequenceNumberText is not null)
+        {
+            if (!long.TryParse(afterSequenceNumberText, out var parsedAfterSequenceNumber)
+                || parsedAfterSequenceNumber < 0)
+            {
+                error = "After sequence number must be a non-negative integer.";
+                return false;
+            }
+
+            afterSequenceNumber = parsedAfterSequenceNumber;
+        }
+
+        var limitText = NormalizeFilter(RuntimeEventLimitFilter);
+        if (limitText is null)
+        {
+            return true;
+        }
+
+        if (!int.TryParse(limitText, out var parsedLimit)
+            || parsedLimit is < 1 or > 1000)
+        {
+            error = "Runtime event limit must be between 1 and 1000.";
+            return false;
+        }
+
+        limit = parsedLimit;
+        return true;
+    }
+
+    private static string? NormalizeFilter(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
     partial void OnConnectionStatusChanged(ConnectionStatus value)
     {
         OnPropertyChanged(nameof(IsChecking));
@@ -696,6 +869,28 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnRuntimeEventStreamErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasRuntimeEventStreamError));
+    }
+
+    partial void OnIsLoadingRuntimeEventLogChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsLogBusy));
+        RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnRuntimeEventLogErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasRuntimeEventLogError));
+    }
+
+    partial void OnIsLoadingAuditEventLogChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsLogBusy));
+        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnAuditEventLogErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasAuditEventLogError));
     }
 
     private void NotifyWorkflowCommandStateChanged()

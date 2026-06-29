@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.6 日志和审计最小视图。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.7 TableRef 和 SharedPublication 摘要。
 
 阶段 A 范围包括：
 
@@ -394,7 +394,16 @@ K.5 验收结果：
 - 已补 C# 测试覆盖缺 token 拒绝、收到 RuntimeEvent 后刷新状态、断线后重连并恢复状态
 - 暂未实现 RuntimeEvent/AuditEvent 可过滤只读日志视图、长期离线缓存和事件详情展开
 
-当前建议下一步是 K.6：接入 RuntimeEvent 和 AuditEvent 的最小只读视图及基础过滤。
+K.6 验收结果：
+
+- 主窗口已拆为 `Execution` 和 `Logs` 页签，运行操作与日志查询互不挤占
+- `Logs` 页签已接入 RuntimeEvent REST 只读视图，支持 workflow_run_id、node_run_id、event_type、after_sequence_number 和 limit 过滤
+- `Logs` 页签已接入 AuditEvent REST 只读视图，支持 workflow_run_id、node_run_id 和 event_type 过滤
+- RuntimeEvent limit 限制为 1 到 1000，非法显式输入会在 UI 层拒绝，不发送无效请求
+- 已补 C# 测试覆盖 RuntimeEvent 过滤查询、非法 limit 拒绝、AuditEvent 过滤查询和 audit API 路径
+- 暂未实现权限审批页面、事件详情展开、长期离线缓存和完整大表查看
+
+当前建议下一步是 K.7：接入当前 run 的 TableRef 摘要、SharedPublication 列表和指定 share_name 的版本摘要。
 
 ## 环境
 

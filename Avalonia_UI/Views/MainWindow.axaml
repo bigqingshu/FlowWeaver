@@ -121,16 +121,18 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="2"
-              ColumnDefinitions="1.05*,1.2*"
-              ColumnSpacing="16">
-            <Border Background="White"
-                    BorderBrush="#D9DEE5"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="18">
-                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+        <TabControl Grid.Row="2">
+            <TabItem Header="Execution">
+                <Grid ColumnDefinitions="1.05*,1.2*"
+                      ColumnSpacing="16"
+                      Margin="0,12,0,0">
+                    <Border Background="White"
+                            BorderBrush="#D9DEE5"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="18">
+                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
                         <TextBlock Text="Workflows"
                                    FontSize="18"
                                    FontWeight="SemiBold"
@@ -150,71 +152,71 @@
                                 Content="Run"
                                 Command="{Binding StartSelectedWorkflowCommand}"
                                 MinWidth="72"/>
-                    </Grid>
+                            </Grid>
 
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Workflows}"
-                             SelectedItem="{Binding SelectedWorkflow}"
-                             BorderBrush="#E1E5EA"
-                             BorderThickness="1">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="vm:WorkflowListItemViewModel"
-                                          x:DataType="vm:WorkflowListItemViewModel">
-                                <Grid ColumnDefinitions="*,Auto"
-                                      RowDefinitions="Auto,Auto"
-                                      ColumnSpacing="12"
-                                      Margin="8">
-                                    <TextBlock Text="{Binding Name}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#1F2933"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding VersionText}"
-                                               VerticalAlignment="Center"
-                                               Foreground="#4B5563"/>
-                                    <TextBlock Grid.Row="1"
-                                               Text="{Binding WorkflowId}"
-                                               FontSize="12"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="1"
-                                               Text="{Binding Status}"
-                                               FontSize="12"
-                                               VerticalAlignment="Center"
-                                               Foreground="#4B5563"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                            <ListBox Grid.Row="1"
+                                     ItemsSource="{Binding Workflows}"
+                                     SelectedItem="{Binding SelectedWorkflow}"
+                                     BorderBrush="#E1E5EA"
+                                     BorderThickness="1">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkflowListItemViewModel"
+                                                  x:DataType="vm:WorkflowListItemViewModel">
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              RowDefinitions="Auto,Auto"
+                                              ColumnSpacing="12"
+                                              Margin="8">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#1F2933"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding VersionText}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#4B5563"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding WorkflowId}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Text="{Binding Status}"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#4B5563"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="{Binding WorkflowMessage}"
-                                       Foreground="#344054"/>
-                            <TextBlock Text="{Binding WorkflowErrorMessage}"
-                                       TextWrapping="Wrap"
-                                       Foreground="#B42318"
-                                       IsVisible="{Binding HasWorkflowError}"/>
-                        </StackPanel>
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding LastStartedRunId}"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="#166534"
-                                   IsVisible="{Binding HasLastStartedRun}"/>
-                    </Grid>
-                </Grid>
-            </Border>
+                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding WorkflowMessage}"
+                                               Foreground="#344054"/>
+                                    <TextBlock Text="{Binding WorkflowErrorMessage}"
+                                               TextWrapping="Wrap"
+                                               Foreground="#B42318"
+                                               IsVisible="{Binding HasWorkflowError}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding LastStartedRunId}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="#166534"
+                                           IsVisible="{Binding HasLastStartedRun}"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
 
-            <Border Grid.Column="1"
-                    Background="White"
-                    BorderBrush="#D9DEE5"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="18">
-                <Grid RowDefinitions="Auto,*,Auto,Auto,*,Auto" RowSpacing="10">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                    <Border Grid.Column="1"
+                            Background="White"
+                            BorderBrush="#D9DEE5"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="18">
+                        <Grid RowDefinitions="Auto,*,Auto,Auto,*,Auto" RowSpacing="10">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
                         <TextBlock Text="Runs"
                                    FontSize="18"
                                    FontWeight="SemiBold"
@@ -234,137 +236,333 @@
                                 Content="Cancel"
                                 Command="{Binding CancelSelectedRunCommand}"
                                 MinWidth="78"/>
-                    </Grid>
+                            </Grid>
 
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Runs}"
-                             SelectedItem="{Binding SelectedRun}"
-                             BorderBrush="#E1E5EA"
-                             BorderThickness="1"
-                             MinHeight="130">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="vm:WorkflowRunListItemViewModel"
-                                          x:DataType="vm:WorkflowRunListItemViewModel">
-                                <Grid ColumnDefinitions="*,Auto"
-                                      RowDefinitions="Auto,Auto,Auto"
-                                      ColumnSpacing="12"
-                                      Margin="8">
-                                    <TextBlock Text="{Binding WorkflowRunId}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#1F2933"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding Status}"
-                                               FontWeight="SemiBold"
-                                               VerticalAlignment="Center"
-                                               Foreground="#4B5563"/>
-                                    <TextBlock Grid.Row="1"
-                                               Text="{Binding WorkflowText}"
-                                               FontSize="12"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="1"
-                                               Text="{Binding StartedAtText}"
-                                               FontSize="12"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="2"
-                                               Text="{Binding CompletionReasonText}"
-                                               FontSize="12"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="2"
-                                               Grid.Column="1"
-                                               Text="{Binding FinishedAtText}"
-                                               FontSize="12"
-                                               Foreground="#697586"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                            <ListBox Grid.Row="1"
+                                     ItemsSource="{Binding Runs}"
+                                     SelectedItem="{Binding SelectedRun}"
+                                     BorderBrush="#E1E5EA"
+                                     BorderThickness="1"
+                                     MinHeight="130">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkflowRunListItemViewModel"
+                                                  x:DataType="vm:WorkflowRunListItemViewModel">
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              RowDefinitions="Auto,Auto,Auto"
+                                              ColumnSpacing="12"
+                                              Margin="8">
+                                            <TextBlock Text="{Binding WorkflowRunId}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#1F2933"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Status}"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#4B5563"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding WorkflowText}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Text="{Binding StartedAtText}"
+                                                       FontSize="12"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="2"
+                                                       Text="{Binding CompletionReasonText}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="2"
+                                                       Grid.Column="1"
+                                                       Text="{Binding FinishedAtText}"
+                                                       FontSize="12"
+                                                       Foreground="#697586"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                    <StackPanel Grid.Row="2" Spacing="4">
-                        <TextBlock Text="{Binding RunMessage}"
-                                   Foreground="#344054"/>
-                        <TextBlock Text="{Binding RunErrorMessage}"
-                                   TextWrapping="Wrap"
-                                   Foreground="#B42318"
-                                   IsVisible="{Binding HasRunError}"/>
-                    </StackPanel>
+                            <StackPanel Grid.Row="2" Spacing="4">
+                                <TextBlock Text="{Binding RunMessage}"
+                                           Foreground="#344054"/>
+                                <TextBlock Text="{Binding RunErrorMessage}"
+                                           TextWrapping="Wrap"
+                                           Foreground="#B42318"
+                                           IsVisible="{Binding HasRunError}"/>
+                            </StackPanel>
 
-                    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                        <TextBlock Text="Node runs"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Foreground="#14171A"/>
-                        <ProgressBar Grid.Column="1"
-                                     Width="88"
-                                     Height="8"
-                                     VerticalAlignment="Center"
-                                     IsIndeterminate="True"
-                                     IsVisible="{Binding IsNodeRunBusy}"/>
-                        <Button Grid.Column="2"
-                                Content="Refresh"
-                                Command="{Binding RefreshNodeRunsCommand}"
-                                MinWidth="84"/>
-                    </Grid>
+                            <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                <TextBlock Text="Node runs"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="#14171A"/>
+                                <ProgressBar Grid.Column="1"
+                                             Width="88"
+                                             Height="8"
+                                             VerticalAlignment="Center"
+                                             IsIndeterminate="True"
+                                             IsVisible="{Binding IsNodeRunBusy}"/>
+                                <Button Grid.Column="2"
+                                        Content="Refresh"
+                                        Command="{Binding RefreshNodeRunsCommand}"
+                                        MinWidth="84"/>
+                            </Grid>
 
-                    <ListBox Grid.Row="4"
-                             ItemsSource="{Binding NodeRuns}"
-                             BorderBrush="#E1E5EA"
-                             BorderThickness="1"
-                             MinHeight="130">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="vm:NodeRunListItemViewModel"
-                                          x:DataType="vm:NodeRunListItemViewModel">
-                                <Grid ColumnDefinitions="*,Auto"
-                                      RowDefinitions="Auto,Auto,Auto"
-                                      ColumnSpacing="12"
-                                      Margin="8">
-                                    <TextBlock Text="{Binding NodeInstanceId}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#1F2933"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding Status}"
-                                               FontWeight="SemiBold"
-                                               Foreground="#4B5563"/>
-                                    <TextBlock Grid.Row="1"
-                                               Text="{Binding NodeType}"
-                                               FontSize="12"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="1"
-                                               Text="{Binding ProgressText}"
-                                               FontSize="12"
-                                               Foreground="#4B5563"/>
-                                    <TextBlock Grid.Row="2"
-                                               Text="{Binding CurrentStageText}"
-                                               FontSize="12"
-                                               TextTrimming="CharacterEllipsis"
-                                               Foreground="#697586"/>
-                                    <TextBlock Grid.Row="2"
-                                               Grid.Column="1"
-                                               Text="{Binding AttemptText}"
-                                               FontSize="12"
-                                               Foreground="#697586"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                            <ListBox Grid.Row="4"
+                                     ItemsSource="{Binding NodeRuns}"
+                                     BorderBrush="#E1E5EA"
+                                     BorderThickness="1"
+                                     MinHeight="130">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:NodeRunListItemViewModel"
+                                                  x:DataType="vm:NodeRunListItemViewModel">
+                                        <Grid ColumnDefinitions="*,Auto"
+                                              RowDefinitions="Auto,Auto,Auto"
+                                              ColumnSpacing="12"
+                                              Margin="8">
+                                            <TextBlock Text="{Binding NodeInstanceId}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#1F2933"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Status}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#4B5563"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding NodeType}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Grid.Column="1"
+                                                       Text="{Binding ProgressText}"
+                                                       FontSize="12"
+                                                       Foreground="#4B5563"/>
+                                            <TextBlock Grid.Row="2"
+                                                       Text="{Binding CurrentStageText}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="#697586"/>
+                                            <TextBlock Grid.Row="2"
+                                                       Grid.Column="1"
+                                                       Text="{Binding AttemptText}"
+                                                       FontSize="12"
+                                                       Foreground="#697586"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                    <StackPanel Grid.Row="5" Spacing="4">
-                        <TextBlock Text="{Binding NodeRunMessage}"
-                                   Foreground="#344054"/>
-                        <TextBlock Text="{Binding NodeRunErrorMessage}"
-                                   TextWrapping="Wrap"
-                                   Foreground="#B42318"
-                                   IsVisible="{Binding HasNodeRunError}"/>
-                    </StackPanel>
+                            <StackPanel Grid.Row="5" Spacing="4">
+                                <TextBlock Text="{Binding NodeRunMessage}"
+                                           Foreground="#344054"/>
+                                <TextBlock Text="{Binding NodeRunErrorMessage}"
+                                           TextWrapping="Wrap"
+                                           Foreground="#B42318"
+                                           IsVisible="{Binding HasNodeRunError}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                 </Grid>
-            </Border>
-        </Grid>
+            </TabItem>
+
+            <TabItem Header="Logs">
+                <Grid RowDefinitions="Auto,*"
+                      RowSpacing="12"
+                      Margin="0,12,0,0">
+                    <Border Background="White"
+                            BorderBrush="#D9DEE5"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="14">
+                        <Grid RowDefinitions="Auto,Auto"
+                              ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto,Auto"
+                              RowSpacing="10"
+                              ColumnSpacing="10">
+                            <TextBlock Text="Workflow run"
+                                       VerticalAlignment="Center"
+                                       Foreground="#2F3742"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding LogWorkflowRunIdFilter}"
+                                     Watermark="run id"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="Node run"
+                                       VerticalAlignment="Center"
+                                       Foreground="#2F3742"/>
+                            <TextBox Grid.Column="3"
+                                     Text="{Binding LogNodeRunIdFilter}"
+                                     Watermark="node run id"/>
+                            <TextBlock Grid.Column="4"
+                                       Text="Event type"
+                                       VerticalAlignment="Center"
+                                       Foreground="#2F3742"/>
+                            <TextBox Grid.Column="5"
+                                     Text="{Binding LogEventTypeFilter}"
+                                     Watermark="EVENT_TYPE"/>
+                            <TextBlock Grid.Column="6"
+                                       Text="After"
+                                       VerticalAlignment="Center"
+                                       Foreground="#2F3742"/>
+                            <TextBox Grid.Column="7"
+                                     Text="{Binding RuntimeEventAfterSequenceNumberFilter}"
+                                     Watermark="sequence"/>
+                            <Button Grid.Column="8"
+                                    Content="Runtime"
+                                    Command="{Binding RefreshRuntimeEventLogCommand}"
+                                    MinWidth="92"/>
+                            <Button Grid.Column="9"
+                                    Content="Audit"
+                                    Command="{Binding RefreshAuditEventsCommand}"
+                                    MinWidth="84"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Text="Limit"
+                                       VerticalAlignment="Center"
+                                       Foreground="#2F3742"/>
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Text="{Binding RuntimeEventLimitFilter}"
+                                     Watermark="100"/>
+                            <ProgressBar Grid.Row="1"
+                                         Grid.Column="8"
+                                         Grid.ColumnSpan="2"
+                                         Height="8"
+                                         VerticalAlignment="Center"
+                                         IsIndeterminate="True"
+                                         IsVisible="{Binding IsLogBusy}"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="*,*"
+                          ColumnSpacing="16">
+                        <Border Background="White"
+                                BorderBrush="#D9DEE5"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                                <TextBlock Text="Runtime events"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="#14171A"/>
+                                <ListBox Grid.Row="1"
+                                         ItemsSource="{Binding RuntimeEventLogEntries}"
+                                         BorderBrush="#E1E5EA"
+                                         BorderThickness="1">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:RuntimeEventListItemViewModel"
+                                                      x:DataType="vm:RuntimeEventListItemViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  RowDefinitions="Auto,Auto"
+                                                  ColumnSpacing="12"
+                                                  Margin="8">
+                                                <TextBlock Text="{Binding SequenceText}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#4B5563"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding EventType}"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#1F2933"/>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding TimestampText}"
+                                                           FontSize="12"
+                                                           Foreground="#697586"/>
+                                                <TextBlock Grid.Row="1"
+                                                           Grid.Column="1"
+                                                           Text="{Binding WorkflowRunText}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#697586"/>
+                                                <TextBlock Grid.Row="1"
+                                                           Grid.Column="2"
+                                                           Text="{Binding NodeRunText}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#697586"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <StackPanel Grid.Row="2" Spacing="4">
+                                    <TextBlock Text="{Binding RuntimeEventLogMessage}"
+                                               Foreground="#344054"/>
+                                    <TextBlock Text="{Binding RuntimeEventLogErrorMessage}"
+                                               TextWrapping="Wrap"
+                                               Foreground="#B42318"
+                                               IsVisible="{Binding HasRuntimeEventLogError}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1"
+                                Background="White"
+                                BorderBrush="#D9DEE5"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14">
+                            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                                <TextBlock Text="Audit events"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="#14171A"/>
+                                <ListBox Grid.Row="1"
+                                         ItemsSource="{Binding AuditEvents}"
+                                         BorderBrush="#E1E5EA"
+                                         BorderThickness="1">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:AuditEventListItemViewModel"
+                                                      x:DataType="vm:AuditEventListItemViewModel">
+                                            <Grid ColumnDefinitions="*,Auto"
+                                                  RowDefinitions="Auto,Auto,Auto"
+                                                  ColumnSpacing="12"
+                                                  Margin="8">
+                                                <TextBlock Text="{Binding EventType}"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#1F2933"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Decision}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#4B5563"/>
+                                                <TextBlock Grid.Row="1"
+                                                           Text="{Binding AuditEventId}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#697586"/>
+                                                <TextBlock Grid.Row="2"
+                                                           Text="{Binding WorkflowRunText}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#697586"/>
+                                                <TextBlock Grid.Row="2"
+                                                           Grid.Column="1"
+                                                           Text="{Binding NodeRunText}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="#697586"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <StackPanel Grid.Row="2" Spacing="4">
+                                    <TextBlock Text="{Binding AuditEventLogMessage}"
+                                               Foreground="#344054"/>
+                                    <TextBlock Text="{Binding AuditEventLogErrorMessage}"
+                                               TextWrapping="Wrap"
+                                               Foreground="#B42318"
+                                               IsVisible="{Binding HasAuditEventLogError}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </Window>
