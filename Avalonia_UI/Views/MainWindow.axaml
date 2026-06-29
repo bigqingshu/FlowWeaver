@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Avalonia_UI.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="Avalonia_UI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="FlowWeaver"
+        Width="760"
+        Height="430"
+        MinWidth="640"
+        MinHeight="380"
+        Background="#F6F7F9">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid Margin="28" RowDefinitions="Auto,*" RowSpacing="20">
+        <StackPanel Spacing="4">
+            <TextBlock Text="FlowWeaver"
+                       FontSize="26"
+                       FontWeight="SemiBold"
+                       Foreground="#14171A"/>
+            <TextBlock Text="EngineHost connection"
+                       FontSize="13"
+                       Foreground="#5B6470"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Background="White"
+                BorderBrush="#D9DEE5"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="20">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*"
+                  ColumnDefinitions="140,*"
+                  RowSpacing="14"
+                  ColumnSpacing="12">
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Text="Base URL"
+                           VerticalAlignment="Center"
+                           Foreground="#2F3742"/>
+                <TextBox Grid.Row="0"
+                         Grid.Column="1"
+                         Text="{Binding BaseUrl}"
+                         Watermark="http://127.0.0.1:8000"/>
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Text="Token"
+                           VerticalAlignment="Center"
+                           Foreground="#2F3742"/>
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Text="{Binding Token}"
+                         PasswordChar="*"/>
+
+                <StackPanel Grid.Row="2"
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                    <Button Content="Check"
+                            Command="{Binding CheckConnectionCommand}"
+                            MinWidth="96"/>
+                    <ProgressBar Width="130"
+                                 Height="8"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsChecking}"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="3"
+                           Grid.Column="0"
+                           Text="Status"
+                           VerticalAlignment="Center"
+                           Foreground="#2F3742"/>
+                <TextBlock Grid.Row="3"
+                           Grid.Column="1"
+                           Text="{Binding StatusMessage}"
+                           VerticalAlignment="Center"
+                           Foreground="#166534"/>
+
+                <TextBlock Grid.Row="4"
+                           Grid.Column="1"
+                           Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="#B42318"
+                           IsVisible="{Binding HasError}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

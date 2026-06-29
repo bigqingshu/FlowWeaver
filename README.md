@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐；后续 UI 技术路线调整为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.1 Avalonia_UI 最小桌面 UI 工程骨架。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查；后续 UI 技术路线为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket，下一步建议进入 K.2 UI API Client。
 
 阶段 A 范围包括：
 
@@ -348,7 +348,16 @@ J.7 验收结果：
 - 主循环端到端测试已覆盖权限句柄、授权记录和 `STANDARD` 审计事件
 - 第一阶段仍不包含 UI 审批、权限页面、FULL 行级差分和所有插件沙盒
 
-当前建议下一步是 K.1：收口 `Avalonia_UI/` 最小桌面 UI 工程骨架和 EngineHost 连接配置。
+K.1 验收结果：
+
+- `Avalonia_UI/` 已纳入仓库，保持 Avalonia、.NET 10.0、C# 和 MVVM 骨架
+- 主窗口已从模板问候语收口为 EngineHost 地址、token、连接状态和错误提示面板
+- 已补最小 health 检查服务，仅调用 `GET /api/v1/health`
+- 已补 C# 单元测试覆盖 health URI 拼接、健康响应和 HTTP 失败
+- 已移除 Python 依赖中的旧 PySide6 和 pytest-qt 路线
+- UI 不直接读取 SQLite，不嵌入或启动 Python EngineHost
+
+当前建议下一步是 K.2：补 C# HTTP/WebSocket Client、统一响应模型和错误模型。
 
 ## 环境
 

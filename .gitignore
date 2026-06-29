@@ -20,3 +20,8 @@ temp/
 dist/
 build/
 *.egg-info/
+
+Avalonia_UI/bin/
+Avalonia_UI/obj/
+Avalonia_UI.Tests/bin/
+Avalonia_UI.Tests/obj/

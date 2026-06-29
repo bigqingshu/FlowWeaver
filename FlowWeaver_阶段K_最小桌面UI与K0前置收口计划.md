@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.0c UI API契约复核已完成，下一步 K.1 Avalonia_UI 最小桌面UI工程骨架
+> 当前执行点：K.1 Avalonia_UI 最小桌面UI工程骨架已完成，下一步 K.2 UI API Client
 
 ## 1. 阶段K目标
 
@@ -33,7 +33,7 @@ K阶段后续UI技术栈固定为：
 - Avalonia UI只作为客户端，不嵌入或重写Python EngineHost
 - UI不直接读取SQLite，不绕过FastAPI、Supervisor或RuntimeStore
 - 后端继续使用现有Python 3.12运行与测试链路
-- 仓内 `pyproject.toml` 仍有旧PySide6依赖记录，是否移除留到K.1实施时单独收口
+- 仓内 `pyproject.toml` 已在K.1移除旧PySide6和pytest-qt依赖记录
 
 阶段K暂不进入：
 
@@ -393,6 +393,24 @@ K.0b后留给K.0c的接口缺口：
 - 可连接本机EngineHost
 - 连接失败有明确错误
 - 不引入UI直连SQLite或Python进程内调用
+
+K.1 完成记录：
+
+- `Avalonia_UI/` 作为仓内桌面UI工程纳入版本控制
+- 保持 `TargetFramework=net10.0`、Avalonia、C# 和 CommunityToolkit.Mvvm
+- 增加 `EngineHostConnectionSettings`、`ConnectionStatus` 和最小 health 检查服务
+- 主窗口提供 EngineHost Base URL、token、连接检查按钮、状态和错误提示
+- C# 测试覆盖 health URI 拼接、健康 envelope 解析和 HTTP 失败
+- 为 Avalonia build/test 产物补 `.gitignore`
+- 旧 PySide6 / pytest-qt 依赖已从 Python 依赖和 `uv.lock` 移除
+
+K.1 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
+- `.\python312\python.exe -m ruff check src tests migrations` 通过
+- `.\python312\python.exe -m mypy` 通过
+- `.\python312\python.exe -m pytest -q` 通过，仅保留已知 StarletteDeprecationWarning
 
 ### K.2：UI API Client
 
