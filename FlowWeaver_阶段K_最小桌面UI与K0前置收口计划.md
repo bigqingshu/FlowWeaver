@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.0c UI API契约复核已完成，下一步 K.1 最小桌面UI工程骨架
+> 当前执行点：K.0c UI API契约复核已完成，下一步 K.1 Avalonia_UI 最小桌面UI工程骨架
 
 ## 1. 阶段K目标
 
@@ -17,6 +17,23 @@
 - UI可以查看 TableRef、SharedPublication 和审计摘要
 - UI断开后后台继续运行
 - UI重连后可通过 REST 恢复当前状态
+
+K阶段后续UI技术栈固定为：
+
+- UI路径：`Avalonia_UI/`
+- UI框架：Avalonia
+- 运行框架：.NET 10.0
+- 开发语言：C#
+- 架构模式：MVVM
+- 后端：Python FastAPI EngineHost
+- 通信：HTTP + WebSocket
+
+技术边界：
+
+- Avalonia UI只作为客户端，不嵌入或重写Python EngineHost
+- UI不直接读取SQLite，不绕过FastAPI、Supervisor或RuntimeStore
+- 后端继续使用现有Python 3.12运行与测试链路
+- 仓内 `pyproject.toml` 仍有旧PySide6依赖记录，是否移除留到K.1实施时单独收口
 
 阶段K暂不进入：
 
@@ -35,14 +52,14 @@
 | K.0a | A-J总体收口 | 第一阶段架构与验收基线文档 | 运行时代码实现 |
 | K.0b | 默认正式路径烟雾测试 | EngineHost正式路径测试和后端缺口清单 | UI绕过后端缺口 |
 | K.0c | UI API契约补齐 | UI所需只读摘要接口和事件过滤 | UI控件实现 |
-| K.1 | UI工程骨架 | PySide6应用入口、主窗口、连接配置 | 复杂布局和业务编辑 |
-| K.2 | UI API Client | HTTP/WebSocket客户端封装 | 控件中直接写请求逻辑 |
+| K.1 | Avalonia_UI工程骨架 | `Avalonia_UI`、net10.0、C#、MVVM主窗口与连接配置 | 复杂布局和业务编辑 |
+| K.2 | UI API Client | C# HTTP/WebSocket客户端封装和统一响应模型 | 控件中直接写请求逻辑 |
 | K.3 | 工作流列表与运行入口 | 工作流列表、运行按钮、基础错误提示 | 工作流画布 |
 | K.4 | 运行和节点状态 | Run列表、停止按钮、NodeRun状态和进度 | 节点调试器 |
 | K.5 | 事件流和重连 | WebSocket事件流、断线重连、REST补状态 | 长期离线缓存 |
 | K.6 | 日志和审计最小视图 | RuntimeEvent和AuditEvent只读视图 | 权限审批页面 |
 | K.7 | 数据摘要视图 | TableRef和SharedPublication摘要 | 完整大表编辑 |
-| K.8 | 阶段验收 | UI通过HTTP/WS工作并可重连恢复 | 后续阶段功能 |
+| K.8 | 阶段验收 | Avalonia UI通过HTTP/WS工作并可重连恢复 | 后续阶段功能 |
 
 ## 3. K.0a：第一阶段架构与验收基线固化
 
@@ -356,36 +373,41 @@ K.0b后留给K.0c的接口缺口：
 - 管理端复杂筛选语言
 - UI控件实现
 
-## 6. K.1-K.8 最小桌面UI
+## 6. K.1-K.8 Avalonia_UI 最小桌面UI
 
-### K.1：UI工程骨架
+### K.1：Avalonia_UI工程骨架
 
 范围：
 
-- 新增`flowweaver/ui/`
-- PySide6应用入口
-- 主窗口
-- EngineHost地址和token配置
-- health检查
+- 使用现有 `Avalonia_UI/` 作为桌面UI工程路径
+- 保持 `TargetFramework=net10.0`
+- 保持 C# + Avalonia + CommunityToolkit.Mvvm 的 MVVM 基础结构
+- 复核 `App.axaml`、`Program.cs`、`Views/`、`ViewModels/` 的最小启动链路
+- 增加或收口 EngineHost 地址、token 和连接状态的配置模型
+- 增加 health 检查入口
 
 验收：
 
-- UI可启动
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 可通过
+- Avalonia UI可启动
 - 可连接本机EngineHost
 - 连接失败有明确错误
+- 不引入UI直连SQLite或Python进程内调用
 
 ### K.2：UI API Client
 
 范围：
 
-- HTTP client封装
-- WebSocket client封装
-- token注入
-- 请求错误和断线错误模型
+- C# `HttpClient` 封装 EngineHost HTTP API
+- C# `ClientWebSocket` 封装 RuntimeEvent WebSocket
+- API统一响应 envelope、错误模型和DTO
+- token注入、base URL配置和超时设置
+- 请求错误、鉴权失败和断线错误模型
 
 验收：
 
 - 不在控件中直接写HTTP请求细节
+- ViewModel只依赖接口或服务抽象
 - 单元测试覆盖鉴权失败和连接失败
 
 ### K.3：工作流列表与运行入口
@@ -401,6 +423,7 @@ K.0b后留给K.0c的接口缺口：
 
 - 可从UI启动workflow run
 - 不实现复杂workflow编辑器
+- UI通过HTTP调用EngineHost，不直接创建本地运行状态
 
 ### K.4：运行和节点状态
 
@@ -414,6 +437,7 @@ K.0b后留给K.0c的接口缺口：
 
 - 可取消运行
 - 可查看节点状态变化
+- 状态刷新来源为REST恢复和WebSocket事件合并
 
 ### K.5：事件流与重连
 
@@ -427,6 +451,7 @@ K.0b后留给K.0c的接口缺口：
 
 - UI断开后后台继续运行
 - UI重连后状态可恢复
+- WebSocket断开不会导致EngineHost运行中断
 
 ### K.6：日志和审计最小视图
 
@@ -440,6 +465,7 @@ K.0b后留给K.0c的接口缺口：
 
 - 可查询基础审计日志
 - 不实现权限审批页面
+- 只读视图使用K.0c补齐的REST API
 
 ### K.7：TableRef和SharedPublication摘要
 
@@ -453,16 +479,18 @@ K.0b后留给K.0c的接口缺口：
 
 - UI可查看输出引用和共享发布版本
 - 不展示完整大表编辑能力
+- 不加载完整表数据内容
 
 ### K.8：阶段K验收
 
 验收：
 
-- UI通过HTTP和WebSocket工作
-- UI不直接访问SQLite
-- UI断开后后台继续运行
-- UI重连后可恢复状态
+- Avalonia UI通过HTTP和WebSocket工作
+- Avalonia UI不直接访问SQLite
+- Avalonia UI断开后后台继续运行
+- Avalonia UI重连后可恢复状态
 - K.0b正式路径烟雾测试通过
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
 - 全量自动化测试通过
 
 验收命令：
