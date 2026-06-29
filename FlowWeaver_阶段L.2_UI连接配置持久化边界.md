@@ -201,8 +201,8 @@ health 成功后保存 BaseUrl
 
 | 小步 | 内容 | 暂不进入 |
 | --- | --- | --- |
-| L.2a | 增加连接配置模型和 JSON 序列化测试 | ViewModel接入 |
-| L.2b | 增加用户级配置路径解析和 Store 接口 | token存储 |
+| L.2a | 增加连接配置模型、用户级路径解析、Store接口、文件实现和单元测试 | ViewModel接入 |
+| L.2b | UI接入前复核，确认加载/保存 BaseUrl 的触发点和错误提示 | token存储 |
 | L.2c | UI启动时加载 BaseUrl，health 成功后保存 BaseUrl | recent列表UI |
 | L.2d | 增加损坏配置、非法URL和保存失败测试 | 凭据存储 |
 
@@ -238,4 +238,4 @@ L.2完成条件：
 
 ## 11. 下一步建议
 
-L.2之后建议先进入 L.2a：连接配置模型和 Store 边界的最小代码实现。L.2a只增加模型、路径解析和单元测试，不接入 MainWindowViewModel，不保存 token。
+L.2a已完成连接配置模型、用户级路径解析、Store接口、文件实现和单元测试。下一步建议进入 L.2b：UI接入前复核，确认只加载/保存 BaseUrl，不接入 token 持久化。
