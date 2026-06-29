@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import socket
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -184,6 +186,126 @@ def test_redact_sensitive_text_masks_token_query_and_literal_token() -> None:
     assert launcher().redact_sensitive_text(text, token="secret-token") == (
         "ws://127.0.0.1/ws/v1/events?token=*** Authorization=***"
     )
+
+
+def test_append_launcher_log_redacts_token(tmp_path: Path) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=False)
+
+    launcher().append_launcher_log(
+        layout,
+        "url=ws://127.0.0.1/ws/v1/events?token=secret-token token=secret-token",
+        token="secret-token",
+    )
+
+    content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "secret-token" not in content
+    assert "token=***" in content
+
+
+def test_ensure_port_available_rejects_bound_port() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        _, port = sock.getsockname()
+
+        with pytest.raises(
+            launcher().LauncherRuntimeError,
+            match="port is not available",
+        ):
+            launcher().ensure_port_available("127.0.0.1", port)
+
+
+def test_enginehost_health_is_ok_parses_expected_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {"ok": True, "data": {"status": "ok"}}
+            ).encode("utf-8")
+
+    def fake_urlopen(url: str, *, timeout: float):
+        assert url == "http://127.0.0.1:8000/api/v1/health"
+        assert timeout == 1.0
+        return FakeResponse()
+
+    monkeypatch.setattr(launcher(), "urlopen", fake_urlopen)
+
+    assert launcher().enginehost_health_is_ok("http://127.0.0.1:8000")
+
+
+def test_wait_for_enginehost_health_rejects_exited_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(launcher(), "enginehost_health_is_ok", lambda _: False)
+
+    with pytest.raises(launcher().LauncherRuntimeError, match="Exit code: 7"):
+        launcher().wait_for_enginehost_health(
+            "http://127.0.0.1:8000",
+            FakeProcess(returncode=7),
+            timeout_seconds=1,
+            poll_interval_seconds=0,
+        )
+
+
+def test_wait_for_local_api_token_rejects_exited_process(tmp_path: Path) -> None:
+    token_path = tmp_path / "local_api_token"
+
+    with pytest.raises(launcher().LauncherRuntimeError, match="Exit code: 9"):
+        launcher().wait_for_local_api_token(
+            token_path,
+            FakeProcess(returncode=9),
+            timeout_seconds=1,
+            poll_interval_seconds=0,
+        )
+
+
+def test_stop_process_terminates_running_process() -> None:
+    process = FakeProcess(returncode=None)
+
+    launcher().stop_process(process)
+
+    assert process.terminated is True
+    assert process.killed is False
+
+
+def test_run_launch_plan_rejects_desktop_until_later_stage(tmp_path: Path) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+
+    with pytest.raises(
+        launcher().LauncherConfigurationError,
+        match="Desktop launch is implemented",
+    ):
+        launcher().run_launch_plan(plan)
+
+
+class FakeProcess:
+    def __init__(self, *, returncode: int | None) -> None:
+        self.returncode = returncode
+        self.terminated = False
+        self.killed = False
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self.returncode = 0
+
+    def kill(self) -> None:
+        self.killed = True
+        self.returncode = -9
+
+    def wait(self, timeout: float | None = None) -> int:
+        return self.returncode or 0
 
 
 def _create_minimal_layout(

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import socket
+import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
+from urllib.error import URLError
+from urllib.request import urlopen
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -16,6 +24,26 @@ APP_IMPORT_TARGET = "flowweaver.api.app:create_default_app"
 
 class LauncherConfigurationError(ValueError):
     """Raised when the portable launcher configuration is invalid."""
+
+
+class LauncherRuntimeError(RuntimeError):
+    """Raised when the portable launcher cannot complete a runtime step."""
+
+
+class PollableProcess(Protocol):
+    returncode: int | None
+
+    def poll(self) -> int | None:
+        ...
+
+    def terminate(self) -> None:
+        ...
+
+    def kill(self) -> None:
+        ...
+
+    def wait(self, timeout: float | None = None) -> int:
+        ...
 
 
 @dataclass(frozen=True)
@@ -213,6 +241,28 @@ def read_local_api_token(token_path: Path) -> str:
     return token
 
 
+def wait_for_local_api_token(
+    token_path: Path,
+    process: PollableProcess,
+    *,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 0.2,
+) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: LauncherConfigurationError | None = None
+    while time.monotonic() < deadline:
+        ensure_process_running(process, "EngineHost exited before token was ready")
+        try:
+            return read_local_api_token(token_path)
+        except LauncherConfigurationError as exc:
+            last_error = exc
+        time.sleep(poll_interval_seconds)
+    raise LauncherRuntimeError(
+        "Timed out waiting for local API token. "
+        + (str(last_error) if last_error is not None else "")
+    )
+
+
 def redact_sensitive_text(text: str, *, token: str | None = None) -> str:
     redacted = re.sub(r"([?&]token=)[^&\s]+", r"\1***", text)
     if token:
@@ -220,20 +270,167 @@ def redact_sensitive_text(text: str, *, token: str | None = None) -> str:
     return redacted
 
 
+def append_launcher_log(
+    layout: PortableLayout,
+    message: str,
+    *,
+    token: str | None = None,
+) -> None:
+    layout.log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(UTC).isoformat()
+    log_line = redact_sensitive_text(f"{timestamp} {message}", token=token)
+    launcher_log_path(layout).open("a", encoding="utf-8").write(f"{log_line}\n")
+
+
+def launcher_log_path(layout: PortableLayout) -> Path:
+    return layout.log_dir / "portable-launcher.log"
+
+
+def ensure_port_available(host: str, port: int) -> None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, port))
+    except OSError as exc:
+        raise LauncherRuntimeError(
+            f"EngineHost port is not available: {host}:{port}"
+        ) from exc
+
+
+def start_enginehost_process(spec: EngineHostLaunchSpec) -> subprocess.Popen[bytes]:
+    spec.stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_file = spec.stdout_path.open("ab")
+    stderr_file = spec.stderr_path.open("ab")
+    try:
+        return subprocess.Popen(
+            spec.command,
+            cwd=spec.cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+    finally:
+        stdout_file.close()
+        stderr_file.close()
+
+
+def enginehost_health_is_ok(base_url: str, *, timeout_seconds: float = 1.0) -> bool:
+    url = f"{base_url.rstrip('/')}/api/v1/health"
+    try:
+        with urlopen(url, timeout=timeout_seconds) as response:
+            if response.status != 200:
+                return False
+            body = response.read().decode("utf-8")
+    except (OSError, TimeoutError, URLError):
+        return False
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return False
+    return (
+        payload.get("ok") is True
+        and isinstance(payload.get("data"), dict)
+        and payload["data"].get("status") == "ok"
+    )
+
+
+def wait_for_enginehost_health(
+    base_url: str,
+    process: PollableProcess,
+    *,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 0.2,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        ensure_process_running(process, "EngineHost exited before health was ready")
+        if enginehost_health_is_ok(base_url):
+            return
+        time.sleep(poll_interval_seconds)
+    raise LauncherRuntimeError("Timed out waiting for EngineHost health")
+
+
+def ensure_process_running(process: PollableProcess, message: str) -> None:
+    exit_code = process.poll()
+    if exit_code is not None:
+        raise LauncherRuntimeError(f"{message}. Exit code: {exit_code}")
+
+
+def stop_process(process: PollableProcess, *, timeout_seconds: float = 5.0) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=timeout_seconds)
+
+
+def run_launch_plan(plan: PortableLaunchPlan) -> int:
+    if plan.desktop is not None:
+        raise LauncherConfigurationError(
+            "Desktop launch is implemented in a later stage. Use --no-desktop."
+        )
+
+    append_launcher_log(plan.layout, f"Starting EngineHost at {plan.base_url}")
+    ensure_port_available(plan.settings.host, plan.settings.port)
+    process = start_enginehost_process(plan.enginehost)
+    token: str | None = None
+    try:
+        append_launcher_log(
+            plan.layout,
+            f"EngineHost pid={process.pid} cwd={plan.enginehost.cwd}",
+        )
+        wait_for_enginehost_health(
+            plan.base_url,
+            process,
+            timeout_seconds=plan.settings.health_timeout_seconds,
+        )
+        token = wait_for_local_api_token(
+            plan.layout.token_path,
+            process,
+            timeout_seconds=plan.settings.health_timeout_seconds,
+        )
+        append_launcher_log(
+            plan.layout,
+            "EngineHost ready. "
+            f"BaseUrl={plan.base_url}; token_file={plan.layout.token_path}",
+            token=token,
+        )
+        print("EngineHost ready.")
+        print(f"BaseUrl: {plan.base_url}")
+        print(f"Token file: {plan.layout.token_path}")
+        print("Press Ctrl+C to stop EngineHost.")
+        while process.poll() is None:
+            time.sleep(0.5)
+        return process.returncode or 0
+    except KeyboardInterrupt:
+        append_launcher_log(plan.layout, "Launcher interrupted by user", token=token)
+        return 130
+    except LauncherRuntimeError as exc:
+        append_launcher_log(plan.layout, f"Launcher runtime error: {exc}", token=token)
+        print(f"FlowWeaver portable launcher runtime error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        if (
+            process.poll() is None
+            and not plan.settings.keep_enginehost_on_desktop_exit
+        ):
+            stop_process(process)
+            append_launcher_log(plan.layout, "EngineHost stopped", token=token)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     try:
         settings = parse_launcher_args(argv)
         plan = build_launch_plan(Path(__file__).resolve().parent, settings)
+        return run_launch_plan(plan)
     except LauncherConfigurationError as exc:
         print(
             f"FlowWeaver portable launcher configuration error: {exc}",
             file=sys.stderr,
         )
         return 2
-    print("FlowWeaver portable launcher plan is valid.")
-    print(f"BaseUrl: {plan.base_url}")
-    print("Process startup is implemented in a later stage.")
-    return 0
 
 
 if __name__ == "__main__":
