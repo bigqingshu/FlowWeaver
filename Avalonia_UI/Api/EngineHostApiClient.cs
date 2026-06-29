@@ -37,6 +37,17 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<List<NodeDefinitionDto>>> ListNodeDefinitionsAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<List<NodeDefinitionDto>>(
+            settings,
+            HttpMethod.Get,
+            "api/v1/node-definitions",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default)

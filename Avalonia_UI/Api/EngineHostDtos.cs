@@ -11,6 +11,45 @@ public sealed record HealthStatusDto
     public string Status { get; init; } = string.Empty;
 }
 
+public sealed record NodePortDefinitionDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("required")]
+    public bool Required { get; init; }
+}
+
+public sealed record NodeDefinitionDto
+{
+    [JsonPropertyName("node_type")]
+    public string NodeType { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_version")]
+    public string NodeVersion { get; init; } = string.Empty;
+
+    [JsonPropertyName("display_name")]
+    public string DisplayName { get; init; } = string.Empty;
+
+    [JsonPropertyName("input_ports")]
+    public NodePortDefinitionDto[] InputPorts { get; init; } = [];
+
+    [JsonPropertyName("output_ports")]
+    public NodePortDefinitionDto[] OutputPorts { get; init; } = [];
+
+    [JsonPropertyName("execution_mode")]
+    public string ExecutionMode { get; init; } = string.Empty;
+
+    [JsonPropertyName("default_timeout_seconds")]
+    public int DefaultTimeoutSeconds { get; init; }
+
+    [JsonPropertyName("retry_safe")]
+    public bool RetrySafe { get; init; }
+
+    [JsonPropertyName("ui_visibility")]
+    public string UiVisibility { get; init; } = string.Empty;
+}
+
 public sealed record WorkflowDefinitionDto
 {
     [JsonPropertyName("workflow_id")]

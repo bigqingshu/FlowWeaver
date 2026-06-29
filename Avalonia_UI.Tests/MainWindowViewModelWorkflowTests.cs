@@ -323,6 +323,13 @@ public sealed class MainWindowViewModelWorkflowTests
                 ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }));
         }
 
+        public Task<ApiResponseEnvelope<List<NodeDefinitionDto>>> ListNodeDefinitionsAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)

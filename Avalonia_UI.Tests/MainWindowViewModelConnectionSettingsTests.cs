@@ -218,6 +218,13 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             return Task.FromResult(HealthResponse);
         }
 
+        public Task<ApiResponseEnvelope<List<NodeDefinitionDto>>> ListNodeDefinitionsAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)

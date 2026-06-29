@@ -11,6 +11,10 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<List<NodeDefinitionDto>>> ListNodeDefinitionsAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);

@@ -91,6 +91,20 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
     return TestClient(create_app(container)), store, container
 
 
+def make_default_registry_client(tmp_path: Path) -> tuple[TestClient, ServiceContainer]:
+    data_dir = tmp_path / "runtime"
+    container = EngineHostBootstrap(
+        EngineConfig(
+            data_dir=data_dir,
+            local_api_token=TOKEN,
+            enforce_single_instance=False,
+            workflow_process_heartbeat_interval_seconds=0,
+            supervisor_maintenance_interval_seconds=0.05,
+        )
+    ).initialize()
+    return TestClient(create_app(container)), container
+
+
 def migrate(database_path: Path) -> None:
     config = Config("alembic.ini")
     config.set_main_option("script_location", "migrations")
@@ -226,6 +240,44 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
     assert [revision["version"] for revision in revisions] == [1, 2]
     assert first_revision["definition"] == valid_definition()
     assert deleted == {"workflow_id": workflow_id, "deleted": True}
+
+
+def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> None:
+    client, container = make_default_registry_client(tmp_path)
+    try:
+        response = client.get("/api/v1/node-definitions", headers=auth_headers())
+        definitions = response_data(response)
+    finally:
+        container.close()
+
+    by_type = {definition["node_type"]: definition for definition in definitions}
+
+    assert set(by_type) == {
+        "GenerateTestTableNode",
+        "FilterRowsNode",
+        "PublishSharedTablesNode",
+        "ReadSharedTablesNode",
+    }
+    assert "DelayTestNode" not in by_type
+    assert "FaultTestNode" not in by_type
+    assert by_type["GenerateTestTableNode"]["output_ports"] == [
+        {"name": "out", "required": False}
+    ]
+    assert by_type["FilterRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
+    assert all("implementation_path" not in definition for definition in definitions)
+    assert all("config_schema" not in definition for definition in definitions)
+
+
+def test_node_definitions_api_rejects_missing_token(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+
+    response = client.get("/api/v1/node-definitions")
+
+    assert response.status_code == 401
+    assert response_error(response)["error_code"] == "UNAUTHORIZED"
 
 
 def test_create_workflow_rejects_reserved_skip_dependents_policy(

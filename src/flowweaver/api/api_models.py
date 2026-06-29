@@ -55,6 +55,23 @@ class WorkflowSummaryView(StrictModel):
     updated_at: datetime
 
 
+class NodePortDefinitionView(StrictModel):
+    name: str
+    required: bool = False
+
+
+class NodeDefinitionView(StrictModel):
+    node_type: str
+    node_version: str
+    display_name: str
+    input_ports: list[NodePortDefinitionView] = []
+    output_ports: list[NodePortDefinitionView] = []
+    execution_mode: str
+    default_timeout_seconds: int
+    retry_safe: bool
+    ui_visibility: str = "visible"
+
+
 class WorkflowDetailView(WorkflowDefinitionData):
     pass
 
