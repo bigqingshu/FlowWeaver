@@ -31,10 +31,6 @@ def test_o4_portable_launcher_no_desktop_runs_enginehost_end_to_end() -> None:
         include_python=True,
         include_desktop_build=False,
     )
-    shutil.copy2(
-        repo_root / "tools" / "portable_launcher.py",
-        portable_dir / "portable_launcher.py",
-    )
 
     enginehost_dir = portable_dir / "EngineHost"
     python_exe = enginehost_dir / "python312" / "python.exe"

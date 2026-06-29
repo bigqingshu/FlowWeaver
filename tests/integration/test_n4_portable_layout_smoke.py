@@ -32,6 +32,14 @@ def test_n4_portable_layout_enginehost_starts_from_generated_directory() -> None
     assert (enginehost_dir / "alembic.ini").is_file()
     assert (enginehost_dir / "migrations" / "env.py").is_file()
     assert (enginehost_dir / "src" / "flowweaver" / "api" / "app.py").is_file()
+    assert (portable_dir / "portable_launcher.py").is_file()
+    assert (portable_dir / "start_flowweaver.cmd").is_file()
+    readme = (portable_dir / "docs" / "README.txt").read_text(encoding="utf-8")
+    assert "start_flowweaver.cmd" in readme
+    assert "portable_launcher.py --no-desktop" in readme
+    start_cmd = (portable_dir / "start_flowweaver.cmd").read_text(encoding="utf-8")
+    assert "portable_launcher.py" in start_cmd
+    assert "--no-desktop" in start_cmd
     assert not (enginehost_dir / "runtime").exists()
 
     stdout_path = enginehost_dir / "uvicorn.stdout.log"

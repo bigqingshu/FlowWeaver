@@ -35,6 +35,11 @@ def create_portable_layout(
     _copy_file(repo_root / "uv.lock", enginehost_dir / "uv.lock")
     _copy_tree(repo_root / "migrations", enginehost_dir / "migrations")
     _copy_tree(repo_root / "src", enginehost_dir / "src")
+    _copy_file(
+        repo_root / "tools" / "portable_launcher.py",
+        output_dir / "portable_launcher.py",
+    )
+    _write_start_cmd(output_dir / "start_flowweaver.cmd")
     _write_readme(output_dir / "docs" / "README.txt")
 
     if include_python:
@@ -84,16 +89,48 @@ def _copy_desktop_build(*, repo_root: Path, desktop_dir: Path) -> None:
     _copy_tree(source_dir, desktop_dir)
 
 
+def _write_start_cmd(path: Path) -> None:
+    path.write_text(
+        "\r\n".join(
+            [
+                "@echo off",
+                "setlocal",
+                'cd /d "%~dp0"',
+                (
+                    '"EngineHost\\python312\\python.exe" '
+                    '"portable_launcher.py" --no-desktop %*'
+                ),
+                "exit /b %ERRORLEVEL%",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _write_readme(path: Path) -> None:
     path.write_text(
         "\n".join(
             [
                 "FlowWeaver Portable Layout",
                 "",
-                "EngineHost must be started with FlowWeaverPortable/EngineHost as cwd.",
+                "Start the current backend-only launcher on Windows:",
+                "start_flowweaver.cmd",
+                "",
+                "Equivalent command:",
+                "EngineHost/python312/python.exe portable_launcher.py --no-desktop",
+                "",
+                "Optional launcher arguments can be passed through the cmd wrapper.",
+                "Example:",
+                "start_flowweaver.cmd --port 8000 --health-timeout-seconds 30",
+                "",
+                "The current portable launcher does not start Desktop",
+                "automatically yet.",
                 "Default EngineHost BaseUrl: http://127.0.0.1:8000",
                 "Local API token is generated at:",
                 "EngineHost/runtime/config/local_api_token.",
+                "Launcher and EngineHost logs are generated under:",
+                "EngineHost/runtime/logs.",
                 "Do not log or share the token value.",
                 "",
             ]
