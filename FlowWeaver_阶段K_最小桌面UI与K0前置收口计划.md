@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.1 Avalonia_UI 最小桌面UI工程骨架已完成，下一步 K.2 UI API Client
+> 当前执行点：K.2 UI API Client已完成，下一步 K.3 工作流列表与运行入口
 
 ## 1. 阶段K目标
 
@@ -427,6 +427,20 @@ K.1 验收结果：
 - 不在控件中直接写HTTP请求细节
 - ViewModel只依赖接口或服务抽象
 - 单元测试覆盖鉴权失败和连接失败
+
+K.2 完成记录：
+
+- 增加 `EngineHostApiClient`，封装 EngineHost REST API、统一响应 envelope、错误模型和 Bearer token 注入
+- 增加 `HealthStatusDto`、`WorkflowDefinitionDto`、`WorkflowRunDto`、`WorkflowProcessDto`、`NodeRunDto`、`RuntimeEventDto`、`TableRefDto`、`SharedPublicationDto` 和 `AuditEventDto`
+- 增加 RuntimeEvent WebSocket 客户端边界，固定 `/ws/v1/events?token=...`
+- `EngineHostHealthClient` 改为复用 API Client
+- C#测试覆盖 health、REST鉴权、无token拒绝、事件过滤查询、错误 envelope、RuntimeEvent解析和 WorkflowRun DTO字段名
+- K.2不实现工作流列表UI、运行按钮、运行状态页面或事件视图
+
+K.2 验收结果：
+
+- `dotnet build Avalonia_UI/Avalonia_UI.sln` 通过
+- `dotnet test Avalonia_UI.Tests/Avalonia_UI.Tests.csproj --no-build` 通过
 
 ### K.3：工作流列表与运行入口
 

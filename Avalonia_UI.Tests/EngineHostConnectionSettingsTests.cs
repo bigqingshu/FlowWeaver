@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia_UI.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -18,6 +19,57 @@ public sealed class EngineHostConnectionSettingsTests
         Assert.AreEqual(
             new Uri("http://127.0.0.1:8010/api/v1/health"),
             settings.BuildHealthUri());
+    }
+
+    [TestMethod]
+    public void BuildApiUriIncludesQueryAndEscaping()
+    {
+        var settings = new EngineHostConnectionSettings
+        {
+            BaseUrl = "http://127.0.0.1:8010/root",
+        };
+
+        var uri = settings.BuildApiUri(
+            "/api/v1/events",
+            new[]
+            {
+                new KeyValuePair<string, string?>("event_type", "NODE TASK"),
+                new KeyValuePair<string, string?>("node_run_id", null),
+                new KeyValuePair<string, string?>("limit", "10"),
+            });
+
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8010/api/v1/events?event_type=NODE%20TASK&limit=10"),
+            uri);
+    }
+
+    [TestMethod]
+    public void BuildRuntimeEventsWebSocketUriUsesTokenQuery()
+    {
+        var settings = new EngineHostConnectionSettings
+        {
+            BaseUrl = "https://engine.local:8443",
+            Token = "secret token",
+        };
+
+        Assert.AreEqual(
+            new Uri("wss://engine.local:8443/ws/v1/events?token=secret%20token"),
+            settings.BuildRuntimeEventsWebSocketUri());
+    }
+
+    [TestMethod]
+    public void BuildRuntimeEventsWebSocketUriRejectsMissingToken()
+    {
+        var settings = new EngineHostConnectionSettings();
+
+        try
+        {
+            settings.BuildRuntimeEventsWebSocketUri();
+            Assert.Fail("Expected an InvalidOperationException.");
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     [TestMethod]

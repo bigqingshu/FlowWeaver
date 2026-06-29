@@ -35,6 +35,7 @@ public sealed class EngineHostHealthClientTests
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
         {
             ReasonPhrase = "Service Unavailable",
+            Content = new StringContent("""{"ok":false,"data":null,"error":{"error_code":"UNAVAILABLE","message":"Service unavailable","details":{},"retryable":true},"request_id":"req"}"""),
         });
         var client = new EngineHostHealthClient(new HttpClient(handler));
 
@@ -42,7 +43,7 @@ public sealed class EngineHostHealthClientTests
 
         Assert.IsFalse(result.IsHealthy);
         Assert.AreEqual("Connection failed.", result.Message);
-        StringAssert.Contains(result.ErrorMessage, "503");
+        Assert.AreEqual("Service unavailable", result.ErrorMessage);
     }
 
     private sealed class StubHandler : HttpMessageHandler
