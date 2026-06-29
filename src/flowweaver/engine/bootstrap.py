@@ -18,7 +18,7 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
-from flowweaver.nodes.registry import NodeRegistry
+from flowweaver.nodes.default_registry import create_default_node_registry
 
 
 class EngineHostBootstrap:
@@ -50,7 +50,7 @@ class EngineHostBootstrap:
             event_router=event_router,
             table_lease_manager=table_lease_manager,
             supervisor=supervisor,
-            node_registry=NodeRegistry(),
+            node_registry=create_default_node_registry(),
             instance_lock=lock,
         )
 

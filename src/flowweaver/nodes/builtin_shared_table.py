@@ -119,6 +119,13 @@ class BuiltinSharedTableNodeRunner:
         version_policy = _required_str_config(task.config, "version_policy")
         exact_version = _optional_int_config(task.config, "exact_version")
         selected_members = _optional_str_list_config(task.config, "selected_members")
+        ensure_task_permission_scope(
+            store=self._store,
+            task=task,
+            action=PermissionAction.READ_SHARED,
+            resource_type="SHARED_PUBLICATION",
+            resource_id=share_name,
+        )
         result = self._reader.read(
             consumer_workflow_run_id=task.workflow_run_id,
             share_name=share_name,

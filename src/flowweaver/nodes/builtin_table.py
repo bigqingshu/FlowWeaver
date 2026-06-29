@@ -19,6 +19,14 @@ GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 
 
+def table_node_types() -> tuple[str, str]:
+    return (GENERATE_TEST_TABLE_NODE_TYPE, FILTER_ROWS_NODE_TYPE)
+
+
+def is_table_node_type(node_type: str) -> bool:
+    return node_type in table_node_types()
+
+
 class BuiltinTableNodeRunner:
     def __init__(
         self,

@@ -2620,6 +2620,7 @@ def test_workflow_process_reuses_default_executor_for_run(
 
 def test_reusable_default_executor_owner_rebuilds_after_closed_executor(
     monkeypatch,
+    tmp_path: Path,
 ) -> None:
     created_executor_ids: list[str] = []
     executed_executor_ids: list[str] = []
@@ -2675,7 +2676,10 @@ def test_reusable_default_executor_owner_rebuilds_after_closed_executor(
         timeout_seconds=60,
     )
     store = RuntimeStore("sqlite:///:memory:")
-    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(store=store)
+    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(
+        store=store,
+        runtime_dir=tmp_path / "runtime",
+    )
     first = owner.executor_for_task(task)
     first.close()
     second = owner.executor_for_task(task)
@@ -2692,6 +2696,7 @@ def test_reusable_default_executor_owner_rebuilds_after_closed_executor(
 
 def test_default_executor_owner_uses_builtin_shared_table_executor(
     monkeypatch,
+    tmp_path: Path,
 ) -> None:
     created_shared_executor_ids: list[str] = []
     created_subprocess_executor_ids: list[str] = []
@@ -2749,7 +2754,10 @@ def test_default_executor_owner_uses_builtin_shared_table_executor(
         TrackingDefaultSubprocessExecutor,
     )
     store = RuntimeStore("sqlite:///:memory:")
-    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(store=store)
+    owner = workflow_process_main._DefaultWorkflowProcessExecutorOwner(
+        store=store,
+        runtime_dir=tmp_path / "runtime",
+    )
     shared_task = NodeTaskModel(
         task_id="task-shared",
         workflow_run_id="run-shared",

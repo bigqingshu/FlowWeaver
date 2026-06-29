@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from flowweaver.common.subprocess_command import python_module_command
 from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
 from flowweaver.node_executor.process import NodeExecutorProcess
@@ -91,9 +92,11 @@ class SubprocessNodeExecutorIpcClient:
         self._child = subprocess.Popen(
             command
             or [
-                python_executable or sys.executable,
-                "-m",
-                "flowweaver.node_executor.process",
+                *python_module_command(
+                    python_executable=python_executable or sys.executable,
+                    module_name="flowweaver.node_executor.process",
+                    src_path=_src_path(),
+                ),
                 "--executor-id",
                 executor_id,
             ],

@@ -5,6 +5,7 @@ import time
 import traceback
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 from typing import NoReturn, Protocol, runtime_checkable
@@ -15,20 +16,24 @@ from flowweaver.common.config import (
     resolve_workflow_process_max_concurrent_node_tasks,
 )
 from flowweaver.common.time import utc_now
+from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_event_sink import (
     DatabaseEventSink,
     IPCEventSink,
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
+from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
+    BuiltinTableNodeExecutor,
     CancellableNodeExecutor,
     NodeExecutor,
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
 from flowweaver.nodes.builtin_shared_table import is_shared_table_node_type
+from flowweaver.nodes.builtin_table import is_table_node_type
 from flowweaver.protocols.enums import (
     EventType,
     IPCMessageType,
@@ -125,19 +130,41 @@ class _NodeTaskIpcEventAwareExecutor(Protocol):
 
 
 class _DefaultWorkflowProcessExecutorOwner:
-    def __init__(self, *, store: RuntimeStore) -> None:
+    def __init__(self, *, store: RuntimeStore, runtime_dir: Path) -> None:
         self._store = store
+        self._runtime_dir = runtime_dir
+        self._data_registry: RuntimeDataRegistry | None = None
+        self._table_provider: SQLiteRuntimeTableProvider | None = None
+        self._table_executor: BuiltinTableNodeExecutor | None = None
         self._executor: SubprocessNodeExecutorIpcClient | None = None
 
     def executor_for_task(
         self,
         task: NodeTaskModel,
     ) -> NodeExecutor:
+        if is_table_node_type(task.node_type):
+            return self._builtin_table_executor()
         if is_shared_table_node_type(task.node_type):
             return BuiltinSharedTableNodeExecutor(store=self._store)
         if self._executor is None or getattr(self._executor, "closed", False):
             self._executor = SubprocessNodeExecutorIpcClient()
         return self._executor
+
+    def _builtin_table_executor(self) -> BuiltinTableNodeExecutor:
+        if self._table_provider is None:
+            self._table_provider = SQLiteRuntimeTableProvider(self._runtime_dir)
+        if self._data_registry is None:
+            self._data_registry = RuntimeDataRegistry(
+                store=self._store,
+                table_provider=self._table_provider,
+            )
+        if self._table_executor is None:
+            self._table_executor = BuiltinTableNodeExecutor(
+                store=self._store,
+                registry=self._data_registry,
+                table_provider=self._table_provider,
+            )
+        return self._table_executor
 
     def close(self) -> None:
         if self._executor is None:
@@ -154,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--process-generation", type=int, required=True)
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
     parser.add_argument("--runtime-event-path")
+    parser.add_argument("--runtime-dir")
     parser.add_argument("--execution-mode")
     parser.add_argument("--max-concurrent-node-tasks")
     args = parser.parse_args(argv)
@@ -171,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             process_generation=args.process_generation,
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
             event_sink=event_sink,
+            runtime_dir=args.runtime_dir,
             execution_mode=args.execution_mode,
             max_concurrent_node_tasks=args.max_concurrent_node_tasks,
         )
@@ -189,6 +218,7 @@ def run_workflow_process(
     heartbeat_interval_seconds: float,
     process_generation: int | None = None,
     event_sink: RuntimeEventSink | None = None,
+    runtime_dir: Path | str | None = None,
     executor_factory: NodeExecutorFactory | None = None,
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
     cancel_grace_seconds: float = 5.0,
@@ -206,7 +236,10 @@ def run_workflow_process(
     reusable_executor_owner: _DefaultWorkflowProcessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
-        reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(store=store)
+        reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(
+            store=store,
+            runtime_dir=Path(runtime_dir or Path("runtime") / "workflow_runs"),
+        )
         executor_factory = reusable_executor_owner.executor_for_task
         close_executor_after_task = False
     try:

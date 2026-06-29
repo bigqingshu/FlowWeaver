@@ -335,17 +335,21 @@ def test_read_shared_tables_node_returns_fixed_table_refs(
     )
     executor = BuiltinSharedTableNodeExecutor(store=store)
 
+    task = make_task(
+        workflow_run_id="run-consumer",
+        node_type=READ_SHARED_TABLES_NODE_TYPE,
+        node_instance_id="read",
+        config={
+            "share_name": "daily_report",
+            "version_policy": "EXACT_VERSION",
+            "exact_version": 1,
+            "selected_members": ["customers", "orders"],
+        },
+    )
     result = executor.execute(
-        make_task(
-            workflow_run_id="run-consumer",
-            node_type=READ_SHARED_TABLES_NODE_TYPE,
-            node_instance_id="read",
-            config={
-                "share_name": "daily_report",
-                "version_policy": "EXACT_VERSION",
-                "exact_version": 1,
-                "selected_members": ["customers", "orders"],
-            },
+        grant_task_permissions(
+            store,
+            task,
         )
     )
 

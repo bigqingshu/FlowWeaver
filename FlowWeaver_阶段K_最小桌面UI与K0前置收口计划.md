@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.0a 第一阶段架构与验收基线固化
+> 当前执行点：K.0b 默认正式路径烟雾测试已完成，下一步 K.0c UI API契约复核
 
 ## 1. 阶段K目标
 
@@ -86,6 +86,7 @@ flowchart TD
     Supervisor["Supervisor"]
     WRP["WorkflowRunProcess"]
     Owner["Default Executor Owner"]
+    TableExec["BuiltinTableNodeExecutor"]
     SubprocessExec["SubprocessNodeExecutorIpcClient"]
     ExecProc["NodeExecutorProcess"]
     SharedExec["BuiltinSharedTableNodeExecutor"]
@@ -97,12 +98,14 @@ flowchart TD
     API --> Store
     Supervisor -->|"owns workflow process"| WRP
     WRP -->|"owns task dispatch"| Owner
+    Owner -->|"builtin table node path"| TableExec
     Owner -->|"ordinary executor path"| SubprocessExec
     SubprocessExec -->|"stdio JSON IPC"| ExecProc
     Owner -->|"shared table node path"| SharedExec
     WRP --> Store
     WRP --> Registry
     SharedExec --> Store
+    TableExec --> Registry
     Registry --> Store
 ```
 
@@ -165,8 +168,9 @@ EXECUTOR_READY
 - IPC消息使用协议模型和序列化载荷
 - 普通节点默认走NodeExecutorProcess子进程通道
 - fault/delay节点已有内置执行器能力
+- 内置表节点在WorkflowRunProcess默认路径中分流到BuiltinTableNodeExecutor并产出TableRef
 - 共享表节点在WorkflowRunProcess默认路径中分流到BuiltinSharedTableNodeExecutor
-- 当前K.0b应复核正式路径中普通表节点是否真正由默认子进程执行并产出TableRef
+- 正式子进程启动显式加载当前src路径，避免嵌入式Python误用旧安装包
 
 ### 3.7 TableRef数据流
 
@@ -226,6 +230,7 @@ NodeTask config / input_refs
 - 支持权限声明的内置NodeTask会在主循环创建前绑定permission_handle_id
 - GenerateTestTableNode和FilterRowsNode发布NODE_OUTPUT前校验PUBLISH权限
 - PublishSharedTablesNode发布SHARED_PUBLICATION前校验PUBLISH权限
+- ReadSharedTablesNode读取SHARED_PUBLICATION前校验READ_SHARED权限
 - 缺少或无效permission_handle_id会拒绝发布并记录denied审计事件
 - 授权通过会记录granted审计事件
 - 第一阶段不实现UI审批、FULL行级差分、外部系统统一权限和插件沙盒
@@ -280,6 +285,8 @@ K.0b正式烟雾测试基线：
 
 K.0b必须走正式路径，不使用测试专用Executor注入。
 
+当前状态：已完成最小正式路径烟雾测试与后端组合根修正。
+
 执行链路：
 
 ```text
@@ -299,10 +306,25 @@ K.0b必须走正式路径，不使用测试专用Executor注入。
 
 验收：
 
-- 控制面API可用
-- WebSocket事件可用
-- 默认执行路径可跑第一阶段内置节点链路
-- 后端缺口在K.0阶段修正，不在UI绕过
+- 控制面API可用：默认EngineHost可通过token鉴权、创建workflow并启动run
+- WebSocket事件可用：可连接并接收正式运行产生的Workflow事件，断开后可重连
+- RuntimeEvent可通过REST恢复
+- 默认执行路径可跑第一阶段内置表节点链路：GenerateTestTableNode -> FilterRowsNode
+- 默认执行路径可完成PublishSharedTablesNode和ReadSharedTablesNode
+- TableRef、SharedPublication、ReadLease和AuditEvent均由正式路径落库
+- 后端缺口已在K.0阶段修正，不在UI绕过
+
+K.0b发现并修正的后端缺口：
+
+- 默认EngineHost原先没有注册第一阶段内置节点定义，已补默认NodeRegistry
+- 嵌入式Python子进程原先可能加载site-packages旧包，已改为显式加载当前src路径
+- WorkflowRunProcess默认执行器原先未执行内置表节点真实产物链路，已补BuiltinTableNodeExecutor分流
+- ReadSharedTablesNode原先未在读取前执行READ_SHARED权限检查，已补STANDARD审计链路
+
+K.0b仍不覆盖：
+
+- cancel长任务的完整交互验收，后续仍需结合K.0c/K阶段UI入口继续复核
+- 审计、TableRef、SharedPublication的只读REST摘要接口，留到K.0c补齐
 
 ## 5. K.0c：UI API契约复核与只读接口补齐
 

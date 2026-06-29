@@ -10,6 +10,7 @@ from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
 from flowweaver.common.ids import new_id
+from flowweaver.common.subprocess_command import python_module_command
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
@@ -53,9 +54,11 @@ class Supervisor:
         self._runtime_event_paths[process.process_id] = runtime_event_path
         self._runtime_event_offsets[process.process_id] = 0
         command = [
-            self._python_executable,
-            "-m",
-            "flowweaver.workflow_process.main",
+            *python_module_command(
+                python_executable=self._python_executable,
+                module_name="flowweaver.workflow_process.main",
+                src_path=Path(__file__).resolve().parents[2],
+            ),
             "--database-url",
             self._runtime_store.database_url,
             "--workflow-run-id",
@@ -70,6 +73,8 @@ class Supervisor:
             self._config.workflow_process_execution_mode,
             "--max-concurrent-node-tasks",
             str(self._config.workflow_process_max_concurrent_node_tasks),
+            "--runtime-dir",
+            str(self._config.resolved_runtime_dir()),
             "--runtime-event-path",
             str(runtime_event_path),
         ]
@@ -113,9 +118,11 @@ class Supervisor:
         self.start()
         executor_id = executor_id or new_id()
         command = [
-            self._python_executable,
-            "-m",
-            "flowweaver.node_executor.process",
+            *python_module_command(
+                python_executable=self._python_executable,
+                module_name="flowweaver.node_executor.process",
+                src_path=Path(__file__).resolve().parents[2],
+            ),
             "--executor-id",
             executor_id,
         ]
