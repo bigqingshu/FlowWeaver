@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -300,6 +302,11 @@ def start_enginehost_process(spec: EngineHostLaunchSpec) -> subprocess.Popen[byt
     spec.stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_file = spec.stdout_path.open("ab")
     stderr_file = spec.stderr_path.open("ab")
+    popen_kwargs = {}
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
     try:
         return subprocess.Popen(
             spec.command,
@@ -307,6 +314,7 @@ def start_enginehost_process(spec: EngineHostLaunchSpec) -> subprocess.Popen[byt
             stdin=subprocess.DEVNULL,
             stdout=stdout_file,
             stderr=stderr_file,
+            **popen_kwargs,
         )
     finally:
         stdout_file.close()
@@ -366,6 +374,16 @@ def stop_process(process: PollableProcess, *, timeout_seconds: float = 5.0) -> N
         process.wait(timeout=timeout_seconds)
 
 
+def handle_interrupt_signal(signum: int, frame: object) -> None:
+    raise KeyboardInterrupt
+
+
+def install_launcher_signal_handlers() -> None:
+    signal.signal(signal.SIGINT, handle_interrupt_signal)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, handle_interrupt_signal)
+
+
 def run_launch_plan(plan: PortableLaunchPlan) -> int:
     if plan.desktop is not None:
         raise LauncherConfigurationError(
@@ -422,6 +440,7 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     try:
+        install_launcher_signal_handlers()
         settings = parse_launcher_args(argv)
         plan = build_launch_plan(Path(__file__).resolve().parent, settings)
         return run_launch_plan(plan)

@@ -276,6 +276,11 @@ def test_stop_process_terminates_running_process() -> None:
     assert process.killed is False
 
 
+def test_handle_interrupt_signal_raises_keyboard_interrupt() -> None:
+    with pytest.raises(KeyboardInterrupt):
+        launcher().handle_interrupt_signal(2, None)
+
+
 def test_run_launch_plan_rejects_desktop_until_later_stage(tmp_path: Path) -> None:
     layout = _create_minimal_layout(tmp_path, include_desktop=True)
     plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
