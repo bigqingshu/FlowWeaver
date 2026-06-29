@@ -80,6 +80,15 @@ public sealed record WorkflowDefinitionDto
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
+public sealed record WorkflowCreateRequestDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("definition")]
+    public JsonElement Definition { get; init; }
+}
+
 public sealed record WorkflowRevisionDto
 {
     [JsonPropertyName("revision_id")]

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
@@ -17,6 +18,12 @@ public interface IEngineHostApiClient
 
     Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<WorkflowDefinitionDto>> CreateWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string name,
+        JsonElement definition,
         CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(

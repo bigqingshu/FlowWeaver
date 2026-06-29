@@ -234,6 +234,15 @@ public sealed class MainWindowViewModelDataTests
                     new List<WorkflowDefinitionDto>()));
         }
 
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> CreateWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string name,
+            JsonElement definition,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
             EngineHostConnectionSettings settings,
             string workflowId,

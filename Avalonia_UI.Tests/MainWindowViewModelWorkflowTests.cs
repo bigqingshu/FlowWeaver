@@ -86,6 +86,72 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task CreateTemplateWorkflowCreatesRefreshesAndSelectsCreatedWorkflow()
+    {
+        var createdWorkflow = Workflow(
+            "wf-new",
+            "Generated table workflow",
+            1);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { createdWorkflow }),
+            CreateWorkflowResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(createdWorkflow),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.CreateTemplateWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Generated table workflow", apiClient.CreatedWorkflowName);
+        Assert.IsNotNull(apiClient.CreatedWorkflowDefinition);
+        var definition = apiClient.CreatedWorkflowDefinition.Value;
+        Assert.AreEqual(
+            "GenerateTestTableNode",
+            definition.GetProperty("nodes")[0].GetProperty("node_type").GetString());
+        Assert.AreEqual(
+            "FilterRowsNode",
+            definition.GetProperty("nodes")[1].GetProperty("node_type").GetString());
+        Assert.AreEqual(
+            "generate_to_filter",
+            definition.GetProperty("connections")[0].GetProperty("connection_id").GetString());
+        Assert.HasCount(1, viewModel.Workflows);
+        Assert.AreEqual("wf-new", viewModel.SelectedWorkflow?.WorkflowId);
+        Assert.AreEqual("Loaded 1 workflow(s).", viewModel.WorkflowMessage);
+        Assert.IsFalse(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public void CreateTemplateWorkflowIsDisabledForBlankName()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.NewWorkflowName = "   ";
+
+        Assert.IsFalse(viewModel.CreateTemplateWorkflowCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task CreateTemplateWorkflowShowsErrorEnvelope()
+    {
+        var apiClient = new FakeApiClient
+        {
+            CreateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_VALIDATION_FAILED",
+                "Workflow definition is invalid."),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.CreateTemplateWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Workflow creation failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual(
+            "WORKFLOW_VALIDATION_FAILED: Workflow definition is invalid.",
+            viewModel.WorkflowErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowError);
+        Assert.IsNull(viewModel.SelectedWorkflow);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionLoadsDetailNodesConnectionsAndRevisions()
     {
         var definitionJson =
@@ -424,6 +490,11 @@ public sealed class MainWindowViewModelWorkflowTests
                 "NOT_CONFIGURED",
                 "No workflow detail response configured.");
 
+        public ApiResponseEnvelope<WorkflowDefinitionDto> CreateWorkflowResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No create response configured.");
+
         public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
 
@@ -442,6 +513,10 @@ public sealed class MainWindowViewModelWorkflowTests
         public EngineHostConnectionSettings? LastSettings { get; private set; }
 
         public string? LastWorkflowDetailId { get; private set; }
+
+        public string? CreatedWorkflowName { get; private set; }
+
+        public JsonElement? CreatedWorkflowDefinition { get; private set; }
 
         public string? LastWorkflowRevisionsWorkflowId { get; private set; }
 
@@ -474,6 +549,18 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             LastSettings = settings;
             return Task.FromResult(WorkflowsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> CreateWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string name,
+            JsonElement definition,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            CreatedWorkflowName = name;
+            CreatedWorkflowDefinition = definition.Clone();
+            return Task.FromResult(CreateWorkflowResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(

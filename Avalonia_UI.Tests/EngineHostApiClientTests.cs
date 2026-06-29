@@ -98,6 +98,43 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task CreateWorkflowAsyncPostsCreatePayload()
+    {
+        HttpMethod? method = null;
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            method = request.Method;
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"workflow_id":"wf-1","name":"Created","revision_id":"rev-1","version":1,"definition_hash":"hash-1","definition":{"schema_version":"1.0","nodes":[],"connections":[]},"status":"ACTIVE","created_at":"2026-06-29T01:02:03Z","updated_at":"2026-06-29T01:03:03Z"},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+        using var definition = JsonDocument.Parse("""{"schema_version":"1.0","nodes":[],"connections":[]}""");
+
+        var result = await client.CreateWorkflowAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "Created",
+            definition.RootElement);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, method);
+        Assert.AreEqual("Bearer", handler.Authorization?.Scheme);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual("Created", payload.RootElement.GetProperty("name").GetString());
+        Assert.AreEqual(
+            "1.0",
+            payload.RootElement.GetProperty("definition").GetProperty("schema_version").GetString());
+        Assert.AreEqual("wf-1", result.Data?.WorkflowId);
+    }
+
+    [TestMethod]
     public async Task ListWorkflowRevisionsAsyncUsesRevisionsPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

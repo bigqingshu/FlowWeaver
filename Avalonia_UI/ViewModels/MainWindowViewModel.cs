@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
@@ -45,6 +46,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool isStartingWorkflow;
+
+    [ObservableProperty]
+    private string newWorkflowName = "Generated table workflow";
+
+    [ObservableProperty]
+    private bool isCreatingWorkflow;
 
     [ObservableProperty]
     private WorkflowListItemViewModel? selectedWorkflow;
@@ -254,7 +261,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasWorkflowError => !string.IsNullOrWhiteSpace(WorkflowErrorMessage);
 
-    public bool IsWorkflowBusy => IsLoadingWorkflows || IsStartingWorkflow;
+    public bool IsWorkflowBusy => IsLoadingWorkflows || IsStartingWorkflow || IsCreatingWorkflow;
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
@@ -326,6 +333,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanStartSelectedWorkflow()
     {
         return SelectedWorkflow is not null && !IsWorkflowBusy;
+    }
+
+    private bool CanCreateTemplateWorkflow()
+    {
+        return !IsWorkflowBusy && !string.IsNullOrWhiteSpace(NewWorkflowName);
     }
 
     private bool CanLoadSelectedWorkflowDefinition()
@@ -443,6 +455,41 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowMessage = "Workflow refresh failed.";
         WorkflowErrorMessage = DescribeError(response);
         IsLoadingWorkflows = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCreateTemplateWorkflow))]
+    private async Task CreateTemplateWorkflowAsync()
+    {
+        var name = NewWorkflowName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            WorkflowMessage = "Workflow creation rejected.";
+            WorkflowErrorMessage = "Workflow name is required.";
+            return;
+        }
+
+        IsCreatingWorkflow = true;
+        WorkflowMessage = $"Creating {name}...";
+        WorkflowErrorMessage = null;
+
+        using var definition = JsonDocument.Parse(TemplateWorkflowDefinitions.GeneratedTable);
+        var response = await _apiClient.CreateWorkflowAsync(
+            BuildSettings(),
+            name,
+            definition.RootElement,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            WorkflowMessage = $"Created workflow {response.Data.Name}.";
+            IsCreatingWorkflow = false;
+            await RefreshWorkflowsSelectingAsync(response.Data.WorkflowId);
+            return;
+        }
+
+        WorkflowMessage = "Workflow creation failed.";
+        WorkflowErrorMessage = DescribeError(response);
+        IsCreatingWorkflow = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadSelectedWorkflowDefinition))]
@@ -1023,6 +1070,36 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingRuns = false;
     }
 
+    private async Task RefreshWorkflowsSelectingAsync(string workflowId)
+    {
+        IsLoadingWorkflows = true;
+        WorkflowMessage = "Refreshing workflows...";
+        WorkflowErrorMessage = null;
+
+        var response = await _apiClient.ListWorkflowsAsync(
+            BuildSettings(),
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            Workflows.Clear();
+            foreach (var workflow in response.Data)
+            {
+                Workflows.Add(new WorkflowListItemViewModel(workflow));
+            }
+
+            SelectedWorkflow = Workflows.FirstOrDefault(workflow => workflow.WorkflowId == workflowId)
+                ?? Workflows.FirstOrDefault();
+            WorkflowMessage = $"Loaded {Workflows.Count} workflow(s).";
+            IsLoadingWorkflows = false;
+            return;
+        }
+
+        WorkflowMessage = "Workflow refresh failed.";
+        WorkflowErrorMessage = DescribeError(response);
+        IsLoadingWorkflows = false;
+    }
+
     private EngineHostConnectionSettings BuildSettings()
     {
         return new EngineHostConnectionSettings
@@ -1148,6 +1225,16 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     partial void OnIsStartingWorkflowChanged(bool value)
+    {
+        NotifyWorkflowCommandStateChanged();
+    }
+
+    partial void OnNewWorkflowNameChanged(string value)
+    {
+        CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsCreatingWorkflowChanged(bool value)
     {
         NotifyWorkflowCommandStateChanged();
     }
@@ -1319,6 +1406,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsWorkflowBusy));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
+        CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
     }
 
@@ -1328,4 +1416,47 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshRunsCommand.NotifyCanExecuteChanged();
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
     }
+}
+
+internal static class TemplateWorkflowDefinitions
+{
+    public const string GeneratedTable =
+        """
+        {
+          "schema_version": "1.0",
+          "nodes": [
+            {
+              "node_instance_id": "generate",
+              "node_type": "GenerateTestTableNode",
+              "node_version": "1.0",
+              "display_name": "Generate rows",
+              "config": {
+                "rows": 3,
+                "columns": ["row_id", "amount"],
+                "seed": 0
+              }
+            },
+            {
+              "node_instance_id": "filter",
+              "node_type": "FilterRowsNode",
+              "node_version": "1.0",
+              "display_name": "Keep amount greater than 1",
+              "config": {
+                "field": "amount",
+                "operator": "GT",
+                "value": 1.0
+              }
+            }
+          ],
+          "connections": [
+            {
+              "connection_id": "generate_to_filter",
+              "source_node_id": "generate",
+              "source_port": "out",
+              "target_node_id": "filter",
+              "target_port": "in"
+            }
+          ]
+        }
+        """;
 }
