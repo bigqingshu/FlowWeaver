@@ -132,6 +132,30 @@ public sealed class ConnectionSettingsStoreTests
     }
 
     [TestMethod]
+    public async Task FileConnectionSettingsStoreReturnsDefaultForInvalidStoredBaseUrls()
+    {
+        var path = Path.Combine(CreateTempDirectory(), "connection-settings.json");
+        await File.WriteAllTextAsync(
+            path,
+            """
+            {
+              "schema_version": 1,
+              "last_successful_base_url": "not a url",
+              "recent_base_urls": ["ftp://invalid"],
+              "updated_at_utc": "2026-06-29T00:00:00Z"
+            }
+            """);
+        var store = new FileConnectionSettingsStore(path);
+
+        var settings = await store.LoadAsync();
+
+        Assert.AreEqual(EngineHostConnectionSettings.DefaultBaseUrl, settings.LastSuccessfulBaseUrl);
+        CollectionAssert.AreEqual(
+            new[] { EngineHostConnectionSettings.DefaultBaseUrl },
+            settings.RecentBaseUrls.ToArray());
+    }
+
+    [TestMethod]
     public void FileConnectionSettingsStoreDefaultPathUsesLocalApplicationData()
     {
         var path = FileConnectionSettingsStore.GetDefaultSettingsPath();

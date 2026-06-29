@@ -1,9 +1,9 @@
 # FlowWeaver 阶段L.2：UI连接配置持久化边界
 
-> 文档状态：阶段L.2边界已确认，L.2a/L.2b/L.2c已完成
+> 文档状态：阶段L.2边界已确认，L.2a/L.2b/L.2c/L.2d已完成
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md`、`01_第一阶段执行方案.md`、阶段K验收基线、阶段L.0边界清单和阶段L.1运行入口收口
 > 适用范围：Avalonia UI 的 EngineHost BaseUrl、token 输入和本地连接偏好持久化
-> 当前执行点：L.2c已完成最小UI接入，下一步进入L.2d失败场景补充测试
+> 当前执行点：L.2d已完成失败场景验收复核，下一步进入L.3正式路径烟雾清单
 
 ## 1. L.2目标
 
@@ -29,6 +29,7 @@ L.2边界确认阶段不做：
 - L.2a 已新增连接配置模型、用户级路径解析、Store接口、文件实现和单元测试
 - L.2b 已完成 UI 接入前复核
 - L.2c 已把 Store 接入 `MainWindowViewModel`
+- L.2d 已完成损坏配置、非法 URL 和保存失败场景验收复核
 
 ## 2. 当前状态
 
@@ -266,6 +267,7 @@ L.2完成条件：
 - 已完成 L.2a 连接配置模型和 Store 边界
 - 已完成 L.2b UI 接入前复核
 - 已完成 L.2c UI 启动加载 BaseUrl 和 health 成功保存 BaseUrl
+- 已完成 L.2d 损坏配置、非法 URL 和保存失败场景验收复核
 
 ## 12. L.2c实现结论
 
@@ -281,6 +283,24 @@ L.2c已完成最小代码接入：
 - 保存失败不改变 `Connected` 状态，只显示非阻断错误
 - 业务 API 和 RuntimeEvent WebSocket 不读写连接配置 Store
 
-## 13. 下一步建议
+## 13. L.2d验收结论
 
-L.2c已完成 UI 启动加载 BaseUrl 和 health 成功后保存 BaseUrl。下一步建议进入 L.2d：补充损坏配置、非法 URL 和保存失败场景的验收复核；仍不保存 token，不增加 recent列表UI，不引入凭据存储。
+L.2d已形成独立复核文档：
+
+```text
+FlowWeaver_阶段L.2d_连接配置失败场景验收复核.md
+```
+
+复核结论：
+
+- 配置文件不存在时回退默认 BaseUrl
+- 配置文件损坏时回退默认 BaseUrl
+- 配置文件合法但 BaseUrl 非法时回退默认 BaseUrl
+- Store 读取异常时 ViewModel 保持默认 BaseUrl 并显示非阻断错误
+- health 成功但保存失败时保持 `Connected`
+- health 失败时不保存配置
+- token、Authorization header 和完整 WebSocket URL 仍不写入配置
+
+## 14. 下一步建议
+
+L.2d已完成后，L.2 连接配置持久化边界可以视为第一轮闭环。下一步建议进入 L.3：正式路径烟雾清单，覆盖空数据库、已有工作流和 EngineHost 重启三类验收。
