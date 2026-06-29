@@ -81,7 +81,7 @@ public sealed class MainWindowViewModelWorkflowTests
 
         Assert.IsEmpty(viewModel.Workflows);
         Assert.AreEqual("Workflow refresh failed.", viewModel.WorkflowMessage);
-        Assert.AreEqual("TOKEN_REQUIRED: EngineHost token is required.", viewModel.WorkflowErrorMessage);
+        Assert.AreEqual("EngineHost token is required.", viewModel.WorkflowErrorMessage);
         Assert.IsTrue(viewModel.HasWorkflowError);
     }
 

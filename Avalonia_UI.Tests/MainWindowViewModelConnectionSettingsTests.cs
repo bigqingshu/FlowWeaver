@@ -147,6 +147,27 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.AreEqual("secret", apiClient.LastSettings?.Token);
     }
 
+    [TestMethod]
+    public async Task BusinessApiInvalidTokenShowsStableTokenRecoveryMessage()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Failure(
+                "UNAUTHORIZED",
+                "Invalid local API token"),
+        };
+        var store = new FakeConnectionSettingsStore();
+        var viewModel = CreateViewModel(apiClient, store);
+        viewModel.Token = "stale-token";
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Workflow refresh failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual(
+            "EngineHost token is wrong, rotated, or no longer valid. Re-enter the current local API token.",
+            viewModel.WorkflowErrorMessage);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
         FakeConnectionSettingsStore store)

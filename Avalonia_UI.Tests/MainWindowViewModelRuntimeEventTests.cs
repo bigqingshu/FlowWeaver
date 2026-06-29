@@ -93,15 +93,48 @@ public sealed class MainWindowViewModelRuntimeEventTests
         Assert.AreEqual("Event stream stopped.", viewModel.RuntimeEventStreamMessage);
     }
 
+    [TestMethod]
+    public async Task RuntimeEventStreamErrorRedactsTokenFromConnectionMessage()
+    {
+        var apiClient = new FakeApiClient();
+        var streamClient = new FakeRuntimeEventStreamClient
+        {
+            ConnectException = new InvalidOperationException(
+                "Could not connect ws://127.0.0.1:8000/ws/v1/events?token=super-secret"),
+        };
+        var viewModel = CreateViewModel(
+            apiClient,
+            streamClient,
+            cancellationToken => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
+
+        await viewModel.StartRuntimeEventStreamCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => viewModel.HasRuntimeEventStreamError);
+        var errorMessage = viewModel.RuntimeEventStreamErrorMessage;
+
+        StringAssert.Contains(
+            errorMessage,
+            "RuntimeEvent stream connection failed");
+        StringAssert.Contains(errorMessage, "token=***");
+        Assert.IsFalse(
+            errorMessage?.Contains(
+                "super-secret",
+                StringComparison.Ordinal) ?? true);
+
+        await viewModel.StopRuntimeEventStreamCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Event stream stopped.", viewModel.RuntimeEventStreamMessage);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
-        FakeRuntimeEventStreamClient streamClient)
+        FakeRuntimeEventStreamClient streamClient,
+        Func<CancellationToken, Task>? reconnectDelay = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
             apiClient,
             streamClient,
-            _ => Task.CompletedTask)
+            reconnectDelay ?? (_ => Task.CompletedTask))
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
@@ -188,6 +221,8 @@ public sealed class MainWindowViewModelRuntimeEventTests
             _streams = new Queue<IEngineHostRuntimeEventStream>(streams);
         }
 
+        public Exception? ConnectException { get; init; }
+
         public int ConnectCount { get; private set; }
 
         public Uri BuildEventsUri(EngineHostConnectionSettings settings)
@@ -202,6 +237,11 @@ public sealed class MainWindowViewModelRuntimeEventTests
             await Task.Yield();
             _ = BuildEventsUri(settings);
             ConnectCount++;
+            if (ConnectException is not null)
+            {
+                throw ConnectException;
+            }
+
             if (_streams.Count == 0)
             {
                 throw new InvalidOperationException("No fake event stream is configured.");

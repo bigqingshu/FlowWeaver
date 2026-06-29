@@ -1102,7 +1102,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 {
                     IsRuntimeEventStreamConnected = false;
                     RuntimeEventStreamMessage = "Event stream error. Reconnecting...";
-                    RuntimeEventStreamErrorMessage = ex.Message;
+                    RuntimeEventStreamErrorMessage =
+                        EngineHostConnectionDiagnostics.DescribeRuntimeEventStreamException(ex);
                     await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
                 }
 
@@ -1265,12 +1266,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private static string DescribeError<TData>(ApiResponseEnvelope<TData> response)
     {
-        if (response.Error is null)
-        {
-            return "EngineHost response did not include data.";
-        }
-
-        return $"{response.Error.ErrorCode}: {response.Error.Message}";
+        return EngineHostConnectionDiagnostics.DescribeError(response);
     }
 
     private static string? FormatValidationIssues(WorkflowValidationResultDto result)
