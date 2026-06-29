@@ -16,6 +16,7 @@ from flowweaver.nodes.permissions import resolve_builtin_node_permissions
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
+    PermissionAction,
     TableMutability,
     TableRole,
     TableScope,
@@ -204,6 +205,18 @@ def test_publish_shared_tables_node_creates_publication(
         )
     ]
     assert publication.retention_policy == {"retention_seconds": 3600}
+    audit_events = store.list_audit_events(event_type="PERMISSION_CHECK")
+    assert len(audit_events) == 1
+    assert audit_events[0].workflow_run_id == "run-producer"
+    assert audit_events[0].node_run_id == "publish-run"
+    assert audit_events[0].subject_type == "NODE"
+    assert audit_events[0].subject_id == "publish-run"
+    assert audit_events[0].resource_type == "SHARED_PUBLICATION"
+    assert audit_events[0].resource_id == "daily_report"
+    assert audit_events[0].action == PermissionAction.PUBLISH
+    assert audit_events[0].result == "granted"
+    assert audit_events[0].summary["node_instance_id"] == "publish"
+    assert audit_events[0].summary["node_type"] == PUBLISH_SHARED_TABLES_NODE_TYPE
     assert [
         (member.export_name, member.table_ref_id)
         for member in publication.members
@@ -254,6 +267,16 @@ def test_publish_shared_tables_node_rejects_missing_publish_permission(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert result.error["message"] == "Node task is missing permission_handle_id"
     assert store.get_latest_shared_publication("daily_report") is None
+    audit_events = store.list_audit_events(event_type="PERMISSION_CHECK")
+    assert len(audit_events) == 1
+    assert audit_events[0].result == "denied"
+    assert audit_events[0].resource_type == "SHARED_PUBLICATION"
+    assert audit_events[0].resource_id == "daily_report"
+    assert audit_events[0].summary["permission_handle_id"] is None
+    assert (
+        audit_events[0].summary["reason"]
+        == "Node task is missing permission_handle_id"
+    )
 
 
 def test_read_shared_tables_node_returns_fixed_table_refs(

@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定和 J.5 内置节点发布前权限检查。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查和 J.6 STANDARD 权限审计事件。
 
 阶段 A 范围包括：
 
@@ -305,6 +305,7 @@ J.0 只确认语义和接口范围，不落 Store/API/节点执行检查。
 - 内置表节点和共享表节点已具备配置到 `PermissionRequestModel` 的解析入口
 - WorkflowRunProcess 已在创建支持权限声明的内置 `NodeTask` 前签发并绑定 `permission_handle_id`
 - 内置表节点和共享表发布节点已在发布前校验 `permission_handle_id`
+- 内置表节点和共享表发布节点已记录 `STANDARD` 权限检查审计事件
 - `TableLeaseManager` 已有表级 READ / WRITE 租约与轻量审计记录
 - `RuntimeEvent` 与 `NodeTaskResult` 已能承载运行状态和节点失败结果
 
@@ -332,7 +333,7 @@ J.0 暂不进入：
 | J.6 | STANDARD 审计 | 写入节点审计节点、表、字段、影响行数和摘要 | FULL 行级差分 |
 | J.7 | 阶段验收 | 无权限写入拒绝和审计记录完整性测试 | 权限页面 |
 
-当前建议下一步是 J.6：补 STANDARD 权限审计事件，不进入 FULL 行级差分。
+当前建议下一步是 J.7：做阶段 J 权限审计验收复核，不新增权限页面。
 
 ## 环境
 

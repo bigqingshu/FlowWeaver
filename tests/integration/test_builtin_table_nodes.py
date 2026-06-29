@@ -14,7 +14,11 @@ from flowweaver.nodes.builtin_table import (
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
 from flowweaver.nodes.permissions import resolve_builtin_node_permissions
-from flowweaver.protocols.enums import LifecycleStatus, NodeResultStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    NodeResultStatus,
+    PermissionAction,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.permissions import PermissionGrantModel
 
@@ -120,6 +124,19 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
     published = registry.get(result.output_refs[0])
     assert published.lifecycle_status == LifecycleStatus.PUBLISHED
     assert published.logical_table_id == "generate_output"
+    audit_events = store.list_audit_events(event_type="PERMISSION_CHECK")
+    assert len(audit_events) == 1
+    assert audit_events[0].workflow_run_id == task.workflow_run_id
+    assert audit_events[0].node_run_id == task.node_run_id
+    assert audit_events[0].subject_type == "NODE"
+    assert audit_events[0].subject_id == task.node_run_id
+    assert audit_events[0].resource_type == "NODE_OUTPUT"
+    assert audit_events[0].resource_id == "run-1:generate:output"
+    assert audit_events[0].action == PermissionAction.PUBLISH
+    assert audit_events[0].result == "granted"
+    assert audit_events[0].summary["permission_handle_id"] == task.permission_handle_id
+    assert audit_events[0].summary["node_instance_id"] == "generate"
+    assert audit_events[0].summary["node_type"] == GENERATE_TEST_TABLE_NODE_TYPE
     assert provider.count_rows(published) == 4
     assert provider.read_rows(published, offset=0, limit=10, order_by=["row_id"]) == [
         {"row_id": 1, "amount": 1.0, "label": "label_7_1"},
@@ -221,7 +238,7 @@ def test_filter_rows_node_returns_validation_error_for_missing_field(
 def test_builtin_table_node_rejects_missing_publish_permission(
     tmp_path: Path,
 ) -> None:
-    executor, _store, registry, _provider = make_executor(tmp_path)
+    executor, store, registry, _provider = make_executor(tmp_path)
     task = make_task(
         node_type=GENERATE_TEST_TABLE_NODE_TYPE,
         node_run_id="node-run-generate",
@@ -237,3 +254,13 @@ def test_builtin_table_node_rejects_missing_publish_permission(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert result.error["message"] == "Node task is missing permission_handle_id"
     assert registry.list_by_workflow_run("run-1") == []
+    audit_events = store.list_audit_events(event_type="PERMISSION_CHECK")
+    assert len(audit_events) == 1
+    assert audit_events[0].result == "denied"
+    assert audit_events[0].resource_type == "NODE_OUTPUT"
+    assert audit_events[0].resource_id == "run-1:generate:output"
+    assert audit_events[0].summary["permission_handle_id"] is None
+    assert (
+        audit_events[0].summary["reason"]
+        == "Node task is missing permission_handle_id"
+    )
