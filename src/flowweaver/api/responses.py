@@ -9,11 +9,14 @@ from flowweaver.common.ids import new_id
 from flowweaver.engine.runtime_store import (
     NodeRun,
     RuntimeEventLog,
+    SharedPublication,
     WorkflowDefinition,
     WorkflowProcess,
     WorkflowRevision,
     WorkflowRun,
 )
+from flowweaver.protocols.permissions import AuditEventModel
+from flowweaver.protocols.table_ref import TableRefModel
 
 
 def request_id(request: Request) -> str:
@@ -153,4 +156,49 @@ def _to_jsonable(value: Any) -> Any:
             "node_run_id": value.node_run_id,
             "payload": value.payload,
         }
+    if isinstance(value, TableRefModel):
+        return {
+            "table_ref_id": value.table_ref_id,
+            "workflow_run_id": value.created_by_workflow_run_id,
+            "node_run_id": value.created_by_node_run_id,
+            "role": value.role.value,
+            "storage_kind": value.storage_kind.value,
+            "scope": value.scope.value,
+            "mutability": value.mutability.value,
+            "provider_id": value.provider_id,
+            "resource_profile_id": value.resource_profile_id,
+            "mount_id": value.mount_id,
+            "logical_table_id": value.logical_table_id,
+            "schema": [
+                field.model_dump(mode="json") for field in value.schema
+            ],
+            "schema_fingerprint": value.schema_fingerprint,
+            "version": value.version,
+            "capabilities": sorted(value.capabilities),
+            "lifecycle_status": value.lifecycle_status.value,
+            "created_at": value.created_at.isoformat(),
+        }
+    if isinstance(value, SharedPublication):
+        return {
+            "publication_id": value.publication_id,
+            "share_name": value.share_name,
+            "publication_version": value.publication_version,
+            "producer_workflow_id": value.producer_workflow_id,
+            "producer_run_id": value.producer_run_id,
+            "status": value.status,
+            "input_snapshot_id": value.input_snapshot_id,
+            "retention_policy": value.retention_policy,
+            "created_at": value.created_at.isoformat(),
+            "members": [
+                {
+                    "publication_id": member.publication_id,
+                    "export_name": member.export_name,
+                    "table_ref_id": member.table_ref_id,
+                    "exact_table_version": member.exact_table_version,
+                }
+                for member in value.members
+            ],
+        }
+    if isinstance(value, AuditEventModel):
+        return value.model_dump(mode="json")
     return value

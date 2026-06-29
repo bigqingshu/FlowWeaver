@@ -1396,6 +1396,36 @@ class RuntimeStore:
                 ),
             )
 
+    def list_shared_publications(
+        self,
+        *,
+        share_name: str | None = None,
+        limit: int = 100,
+    ) -> list[SharedPublication]:
+        limit = max(1, min(limit, 1000))
+        statement = select(SharedPublicationRecord).order_by(
+            SharedPublicationRecord.share_name,
+            SharedPublicationRecord.publication_version.desc(),
+            SharedPublicationRecord.created_at.desc(),
+        )
+        if share_name is not None:
+            statement = statement.where(
+                SharedPublicationRecord.share_name == share_name
+            )
+        statement = statement.limit(limit)
+        with self._session_factory() as session:
+            records = session.scalars(statement).all()
+            return [
+                _shared_publication_from_records(
+                    record,
+                    _get_shared_publication_member_records(
+                        session,
+                        record.publication_id,
+                    ),
+                )
+                for record in records
+            ]
+
     def create_input_snapshot(
         self,
         *,
@@ -1710,6 +1740,9 @@ class RuntimeStore:
         self,
         *,
         after_sequence_number: int | None = None,
+        workflow_run_id: str | None = None,
+        node_run_id: str | None = None,
+        event_type: str | None = None,
         limit: int = 100,
     ) -> list[RuntimeEventLog]:
         limit = max(1, min(limit, 1000))
@@ -1720,6 +1753,14 @@ class RuntimeStore:
             statement = statement.where(
                 RuntimeEventRecord.sequence_number > after_sequence_number
             )
+        if workflow_run_id is not None:
+            statement = statement.where(
+                RuntimeEventRecord.workflow_run_id == workflow_run_id
+            )
+        if node_run_id is not None:
+            statement = statement.where(RuntimeEventRecord.node_run_id == node_run_id)
+        if event_type is not None:
+            statement = statement.where(RuntimeEventRecord.event_type == event_type)
         with self._session_factory() as session:
             return [
                 _runtime_event_from_record(record)

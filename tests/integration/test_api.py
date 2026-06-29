@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from flowweaver.api.app import create_app
 from flowweaver.common.config import EngineConfig
+from flowweaver.common.time import utc_now
 from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -19,11 +20,20 @@ from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec, NodeRegistry
 from flowweaver.protocols.enums import (
+    AuditLevel,
     EventType,
+    LifecycleStatus,
+    PermissionAction,
+    TableMutability,
+    TableRole,
+    TableScope,
+    TableStorageKind,
     WorkflowRunCompletionReason,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.permissions import AuditEventModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 TOKEN = "test-token"
 
@@ -102,6 +112,47 @@ def response_error(response):
     assert payload["data"] is None
     assert payload["request_id"]
     return payload["error"]
+
+
+def make_api_table_ref(
+    *,
+    table_ref_id: str,
+    workflow_run_id: str,
+    node_run_id: str,
+    logical_table_id: str = "orders",
+    version: int = 1,
+) -> TableRefModel:
+    return TableRefModel(
+        table_ref_id=table_ref_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        scope=TableScope.WORKFLOW_SCOPE,
+        mutability=TableMutability.PUBLISHED_IMMUTABLE,
+        provider_id="sqlite_runtime",
+        resource_profile_id=None,
+        mount_id=None,
+        logical_table_id=logical_table_id,
+        opaque_handle={
+            "database_path": "runtime/run.db",
+            "table_name": f"{logical_table_id}_v{version}",
+        },
+        schema=[
+            FieldSchemaModel(
+                field_id=f"{logical_table_id}-amount",
+                name="amount",
+                data_type="FLOAT",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+        schema_fingerprint=f"{logical_table_id}-fingerprint-{version}",
+        version=version,
+        capabilities={"READ"},
+        lifecycle_status=LifecycleStatus.PUBLISHED,
+        created_by_workflow_run_id=workflow_run_id,
+        created_by_node_run_id=node_run_id,
+        created_at=utc_now(),
+    )
 
 
 def test_health_returns_uniform_response(tmp_path: Path) -> None:
@@ -483,21 +534,135 @@ def test_websocket_receives_workflow_process_runtime_event(tmp_path: Path) -> No
 def test_runtime_events_can_be_restored_through_rest(tmp_path: Path) -> None:
     client, store, _container = make_client(tmp_path)
     store.append_runtime_event(
-        EventModel(event_type=EventType.WORKFLOW_STARTED, payload={"run": "1"})
+        EventModel(
+            event_type=EventType.WORKFLOW_STARTED,
+            workflow_run_id="run-1",
+            payload={"run": "1"},
+        )
     )
     store.append_runtime_event(
-        EventModel(event_type=EventType.NODE_STARTED, payload={"node": "a"})
+        EventModel(
+            event_type=EventType.NODE_STARTED,
+            workflow_run_id="run-1",
+            node_run_id="node-run-1",
+            payload={"node": "a"},
+        )
+    )
+    store.append_runtime_event(
+        EventModel(
+            event_type=EventType.NODE_FINISHED,
+            workflow_run_id="run-2",
+            node_run_id="node-run-2",
+            payload={"node": "b"},
+        )
     )
 
     response = client.get(
         "/api/v1/events",
-        params={"after_sequence_number": 1},
+        params={
+            "after_sequence_number": 1,
+            "workflow_run_id": "run-1",
+            "event_type": "NODE_STARTED",
+        },
         headers=auth_headers(),
     )
     data = response_data(response)
 
     assert [event["sequence_number"] for event in data] == [2]
     assert data[0]["event_type"] == "NODE_STARTED"
+    assert data[0]["workflow_run_id"] == "run-1"
+    assert data[0]["node_run_id"] == "node-run-1"
+
+
+def test_k0c_read_only_api_contracts_return_runtime_summaries(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Runtime summaries",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        status=WorkflowRunStatus.PENDING,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-1",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-1",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+    )
+    store.register_table_ref(table_ref)
+    publication = store.create_shared_publication(
+        publication_id="publication-1",
+        share_name="daily_report",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={"orders": table_ref.table_ref_id},
+    )
+    audit_event = store.append_audit_event(
+        AuditEventModel(
+            event_id="audit-event-1",
+            event_type="PERMISSION_CHECK",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=node.node_run_id,
+            subject_type="NODE",
+            subject_id=node.node_run_id,
+            resource_type="SHARED_PUBLICATION",
+            resource_id="daily_report",
+            action=PermissionAction.PUBLISH,
+            result="granted",
+            audit_level=AuditLevel.STANDARD,
+            summary={"node_instance_id": "generate"},
+        )
+    )
+
+    table_refs = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+    audit_events = response_data(
+        client.get(
+            "/api/v1/audit-events",
+            params={
+                "workflow_run_id": run.workflow_run_id,
+                "event_type": "PERMISSION_CHECK",
+            },
+            headers=auth_headers(),
+        )
+    )
+    publications = response_data(
+        client.get("/api/v1/shared-publications", headers=auth_headers())
+    )
+    versions = response_data(
+        client.get(
+            "/api/v1/shared-publications/daily_report/versions",
+            headers=auth_headers(),
+        )
+    )
+
+    assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
+    assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
+    assert table_refs[0]["node_run_id"] == node.node_run_id
+    assert table_refs[0]["lifecycle_status"] == "PUBLISHED"
+    assert audit_events[0]["event_id"] == audit_event.event_id
+    assert audit_events[0]["action"] == "PUBLISH"
+    assert audit_events[0]["summary"]["node_instance_id"] == "generate"
+    assert [item["publication_id"] for item in publications] == [
+        publication.publication_id
+    ]
+    assert versions[0]["share_name"] == "daily_report"
+    assert versions[0]["publication_version"] == 1
+    assert versions[0]["members"][0]["table_ref_id"] == table_ref.table_ref_id
 
 
 def test_create_app_can_migrate_default_store(tmp_path: Path) -> None:

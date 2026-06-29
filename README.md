@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化，并完成 K.0b 默认正式路径烟雾测试及后端组合根缺口修正；下一步建议进入 K.0c UI API 契约复核与只读接口补齐。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐；下一步建议进入 K.1 最小桌面 UI 工程骨架。
 
 阶段 A 范围包括：
 
@@ -86,6 +86,7 @@
 - 默认 `EngineHost` 已注册第一阶段内置节点定义，API 创建内置节点 workflow 不再依赖测试专用注册表
 - 正式子进程启动会显式加载当前 `src` 路径，避免嵌入式 Python 捡到旧安装包
 - 读取共享表节点在执行前已校验 `READ_SHARED` 权限并记录 `STANDARD` 审计事件
+- UI 前置只读 API 已补齐：审计事件、运行 TableRef、共享发布列表、共享发布版本和 RuntimeEvent 服务端过滤
 - 阶段 I 已具备 A 发布 V1/V2、B 固定读取 V1、B 结束释放 ReadLease 的主循环验收
 - `RuntimeDataRegistry` 已具备单表 STAGING 注册、发布为 PUBLISHED、按 workflow/node 查询和节点失败清理
 - `TableLeaseManager` 已具备表级 READ / WRITE 租约基础能力
@@ -93,8 +94,8 @@
 
 尚未完成：
 
-- 审计只读 API、运行数据摘要 API、共享发布摘要 API
 - 阶段 K 最小桌面 UI
+- cancel 长任务的 UI 交互验收
 
 ## 阶段 I 计划
 
@@ -346,7 +347,7 @@ J.7 验收结果：
 - 主循环端到端测试已覆盖权限句柄、授权记录和 `STANDARD` 审计事件
 - 第一阶段仍不包含 UI 审批、权限页面、FULL 行级差分和所有插件沙盒
 
-当前建议下一步是 K.0c：先补齐 UI 所需只读 API 契约，再进入最小桌面 UI 骨架。
+当前建议下一步是 K.1：建立最小桌面 UI 工程骨架和 EngineHost 连接配置。
 
 ## 环境
 

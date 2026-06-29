@@ -3,7 +3,7 @@
 > 文档状态：阶段K实施前置基线
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md` 和 `01_第一阶段执行方案.md`
 > 适用范围：阶段K.0到K.8
-> 当前执行点：K.0b 默认正式路径烟雾测试已完成，下一步 K.0c UI API契约复核
+> 当前执行点：K.0c UI API契约复核已完成，下一步 K.1 最小桌面UI工程骨架
 
 ## 1. 阶段K目标
 
@@ -321,14 +321,17 @@ K.0b发现并修正的后端缺口：
 - WorkflowRunProcess默认执行器原先未执行内置表节点真实产物链路，已补BuiltinTableNodeExecutor分流
 - ReadSharedTablesNode原先未在读取前执行READ_SHARED权限检查，已补STANDARD审计链路
 
-K.0b仍不覆盖：
+K.0b后留给K.0c的接口缺口：
 
-- cancel长任务的完整交互验收，后续仍需结合K.0c/K阶段UI入口继续复核
-- 审计、TableRef、SharedPublication的只读REST摘要接口，留到K.0c补齐
+- 审计、TableRef、SharedPublication的只读REST摘要接口
+- RuntimeEvent按workflow_run_id、node_run_id、event_type过滤
+- cancel长任务的完整交互验收仍需结合K阶段UI入口继续复核
 
 ## 5. K.0c：UI API契约复核与只读接口补齐
 
-建议补齐或确认以下接口：
+当前状态：已完成最小只读接口和事件过滤补齐。
+
+已补齐或确认以下接口：
 
 - `GET /api/v1/audit-events`
 - `GET /api/v1/runs/{run_id}/table-refs`
@@ -336,7 +339,14 @@ K.0b仍不覆盖：
 - `GET /api/v1/shared-publications/{share_name}/versions`
 - `GET /api/v1/events` 支持 `workflow_run_id`、`node_run_id`、`event_type`、`after_sequence_number`、`limit`
 
-第一版只需要只读摘要、分页和过滤。
+已固化边界：
+
+- 只读接口均走EngineHost HTTP API，不要求UI直连SQLite
+- `audit-events` 第一版支持按 `workflow_run_id`、`node_run_id`、`event_type` 过滤
+- `runs/{run_id}/table-refs` 第一版返回当前run产生的TableRef摘要
+- `shared-publications` 第一版支持按 `share_name` 过滤和 `limit`
+- `shared-publications/{share_name}/versions` 第一版返回指定share的版本列表
+- `events` 已支持服务端过滤，避免UI只能拉全量后客户端筛选
 
 暂不进入：
 
@@ -344,6 +354,7 @@ K.0b仍不覆盖：
 - 表格编辑
 - 权限审批动作
 - 管理端复杂筛选语言
+- UI控件实现
 
 ## 6. K.1-K.8 最小桌面UI
 

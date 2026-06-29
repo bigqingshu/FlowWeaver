@@ -93,3 +93,20 @@ def list_run_nodes(
             status_code=404,
         )
     return ok_response(request, store.list_node_runs(workflow_run_id))
+
+
+@router.get("/{workflow_run_id}/table-refs", response_model=APIResponseModel)
+def list_run_table_refs(
+    request: Request,
+    workflow_run_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+):
+    run = store.get_workflow_run(workflow_run_id)
+    if run is None:
+        return error_response(
+            request,
+            error_code="WORKFLOW_RUN_NOT_FOUND",
+            message="Workflow run not found",
+            status_code=404,
+        )
+    return ok_response(request, store.list_table_refs_by_workflow_run(workflow_run_id))

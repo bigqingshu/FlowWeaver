@@ -14,29 +14,33 @@ from flowweaver.api.responses import ok_response
 from flowweaver.engine.runtime_store import RuntimeStore
 
 router = APIRouter(
-    prefix="/api/v1/events",
-    tags=["events"],
+    prefix="/api/v1/shared-publications",
+    tags=["shared-publications"],
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
 
 
 @router.get("", response_model=APIResponseModel)
-def list_events(
+def list_shared_publications(
     request: Request,
     store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-    after_sequence_number: int | None = None,
-    workflow_run_id: str | None = None,
-    node_run_id: str | None = None,
-    event_type: str | None = None,
+    share_name: str | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ):
     return ok_response(
         request,
-        store.list_runtime_events(
-            after_sequence_number=after_sequence_number,
-            workflow_run_id=workflow_run_id,
-            node_run_id=node_run_id,
-            event_type=event_type,
-            limit=limit,
-        ),
+        store.list_shared_publications(share_name=share_name, limit=limit),
+    )
+
+
+@router.get("/{share_name}/versions", response_model=APIResponseModel)
+def list_shared_publication_versions(
+    request: Request,
+    share_name: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+):
+    return ok_response(
+        request,
+        store.list_shared_publications(share_name=share_name, limit=limit),
     )
