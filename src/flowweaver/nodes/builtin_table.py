@@ -5,8 +5,13 @@ from typing import Any
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
+from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
-from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus
+from flowweaver.nodes.permission_checks import (
+    PermissionCheckError,
+    ensure_task_permission_scope,
+)
+from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, PermissionAction
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -18,9 +23,11 @@ class BuiltinTableNodeRunner:
     def __init__(
         self,
         *,
+        store: RuntimeStore,
         registry: RuntimeDataRegistry,
         table_provider: SQLiteRuntimeTableProvider,
     ) -> None:
+        self._store = store
         self._registry = registry
         self._table_provider = table_provider
 
@@ -40,7 +47,7 @@ class BuiltinTableNodeRunner:
                 raise _NodeValidationError(
                     f"Unsupported builtin node type: {task.node_type}"
                 )
-        except _NodeValidationError as exc:
+        except (_NodeValidationError, PermissionCheckError) as exc:
             return NodeTaskResultModel(
                 task_id=task.task_id,
                 node_run_id=task.node_run_id,
@@ -129,6 +136,13 @@ class BuiltinTableNodeRunner:
         schema: Sequence[FieldSchemaModel],
         rows: Sequence[dict[str, Any]],
     ) -> TableRefModel:
+        ensure_task_permission_scope(
+            store=self._store,
+            task=task,
+            action=PermissionAction.PUBLISH,
+            resource_type="NODE_OUTPUT",
+            resource_id=_node_output_resource_id(task),
+        )
         staging_ref = self._table_provider.create_staging_table(
             workflow_run_id=task.workflow_run_id,
             node_run_id=task.node_run_id,
@@ -201,6 +215,10 @@ def _infer_data_type(name: str) -> str:
     if lowered in {"amount", "score", "value", "price"}:
         return "FLOAT"
     return "TEXT"
+
+
+def _node_output_resource_id(task: NodeTaskModel) -> str:
+    return f"{task.workflow_run_id}:{task.node_instance_id}:output"
 
 
 def _generated_value(

@@ -1014,6 +1014,7 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
         executor_id="builtin-table-mainloop",
+        store=store,
         registry=registry,
         table_provider=provider,
     )
@@ -1133,6 +1134,7 @@ def test_workflow_process_rejects_invalid_builtin_permission_request(
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
         executor_id="builtin-table-permission-reject",
+        store=store,
         registry=registry,
         table_provider=provider,
     )
@@ -1201,6 +1203,7 @@ def test_workflow_process_runs_shared_table_nodes_in_main_loop(
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     table_executor = BuiltinTableNodeExecutor(
         executor_id="builtin-table-mainloop",
+        store=store,
         registry=registry,
         table_provider=provider,
     )
@@ -1344,6 +1347,7 @@ def test_stage_i_workflow_process_keeps_consumer_pinned_to_read_publication(
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     table_executor = BuiltinTableNodeExecutor(
         executor_id="builtin-table-i9",
+        store=store,
         registry=registry,
         table_provider=provider,
     )

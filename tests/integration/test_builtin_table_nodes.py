@@ -13,8 +13,10 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
+from flowweaver.nodes.permissions import resolve_builtin_node_permissions
 from flowweaver.protocols.enums import LifecycleStatus, NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.permissions import PermissionGrantModel
 
 
 def migrate(database_path: Path) -> None:
@@ -32,6 +34,7 @@ def make_store(tmp_path: Path) -> RuntimeStore:
 
 def make_executor(tmp_path: Path) -> tuple[
     BuiltinTableNodeExecutor,
+    RuntimeStore,
     RuntimeDataRegistry,
     SQLiteRuntimeTableProvider,
 ]:
@@ -40,10 +43,11 @@ def make_executor(tmp_path: Path) -> tuple[
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
         executor_id="builtin-executor-1",
+        store=store,
         registry=registry,
         table_provider=provider,
     )
-    return executor, registry, provider
+    return executor, store, registry, provider
 
 
 def make_task(
@@ -69,23 +73,43 @@ def make_task(
     )
 
 
+def grant_task_permissions(store: RuntimeStore, task: NodeTaskModel) -> NodeTaskModel:
+    request = resolve_builtin_node_permissions(task)
+    grant = store.create_permission_grant(
+        PermissionGrantModel(
+            request_id=request.request_id,
+            workflow_run_id=request.workflow_run_id,
+            node_run_id=request.node_run_id,
+            scopes=request.scopes,
+            granted=True,
+            audit_level=request.audit_level,
+        )
+    )
+    return task.model_copy(
+        update={"permission_handle_id": grant.permission_handle_id}
+    )
+
+
 def test_generate_test_table_node_publishes_runtime_sql_table_ref(
     tmp_path: Path,
 ) -> None:
-    executor, registry, provider = make_executor(tmp_path)
-    task = make_task(
-        node_type=GENERATE_TEST_TABLE_NODE_TYPE,
-        node_run_id="node-run-generate",
-        node_instance_id="generate",
-        config={
-            "rows": 4,
-            "columns": [
-                {"name": "row_id", "data_type": "INTEGER"},
-                {"name": "amount", "data_type": "FLOAT"},
-                {"name": "label", "data_type": "TEXT"},
-            ],
-            "seed": 7,
-        },
+    executor, store, registry, provider = make_executor(tmp_path)
+    task = grant_task_permissions(
+        store,
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 4,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "amount", "data_type": "FLOAT"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 7,
+            },
+        ),
     )
 
     result = executor.execute(task)
@@ -108,26 +132,32 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
 def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
     tmp_path: Path,
 ) -> None:
-    executor, registry, provider = make_executor(tmp_path)
+    executor, store, registry, provider = make_executor(tmp_path)
     generate_result = executor.execute(
-        make_task(
-            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
-            node_run_id="node-run-generate",
-            node_instance_id="generate",
-            config={
-                "rows": 5,
-                "columns": ["row_id", "amount", "label"],
-                "seed": 0,
-            },
+        grant_task_permissions(
+            store,
+            make_task(
+                node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+                node_run_id="node-run-generate",
+                node_instance_id="generate",
+                config={
+                    "rows": 5,
+                    "columns": ["row_id", "amount", "label"],
+                    "seed": 0,
+                },
+            ),
         )
     )
     input_ref = registry.get(generate_result.output_refs[0])
-    filter_task = make_task(
-        node_type=FILTER_ROWS_NODE_TYPE,
-        node_run_id="node-run-filter",
-        node_instance_id="filter",
-        input_refs=[input_ref.table_ref_id],
-        config={"field": "amount", "operator": "GT", "value": 2.0},
+    filter_task = grant_task_permissions(
+        store,
+        make_task(
+            node_type=FILTER_ROWS_NODE_TYPE,
+            node_run_id="node-run-filter",
+            node_instance_id="filter",
+            input_refs=[input_ref.table_ref_id],
+            config={"field": "amount", "operator": "GT", "value": 2.0},
+        ),
     )
 
     filter_result = executor.execute(filter_task)
@@ -155,21 +185,27 @@ def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
 def test_filter_rows_node_returns_validation_error_for_missing_field(
     tmp_path: Path,
 ) -> None:
-    executor, registry, _provider = make_executor(tmp_path)
+    executor, store, registry, _provider = make_executor(tmp_path)
     generate_result = executor.execute(
-        make_task(
-            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
-            node_run_id="node-run-generate",
-            node_instance_id="generate",
-            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        grant_task_permissions(
+            store,
+            make_task(
+                node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+                node_run_id="node-run-generate",
+                node_instance_id="generate",
+                config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+            ),
         )
     )
-    filter_task = make_task(
-        node_type=FILTER_ROWS_NODE_TYPE,
-        node_run_id="node-run-filter",
-        node_instance_id="filter",
-        input_refs=generate_result.output_refs,
-        config={"field": "missing", "operator": "EQ", "value": 1},
+    filter_task = grant_task_permissions(
+        store,
+        make_task(
+            node_type=FILTER_ROWS_NODE_TYPE,
+            node_run_id="node-run-filter",
+            node_instance_id="filter",
+            input_refs=generate_result.output_refs,
+            config={"field": "missing", "operator": "EQ", "value": 1},
+        ),
     )
 
     result = executor.execute(filter_task)
@@ -180,3 +216,24 @@ def test_filter_rows_node_returns_validation_error_for_missing_field(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_builtin_table_node_rejects_missing_publish_permission(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    task = make_task(
+        node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+        node_run_id="node-run-generate",
+        node_instance_id="generate",
+        config={"rows": 1, "columns": ["row_id"], "seed": 0},
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert result.error["message"] == "Node task is missing permission_handle_id"
+    assert registry.list_by_workflow_run("run-1") == []

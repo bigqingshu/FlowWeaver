@@ -10,7 +10,11 @@ from flowweaver.engine.shared_table_reader import (
     SharedTableReader,
     SharedTableVersionPolicy,
 )
-from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus
+from flowweaver.nodes.permission_checks import (
+    PermissionCheckError,
+    ensure_task_permission_scope,
+)
+from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, PermissionAction
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 PUBLISH_SHARED_TABLES_NODE_TYPE = "PublishSharedTablesNode"
@@ -43,7 +47,7 @@ class BuiltinSharedTableNodeRunner:
                 raise _NodeValidationError(
                     f"Unsupported builtin shared table node type: {task.node_type}"
                 )
-        except (KeyError, ValueError) as exc:
+        except (KeyError, ValueError, PermissionCheckError) as exc:
             return NodeTaskResultModel(
                 task_id=task.task_id,
                 node_run_id=task.node_run_id,
@@ -86,6 +90,13 @@ class BuiltinSharedTableNodeRunner:
             raise _NodeValidationError(
                 "PublishSharedTablesNode config.export_names must be unique"
             )
+        ensure_task_permission_scope(
+            store=self._store,
+            task=task,
+            action=PermissionAction.PUBLISH,
+            resource_type="SHARED_PUBLICATION",
+            resource_id=share_name,
+        )
         retention_policy = _retention_policy(task.config)
         workflow = self._store.get_workflow_run(task.workflow_run_id)
         if workflow is None:

@@ -12,6 +12,7 @@ from flowweaver.nodes.builtin_shared_table import (
     PUBLISH_SHARED_TABLES_NODE_TYPE,
     READ_SHARED_TABLES_NODE_TYPE,
 )
+from flowweaver.nodes.permissions import resolve_builtin_node_permissions
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
@@ -21,6 +22,7 @@ from flowweaver.protocols.enums import (
     TableStorageKind,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.permissions import PermissionGrantModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -128,6 +130,23 @@ def make_task(
     )
 
 
+def grant_task_permissions(store: RuntimeStore, task: NodeTaskModel) -> NodeTaskModel:
+    request = resolve_builtin_node_permissions(task)
+    grant = store.create_permission_grant(
+        PermissionGrantModel(
+            request_id=request.request_id,
+            workflow_run_id=request.workflow_run_id,
+            node_run_id=request.node_run_id,
+            scopes=request.scopes,
+            granted=True,
+            audit_level=request.audit_level,
+        )
+    )
+    return task.model_copy(
+        update={"permission_handle_id": grant.permission_handle_id}
+    )
+
+
 def test_publish_shared_tables_node_creates_publication(
     tmp_path: Path,
 ) -> None:
@@ -159,16 +178,19 @@ def test_publish_shared_tables_node_creates_publication(
     )
 
     result = executor.execute(
-        make_task(
-            workflow_run_id="run-producer",
-            node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
-            node_instance_id="publish",
-            input_refs=[orders.table_ref_id, customers.table_ref_id],
-            config={
-                "share_name": "daily_report",
-                "export_names": ["orders", "customers"],
-                "retention_seconds": 3600,
-            },
+        grant_task_permissions(
+            store,
+            make_task(
+                workflow_run_id="run-producer",
+                node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
+                node_instance_id="publish",
+                input_refs=[orders.table_ref_id, customers.table_ref_id],
+                config={
+                    "share_name": "daily_report",
+                    "export_names": ["orders", "customers"],
+                    "retention_seconds": 3600,
+                },
+            ),
         )
     )
 
@@ -189,6 +211,49 @@ def test_publish_shared_tables_node_creates_publication(
         ("customers", customers.table_ref_id),
         ("orders", orders.table_ref_id),
     ]
+
+
+def test_publish_shared_tables_node_rejects_missing_publish_permission(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    create_workflow_run(
+        store,
+        workflow_id="workflow-producer",
+        workflow_run_id="run-producer",
+    )
+    orders = make_table_ref(
+        table_ref_id="table-orders-v1",
+        workflow_run_id="run-producer",
+        node_run_id="run-producer-node",
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(orders)
+    executor = BuiltinSharedTableNodeExecutor(
+        executor_id="shared-executor-1",
+        store=store,
+    )
+
+    result = executor.execute(
+        make_task(
+            workflow_run_id="run-producer",
+            node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
+            node_instance_id="publish",
+            input_refs=[orders.table_ref_id],
+            config={
+                "share_name": "daily_report",
+                "export_names": ["orders"],
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert result.error["message"] == "Node task is missing permission_handle_id"
+    assert store.get_latest_shared_publication("daily_report") is None
 
 
 def test_read_shared_tables_node_returns_fixed_table_refs(
