@@ -96,12 +96,13 @@
 阶段 L 收口结果与下一步建议：
 
 - L.0 到 L.3c 已完成运行入口、连接配置持久化和三类正式路径 smoke 收口
-- L 阶段总体验收复核已新增 `FlowWeaver_阶段L_总体验收复核.md`
+- L 阶段总体验收复核已新增 `docs/FlowWeaver_阶段L_总体验收复核.md`
 - 当前 EngineHost 入口仍为 `.\python312\python.exe -m uvicorn --app-dir src flowweaver.api.app:create_default_app --factory --host 127.0.0.1 --port 8000`
 - 当前 Avalonia UI 入口仍为 `dotnet run --project Avalonia_UI/Avalonia_UI.csproj`
 - UI 只持久化 BaseUrl 连接偏好，token 默认不落盘，完整 WebSocket URL 必须脱敏
 - L.3a / L.3b / L.3c 已覆盖空数据库、已有工作流和同一 `runtime/` EngineHost 重启恢复
-- 下一步建议先做下一阶段边界分析，再决定进入 L.4 连接体验稳定化、工作流定义与节点配置入口，或打包发布前置清单
+- M.0 工作流定义与节点配置入口边界清单已新增 `docs/FlowWeaver_阶段M.0_工作流定义与节点配置入口边界清单.md`
+- 下一步建议按 M.1 节点定义只读 API 小步推进，再进入 workflow detail / revision API 客户端接入
 
 ## 阶段 I 计划
 
