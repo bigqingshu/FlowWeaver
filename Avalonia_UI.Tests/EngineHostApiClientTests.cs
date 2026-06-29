@@ -76,6 +76,70 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetWorkflowAsyncUsesDetailPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"workflow_id":"wf-1","name":"Flow","revision_id":"rev-1","version":2,"definition_hash":"hash-1","definition":{"schema_version":"1.0","nodes":[],"connections":[]},"status":"ACTIVE","created_at":"2026-06-29T01:02:03Z","updated_at":"2026-06-29T01:03:03Z"},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetWorkflowAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "wf 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/wf%201"),
+            handler.RequestUri);
+        Assert.AreEqual("wf-1", result.Data?.WorkflowId);
+        Assert.AreEqual("rev-1", result.Data?.RevisionId);
+        Assert.AreEqual("1.0", result.Data?.Definition.GetProperty("schema_version").GetString());
+    }
+
+    [TestMethod]
+    public async Task ListWorkflowRevisionsAsyncUsesRevisionsPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[{"revision_id":"rev-1","workflow_id":"wf-1","version":1,"definition_hash":"hash-1","definition":{"schema_version":"1.0"},"created_at":"2026-06-29T01:02:03Z","created_by":"tester"}],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListWorkflowRevisionsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "wf-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/wf-1/revisions"),
+            handler.RequestUri);
+        Assert.AreEqual("rev-1", result.Data?[0].RevisionId);
+        Assert.AreEqual("tester", result.Data?[0].CreatedBy);
+    }
+
+    [TestMethod]
+    public async Task GetWorkflowRevisionAsyncUsesRevisionDetailPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"revision_id":"rev 1","workflow_id":"wf-1","version":1,"definition_hash":"hash-1","definition":{"schema_version":"1.0"},"created_at":"2026-06-29T01:02:03Z","created_by":null},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetWorkflowRevisionAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "wf-1",
+            "rev 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/wf-1/revisions/rev%201"),
+            handler.RequestUri);
+        Assert.AreEqual("rev 1", result.Data?.RevisionId);
+    }
+
+    [TestMethod]
     public async Task ListWorkflowsAsyncRejectsMissingTokenBeforeRequest()
     {
         var handler = new StubHandler(_ => throw new InvalidOperationException("Should not send."));

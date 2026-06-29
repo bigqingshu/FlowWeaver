@@ -80,6 +80,30 @@ public sealed record WorkflowDefinitionDto
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
+public sealed record WorkflowRevisionDto
+{
+    [JsonPropertyName("revision_id")]
+    public string RevisionId { get; init; } = string.Empty;
+
+    [JsonPropertyName("workflow_id")]
+    public string WorkflowId { get; init; } = string.Empty;
+
+    [JsonPropertyName("version")]
+    public int Version { get; init; }
+
+    [JsonPropertyName("definition_hash")]
+    public string DefinitionHash { get; init; } = string.Empty;
+
+    [JsonPropertyName("definition")]
+    public JsonElement Definition { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; init; }
+
+    [JsonPropertyName("created_by")]
+    public string? CreatedBy { get; init; }
+}
+
 public sealed record WorkflowRunDto
 {
     [JsonPropertyName("workflow_run_id")]

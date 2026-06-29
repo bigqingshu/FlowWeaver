@@ -234,6 +234,31 @@ public sealed class MainWindowViewModelDataTests
                     new List<WorkflowDefinitionDto>()));
         }
 
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string revisionId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
             EngineHostConnectionSettings settings,
             string workflowId,

@@ -59,6 +59,43 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowDefinitionDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<List<WorkflowRevisionDto>>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}/revisions",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string revisionId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowRevisionDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}/revisions/{Uri.EscapeDataString(revisionId)}",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

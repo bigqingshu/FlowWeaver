@@ -19,6 +19,22 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string revisionId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

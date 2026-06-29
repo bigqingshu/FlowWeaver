@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
@@ -231,6 +232,31 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         {
             LastSettings = settings;
             return Task.FromResult(WorkflowsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowDefinitionDto>> GetWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string revisionId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
