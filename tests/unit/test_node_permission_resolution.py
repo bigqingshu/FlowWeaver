@@ -10,7 +10,10 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
-from flowweaver.nodes.permissions import resolve_builtin_node_permissions
+from flowweaver.nodes.permissions import (
+    resolve_builtin_node_permissions,
+    supports_builtin_node_permissions,
+)
 from flowweaver.protocols.enums import PermissionAction
 from flowweaver.protocols.node_task import NodeTaskModel
 
@@ -56,6 +59,14 @@ def test_generate_table_node_declares_output_publish_permission() -> None:
         "columns": ["row_id", "amount"],
         "rows": 3,
     }
+
+
+def test_builtin_permission_support_is_limited_to_known_nodes() -> None:
+    assert supports_builtin_node_permissions(GENERATE_TEST_TABLE_NODE_TYPE)
+    assert supports_builtin_node_permissions(FILTER_ROWS_NODE_TYPE)
+    assert supports_builtin_node_permissions(PUBLISH_SHARED_TABLES_NODE_TYPE)
+    assert supports_builtin_node_permissions(READ_SHARED_TABLES_NODE_TYPE)
+    assert not supports_builtin_node_permissions("core.source")
 
 
 def test_filter_rows_node_declares_read_fields_and_output_publish() -> None:

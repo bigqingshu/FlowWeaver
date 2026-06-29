@@ -8,6 +8,10 @@ from typing import Any
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
+from flowweaver.nodes.permissions import (
+    resolve_builtin_node_permissions,
+    supports_builtin_node_permissions,
+)
 from flowweaver.protocols.enums import (
     EventType,
     NodeResultStatus,
@@ -16,6 +20,7 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.permissions import PermissionGrantModel
 from flowweaver.workflow.definition import FailurePolicyMode
 from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
@@ -118,6 +123,24 @@ class NodeTaskManager:
             permission_handle_id=permission_handle_id,
             timeout_seconds=timeout_seconds,
         )
+        if permission_handle_id is None:
+            try:
+                permission_handle_id = self._create_permission_grant_for_task(task)
+            except ValueError as exc:
+                self._fail_permission_request(
+                    queued,
+                    workflow_process_id=workflow_process_id,
+                    process_generation=process_generation,
+                    error={
+                        "message": "Node permission request was rejected",
+                        "node_instance_id": node_instance_id,
+                        "detail": str(exc),
+                    },
+                )
+                return None
+            task = task.model_copy(
+                update={"permission_handle_id": permission_handle_id}
+            )
         self._store.create_node_task(task)
         self._event_sink.emit(
             EventModel(
@@ -132,6 +155,76 @@ class NodeTaskManager:
             )
         )
         return task
+
+    def _create_permission_grant_for_task(
+        self,
+        task: NodeTaskModel,
+    ) -> str | None:
+        if not supports_builtin_node_permissions(task.node_type):
+            return None
+        request = resolve_builtin_node_permissions(task)
+        grant = self._store.create_permission_grant(
+            PermissionGrantModel(
+                request_id=request.request_id,
+                workflow_run_id=request.workflow_run_id,
+                node_run_id=request.node_run_id,
+                scopes=request.scopes,
+                granted=True,
+                audit_level=request.audit_level,
+            )
+        )
+        return grant.permission_handle_id
+
+    def _fail_permission_request(
+        self,
+        node_run: NodeRun,
+        *,
+        workflow_process_id: str,
+        process_generation: int,
+        error: dict[str, Any],
+    ) -> None:
+        failed_node = self._store.update_node_run_status(
+            node_run.node_run_id,
+            NodeRunStatus.FAILED,
+            finished_at=utc_now(),
+            error=error,
+            expected_state_version=node_run.state_version,
+            allowed_source_statuses=[NodeRunStatus.QUEUED],
+            owner_process_id=workflow_process_id,
+            process_generation=process_generation,
+        )
+        failed_run = self._store.update_workflow_run_status(
+            node_run.workflow_run_id,
+            WorkflowRunStatus.FAILED,
+            finished_at=utc_now(),
+            error=error,
+            allowed_source_statuses=[WorkflowRunStatus.RUNNING],
+            owner_process_id=workflow_process_id,
+            process_generation=process_generation,
+        )
+        if failed_node is not None:
+            self._event_sink.emit(
+                EventModel(
+                    event_type=EventType.NODE_FAILED,
+                    workflow_run_id=node_run.workflow_run_id,
+                    node_run_id=node_run.node_run_id,
+                    payload={
+                        "process_id": workflow_process_id,
+                        "reason": "PERMISSION_REQUEST_REJECTED",
+                    },
+                )
+            )
+        if failed_run is not None:
+            self._event_sink.emit(
+                EventModel(
+                    event_type=EventType.WORKFLOW_FAILED,
+                    workflow_run_id=node_run.workflow_run_id,
+                    payload={
+                        "process_id": workflow_process_id,
+                        "reason": "PERMISSION_REQUEST_REJECTED",
+                    },
+                )
+            )
 
     def accept_task(
         self,

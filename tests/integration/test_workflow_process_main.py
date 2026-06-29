@@ -42,6 +42,7 @@ from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
     NodeRunStatus,
+    PermissionAction,
     TableMutability,
     TableRole,
     TableScope,
@@ -1074,6 +1075,29 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
     assert generate_task.input_refs == []
     assert filter_task.input_refs == generate_result.output_refs
+    assert generate_task.permission_handle_id is not None
+    assert filter_task.permission_handle_id is not None
+    grants = store.list_permission_grants_by_workflow_run(run.workflow_run_id)
+    grants_by_node_run = {grant.node_run_id: grant for grant in grants}
+    assert len(grants) == 2
+    assert (
+        grants_by_node_run[generate_task.node_run_id].permission_handle_id
+        == generate_task.permission_handle_id
+    )
+    assert [
+        scope.action for scope in grants_by_node_run[generate_task.node_run_id].scopes
+    ] == [PermissionAction.PUBLISH]
+    assert (
+        grants_by_node_run[filter_task.node_run_id].permission_handle_id
+        == filter_task.permission_handle_id
+    )
+    assert [
+        scope.action for scope in grants_by_node_run[filter_task.node_run_id].scopes
+    ] == [
+        PermissionAction.READ_TABLE,
+        PermissionAction.READ_FIELDS,
+        PermissionAction.PUBLISH,
+    ]
     assert len(generate_result.output_refs) == 1
     assert len(filter_result.output_refs) == 1
     filtered_rows = provider.read_rows(
@@ -1097,6 +1121,76 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_rejects_invalid_builtin_permission_request(
+    tmp_path: Path,
+) -> None:
+    invalid_definition = table_ref_definition()
+    invalid_definition["nodes"][1]["config"] = {"operator": "GT", "value": 2.0}
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-permission-reject",
+        registry=registry,
+        table_provider=provider,
+    )
+    workflow = store.create_workflow_definition(
+        name="Invalid builtin permission workflow",
+        definition=invalid_definition,
+        workflow_id="workflow-invalid-builtin-permission",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-invalid-builtin-permission",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-invalid-builtin-permission",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    generate_node = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+    )
+    filter_node = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="filter",
+    )
+    grants = store.list_permission_grants_by_workflow_run(run.workflow_run_id)
+    queued_nodes = [
+        event.payload["node_instance_id"]
+        for event in store.list_runtime_events()
+        if event.event_type == "NODE_QUEUED"
+    ]
+
+    assert exit_code == 0
+    assert loaded_run is not None
+    assert loaded_run.status == "FAILED"
+    assert loaded_run.error == {
+        "message": "Node permission request was rejected",
+        "node_instance_id": "filter",
+        "detail": "FilterRowsNode config.field is required",
+    }
+    assert generate_node is not None
+    assert generate_node.status == "SUCCEEDED"
+    assert filter_node is not None
+    assert filter_node.status == "FAILED"
+    assert filter_node.error == loaded_run.error
+    assert queued_nodes == ["generate"]
+    assert [grant.node_run_id for grant in grants] == [generate_node.node_run_id]
 
 
 def test_workflow_process_runs_shared_table_nodes_in_main_loop(
@@ -1145,8 +1239,24 @@ def test_workflow_process_runs_shared_table_nodes_in_main_loop(
     )
 
     publication = store.get_latest_shared_publication("daily_report")
+    producer_queued_events = {
+        event.payload["node_instance_id"]: event
+        for event in store.list_runtime_events()
+        if event.workflow_run_id == producer_run.workflow_run_id
+        and event.event_type == "NODE_QUEUED"
+    }
+    publish_task = store.get_node_task(
+        producer_queued_events["publish"].payload["task_id"]
+    )
     assert producer_exit_code == 0
     assert store.get_workflow_run(producer_run.workflow_run_id).status == "SUCCEEDED"
+    assert publish_task is not None
+    assert publish_task.permission_handle_id is not None
+    publish_grant = store.get_permission_grant(publish_task.permission_handle_id)
+    assert publish_grant is not None
+    assert publish_grant.scopes[-1].resource_type == "SHARED_PUBLICATION"
+    assert publish_grant.scopes[-1].resource_id == "daily_report"
+    assert publish_grant.scopes[-1].action == PermissionAction.PUBLISH
     assert publication is not None
     assert publication.publication_version == 1
     publication_member_refs = {
@@ -1179,15 +1289,29 @@ def test_workflow_process_runs_shared_table_nodes_in_main_loop(
     )
 
     consumer_loaded = store.get_workflow_run(consumer_run.workflow_run_id)
+    consumer_queued_events = {
+        event.payload["node_instance_id"]: event
+        for event in store.list_runtime_events()
+        if event.workflow_run_id == consumer_run.workflow_run_id
+        and event.event_type == "NODE_QUEUED"
+    }
     read_node = store.get_node_run_for_instance(
         workflow_run_id=consumer_run.workflow_run_id,
         node_instance_id="read",
     )
+    read_task = store.get_node_task(consumer_queued_events["read"].payload["task_id"])
     assert consumer_exit_code == 0
     assert consumer_loaded is not None
     assert consumer_loaded.status == "SUCCEEDED"
     assert consumer_loaded.input_snapshot_id is not None
     assert read_node is not None
+    assert read_task is not None
+    assert read_task.permission_handle_id is not None
+    read_grant = store.get_permission_grant(read_task.permission_handle_id)
+    assert read_grant is not None
+    assert [scope.action for scope in read_grant.scopes] == [
+        PermissionAction.READ_SHARED
+    ]
     read_result = store.get_latest_succeeded_node_task_result_for_node_run(
         read_node.node_run_id
     )

@@ -17,6 +17,19 @@ from flowweaver.protocols.permissions import (
     PermissionScopeModel,
 )
 
+_PERMISSION_AWARE_BUILTIN_NODE_TYPES = frozenset(
+    {
+        GENERATE_TEST_TABLE_NODE_TYPE,
+        FILTER_ROWS_NODE_TYPE,
+        PUBLISH_SHARED_TABLES_NODE_TYPE,
+        READ_SHARED_TABLES_NODE_TYPE,
+    }
+)
+
+
+def supports_builtin_node_permissions(node_type: str) -> bool:
+    return node_type in _PERMISSION_AWARE_BUILTIN_NODE_TYPES
+
 
 def resolve_builtin_node_permissions(task: NodeTaskModel) -> PermissionRequestModel:
     if task.node_type == GENERATE_TEST_TABLE_NODE_TYPE:
