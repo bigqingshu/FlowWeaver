@@ -10,7 +10,7 @@
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Foreground="#14171A"/>
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <ProgressBar Grid.Column="1"
                              Width="88"
                              Height="8"
@@ -30,7 +30,7 @@
             <ListBox Grid.Row="1"
                      ItemsSource="{Binding Runs}"
                      SelectedItem="{Binding SelectedRun}"
-                     BorderBrush="#E1E5EA"
+                     BorderBrush="{DynamicResource ControlBorderBrush}"
                      BorderThickness="1">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:WorkflowRunListItemViewModel"
@@ -39,12 +39,12 @@
                               RowDefinitions="Auto,Auto,Auto"
                               ColumnSpacing="12"
                               Margin="8">
-                            <TextBlock Text="{Binding WorkflowRunId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#4B5563"/>
-                            <TextBlock Grid.Row="1" Text="{Binding WorkflowText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StartedAtText}" FontSize="12" Foreground="#697586"/>
-                            <TextBlock Grid.Row="2" Text="{Binding CompletionReasonText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FinishedAtText}" FontSize="12" Foreground="#697586"/>
+                            <TextBlock Text="{Binding WorkflowRunId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="1" Text="{Binding WorkflowText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StartedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2" Text="{Binding CompletionReasonText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FinishedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

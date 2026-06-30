@@ -14,7 +14,7 @@
         Height="760"
         MinWidth="900"
         MinHeight="600"
-        Background="#F8FAFC">
+        Background="{DynamicResource PageBackgroundBrush}">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -24,10 +24,10 @@
         <!-- Base Button Styling -->
         <Style Selector="Button">
             <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Background" Value="#FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="#334155"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -39,16 +39,16 @@
             </Setter>
         </Style>
         <Style Selector="Button:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#F1F5F9" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="Foreground" Value="#334155" />
+            <Setter Property="Background" Value="{DynamicResource ControlBackgroundHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderHoverBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
         <Style Selector="Button:pointerover">
             <Setter Property="RenderTransform" Value="translateY(-1px)"/>
         </Style>
         <Style Selector="Button:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="#E2E8F0" />
-            <Setter Property="Foreground" Value="#334155" />
+            <Setter Property="Background" Value="{DynamicResource ControlBackgroundPressedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
         <Style Selector="Button:pressed">
             <Setter Property="RenderTransform" Value="scale(0.97)"/>
@@ -56,17 +56,17 @@
 
         <!-- Primary Button Styling -->
         <Style Selector="Button.Primary">
-            <Setter Property="Background" Value="#4F46E5"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForegroundBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style Selector="Button.Primary:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#4338CA"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackgroundHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForegroundBrush}"/>
         </Style>
         <Style Selector="Button.Primary:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="#3730A3"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackgroundPressedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForegroundBrush}"/>
         </Style>
 
         <!-- ListBoxItem Animations -->
@@ -83,10 +83,10 @@
         </Style>
         <Style Selector="ListBoxItem:pointerover">
             <Setter Property="RenderTransform" Value="translateX(2px)"/>
-            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="Background" Value="{DynamicResource ControlBackgroundHoverBrush}"/>
         </Style>
         <Style Selector="ListBoxItem:selected">
-            <Setter Property="Background" Value="#E2E8F0"/>
+            <Setter Property="Background" Value="{DynamicResource ControlBackgroundPressedBrush}"/>
         </Style>
 
         <!-- TabControl as Side Navigation -->
@@ -103,7 +103,7 @@
         <Style Selector="TabItem">
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavigationItemForegroundBrush}"/>
             <Setter Property="Padding" Value="16,14"/>
             <Setter Property="Margin" Value="0,4"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -120,20 +120,20 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="#E2E8F0"/>
+            <Setter Property="Background" Value="{DynamicResource NavigationItemPointerOverBackgroundBrush}"/>
         </Style>
         <Style Selector="TabItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavigationItemPointerOverForegroundBrush}"/>
         </Style>
         <Style Selector="TabItem:pointerover">
-            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavigationItemPointerOverForegroundBrush}"/>
         </Style>
         <Style Selector="TabItem:selected /template/ ContentPresenter">
-            <Setter Property="Foreground" Value="#4338CA"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavigationSelectedForegroundBrush}"/>
         </Style>
         <Style Selector="TabItem:selected">
-            <Setter Property="Background" Value="#E0E7FF"/>
-            <Setter Property="Foreground" Value="#4338CA"/>
+            <Setter Property="Background" Value="{DynamicResource NavigationSelectedBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavigationSelectedForegroundBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <!-- Hide the default pipe in fluent theme -->
@@ -143,8 +143,8 @@
 
         <!-- Card Borders with light shadows -->
         <Style Selector="Border.Card">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="BorderBrush" Value="#E2E8F0"/>
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="BoxShadow" Value="0 2 8 0 #08000000"/>
@@ -158,10 +158,10 @@
                 <TextBlock Text="{Binding AppTitleText}"
                            FontSize="28"
                            FontWeight="Bold"
-                           Foreground="#0F172A"/>
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <TextBlock Text="{Binding AppSubtitleText}"
                            FontSize="14"
-                           Foreground="#64748B"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
             </StackPanel>
 
             <components:ConnectionStatusView Grid.Column="1" VerticalAlignment="Center"/>

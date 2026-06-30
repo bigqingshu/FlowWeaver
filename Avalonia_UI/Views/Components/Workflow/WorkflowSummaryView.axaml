@@ -12,7 +12,7 @@
                                FontSize="16"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
-                               Foreground="#14171A"/>
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <ProgressBar Grid.Column="1"
                                  Width="88"
                                  Height="8"
@@ -31,25 +31,25 @@
                       RowSpacing="6"
                       ColumnSpacing="10"
                       IsVisible="{Binding HasWorkflowDefinition}">
-                    <TextBlock Text="{Binding NameLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.Name}" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                    <TextBlock Grid.Column="2" Text="{Binding VersionLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.VersionText}" Foreground="#1F2933"/>
+                    <TextBlock Text="{Binding NameLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.Name}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Grid.Column="2" Text="{Binding VersionLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.VersionText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-                    <TextBlock Grid.Row="1" Text="{Binding RevisionLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.RevisionId}" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding StatusLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.Status}" Foreground="#1F2933"/>
+                    <TextBlock Grid.Row="1" Text="{Binding RevisionLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.RevisionId}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding StatusLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.Status}" Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-                    <TextBlock Grid.Row="2" Text="{Binding HashLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.DefinitionHash}" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding UpdatedLabelText}" Foreground="#697586"/>
-                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.UpdatedAtText}" Foreground="#1F2933"/>
+                    <TextBlock Grid.Row="2" Text="{Binding HashLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WorkflowDefinitionDetail.DefinitionHash}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding UpdatedLabelText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.UpdatedAtText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                 </Grid>
 
                 <ListBox Grid.Row="2"
                          ItemsSource="{Binding WorkflowDefinitionDetail.Revisions}"
-                         BorderBrush="#E1E5EA"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
                          MinHeight="100">
                     <ListBox.ItemTemplate>
@@ -59,19 +59,19 @@
                                   RowDefinitions="Auto,Auto,Auto"
                                   ColumnSpacing="12"
                                   Margin="8">
-                                <TextBlock Text="{Binding RevisionId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="#4B5563"/>
-                                <TextBlock Grid.Row="1" Text="{Binding DefinitionHash}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CreatedAtText}" FontSize="12" Foreground="#697586"/>
-                                <TextBlock Grid.Row="2" Text="{Binding CreatedByText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
+                                <TextBlock Text="{Binding RevisionId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Text="{Binding DefinitionHash}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CreatedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2" Text="{Binding CreatedByText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
 
                 <StackPanel Grid.Row="3" Spacing="4">
-                    <TextBlock Text="{Binding WorkflowDefinitionMessage}" Foreground="#344054"/>
-                    <TextBlock Text="{Binding WorkflowDefinitionErrorMessage}" TextWrapping="Wrap" Foreground="#B42318" IsVisible="{Binding HasWorkflowDefinitionError}"/>
+                    <TextBlock Text="{Binding WorkflowDefinitionMessage}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding WorkflowDefinitionErrorMessage}" TextWrapping="Wrap" Foreground="{DynamicResource TextErrorBrush}" IsVisible="{Binding HasWorkflowDefinitionError}"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -84,16 +84,16 @@
                                FontSize="16"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
-                               Foreground="#14171A"/>
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <TextBlock Grid.Column="1"
                                Text="{Binding WorkflowDefinitionDetail.NodeCountText}"
                                VerticalAlignment="Center"
-                               Foreground="#4B5563"/>
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
 
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding WorkflowDefinitionDetail.Nodes}"
-                         BorderBrush="#E1E5EA"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
                          MinHeight="100">
                     <ListBox.ItemTemplate>
@@ -103,11 +103,11 @@
                                   RowDefinitions="Auto,Auto,Auto"
                                   ColumnSpacing="12"
                                   Margin="8">
-                                <TextBlock Text="{Binding NodeInstanceId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                                <TextBlock Grid.Column="1" Text="{Binding EnabledText}" Foreground="#4B5563"/>
-                                <TextBlock Grid.Row="1" Text="{Binding TypeText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DisplayNameText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ConfigJson}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
+                                <TextBlock Text="{Binding NodeInstanceId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding EnabledText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Text="{Binding TypeText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DisplayNameText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ConfigJson}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -123,24 +123,24 @@
                                FontSize="16"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
-                               Foreground="#14171A"/>
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <TextBlock Grid.Column="1"
                                Text="{Binding WorkflowDefinitionDetail.ConnectionCountText}"
                                VerticalAlignment="Center"
-                               Foreground="#4B5563"/>
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
 
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding WorkflowDefinitionDetail.Connections}"
-                         BorderBrush="#E1E5EA"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
                          MinHeight="100">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:WorkflowDefinitionConnectionListItemViewModel"
                                       x:DataType="vm:WorkflowDefinitionConnectionListItemViewModel">
                             <Grid RowDefinitions="Auto,Auto" Margin="8" RowSpacing="4">
-                                <TextBlock Text="{Binding EdgeText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                                <TextBlock Grid.Row="1" Text="{Binding ConnectionId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
+                                <TextBlock Text="{Binding EdgeText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Grid.Row="1" Text="{Binding ConnectionId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

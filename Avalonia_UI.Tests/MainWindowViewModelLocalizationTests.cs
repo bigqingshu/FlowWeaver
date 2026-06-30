@@ -64,6 +64,51 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task LoadUiSettingsAppliesPersistedTheme()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore
+        {
+            SettingsToLoad = PersistedUiSettings.FromSettings("zh-Hans", "Dark"),
+        };
+        var viewModel = CreateViewModel(uiSettingsStore);
+
+        await viewModel.LoadUiSettingsAsync();
+
+        Assert.AreEqual("Dark", viewModel.CurrentThemeVariant);
+        Assert.AreEqual("主题: 暗色", viewModel.ThemeMenuHeaderText);
+        Assert.AreEqual(1, uiSettingsStore.LoadCount);
+        Assert.AreEqual(0, uiSettingsStore.SaveCount);
+    }
+
+    [TestMethod]
+    public async Task ChangeThemeCommandSavesUiSettings()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var viewModel = CreateViewModel(uiSettingsStore);
+
+        await viewModel.ChangeThemeCommand.ExecuteAsync("Dark");
+
+        Assert.AreEqual("Dark", viewModel.CurrentThemeVariant);
+        Assert.AreEqual("Theme: Dark", viewModel.ThemeMenuHeaderText);
+        Assert.AreEqual(1, uiSettingsStore.SaveCount);
+        Assert.AreEqual("en-US", uiSettingsStore.SavedSettings?.LanguageCode);
+        Assert.AreEqual("Dark", uiSettingsStore.SavedSettings?.ThemeVariant);
+    }
+
+    [TestMethod]
+    public async Task ChangeThemeCommandFallsBackForUnsupportedTheme()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var viewModel = CreateViewModel(uiSettingsStore);
+
+        await viewModel.ChangeThemeCommand.ExecuteAsync("midnight");
+
+        Assert.AreEqual("System", viewModel.CurrentThemeVariant);
+        Assert.AreEqual("Theme: System", viewModel.ThemeMenuHeaderText);
+        Assert.AreEqual("System", uiSettingsStore.SavedSettings?.ThemeVariant);
+    }
+
+    [TestMethod]
     public async Task DynamicMessagesUseCurrentLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore();

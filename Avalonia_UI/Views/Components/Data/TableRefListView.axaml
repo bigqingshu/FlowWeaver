@@ -10,7 +10,7 @@
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Foreground="#14171A"/>
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <ProgressBar Grid.Column="1"
                              Width="88"
                              Height="8"
@@ -25,7 +25,7 @@
 
             <ListBox Grid.Row="1"
                      ItemsSource="{Binding TableRefs}"
-                     BorderBrush="#E1E5EA"
+                     BorderBrush="{DynamicResource ControlBorderBrush}"
                      BorderThickness="1">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:TableRefListItemViewModel"
@@ -37,41 +37,41 @@
                             <TextBlock Text="{Binding LogicalTableId}"
                                        FontWeight="SemiBold"
                                        TextTrimming="CharacterEllipsis"
-                                       Foreground="#1F2933"/>
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <TextBlock Grid.Column="1"
                                        Text="{Binding LifecycleStatus}"
                                        FontWeight="SemiBold"
-                                       Foreground="#4B5563"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="1"
                                        Text="{Binding TableRefId}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"
-                                       Foreground="#697586"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="1"
                                        Grid.Column="1"
                                        Text="{Binding VersionText}"
                                        FontSize="12"
-                                       Foreground="#4B5563"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="2"
                                        Text="{Binding NodeRunId}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"
-                                       Foreground="#697586"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="2"
                                        Grid.Column="1"
                                        Text="{Binding Role}"
                                        FontSize="12"
-                                       Foreground="#697586"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="3"
                                        Text="{Binding CapabilitiesText}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"
-                                       Foreground="#697586"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="3"
                                        Grid.Column="1"
                                        Text="{Binding StorageKind}"
                                        FontSize="12"
-                                       Foreground="#697586"/>
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -79,10 +79,10 @@
 
             <StackPanel Grid.Row="2" Spacing="4">
                 <TextBlock Text="{Binding TableRefMessage}"
-                           Foreground="#344054"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding TableRefErrorMessage}"
                            TextWrapping="Wrap"
-                           Foreground="#B42318"
+                           Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasTableRefError}"/>
             </StackPanel>
         </Grid>

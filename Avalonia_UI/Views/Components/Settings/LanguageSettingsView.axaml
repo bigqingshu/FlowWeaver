@@ -5,8 +5,19 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="18">
         <StackPanel Spacing="12">
-            <TextBlock Text="{Binding SettingsMenuText}" FontSize="18" FontWeight="SemiBold" Foreground="#14171A"/>
+            <TextBlock Text="{Binding SettingsMenuText}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"/>
             <Menu>
+                <MenuItem Header="{Binding ThemeMenuHeaderText}">
+                    <MenuItem Header="{Binding LightThemeText}"
+                              Command="{Binding ChangeThemeCommand}"
+                              CommandParameter="Light"/>
+                    <MenuItem Header="{Binding DarkThemeText}"
+                              Command="{Binding ChangeThemeCommand}"
+                              CommandParameter="Dark"/>
+                    <MenuItem Header="{Binding SystemThemeText}"
+                              Command="{Binding ChangeThemeCommand}"
+                              CommandParameter="System"/>
+                </MenuItem>
                 <MenuItem Header="{Binding LanguageMenuHeaderText}">
                     <MenuItem Header="{Binding EnglishLanguageText}"
                               Command="{Binding ChangeLanguageCommand}"

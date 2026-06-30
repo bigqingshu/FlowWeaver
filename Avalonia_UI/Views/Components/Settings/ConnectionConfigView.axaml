@@ -12,7 +12,7 @@
                        Grid.Column="0"
                        Text="{Binding ConnectionBaseUrlText}"
                        VerticalAlignment="Center"
-                       Foreground="#14171A"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontWeight="SemiBold"/>
             <TextBox Grid.Row="0"
                      Grid.Column="1"
@@ -29,7 +29,7 @@
                        Grid.Column="0"
                        Text="{Binding ConnectionTokenText}"
                        VerticalAlignment="Center"
-                       Foreground="#14171A"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontWeight="SemiBold"/>
             <TextBox Grid.Row="1"
                      Grid.Column="1"
@@ -41,7 +41,7 @@
                        Grid.Column="0"
                        Text="{Binding ConnectionStatusText}"
                        VerticalAlignment="Center"
-                       Foreground="#14171A"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontWeight="SemiBold"/>
             <StackPanel Grid.Row="2"
                         Grid.Column="1"
@@ -50,7 +50,7 @@
                         Spacing="12">
                 <TextBlock Text="{Binding StatusMessage}"
                            VerticalAlignment="Center"
-                           Foreground="#166534"/>
+                           Foreground="{DynamicResource TextSuccessBrush}"/>
                 <ProgressBar Width="120"
                              Height="8"
                              VerticalAlignment="Center"
@@ -58,7 +58,7 @@
                              IsVisible="{Binding IsChecking}"/>
                 <TextBlock Text="{Binding ErrorMessage}"
                            TextWrapping="Wrap"
-                           Foreground="#B42318"
+                           Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasError}"/>
             </StackPanel>
         </Grid>

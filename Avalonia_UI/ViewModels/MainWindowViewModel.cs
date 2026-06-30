@@ -217,6 +217,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string currentLanguageCode = SupportedLanguage.Default.Code;
 
+    [ObservableProperty]
+    private string currentThemeVariant = PersistedUiSettings.SystemThemeVariant;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -269,10 +272,21 @@ public partial class MainWindowViewModel : ViewModelBase
                 });
         }
 
+        Themes.Add(new ThemeMenuItemViewModel("Light", PersistedUiSettings.LightThemeVariant));
+        Themes.Add(new ThemeMenuItemViewModel("Dark", PersistedUiSettings.DarkThemeVariant));
+        Themes.Add(new ThemeMenuItemViewModel("System", PersistedUiSettings.SystemThemeVariant));
+
+        foreach (var theme in Themes)
+        {
+            theme.IsSelected = theme.ThemeVariant == CurrentThemeVariant;
+        }
+
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
+
+    public ObservableCollection<ThemeMenuItemViewModel> Themes { get; } = new();
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
@@ -360,6 +374,16 @@ public partial class MainWindowViewModel : ViewModelBase
     public string LanguageMenuText => T("settings.language");
 
     public string LanguageMenuHeaderText => $"{LanguageMenuText}: {T($"language.{CurrentLanguageCode}")}";
+
+    public string ThemeMenuText => T("settings.theme");
+
+    public string ThemeMenuHeaderText => $"{ThemeMenuText}: {T($"theme.{CurrentThemeVariant.ToLowerInvariant()}")}";
+
+    public string LightThemeText => T("theme.light");
+
+    public string DarkThemeText => T("theme.dark");
+
+    public string SystemThemeText => T("theme.system");
 
     public string EnglishLanguageText => T("language.en-US");
 
@@ -485,6 +509,7 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var settings = await _uiSettingsStore.LoadAsync(cancellationToken);
+            await ApplyThemeAsync(settings.ThemeVariant, save: false, cancellationToken);
             await ApplyLanguageAsync(settings.LanguageCode, save: false, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -618,6 +643,15 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         await ApplyLanguageAsync(
             languageCode ?? SupportedLanguage.Default.Code,
+            save: true,
+            _shutdown.Token);
+    }
+
+    [RelayCommand]
+    private async Task ChangeThemeAsync(string? themeVariantStr)
+    {
+        await ApplyThemeAsync(
+            themeVariantStr ?? PersistedUiSettings.SystemThemeVariant,
             save: true,
             _shutdown.Token);
     }
@@ -1605,7 +1639,38 @@ public partial class MainWindowViewModel : ViewModelBase
         if (save)
         {
             await _uiSettingsStore.SaveAsync(
-                PersistedUiSettings.FromLanguageCode(CurrentLanguageCode),
+                PersistedUiSettings.FromSettings(CurrentLanguageCode, CurrentThemeVariant),
+                cancellationToken);
+        }
+    }
+
+    private async Task ApplyThemeAsync(
+        string themeVariant,
+        bool save,
+        CancellationToken cancellationToken)
+    {
+        CurrentThemeVariant = PersistedUiSettings.NormalizeThemeVariantOrDefault(themeVariant);
+        foreach (var theme in Themes)
+        {
+            theme.IsSelected = theme.ThemeVariant == CurrentThemeVariant;
+        }
+
+        if (Avalonia.Application.Current != null)
+        {
+            Avalonia.Application.Current.RequestedThemeVariant = CurrentThemeVariant switch
+            {
+                PersistedUiSettings.LightThemeVariant => Avalonia.Styling.ThemeVariant.Light,
+                PersistedUiSettings.DarkThemeVariant => Avalonia.Styling.ThemeVariant.Dark,
+                _ => Avalonia.Styling.ThemeVariant.Default
+            };
+        }
+
+        OnPropertyChanged(nameof(ThemeMenuHeaderText));
+
+        if (save)
+        {
+            await _uiSettingsStore.SaveAsync(
+                PersistedUiSettings.FromSettings(CurrentLanguageCode, CurrentThemeVariant),
                 cancellationToken);
         }
     }
@@ -1747,6 +1812,11 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(SettingsMenuText));
         OnPropertyChanged(nameof(LanguageMenuText));
         OnPropertyChanged(nameof(LanguageMenuHeaderText));
+        OnPropertyChanged(nameof(ThemeMenuText));
+        OnPropertyChanged(nameof(ThemeMenuHeaderText));
+        OnPropertyChanged(nameof(LightThemeText));
+        OnPropertyChanged(nameof(DarkThemeText));
+        OnPropertyChanged(nameof(SystemThemeText));
         OnPropertyChanged(nameof(EnglishLanguageText));
         OnPropertyChanged(nameof(SimplifiedChineseLanguageText));
         OnPropertyChanged(nameof(ConnectionBaseUrlText));

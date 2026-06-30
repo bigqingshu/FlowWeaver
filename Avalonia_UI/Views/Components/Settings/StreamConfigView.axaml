@@ -10,7 +10,7 @@
             <TextBlock Grid.Column="0"
                        Text="{Binding ConnectionEventsText}"
                        VerticalAlignment="Center"
-                       Foreground="#14171A"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
                        FontWeight="SemiBold"/>
             <StackPanel Grid.Column="1"
                         Orientation="Horizontal"
@@ -18,11 +18,11 @@
                 <TextBlock Text="{Binding RuntimeEventStreamMessage}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="#344054"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding RuntimeEventStreamErrorMessage}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
-                           Foreground="#B42318"
+                           Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasRuntimeEventStreamError}"/>
             </StackPanel>
             <Button Grid.Column="2"

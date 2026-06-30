@@ -10,7 +10,7 @@
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Foreground="#14171A"/>
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <ProgressBar Grid.Column="1"
                              Width="88"
                              Height="8"
@@ -36,10 +36,10 @@
 
             <StackPanel Grid.Row="2" Spacing="4">
                 <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
-                           Foreground="#344054"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding WorkflowDefinitionValidationErrorMessage}"
                            TextWrapping="Wrap"
-                           Foreground="#B42318"
+                           Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasWorkflowDefinitionValidationError}"/>
             </StackPanel>
         </Grid>

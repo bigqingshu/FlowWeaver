@@ -8,33 +8,33 @@
         <Border Classes="Card" Padding="14">
             <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
-                    <TextBlock Text="{Binding ShareText}" VerticalAlignment="Center" Foreground="#14171A" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ShareText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                     <TextBox Grid.Column="1" Text="{Binding SharedPublicationShareNameFilter}" Watermark="{Binding ShareNameWatermarkText}"/>
-                    <TextBlock Grid.Column="2" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="#14171A"/>
+                    <TextBlock Grid.Column="2" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <TextBox Grid.Column="3" Text="{Binding SharedPublicationLimitFilter}" Watermark="100" Width="70"/>
                     <Button Grid.Column="4" Content="{Binding RefreshText}" Command="{Binding RefreshSharedPublicationsCommand}" MinWidth="84"/>
                 </Grid>
 
                 <StackPanel Grid.Row="1" Spacing="4">
-                    <TextBlock Text="{Binding SharedPublicationMessage}" Foreground="#344054"/>
-                    <TextBlock Text="{Binding SharedPublicationErrorMessage}" TextWrapping="Wrap" Foreground="#B42318" IsVisible="{Binding HasSharedPublicationError}"/>
+                    <TextBlock Text="{Binding SharedPublicationMessage}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding SharedPublicationErrorMessage}" TextWrapping="Wrap" Foreground="{DynamicResource TextErrorBrush}" IsVisible="{Binding HasSharedPublicationError}"/>
                 </StackPanel>
 
                 <ListBox Grid.Row="2"
                          ItemsSource="{Binding SharedPublications}"
                          SelectedItem="{Binding SelectedSharedPublication}"
-                         BorderBrush="#E1E5EA"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:SharedPublicationListItemViewModel"
                                       x:DataType="vm:SharedPublicationListItemViewModel">
                             <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" Margin="8">
-                                <TextBlock Text="{Binding ShareName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="#4B5563"/>
-                                <TextBlock Grid.Row="1" Text="{Binding PublicationId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Status}" FontSize="12" Foreground="#4B5563"/>
-                                <TextBlock Grid.Row="2" Text="{Binding ProducerRunId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MemberCountText}" FontSize="12" Foreground="#697586"/>
+                                <TextBlock Text="{Binding ShareName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Text="{Binding PublicationId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Status}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2" Text="{Binding ProducerRunId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MemberCountText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -46,40 +46,40 @@
         <Border Grid.Row="1" Classes="Card" Padding="14">
             <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
-                    <TextBlock Text="{Binding VersionsText}" VerticalAlignment="Center" Foreground="#14171A" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding VersionsText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                     <TextBox Grid.Column="1" Text="{Binding SharedPublicationVersionShareNameFilter}" Watermark="{Binding ShareNameWatermarkText}"/>
-                    <TextBlock Grid.Column="2" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="#14171A"/>
+                    <TextBlock Grid.Column="2" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
                     <TextBox Grid.Column="3" Text="{Binding SharedPublicationVersionLimitFilter}" Watermark="100" Width="70"/>
                     <Button Grid.Column="4" Content="{Binding RefreshText}" Command="{Binding RefreshSharedPublicationVersionsCommand}" MinWidth="84"/>
                 </Grid>
 
                 <StackPanel Grid.Row="1" Spacing="4">
-                    <TextBlock Text="{Binding SharedPublicationVersionMessage}" Foreground="#344054"/>
-                    <TextBlock Text="{Binding SharedPublicationVersionErrorMessage}" TextWrapping="Wrap" Foreground="#B42318" IsVisible="{Binding HasSharedPublicationVersionError}"/>
+                    <TextBlock Text="{Binding SharedPublicationVersionMessage}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding SharedPublicationVersionErrorMessage}" TextWrapping="Wrap" Foreground="{DynamicResource TextErrorBrush}" IsVisible="{Binding HasSharedPublicationVersionError}"/>
                 </StackPanel>
 
                 <ListBox Grid.Row="2"
                          ItemsSource="{Binding SharedPublicationVersions}"
-                         BorderBrush="#E1E5EA"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:SharedPublicationListItemViewModel"
                                       x:DataType="vm:SharedPublicationListItemViewModel">
                             <Grid RowDefinitions="Auto,Auto,Auto" Margin="8" RowSpacing="4">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <TextBlock Text="{Binding ShareName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="#4B5563"/>
+                                    <TextBlock Text="{Binding ShareName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 </Grid>
                                 <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                    <TextBlock Text="{Binding PublicationId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding MemberCountText}" FontSize="12" Foreground="#697586"/>
+                                    <TextBlock Text="{Binding PublicationId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding MemberCountText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 </Grid>
                                 <ItemsControl Grid.Row="2" ItemsSource="{Binding Members}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="vm:SharedPublicationMemberListItemViewModel" x:DataType="vm:SharedPublicationMemberListItemViewModel">
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,2,0,0">
-                                                <TextBlock Text="{Binding ExportName}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#4B5563"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontSize="12" Foreground="#697586"/>
+                                                <TextBlock Text="{Binding ExportName}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>

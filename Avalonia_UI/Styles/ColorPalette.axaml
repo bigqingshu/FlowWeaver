@@ -1,0 +1,64 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="PageBackgroundBrush" Color="#F8FAFC"/>
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#E2E8F0"/>
+
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#0F172A"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#64748B"/>
+            <SolidColorBrush x:Key="TextSuccessBrush" Color="#166534"/>
+            <SolidColorBrush x:Key="TextErrorBrush" Color="#B42318"/>
+            <SolidColorBrush x:Key="ErrorBackgroundBrush" Color="#FEF2F2"/>
+            <SolidColorBrush x:Key="ErrorBorderBrush" Color="#FCA5A5"/>
+
+            <SolidColorBrush x:Key="ControlBorderBrush" Color="#E2E8F0"/>
+            <SolidColorBrush x:Key="ControlBorderHoverBrush" Color="#CBD5E1"/>
+            <SolidColorBrush x:Key="ControlBackgroundBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="ControlBackgroundHoverBrush" Color="#F1F5F9"/>
+            <SolidColorBrush x:Key="ControlBackgroundPressedBrush" Color="#E2E8F0"/>
+
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundBrush" Color="#4F46E5"/>
+            <SolidColorBrush x:Key="PrimaryButtonForegroundBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundHoverBrush" Color="#4338CA"/>
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundPressedBrush" Color="#3730A3"/>
+
+            <SolidColorBrush x:Key="NavigationItemForegroundBrush" Color="#64748B"/>
+            <SolidColorBrush x:Key="NavigationSelectedBackgroundBrush" Color="#E0E7FF"/>
+            <SolidColorBrush x:Key="NavigationSelectedForegroundBrush" Color="#4338CA"/>
+            <SolidColorBrush x:Key="NavigationItemPointerOverBackgroundBrush" Color="#E2E8F0"/>
+            <SolidColorBrush x:Key="NavigationItemPointerOverForegroundBrush" Color="#0F172A"/>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="PageBackgroundBrush" Color="#0F172A"/>
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1E293B"/>
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#334155"/>
+
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F8FAFC"/>
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#94A3B8"/>
+            <SolidColorBrush x:Key="TextSuccessBrush" Color="#4ADE80"/>
+            <SolidColorBrush x:Key="TextErrorBrush" Color="#F87171"/>
+            <SolidColorBrush x:Key="ErrorBackgroundBrush" Color="#450a0a"/>
+            <SolidColorBrush x:Key="ErrorBorderBrush" Color="#7f1d1d"/>
+
+            <SolidColorBrush x:Key="ControlBorderBrush" Color="#334155"/>
+            <SolidColorBrush x:Key="ControlBorderHoverBrush" Color="#475569"/>
+            <SolidColorBrush x:Key="ControlBackgroundBrush" Color="#1E293B"/>
+            <SolidColorBrush x:Key="ControlBackgroundHoverBrush" Color="#334155"/>
+            <SolidColorBrush x:Key="ControlBackgroundPressedBrush" Color="#475569"/>
+
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundBrush" Color="#6366F1"/>
+            <SolidColorBrush x:Key="PrimaryButtonForegroundBrush" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundHoverBrush" Color="#4F46E5"/>
+            <SolidColorBrush x:Key="PrimaryButtonBackgroundPressedBrush" Color="#4338CA"/>
+
+            <SolidColorBrush x:Key="NavigationItemForegroundBrush" Color="#94A3B8"/>
+            <SolidColorBrush x:Key="NavigationSelectedBackgroundBrush" Color="#312E81"/>
+            <SolidColorBrush x:Key="NavigationSelectedForegroundBrush" Color="#E0E7FF"/>
+            <SolidColorBrush x:Key="NavigationItemPointerOverBackgroundBrush" Color="#334155"/>
+            <SolidColorBrush x:Key="NavigationItemPointerOverForegroundBrush" Color="#F8FAFC"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>
