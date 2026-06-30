@@ -19,15 +19,30 @@
     </Design.DataContext>
 
     <Grid Margin="24" RowDefinitions="Auto,Auto,*" RowSpacing="18">
-        <StackPanel Spacing="4">
-            <TextBlock Text="FlowWeaver"
-                       FontSize="26"
-                       FontWeight="SemiBold"
-                       Foreground="#14171A"/>
-            <TextBlock Text="EngineHost connection"
-                       FontSize="13"
-                       Foreground="#5B6470"/>
-        </StackPanel>
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding AppTitleText}"
+                           FontSize="26"
+                           FontWeight="SemiBold"
+                           Foreground="#14171A"/>
+                <TextBlock Text="{Binding AppSubtitleText}"
+                           FontSize="13"
+                           Foreground="#5B6470"/>
+            </StackPanel>
+            <Menu Grid.Column="1"
+                  VerticalAlignment="Top">
+                <MenuItem Header="{Binding SettingsMenuText}">
+                    <MenuItem Header="{Binding LanguageMenuHeaderText}">
+                        <MenuItem Header="{Binding EnglishLanguageText}"
+                                  Command="{Binding ChangeLanguageCommand}"
+                                  CommandParameter="en-US"/>
+                        <MenuItem Header="{Binding SimplifiedChineseLanguageText}"
+                                  Command="{Binding ChangeLanguageCommand}"
+                                  CommandParameter="zh-Hans"/>
+                    </MenuItem>
+                </MenuItem>
+            </Menu>
+        </Grid>
 
         <Border Grid.Row="1"
                 Background="White"
@@ -41,7 +56,7 @@
                   ColumnSpacing="12">
                 <TextBlock Grid.Row="0"
                            Grid.Column="0"
-                           Text="Base URL"
+                           Text="{Binding ConnectionBaseUrlText}"
                            VerticalAlignment="Center"
                            Foreground="#2F3742"/>
                 <TextBox Grid.Row="0"
@@ -50,13 +65,13 @@
                          Watermark="http://127.0.0.1:8000"/>
                 <Button Grid.Row="0"
                         Grid.Column="2"
-                        Content="Check"
+                        Content="{Binding CheckConnectionText}"
                         Command="{Binding CheckConnectionCommand}"
                         MinWidth="92"/>
 
                 <TextBlock Grid.Row="1"
                            Grid.Column="0"
-                           Text="Token"
+                           Text="{Binding ConnectionTokenText}"
                            VerticalAlignment="Center"
                            Foreground="#2F3742"/>
                 <TextBox Grid.Row="1"
@@ -67,7 +82,7 @@
 
                 <TextBlock Grid.Row="2"
                            Grid.Column="0"
-                           Text="Status"
+                           Text="{Binding ConnectionStatusText}"
                            VerticalAlignment="Center"
                            Foreground="#2F3742"/>
                 <StackPanel Grid.Row="2"
@@ -91,7 +106,7 @@
 
                 <TextBlock Grid.Row="3"
                            Grid.Column="0"
-                           Text="Events"
+                           Text="{Binding ConnectionEventsText}"
                            VerticalAlignment="Center"
                            Foreground="#2F3742"/>
                 <StackPanel Grid.Row="3"
@@ -110,19 +125,19 @@
                 </StackPanel>
                 <Button Grid.Row="3"
                         Grid.Column="2"
-                        Content="Stream"
+                        Content="{Binding StreamText}"
                         Command="{Binding StartRuntimeEventStreamCommand}"
                         MinWidth="92"/>
                 <Button Grid.Row="3"
                         Grid.Column="3"
-                        Content="Stop"
+                        Content="{Binding StopText}"
                         Command="{Binding StopRuntimeEventStreamCommand}"
                         MinWidth="76"/>
             </Grid>
         </Border>
 
         <TabControl Grid.Row="2">
-            <TabItem Header="Execution">
+            <TabItem Header="{Binding ExecutionTabText}">
                 <Grid ColumnDefinitions="1.05*,1.2*"
                       ColumnSpacing="16"
                       Margin="0,12,0,0">
@@ -133,32 +148,32 @@
                             Padding="18">
                         <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                             <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
-                        <TextBlock Text="Workflows"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Foreground="#14171A"/>
-                        <ProgressBar Grid.Column="1"
-                                     Width="88"
-                                     Height="8"
-                                     VerticalAlignment="Center"
-                                     IsIndeterminate="True"
-                                     IsVisible="{Binding IsWorkflowBusy}"/>
-                        <Button Grid.Column="2"
-                                Content="Refresh"
-                                Command="{Binding RefreshWorkflowsCommand}"
-                                MinWidth="84"/>
-                        <Button Grid.Column="3"
-                                Content="Run"
-                                Command="{Binding StartSelectedWorkflowCommand}"
-                                MinWidth="72"/>
+                                <TextBlock Text="{Binding WorkflowsSectionText}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="#14171A"/>
+                                <ProgressBar Grid.Column="1"
+                                             Width="88"
+                                             Height="8"
+                                             VerticalAlignment="Center"
+                                             IsIndeterminate="True"
+                                             IsVisible="{Binding IsWorkflowBusy}"/>
+                                <Button Grid.Column="2"
+                                        Content="{Binding RefreshText}"
+                                        Command="{Binding RefreshWorkflowsCommand}"
+                                        MinWidth="84"/>
+                                <Button Grid.Column="3"
+                                        Content="{Binding RunText}"
+                                        Command="{Binding StartSelectedWorkflowCommand}"
+                                        MinWidth="72"/>
                             </Grid>
 
                             <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                 <TextBox Text="{Binding NewWorkflowName}"
-                                         Watermark="Workflow name"/>
+                                         Watermark="{Binding WorkflowNameWatermarkText}"/>
                                 <Button Grid.Column="1"
-                                        Content="Create"
+                                        Content="{Binding CreateText}"
                                         Command="{Binding CreateTemplateWorkflowCommand}"
                                         MinWidth="84"/>
                             </Grid>
@@ -226,25 +241,25 @@
                             Padding="18">
                         <Grid RowDefinitions="Auto,*,Auto,Auto,*,Auto" RowSpacing="10">
                             <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
-                        <TextBlock Text="Runs"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Foreground="#14171A"/>
-                        <ProgressBar Grid.Column="1"
-                                     Width="88"
-                                     Height="8"
-                                     VerticalAlignment="Center"
-                                     IsIndeterminate="True"
-                                     IsVisible="{Binding IsRunBusy}"/>
-                        <Button Grid.Column="2"
-                                Content="Refresh"
-                                Command="{Binding RefreshRunsCommand}"
-                                MinWidth="84"/>
-                        <Button Grid.Column="3"
-                                Content="Cancel"
-                                Command="{Binding CancelSelectedRunCommand}"
-                                MinWidth="78"/>
+                                <TextBlock Text="{Binding RunsSectionText}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="#14171A"/>
+                                <ProgressBar Grid.Column="1"
+                                             Width="88"
+                                             Height="8"
+                                             VerticalAlignment="Center"
+                                             IsIndeterminate="True"
+                                             IsVisible="{Binding IsRunBusy}"/>
+                                <Button Grid.Column="2"
+                                        Content="{Binding RefreshText}"
+                                        Command="{Binding RefreshRunsCommand}"
+                                        MinWidth="84"/>
+                                <Button Grid.Column="3"
+                                        Content="{Binding CancelText}"
+                                        Command="{Binding CancelSelectedRunCommand}"
+                                        MinWidth="78"/>
                             </Grid>
 
                             <ListBox Grid.Row="1"
@@ -304,7 +319,7 @@
                             </StackPanel>
 
                             <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                <TextBlock Text="Node runs"
+                                <TextBlock Text="{Binding NodeRunsSectionText}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
@@ -316,7 +331,7 @@
                                              IsIndeterminate="True"
                                              IsVisible="{Binding IsNodeRunBusy}"/>
                                 <Button Grid.Column="2"
-                                        Content="Refresh"
+                                        Content="{Binding RefreshText}"
                                         Command="{Binding RefreshNodeRunsCommand}"
                                         MinWidth="84"/>
                             </Grid>
@@ -379,7 +394,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Definition">
+            <TabItem Header="{Binding DefinitionTabText}">
                 <Grid ColumnDefinitions="0.95*,1.35*"
                       ColumnSpacing="16"
                       Margin="0,12,0,0">
@@ -390,7 +405,7 @@
                             Padding="14">
                         <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                <TextBlock Text="Workflow definition"
+                                <TextBlock Text="{Binding WorkflowDefinitionSectionText}"
                                            FontSize="18"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
@@ -402,7 +417,7 @@
                                              IsIndeterminate="True"
                                              IsVisible="{Binding IsLoadingWorkflowDefinition}"/>
                                 <Button Grid.Column="2"
-                                        Content="Details"
+                                        Content="{Binding DetailsText}"
                                         Command="{Binding LoadSelectedWorkflowDefinitionCommand}"
                                         MinWidth="84"/>
                             </Grid>
@@ -413,21 +428,21 @@
                                   RowSpacing="6"
                                   ColumnSpacing="10"
                                   IsVisible="{Binding HasWorkflowDefinition}">
-                                <TextBlock Text="Name"
+                                <TextBlock Text="{Binding NameLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding WorkflowDefinitionDetail.Name}"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="#1F2933"/>
                                 <TextBlock Grid.Column="2"
-                                           Text="Version"
+                                           Text="{Binding VersionLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Column="3"
                                            Text="{Binding WorkflowDefinitionDetail.VersionText}"
                                            Foreground="#1F2933"/>
 
                                 <TextBlock Grid.Row="1"
-                                           Text="Revision"
+                                           Text="{Binding RevisionLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Row="1"
                                            Grid.Column="1"
@@ -436,7 +451,7 @@
                                            Foreground="#1F2933"/>
                                 <TextBlock Grid.Row="1"
                                            Grid.Column="2"
-                                           Text="Status"
+                                           Text="{Binding StatusLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Row="1"
                                            Grid.Column="3"
@@ -444,7 +459,7 @@
                                            Foreground="#1F2933"/>
 
                                 <TextBlock Grid.Row="2"
-                                           Text="Hash"
+                                           Text="{Binding HashLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Row="2"
                                            Grid.Column="1"
@@ -453,7 +468,7 @@
                                            Foreground="#1F2933"/>
                                 <TextBlock Grid.Row="2"
                                            Grid.Column="2"
-                                           Text="Updated"
+                                           Text="{Binding UpdatedLabelText}"
                                            Foreground="#697586"/>
                                 <TextBlock Grid.Row="2"
                                            Grid.Column="3"
@@ -521,7 +536,7 @@
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*" RowSpacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                    <TextBlock Text="Nodes"
+                                    <TextBlock Text="{Binding NodesSectionText}"
                                                FontSize="16"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"
@@ -582,7 +597,7 @@
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*" RowSpacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                    <TextBlock Text="Connections"
+                                    <TextBlock Text="{Binding ConnectionsSectionText}"
                                                FontSize="16"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"
@@ -627,7 +642,7 @@
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
                                 <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
-                                    <TextBlock Text="Draft JSON"
+                                    <TextBlock Text="{Binding DraftJsonSectionText}"
                                                FontSize="16"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center"
@@ -639,11 +654,11 @@
                                                  IsIndeterminate="True"
                                                  IsVisible="{Binding IsWorkflowDefinitionDraftBusy}"/>
                                     <Button Grid.Column="2"
-                                            Content="Validate"
+                                            Content="{Binding ValidateText}"
                                             Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
                                             MinWidth="92"/>
                                     <Button Grid.Column="3"
-                                            Content="Save"
+                                            Content="{Binding SaveText}"
                                             Command="{Binding SaveWorkflowDefinitionDraftCommand}"
                                             MinWidth="78"/>
                                 </Grid>
@@ -669,7 +684,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Logs">
+            <TabItem Header="{Binding LogsTabText}">
                 <Grid RowDefinitions="Auto,*"
                       RowSpacing="12"
                       Margin="0,12,0,0">
@@ -682,44 +697,44 @@
                               ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto,Auto"
                               RowSpacing="10"
                               ColumnSpacing="10">
-                            <TextBlock Text="Workflow run"
+                            <TextBlock Text="{Binding WorkflowRunFilterText}"
                                        VerticalAlignment="Center"
                                        Foreground="#2F3742"/>
                             <TextBox Grid.Column="1"
                                      Text="{Binding LogWorkflowRunIdFilter}"
-                                     Watermark="run id"/>
+                                     Watermark="{Binding RunIdWatermarkText}"/>
                             <TextBlock Grid.Column="2"
-                                       Text="Node run"
+                                       Text="{Binding NodeRunFilterText}"
                                        VerticalAlignment="Center"
                                        Foreground="#2F3742"/>
                             <TextBox Grid.Column="3"
                                      Text="{Binding LogNodeRunIdFilter}"
-                                     Watermark="node run id"/>
+                                     Watermark="{Binding NodeRunIdWatermarkText}"/>
                             <TextBlock Grid.Column="4"
-                                       Text="Event type"
+                                       Text="{Binding EventTypeFilterText}"
                                        VerticalAlignment="Center"
                                        Foreground="#2F3742"/>
                             <TextBox Grid.Column="5"
                                      Text="{Binding LogEventTypeFilter}"
                                      Watermark="EVENT_TYPE"/>
                             <TextBlock Grid.Column="6"
-                                       Text="After"
+                                       Text="{Binding AfterFilterText}"
                                        VerticalAlignment="Center"
                                        Foreground="#2F3742"/>
                             <TextBox Grid.Column="7"
                                      Text="{Binding RuntimeEventAfterSequenceNumberFilter}"
-                                     Watermark="sequence"/>
+                                     Watermark="{Binding SequenceWatermarkText}"/>
                             <Button Grid.Column="8"
-                                    Content="Runtime"
+                                    Content="{Binding RuntimeText}"
                                     Command="{Binding RefreshRuntimeEventLogCommand}"
                                     MinWidth="92"/>
                             <Button Grid.Column="9"
-                                    Content="Audit"
+                                    Content="{Binding AuditText}"
                                     Command="{Binding RefreshAuditEventsCommand}"
                                     MinWidth="84"/>
 
                             <TextBlock Grid.Row="1"
-                                       Text="Limit"
+                                       Text="{Binding LimitText}"
                                        VerticalAlignment="Center"
                                        Foreground="#2F3742"/>
                             <TextBox Grid.Row="1"
@@ -745,7 +760,7 @@
                                 CornerRadius="8"
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                                <TextBlock Text="Runtime events"
+                                <TextBlock Text="{Binding RuntimeEventsSectionText}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            Foreground="#14171A"/>
@@ -806,7 +821,7 @@
                                 CornerRadius="8"
                                 Padding="14">
                             <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                                <TextBlock Text="Audit events"
+                                <TextBlock Text="{Binding AuditEventsSectionText}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            Foreground="#14171A"/>
@@ -863,7 +878,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Data">
+            <TabItem Header="{Binding DataTabText}">
                 <Grid ColumnDefinitions="1.05*,1.2*"
                       ColumnSpacing="16"
                       Margin="0,12,0,0">
@@ -874,7 +889,7 @@
                             Padding="14">
                         <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                <TextBlock Text="Table refs"
+                                <TextBlock Text="{Binding TableRefsSectionText}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
@@ -886,7 +901,7 @@
                                              IsIndeterminate="True"
                                              IsVisible="{Binding IsDataBusy}"/>
                                 <Button Grid.Column="2"
-                                        Content="Refresh"
+                                        Content="{Binding RefreshText}"
                                         Command="{Binding RefreshTableRefsCommand}"
                                         MinWidth="84"/>
                             </Grid>
@@ -968,14 +983,14 @@
                                   ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                   RowSpacing="10"
                                   ColumnSpacing="10">
-                                <TextBlock Text="Share"
+                                <TextBlock Text="{Binding ShareText}"
                                            VerticalAlignment="Center"
                                            Foreground="#2F3742"/>
                                 <TextBox Grid.Column="1"
                                          Text="{Binding SharedPublicationShareNameFilter}"
-                                         Watermark="share name"/>
+                                         Watermark="{Binding ShareNameWatermarkText}"/>
                                 <TextBlock Grid.Column="2"
-                                           Text="Limit"
+                                           Text="{Binding LimitText}"
                                            VerticalAlignment="Center"
                                            Foreground="#2F3742"/>
                                 <TextBox Grid.Column="3"
@@ -983,7 +998,7 @@
                                          Watermark="100"
                                          Width="70"/>
                                 <Button Grid.Column="4"
-                                        Content="Refresh"
+                                        Content="{Binding RefreshText}"
                                         Command="{Binding RefreshSharedPublicationsCommand}"
                                         MinWidth="84"/>
 
@@ -1056,14 +1071,14 @@
                                   ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                   RowSpacing="10"
                                   ColumnSpacing="10">
-                                <TextBlock Text="Versions"
+                                <TextBlock Text="{Binding VersionsText}"
                                            VerticalAlignment="Center"
                                            Foreground="#2F3742"/>
                                 <TextBox Grid.Column="1"
                                          Text="{Binding SharedPublicationVersionShareNameFilter}"
-                                         Watermark="share name"/>
+                                         Watermark="{Binding ShareNameWatermarkText}"/>
                                 <TextBlock Grid.Column="2"
-                                           Text="Limit"
+                                           Text="{Binding LimitText}"
                                            VerticalAlignment="Center"
                                            Foreground="#2F3742"/>
                                 <TextBox Grid.Column="3"
@@ -1071,7 +1086,7 @@
                                          Watermark="100"
                                          Width="70"/>
                                 <Button Grid.Column="4"
-                                        Content="Refresh"
+                                        Content="{Binding RefreshText}"
                                         Command="{Binding RefreshSharedPublicationVersionsCommand}"
                                         MinWidth="84"/>
 

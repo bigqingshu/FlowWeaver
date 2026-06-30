@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,6 +22,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IEngineHostRuntimeEventStreamClient _runtimeEventStreamClient;
     private readonly Func<CancellationToken, Task> _runtimeEventReconnectDelay;
     private readonly IConnectionSettingsStore _connectionSettingsStore;
+    private readonly IUiSettingsStore _uiSettingsStore;
+    private readonly ILocalizationService _localizationService;
 
     private readonly CancellationTokenSource _shutdown = new();
     private CancellationTokenSource? _runtimeEventStreamCancellation;
@@ -210,6 +213,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? sharedPublicationVersionErrorMessage;
 
+    [ObservableProperty]
+    private string currentLanguageCode = SupportedLanguage.Default.Code;
+
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
     {
@@ -240,7 +246,9 @@ public partial class MainWindowViewModel : ViewModelBase
         IEngineHostApiClient apiClient,
         IEngineHostRuntimeEventStreamClient runtimeEventStreamClient,
         Func<CancellationToken, Task>? runtimeEventReconnectDelay = null,
-        IConnectionSettingsStore? connectionSettingsStore = null)
+        IConnectionSettingsStore? connectionSettingsStore = null,
+        IUiSettingsStore? uiSettingsStore = null,
+        ILocalizationService? localizationService = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
@@ -248,7 +256,20 @@ public partial class MainWindowViewModel : ViewModelBase
         _runtimeEventReconnectDelay = runtimeEventReconnectDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromSeconds(2), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
+        _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
+        _localizationService = localizationService ?? new JsonLocalizationService();
+        CurrentLanguageCode = _localizationService.CurrentLanguageCode;
+        foreach (var language in _localizationService.SupportedLanguages)
+        {
+            Languages.Add(
+                new LanguageMenuItemViewModel(language)
+                {
+                    IsSelected = language.Code == CurrentLanguageCode,
+                });
+        }
     }
+
+    public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
@@ -325,6 +346,116 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool IsDataBusy =>
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
 
+    public string AppTitleText => T("app.title");
+
+    public string AppSubtitleText => T("app.subtitle");
+
+    public string SettingsMenuText => T("settings.menu");
+
+    public string LanguageMenuText => T("settings.language");
+
+    public string LanguageMenuHeaderText => $"{LanguageMenuText}: {T($"language.{CurrentLanguageCode}")}";
+
+    public string EnglishLanguageText => T("language.en-US");
+
+    public string SimplifiedChineseLanguageText => T("language.zh-Hans");
+
+    public string ConnectionBaseUrlText => T("connection.base_url");
+
+    public string ConnectionTokenText => T("connection.token");
+
+    public string ConnectionStatusText => T("connection.status");
+
+    public string ConnectionEventsText => T("connection.events");
+
+    public string CheckConnectionText => T("connection.check");
+
+    public string StreamText => T("connection.stream");
+
+    public string StopText => T("connection.stop");
+
+    public string ExecutionTabText => T("tab.execution");
+
+    public string DefinitionTabText => T("tab.definition");
+
+    public string LogsTabText => T("tab.logs");
+
+    public string DataTabText => T("tab.data");
+
+    public string WorkflowsSectionText => T("workflow.section");
+
+    public string RefreshText => T("common.refresh");
+
+    public string RunText => T("workflow.run");
+
+    public string CreateText => T("workflow.create");
+
+    public string WorkflowNameWatermarkText => T("workflow.name_watermark");
+
+    public string RunsSectionText => T("runs.section");
+
+    public string CancelText => T("runs.cancel");
+
+    public string NodeRunsSectionText => T("node_runs.section");
+
+    public string WorkflowDefinitionSectionText => T("definition.section");
+
+    public string DetailsText => T("definition.details");
+
+    public string NameLabelText => T("definition.name");
+
+    public string VersionLabelText => T("definition.version");
+
+    public string RevisionLabelText => T("definition.revision");
+
+    public string StatusLabelText => T("definition.status");
+
+    public string HashLabelText => T("definition.hash");
+
+    public string UpdatedLabelText => T("definition.updated");
+
+    public string NodesSectionText => T("definition.nodes");
+
+    public string ConnectionsSectionText => T("definition.connections");
+
+    public string DraftJsonSectionText => T("definition.draft_json");
+
+    public string ValidateText => T("definition.validate");
+
+    public string SaveText => T("definition.save");
+
+    public string WorkflowRunFilterText => T("logs.workflow_run");
+
+    public string RunIdWatermarkText => T("logs.run_id_watermark");
+
+    public string NodeRunFilterText => T("logs.node_run");
+
+    public string NodeRunIdWatermarkText => T("logs.node_run_id_watermark");
+
+    public string EventTypeFilterText => T("logs.event_type");
+
+    public string AfterFilterText => T("logs.after");
+
+    public string SequenceWatermarkText => T("logs.sequence_watermark");
+
+    public string RuntimeText => T("logs.runtime");
+
+    public string AuditText => T("logs.audit");
+
+    public string LimitText => T("common.limit");
+
+    public string RuntimeEventsSectionText => T("logs.runtime_events");
+
+    public string AuditEventsSectionText => T("logs.audit_events");
+
+    public string TableRefsSectionText => T("data.table_refs");
+
+    public string ShareText => T("data.share");
+
+    public string ShareNameWatermarkText => T("data.share_name_watermark");
+
+    public string VersionsText => T("data.versions");
+
     public async Task LoadConnectionSettingsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -340,6 +471,24 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             ErrorMessage = $"Connection settings were not loaded: {ex.Message}";
+        }
+    }
+
+    public async Task LoadUiSettingsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var settings = await _uiSettingsStore.LoadAsync(cancellationToken);
+            await ApplyLanguageAsync(settings.LanguageCode, save: false, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"UI settings were not loaded: {ex.Message}";
         }
     }
 
@@ -457,6 +606,15 @@ public partial class MainWindowViewModel : ViewModelBase
         ConnectionStatus = ConnectionStatus.Error;
         StatusMessage = result.Message;
         ErrorMessage = result.ErrorMessage;
+    }
+
+    [RelayCommand]
+    private async Task ChangeLanguageAsync(string? languageCode)
+    {
+        await ApplyLanguageAsync(
+            languageCode ?? SupportedLanguage.Default.Code,
+            save: true,
+            _shutdown.Token);
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshWorkflows))]
@@ -1352,6 +1510,91 @@ public partial class MainWindowViewModel : ViewModelBase
     private static string? NormalizeFilter(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private async Task ApplyLanguageAsync(
+        string languageCode,
+        bool save,
+        CancellationToken cancellationToken)
+    {
+        await _localizationService.SetLanguageAsync(languageCode, cancellationToken);
+        CurrentLanguageCode = _localizationService.CurrentLanguageCode;
+        foreach (var language in Languages)
+        {
+            language.IsSelected = language.Code == CurrentLanguageCode;
+        }
+
+        NotifyLocalizedTextChanged();
+        if (save)
+        {
+            await _uiSettingsStore.SaveAsync(
+                PersistedUiSettings.FromLanguageCode(CurrentLanguageCode),
+                cancellationToken);
+        }
+    }
+
+    private string T(string key)
+    {
+        return _localizationService.GetString(key);
+    }
+
+    private void NotifyLocalizedTextChanged()
+    {
+        OnPropertyChanged(nameof(AppTitleText));
+        OnPropertyChanged(nameof(AppSubtitleText));
+        OnPropertyChanged(nameof(SettingsMenuText));
+        OnPropertyChanged(nameof(LanguageMenuText));
+        OnPropertyChanged(nameof(LanguageMenuHeaderText));
+        OnPropertyChanged(nameof(EnglishLanguageText));
+        OnPropertyChanged(nameof(SimplifiedChineseLanguageText));
+        OnPropertyChanged(nameof(ConnectionBaseUrlText));
+        OnPropertyChanged(nameof(ConnectionTokenText));
+        OnPropertyChanged(nameof(ConnectionStatusText));
+        OnPropertyChanged(nameof(ConnectionEventsText));
+        OnPropertyChanged(nameof(CheckConnectionText));
+        OnPropertyChanged(nameof(StreamText));
+        OnPropertyChanged(nameof(StopText));
+        OnPropertyChanged(nameof(ExecutionTabText));
+        OnPropertyChanged(nameof(DefinitionTabText));
+        OnPropertyChanged(nameof(LogsTabText));
+        OnPropertyChanged(nameof(DataTabText));
+        OnPropertyChanged(nameof(WorkflowsSectionText));
+        OnPropertyChanged(nameof(RefreshText));
+        OnPropertyChanged(nameof(RunText));
+        OnPropertyChanged(nameof(CreateText));
+        OnPropertyChanged(nameof(WorkflowNameWatermarkText));
+        OnPropertyChanged(nameof(RunsSectionText));
+        OnPropertyChanged(nameof(CancelText));
+        OnPropertyChanged(nameof(NodeRunsSectionText));
+        OnPropertyChanged(nameof(WorkflowDefinitionSectionText));
+        OnPropertyChanged(nameof(DetailsText));
+        OnPropertyChanged(nameof(NameLabelText));
+        OnPropertyChanged(nameof(VersionLabelText));
+        OnPropertyChanged(nameof(RevisionLabelText));
+        OnPropertyChanged(nameof(StatusLabelText));
+        OnPropertyChanged(nameof(HashLabelText));
+        OnPropertyChanged(nameof(UpdatedLabelText));
+        OnPropertyChanged(nameof(NodesSectionText));
+        OnPropertyChanged(nameof(ConnectionsSectionText));
+        OnPropertyChanged(nameof(DraftJsonSectionText));
+        OnPropertyChanged(nameof(ValidateText));
+        OnPropertyChanged(nameof(SaveText));
+        OnPropertyChanged(nameof(WorkflowRunFilterText));
+        OnPropertyChanged(nameof(RunIdWatermarkText));
+        OnPropertyChanged(nameof(NodeRunFilterText));
+        OnPropertyChanged(nameof(NodeRunIdWatermarkText));
+        OnPropertyChanged(nameof(EventTypeFilterText));
+        OnPropertyChanged(nameof(AfterFilterText));
+        OnPropertyChanged(nameof(SequenceWatermarkText));
+        OnPropertyChanged(nameof(RuntimeText));
+        OnPropertyChanged(nameof(AuditText));
+        OnPropertyChanged(nameof(LimitText));
+        OnPropertyChanged(nameof(RuntimeEventsSectionText));
+        OnPropertyChanged(nameof(AuditEventsSectionText));
+        OnPropertyChanged(nameof(TableRefsSectionText));
+        OnPropertyChanged(nameof(ShareText));
+        OnPropertyChanged(nameof(ShareNameWatermarkText));
+        OnPropertyChanged(nameof(VersionsText));
     }
 
     partial void OnConnectionStatusChanged(ConnectionStatus value)
