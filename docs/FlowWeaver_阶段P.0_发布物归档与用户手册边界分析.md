@@ -22,6 +22,8 @@
 
 下一步如果直接做安装器或自动更新，范围会明显扩大。因此 P.0 先只固化“发布物归档”和“用户手册”的边界。
 
+P.0a 已补充发布归档关键边界：Desktop 当前为 framework-dependent 发布，`python312/` 需要 runtime audit 后才能作为干净发布运行时，Python/Avalonia/manifest/zip 需要统一发布版本，manifest、SHA-256 和许可证必须纳入发布物边界，clean-room smoke 必须覆盖仓库外空格/中文路径，用户手册必须明确关闭 Desktop 可能影响运行中 workflow。
+
 ## 2. 目标
 
 P.0 的目标是回答：
@@ -254,11 +256,13 @@ P.0 后建议按以下顺序继续：
 
 | 小步 | 方向 | 主要产出 | 暂不进入 |
 | --- | --- | --- | --- |
-| P.1 | 发布归档脚本方案 | 确认 `tools/create_portable_archive.py` 参数、输入输出和安全检查 | 不写代码或只写文档 |
-| P.2 | 最小归档脚本 | 从 `.tmp/FlowWeaverPortable/` 生成 zip，排除 runtime/cache | 安装器、签名、上传 |
-| P.3 | 归档解压 smoke | 解压 zip 后跑 backend-only 最小 smoke | 真实 UI 自动化 |
-| P.4 | 用户手册骨架 | 新增便携版用户手册章节骨架 | 完整截图教程 |
-| P.5 | 用户手册内容收口 | 补启动、token、日志、备份和故障排查 | 安装器文档 |
-| P.6 | 阶段 P 验收复核 | 归档边界、用户手册和不支持清单复核 | 自动更新 |
+| P.0a | 发布归档补充边界 | self-contained、runtime audit、版本统一、manifest/hash/license、clean-room 和手册警示 | 代码实现 |
+| P.1 | 发布归档脚本方案 | 确认 `tools/create_portable_archive.py` 参数、版本来源、输入输出和安全检查 | 不写 zip 代码 |
+| P.2 | runtime audit 与归档前检查 | 检查 `python312/` 清洁度、dev 包、cache、许可证和版本一致性 | 清理 runtime |
+| P.3 | 最小归档脚本 | 从 `.tmp/FlowWeaverPortable/` 生成 zip、manifest 和外部 `.sha256` | 安装器、签名、上传 |
+| P.4 | clean-room 解压 smoke | 仓库外、空格/中文路径 backend-only smoke | 默认真实 UI 自动化 |
+| P.5 | 用户手册骨架 | 新增便携版用户手册章节骨架和 workflow 中断警示 | 完整截图教程 |
+| P.6 | 用户手册内容收口 | 补启动、token、日志、备份、workflow 中断和故障排查 | 安装器文档 |
+| P.7 | 阶段 P 验收复核 | 归档、manifest、hash、license、clean-room 和手册复核 | 自动更新 |
 
-最稳下一步是 P.1：先做发布归档脚本方案，确认参数和安全检查后，再决定是否实现最小 zip 生成。
+最稳下一步是 P.1：先做发布归档脚本方案，确认参数、版本、runtime audit、manifest、SHA-256、许可证和安全检查后，再决定是否实现最小 zip 生成。
