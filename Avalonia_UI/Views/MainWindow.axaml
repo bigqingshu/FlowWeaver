@@ -10,7 +10,7 @@
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="FlowWeaver"
-        Width="1100"
+        Width="1400"
         Height="760"
         MinWidth="900"
         MinHeight="600"
