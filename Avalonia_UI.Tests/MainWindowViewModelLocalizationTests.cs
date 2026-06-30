@@ -169,6 +169,81 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task ConnectionAndDiagnosticsMessagesUseCurrentLanguage()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Failure(
+                "UNAUTHORIZED",
+                "Invalid local API token"),
+        };
+        var viewModel = CreateViewModel(uiSettingsStore, apiClient);
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("EngineHost 健康检查通过。", viewModel.StatusMessage);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("工作流刷新失败。", viewModel.WorkflowMessage);
+        Assert.AreEqual(
+            "EngineHost 令牌错误、已轮换或已失效。请重新输入当前本地 API 令牌。",
+            viewModel.WorkflowErrorMessage);
+    }
+
+    [TestMethod]
+    public async Task TemplateWorkflowDisplayTextUsesCurrentLanguage()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    Workflow(
+                        "wf-new",
+                        "生成表格工作流",
+                        1,
+                        """{"nodes":[]}"""),
+                }),
+            CreateWorkflowResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                    Workflow(
+                        "wf-new",
+                        "生成表格工作流",
+                        1,
+                        """{"nodes":[]}""")),
+        };
+        var viewModel = CreateViewModel(uiSettingsStore, apiClient);
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        Assert.AreEqual("生成表格工作流", viewModel.NewWorkflowName);
+
+        await viewModel.CreateTemplateWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("生成表格工作流", apiClient.CreatedWorkflowName);
+        Assert.IsNotNull(apiClient.CreatedWorkflowDefinition);
+        var nodes = apiClient.CreatedWorkflowDefinition.Value.GetProperty("nodes");
+        Assert.AreEqual("生成数据行", nodes[0].GetProperty("display_name").GetString());
+        Assert.AreEqual("保留金额大于 1 的行", nodes[1].GetProperty("display_name").GetString());
+    }
+
+    [TestMethod]
+    public async Task DefaultWorkflowNameDoesNotOverwriteUserEditedName()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var viewModel = CreateViewModel(uiSettingsStore);
+        viewModel.NewWorkflowName = "Custom workflow";
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        Assert.AreEqual("Custom workflow", viewModel.NewWorkflowName);
+    }
+
+    [TestMethod]
     public async Task ChangeLanguageCommandFallsBackForUnsupportedLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore();
@@ -362,6 +437,11 @@ public sealed class MainWindowViewModelLocalizationTests
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; init; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
 
+        public ApiResponseEnvelope<WorkflowDefinitionDto> CreateWorkflowResponse { get; init; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No create response configured.");
+
         public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; init; } =
             ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
                 "NOT_CONFIGURED",
@@ -378,6 +458,10 @@ public sealed class MainWindowViewModelLocalizationTests
 
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; init; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
+
+        public string? CreatedWorkflowName { get; private set; }
+
+        public JsonElement? CreatedWorkflowDefinition { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -408,7 +492,9 @@ public sealed class MainWindowViewModelLocalizationTests
             JsonElement definition,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            CreatedWorkflowName = name;
+            CreatedWorkflowDefinition = definition.Clone();
+            return Task.FromResult(CreateWorkflowResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowValidationResultDto>> ValidateWorkflowDraftAsync(

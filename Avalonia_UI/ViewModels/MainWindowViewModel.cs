@@ -475,7 +475,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Connection settings were not loaded: {ex.Message}";
+            ErrorMessage = F("format.connection_settings_load_failed", ex.Message);
         }
     }
 
@@ -493,7 +493,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"UI settings were not loaded: {ex.Message}";
+            ErrorMessage = F("format.ui_settings_load_failed", ex.Message);
         }
     }
 
@@ -602,15 +602,15 @@ public partial class MainWindowViewModel : ViewModelBase
         if (result.IsHealthy)
         {
             ConnectionStatus = ConnectionStatus.Connected;
-            StatusMessage = result.Message;
+            StatusMessage = LocalizeHealthStatusMessage(result);
             ErrorMessage = null;
             await SaveConnectionSettingsAsync(settings);
             return;
         }
 
         ConnectionStatus = ConnectionStatus.Error;
-        StatusMessage = result.Message;
-        ErrorMessage = result.ErrorMessage;
+        StatusMessage = LocalizeHealthStatusMessage(result);
+        ErrorMessage = LocalizeHealthErrorMessage(result.ErrorMessage);
     }
 
     [RelayCommand]
@@ -670,7 +670,9 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowMessage = F("format.creating_workflow", name);
         WorkflowErrorMessage = null;
 
-        using var definition = JsonDocument.Parse(TemplateWorkflowDefinitions.GeneratedTable);
+        using var definition = TemplateWorkflowDefinitions.CreateGeneratedTable(
+            T("workflow.template.generate_rows_display_name"),
+            T("workflow.template.keep_amount_gt_one_display_name"));
         var response = await _apiClient.CreateWorkflowAsync(
             BuildSettings(),
             name,
@@ -1280,7 +1282,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     IsRuntimeEventStreamConnected = false;
                     RuntimeEventStreamMessage = T("events.stream_error_reconnecting");
                     RuntimeEventStreamErrorMessage =
-                        EngineHostConnectionDiagnostics.DescribeRuntimeEventStreamException(ex);
+                        F(
+                            "format.events.stream_connection_failed",
+                            EngineHostConnectionDiagnostics.RedactToken(ex.Message));
                     await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
                 }
 
@@ -1440,13 +1444,57 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Connection settings were not saved: {ex.Message}";
+            ErrorMessage = F("format.connection_settings_save_failed", ex.Message);
         }
     }
 
-    private static string DescribeError<TData>(ApiResponseEnvelope<TData> response)
+    private string DescribeError<TData>(ApiResponseEnvelope<TData> response)
     {
-        return EngineHostConnectionDiagnostics.DescribeError(response);
+        if (response.Error is null)
+        {
+            return T("diagnostics.response_missing_data");
+        }
+
+        return response.Error.ErrorCode switch
+        {
+            "TOKEN_REQUIRED" => T("diagnostics.token_required"),
+            "UNAUTHORIZED" => T("diagnostics.token_invalid"),
+            "INVALID_BASE_URL" => F(
+                "format.diagnostics.invalid_base_url",
+                response.Error.Message),
+            "REQUEST_TIMEOUT" => T("diagnostics.request_timeout"),
+            "REQUEST_FAILED" => F(
+                "format.diagnostics.request_failed",
+                response.Error.Message),
+            _ => $"{response.Error.ErrorCode}: {response.Error.Message}",
+        };
+    }
+
+    private string LocalizeHealthStatusMessage(EngineHostHealthCheckResult result)
+    {
+        if (result.IsHealthy)
+        {
+            return T("connection.health_check_passed");
+        }
+
+        return string.Equals(result.Message, "Connection failed.", StringComparison.Ordinal)
+            ? T("connection.failed")
+            : result.Message;
+    }
+
+    private string? LocalizeHealthErrorMessage(string? message)
+    {
+        return message switch
+        {
+            null => null,
+            "Connection timed out." => T("connection.timed_out"),
+            "EngineHost health response was not recognized." =>
+                T("connection.health_response_unrecognized"),
+            "EngineHost base URL is required." => T("connection.base_url_required"),
+            "EngineHost base URL must be an absolute URL." => T("connection.base_url_absolute"),
+            "EngineHost base URL must use HTTP or HTTPS." => T("connection.base_url_http_https"),
+            _ => message,
+        };
     }
 
     private static string? FormatValidationIssues(WorkflowValidationResultDto result)
@@ -1578,6 +1626,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             ["status.disconnected"] = T("status.disconnected"),
             ["status.event_stream_disconnected"] = T("status.event_stream_disconnected"),
+            ["workflow.default_name"] = T("workflow.default_name"),
             ["status.no_workflows_loaded"] = T("status.no_workflows_loaded"),
             ["status.select_workflow_definition"] = T("status.select_workflow_definition"),
             ["status.load_definition_to_edit"] = T("status.load_definition_to_edit"),
@@ -1605,6 +1654,11 @@ public partial class MainWindowViewModel : ViewModelBase
             "status.event_stream_disconnected"))
         {
             RuntimeEventStreamMessage = T("status.event_stream_disconnected");
+        }
+
+        if (ShouldRefreshDefault(NewWorkflowName, previousDefaults, "workflow.default_name"))
+        {
+            NewWorkflowName = T("workflow.default_name");
         }
 
         if (ShouldRefreshDefault(WorkflowMessage, previousDefaults, "status.no_workflows_loaded"))
@@ -1989,43 +2043,55 @@ public partial class MainWindowViewModel : ViewModelBase
 
 internal static class TemplateWorkflowDefinitions
 {
-    public const string GeneratedTable =
-        """
+    public static JsonDocument CreateGeneratedTable(
+        string generateRowsDisplayName,
+        string keepAmountGreaterThanOneDisplayName)
+    {
+        var definition = new
         {
-          "schema_version": "1.0",
-          "nodes": [
+            schema_version = "1.0",
+            nodes = new object[]
             {
-              "node_instance_id": "generate",
-              "node_type": "GenerateTestTableNode",
-              "node_version": "1.0",
-              "display_name": "Generate rows",
-              "config": {
-                "rows": 3,
-                "columns": ["row_id", "amount"],
-                "seed": 0
-              }
+                new
+                {
+                    node_instance_id = "generate",
+                    node_type = "GenerateTestTableNode",
+                    node_version = "1.0",
+                    display_name = generateRowsDisplayName,
+                    config = new
+                    {
+                        rows = 3,
+                        columns = new[] { "row_id", "amount" },
+                        seed = 0,
+                    },
+                },
+                new
+                {
+                    node_instance_id = "filter",
+                    node_type = "FilterRowsNode",
+                    node_version = "1.0",
+                    display_name = keepAmountGreaterThanOneDisplayName,
+                    config = new
+                    {
+                        field = "amount",
+                        @operator = "GT",
+                        value = 1.0,
+                    },
+                },
             },
+            connections = new[]
             {
-              "node_instance_id": "filter",
-              "node_type": "FilterRowsNode",
-              "node_version": "1.0",
-              "display_name": "Keep amount greater than 1",
-              "config": {
-                "field": "amount",
-                "operator": "GT",
-                "value": 1.0
-              }
-            }
-          ],
-          "connections": [
-            {
-              "connection_id": "generate_to_filter",
-              "source_node_id": "generate",
-              "source_port": "out",
-              "target_node_id": "filter",
-              "target_port": "in"
-            }
-          ]
-        }
-        """;
+                new
+                {
+                    connection_id = "generate_to_filter",
+                    source_node_id = "generate",
+                    source_port = "out",
+                    target_node_id = "filter",
+                    target_port = "in",
+                },
+            },
+        };
+
+        return JsonSerializer.SerializeToDocument(definition, FlowWeaverJson.Options);
+    }
 }
