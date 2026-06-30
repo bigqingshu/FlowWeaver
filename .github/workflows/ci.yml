@@ -36,7 +36,7 @@ jobs:
 
           $pthPath = Join-Path "python312" "python312._pth"
           $pthContent = Get-Content -Path $pthPath -Raw
-          $pthContent = $pthContent -replace "(?m)^#import site$", "import site"
+          $pthContent = $pthContent.Replace("#import site", "import site")
           Set-Content -Path $pthPath -Value $pthContent -Encoding ascii
 
           $getPipPath = Join-Path $env:RUNNER_TEMP "get-pip.py"
