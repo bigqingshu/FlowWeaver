@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.RunListView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,*" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding RunsSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="#14171A"/>
+                <ProgressBar Grid.Column="1"
+                             Width="88"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsRunBusy}"/>
+                <Button Grid.Column="2"
+                        Content="{Binding RefreshText}"
+                        Command="{Binding RefreshRunsCommand}"
+                        MinWidth="84"/>
+                <Button Grid.Column="3"
+                        Content="{Binding CancelText}"
+                        Command="{Binding CancelSelectedRunCommand}"
+                        MinWidth="78"/>
+            </Grid>
+
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding Runs}"
+                     SelectedItem="{Binding SelectedRun}"
+                     BorderBrush="#E1E5EA"
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:WorkflowRunListItemViewModel"
+                                  x:DataType="vm:WorkflowRunListItemViewModel">
+                        <Grid ColumnDefinitions="*,Auto"
+                              RowDefinitions="Auto,Auto,Auto"
+                              ColumnSpacing="12"
+                              Margin="8">
+                            <TextBlock Text="{Binding WorkflowRunId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="#1F2933"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#4B5563"/>
+                            <TextBlock Grid.Row="1" Text="{Binding WorkflowText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StartedAtText}" FontSize="12" Foreground="#697586"/>
+                            <TextBlock Grid.Row="2" Text="{Binding CompletionReasonText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#697586"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FinishedAtText}" FontSize="12" Foreground="#697586"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+    </Border>
+</UserControl>

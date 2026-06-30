@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.RunDetailPanelView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+            <TextBlock Text="{Binding RunsSectionText}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="#14171A"/>
+            <TextBlock Grid.Row="1" Text="{Binding RunMessage}" Foreground="#344054" TextWrapping="Wrap"/>
+            <ScrollViewer Grid.Row="2" IsVisible="{Binding HasRunError}" MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Border Background="#FEF2F2" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <TextBlock Text="{Binding RunErrorMessage}"
+                               TextWrapping="Wrap"
+                               Foreground="#B42318"
+                               FontFamily="Consolas"
+                               FontSize="12"/>
+                </Border>
+            </ScrollViewer>
+
+            <TextBlock Grid.Row="3" Text="{Binding NodeRunsSectionText}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="#14171A"/>
+            <TextBlock Grid.Row="4" Text="{Binding NodeRunMessage}" Foreground="#344054" TextWrapping="Wrap"/>
+            <ScrollViewer Grid.Row="5" IsVisible="{Binding HasNodeRunError}" MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Border Background="#FEF2F2" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="6" Padding="12">
+                    <TextBlock Text="{Binding NodeRunErrorMessage}"
+                               TextWrapping="Wrap"
+                               Foreground="#B42318"
+                               FontFamily="Consolas"
+                               FontSize="12"/>
+                </Border>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

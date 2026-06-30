@@ -41,6 +41,7 @@
                          Watermark="http://127.0.0.1:8000"/>
                 <Button Grid.Row="0"
                         Grid.Column="2"
+                        Classes="Primary"
                         Content="{Binding CheckConnectionText}"
                         Command="{Binding CheckConnectionCommand}"
                         MinWidth="92"/>
@@ -101,6 +102,7 @@
                 </StackPanel>
                 <Button Grid.Row="3"
                         Grid.Column="2"
+                        Classes="Primary"
                         Content="{Binding StreamText}"
                         Command="{Binding StartRuntimeEventStreamCommand}"
                         MinWidth="92"/>
