@@ -129,6 +129,20 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public void CheckConnectionIsDisabledWhenBaseUrlIsBlank()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient(), new FakeConnectionSettingsStore());
+
+        viewModel.BaseUrl = "   ";
+
+        Assert.IsFalse(viewModel.CheckConnectionCommand.CanExecute(null));
+
+        viewModel.BaseUrl = "http://127.0.0.1:8000";
+
+        Assert.IsTrue(viewModel.CheckConnectionCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task BusinessApiDoesNotReadOrSaveConnectionSettings()
     {
         var apiClient = new FakeApiClient
@@ -139,6 +153,7 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         var store = new FakeConnectionSettingsStore();
         var viewModel = CreateViewModel(apiClient, store);
         viewModel.Token = "secret";
+        viewModel.ConnectionStatus = ConnectionStatus.Connected;
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
 
@@ -159,6 +174,7 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         var store = new FakeConnectionSettingsStore();
         var viewModel = CreateViewModel(apiClient, store);
         viewModel.Token = "stale-token";
+        viewModel.ConnectionStatus = ConnectionStatus.Connected;
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
 

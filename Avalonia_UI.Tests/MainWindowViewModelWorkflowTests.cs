@@ -86,6 +86,55 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public void HttpBusinessCommandsDoNotRequireRuntimeEventStreamConnection()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        Assert.IsFalse(viewModel.IsRuntimeEventStreamConnected);
+        Assert.IsTrue(viewModel.CanUseEngineActions);
+        Assert.IsTrue(viewModel.RefreshWorkflowsCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.CreateTemplateWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.RefreshRunsCommand.CanExecute(null));
+
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-1", "Daily Load", 1));
+
+        Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.LoadSelectedWorkflowDefinitionCommand.CanExecute(null));
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(
+            Run("run-1", "wf-1", "RUNNING"));
+
+        Assert.IsTrue(viewModel.RefreshNodeRunsCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.CancelSelectedRunCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task BusinessCommandsAreDisabledAfterAuthenticationFailureUntilTokenChanges()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Failure(
+                "UNAUTHORIZED",
+                "Invalid local API token"),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.IsAuthenticationFailed);
+        Assert.IsFalse(viewModel.CanUseEngineActions);
+        Assert.IsFalse(viewModel.RefreshWorkflowsCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.CreateTemplateWorkflowCommand.CanExecute(null));
+
+        viewModel.Token = "new-secret";
+
+        Assert.IsFalse(viewModel.IsAuthenticationFailed);
+        Assert.IsTrue(viewModel.CanUseEngineActions);
+        Assert.IsTrue(viewModel.RefreshWorkflowsCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task CreateTemplateWorkflowCreatesRefreshesAndSelectsCreatedWorkflow()
     {
         var createdWorkflow = Workflow(

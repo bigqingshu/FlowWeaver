@@ -44,6 +44,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private ConnectionStatus connectionStatus = ConnectionStatus.Disconnected;
 
     [ObservableProperty]
+    private bool isAuthenticationFailed;
+
+    [ObservableProperty]
     private string statusMessage = "Disconnected.";
 
     [ObservableProperty]
@@ -236,7 +239,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool CanUseEngineActions =>
         ConnectionStatus == ConnectionStatus.Connected
         && !string.IsNullOrWhiteSpace(BaseUrl)
-        && !string.IsNullOrWhiteSpace(Token);
+        && !string.IsNullOrWhiteSpace(Token)
+        && !IsAuthenticationFailed;
 
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
@@ -546,22 +550,25 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanCheckConnection()
     {
-        return ConnectionStatus != ConnectionStatus.Connecting;
+        return !string.IsNullOrWhiteSpace(BaseUrl)
+            && ConnectionStatus != ConnectionStatus.Connecting;
     }
 
     private bool CanRefreshWorkflows()
     {
-        return !IsWorkflowBusy;
+        return CanUseEngineActions && !IsWorkflowBusy;
     }
 
     private bool CanStartSelectedWorkflow()
     {
-        return SelectedWorkflow is not null && !IsWorkflowBusy;
+        return CanUseEngineActions && SelectedWorkflow is not null && !IsWorkflowBusy;
     }
 
     private bool CanCreateTemplateWorkflow()
     {
-        return !IsWorkflowBusy && !string.IsNullOrWhiteSpace(NewWorkflowName);
+        return CanUseEngineActions
+            && !IsWorkflowBusy
+            && !string.IsNullOrWhiteSpace(NewWorkflowName);
     }
 
     private bool CanLoadSelectedWorkflowDefinition()
@@ -588,7 +595,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanRefreshRuns()
     {
-        return !IsRunBusy;
+        return CanUseEngineActions && !IsRunBusy;
     }
 
     private bool CanCancelSelectedRunCore()
@@ -641,12 +648,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanRefreshNodeRuns()
     {
-        return SelectedRun is not null && !IsNodeRunBusy;
+        return CanUseEngineActions && SelectedRun is not null && !IsNodeRunBusy;
     }
 
     private bool CanStartRuntimeEventStream()
     {
-        return !IsRuntimeEventStreamRunning;
+        return !IsRuntimeEventStreamRunning && !string.IsNullOrWhiteSpace(BaseUrl);
     }
 
     private bool CanStopRuntimeEventStream()
@@ -656,12 +663,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanRefreshRuntimeEventLog()
     {
-        return !IsLoadingRuntimeEventLog;
+        return CanUseEngineActions && !IsLoadingRuntimeEventLog;
     }
 
     private bool CanRefreshAuditEvents()
     {
-        return !IsLoadingAuditEventLog;
+        return CanUseEngineActions && !IsLoadingAuditEventLog;
     }
 
     private bool CanRefreshTableRefs()
@@ -1660,6 +1667,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return T("diagnostics.response_missing_data");
         }
 
+        if (response.Error.ErrorCode is "TOKEN_REQUIRED" or "UNAUTHORIZED")
+        {
+            IsAuthenticationFailed = true;
+        }
+
         return response.Error.ErrorCode switch
         {
             "TOKEN_REQUIRED" => T("diagnostics.token_required"),
@@ -2051,10 +2063,24 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnTokenChanged(string value)
     {
+        IsAuthenticationFailed = false;
         NotifyEngineActionStateChanged();
     }
 
     partial void OnBaseUrlChanged(string value)
+    {
+        IsAuthenticationFailed = false;
+        NotifyEngineActionStateChanged();
+        CheckConnectionCommand.NotifyCanExecuteChanged();
+        StartRuntimeEventStreamCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsRuntimeEventStreamConnectedChanged(bool value)
+    {
+        NotifyEngineActionStateChanged();
+    }
+
+    partial void OnIsAuthenticationFailedChanged(bool value)
     {
         NotifyEngineActionStateChanged();
     }
@@ -2341,10 +2367,17 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanUseEngineActions));
         OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
         OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
+        RefreshWorkflowsCommand.NotifyCanExecuteChanged();
+        CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        RefreshRunsCommand.NotifyCanExecuteChanged();
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
+        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
+        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();

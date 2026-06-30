@@ -318,7 +318,12 @@ public sealed class MainWindowViewModelLocalizationTests
             runtimeEventReconnectDelay: _ => Task.CompletedTask,
             connectionSettingsStore: new FakeConnectionSettingsStore(),
             uiSettingsStore: uiSettingsStore,
-            localizationService: new JsonLocalizationService(CreateLocalizationDirectory()));
+            localizationService: new JsonLocalizationService(CreateLocalizationDirectory()))
+        {
+            BaseUrl = "http://127.0.0.1:8000",
+            Token = "secret",
+            ConnectionStatus = ConnectionStatus.Connected,
+        };
     }
 
     private static string CreateLocalizationDirectory()

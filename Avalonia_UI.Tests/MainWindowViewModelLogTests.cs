@@ -104,6 +104,7 @@ public sealed class MainWindowViewModelLogTests
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
+            ConnectionStatus = ConnectionStatus.Connected,
         };
     }
 
