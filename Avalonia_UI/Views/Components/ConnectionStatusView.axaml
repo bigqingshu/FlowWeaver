@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.ConnectionStatusView"
+             x:DataType="vm:MainWindowViewModel">
+    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="12" Foreground="#166534" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ErrorMessage}" FontSize="12" Foreground="#B42318" VerticalAlignment="Center" IsVisible="{Binding HasError}" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding RuntimeEventStreamMessage}" FontSize="12" Foreground="#344054" VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding RuntimeEventStreamErrorMessage}" FontSize="12" Foreground="#B42318" VerticalAlignment="Center" IsVisible="{Binding HasRuntimeEventStreamError}" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

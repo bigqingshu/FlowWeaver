@@ -1,0 +1,379 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Pages.WorkflowPage"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid ColumnDefinitions="360,*" ColumnSpacing="16" Margin="12">
+        <Border Classes="Card"
+                Padding="18">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                    <TextBlock Text="{Binding WorkflowsSectionText}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="#14171A"/>
+                    <ProgressBar Grid.Column="1"
+                                 Width="88"
+                                 Height="8"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsWorkflowBusy}"/>
+                    <Button Grid.Column="2"
+                            Content="{Binding RefreshText}"
+                            Command="{Binding RefreshWorkflowsCommand}"
+                            MinWidth="84"/>
+                    <Button Grid.Column="3"
+                            Content="{Binding RunText}"
+                            Command="{Binding StartSelectedWorkflowCommand}"
+                            MinWidth="72"/>
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <TextBox Text="{Binding NewWorkflowName}"
+                             Watermark="{Binding WorkflowNameWatermarkText}"/>
+                    <Button Grid.Column="1"
+                            Content="{Binding CreateText}"
+                            Command="{Binding CreateTemplateWorkflowCommand}"
+                            MinWidth="84"/>
+                </Grid>
+
+                <ListBox Grid.Row="2"
+                         ItemsSource="{Binding Workflows}"
+                         SelectedItem="{Binding SelectedWorkflow}"
+                         BorderBrush="#E1E5EA"
+                         BorderThickness="1">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:WorkflowListItemViewModel"
+                                      x:DataType="vm:WorkflowListItemViewModel">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="12"
+                                  Margin="8">
+                                <TextBlock Text="{Binding Name}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="#1F2933"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding VersionText}"
+                                           VerticalAlignment="Center"
+                                           Foreground="#4B5563"/>
+                                <TextBlock Grid.Row="1"
+                                           Text="{Binding WorkflowId}"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="#697586"/>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="1"
+                                           Text="{Binding Status}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           Foreground="#4B5563"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding WorkflowMessage}"
+                                   Foreground="#344054"/>
+                        <TextBlock Text="{Binding WorkflowErrorMessage}"
+                                   TextWrapping="Wrap"
+                                   Foreground="#B42318"
+                                   IsVisible="{Binding HasWorkflowError}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding LastStartedRunId}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="#166534"
+                               IsVisible="{Binding HasLastStartedRun}"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" ColumnDefinitions="0.95*,1.35*" ColumnSpacing="16">
+            <Border Classes="Card"
+                    Padding="14">
+                <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <TextBlock Text="{Binding WorkflowDefinitionSectionText}"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="#14171A"/>
+                        <ProgressBar Grid.Column="1"
+                                     Width="88"
+                                     Height="8"
+                                     VerticalAlignment="Center"
+                                     IsIndeterminate="True"
+                                     IsVisible="{Binding IsLoadingWorkflowDefinition}"/>
+                        <Button Grid.Column="2"
+                                Content="{Binding DetailsText}"
+                                Command="{Binding LoadSelectedWorkflowDefinitionCommand}"
+                                MinWidth="84"/>
+                    </Grid>
+
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="Auto,*,Auto,*"
+                          RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="6"
+                          ColumnSpacing="10"
+                          IsVisible="{Binding HasWorkflowDefinition}">
+                        <TextBlock Text="{Binding NameLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding WorkflowDefinitionDetail.Name}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="#1F2933"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding VersionLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding WorkflowDefinitionDetail.VersionText}"
+                                   Foreground="#1F2933"/>
+
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding RevisionLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   Text="{Binding WorkflowDefinitionDetail.RevisionId}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="#1F2933"/>
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Text="{Binding StatusLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="3"
+                                   Text="{Binding WorkflowDefinitionDetail.Status}"
+                                   Foreground="#1F2933"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding HashLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="1"
+                                   Text="{Binding WorkflowDefinitionDetail.DefinitionHash}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="#1F2933"/>
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="2"
+                                   Text="{Binding UpdatedLabelText}"
+                                   Foreground="#697586"/>
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="3"
+                                   Text="{Binding WorkflowDefinitionDetail.UpdatedAtText}"
+                                   Foreground="#1F2933"/>
+                    </Grid>
+
+                    <ListBox Grid.Row="2"
+                             ItemsSource="{Binding WorkflowDefinitionDetail.Revisions}"
+                             BorderBrush="#E1E5EA"
+                             BorderThickness="1">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowRevisionListItemViewModel"
+                                          x:DataType="vm:WorkflowRevisionListItemViewModel">
+                                <Grid ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto,Auto"
+                                      ColumnSpacing="12"
+                                      Margin="8">
+                                    <TextBlock Text="{Binding RevisionId}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="#1F2933"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding VersionText}"
+                                               FontWeight="SemiBold"
+                                               Foreground="#4B5563"/>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding DefinitionHash}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="#697586"/>
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
+                                               Text="{Binding CreatedAtText}"
+                                               FontSize="12"
+                                               Foreground="#697586"/>
+                                    <TextBlock Grid.Row="2"
+                                               Text="{Binding CreatedByText}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="#697586"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="3" Spacing="4">
+                        <TextBlock Text="{Binding WorkflowDefinitionMessage}"
+                                   Foreground="#344054"/>
+                        <TextBlock Text="{Binding WorkflowDefinitionErrorMessage}"
+                                   TextWrapping="Wrap"
+                                   Foreground="#B42318"
+                                   IsVisible="{Binding HasWorkflowDefinitionError}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="1"
+                  RowDefinitions="*,*,1.25*"
+                  RowSpacing="10">
+                <Border Background="White"
+                        BorderBrush="#D9DEE5"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding NodesSectionText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="#14171A"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding WorkflowDefinitionDetail.NodeCountText}"
+                                       VerticalAlignment="Center"
+                                       Foreground="#4B5563"/>
+                        </Grid>
+
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding WorkflowDefinitionDetail.Nodes}"
+                                 BorderBrush="#E1E5EA"
+                                 BorderThickness="1">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkflowDefinitionNodeListItemViewModel"
+                                              x:DataType="vm:WorkflowDefinitionNodeListItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          RowDefinitions="Auto,Auto,Auto"
+                                          ColumnSpacing="12"
+                                          Margin="8">
+                                        <TextBlock Text="{Binding NodeInstanceId}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#1F2933"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding EnabledText}"
+                                                   Foreground="#4B5563"/>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding TypeText}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#697586"/>
+                                        <TextBlock Grid.Row="1"
+                                                   Grid.Column="1"
+                                                   Text="{Binding DisplayNameText}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#697586"/>
+                                        <TextBlock Grid.Row="2"
+                                                   Grid.ColumnSpan="2"
+                                                   Text="{Binding ConfigJson}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#697586"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Background="White"
+                        BorderBrush="#D9DEE5"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding ConnectionsSectionText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="#14171A"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding WorkflowDefinitionDetail.ConnectionCountText}"
+                                       VerticalAlignment="Center"
+                                       Foreground="#4B5563"/>
+                        </Grid>
+
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding WorkflowDefinitionDetail.Connections}"
+                                 BorderBrush="#E1E5EA"
+                                 BorderThickness="1">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkflowDefinitionConnectionListItemViewModel"
+                                              x:DataType="vm:WorkflowDefinitionConnectionListItemViewModel">
+                                    <Grid RowDefinitions="Auto,Auto"
+                                          Margin="8"
+                                          RowSpacing="4">
+                                        <TextBlock Text="{Binding EdgeText}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#1F2933"/>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding ConnectionId}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="#697586"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2"
+                        Background="White"
+                        BorderBrush="#D9DEE5"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14">
+                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding DraftJsonSectionText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="#14171A"/>
+                            <ProgressBar Grid.Column="1"
+                                         Width="88"
+                                         Height="8"
+                                         VerticalAlignment="Center"
+                                         IsIndeterminate="True"
+                                         IsVisible="{Binding IsWorkflowDefinitionDraftBusy}"/>
+                            <Button Grid.Column="2"
+                                    Content="{Binding ValidateText}"
+                                    Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
+                                    MinWidth="92"/>
+                            <Button Grid.Column="3"
+                                    Content="{Binding SaveText}"
+                                    Command="{Binding SaveWorkflowDefinitionDraftCommand}"
+                                    MinWidth="78"/>
+                        </Grid>
+
+                        <TextBox Grid.Row="1"
+                                 Text="{Binding WorkflowDefinitionDraftJson}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 FontFamily="Consolas"
+                                 FontSize="12"/>
+
+                        <StackPanel Grid.Row="2" Spacing="4">
+                            <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
+                                       Foreground="#344054"/>
+                            <TextBlock Text="{Binding WorkflowDefinitionValidationErrorMessage}"
+                                       TextWrapping="Wrap"
+                                       Foreground="#B42318"
+                                       IsVisible="{Binding HasWorkflowDefinitionValidationError}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
