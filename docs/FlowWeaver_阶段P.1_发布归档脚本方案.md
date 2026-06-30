@@ -261,7 +261,7 @@ FlowWeaverPortable/release-manifest.json
 
 - manifest 中 `entries` 只记录 zip 内文件，不记录目录
 - `entries` 路径统一使用 `/`
-- `release-manifest.json` 自身也应进入 `entries`
+- `release-manifest.json` 不进入自身 `entries`，避免 manifest 自引用 hash 无法自洽；manifest 完整性由 zip 外部 `.sha256` 覆盖
 - zip 外部 `.sha256` 不进入 manifest
 - 不记录 token 内容、Authorization header、完整 WebSocket URL
 

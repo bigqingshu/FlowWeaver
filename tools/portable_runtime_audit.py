@@ -127,27 +127,6 @@ def audit_portable_runtime(
     pth_path = python_dir / "python312._pth"
     license_path = python_dir / "LICENSE.txt"
 
-    _collect_path_findings(
-        portable_root=portable_root,
-        rejected_paths=rejected_paths,
-        excluded_paths=excluded_paths,
-    )
-    for relative_path in sorted(rejected_paths):
-        errors.append(
-            RuntimeAuditIssue(
-                code="rejected_path_present",
-                message="portable runtime contains a path that must not be archived",
-                path=relative_path,
-            )
-        )
-    if excluded_paths:
-        warnings.append(
-            RuntimeAuditIssue(
-                code="excluded_cache_paths_present",
-                message="portable runtime contains cache paths that must be excluded",
-            )
-        )
-
     if not python_exe.is_file():
         errors.append(
             RuntimeAuditIssue(
@@ -193,6 +172,27 @@ def audit_portable_runtime(
                 code="python_license_missing",
                 message="Python LICENSE.txt is required for distributable runtime",
                 path=_relative_posix(license_path, portable_root),
+            )
+        )
+
+    _collect_path_findings(
+        portable_root=portable_root,
+        rejected_paths=rejected_paths,
+        excluded_paths=excluded_paths,
+    )
+    for relative_path in sorted(rejected_paths):
+        errors.append(
+            RuntimeAuditIssue(
+                code="rejected_path_present",
+                message="portable runtime contains a path that must not be archived",
+                path=relative_path,
+            )
+        )
+    if excluded_paths:
+        warnings.append(
+            RuntimeAuditIssue(
+                code="excluded_cache_paths_present",
+                message="portable runtime contains cache paths that must be excluded",
             )
         )
 

@@ -134,6 +134,38 @@ def test_audit_records_cache_paths_as_excluded(tmp_path: Path) -> None:
     assert _issue_codes(result.warnings) == {"excluded_cache_paths_present"}
 
 
+def test_audit_records_cache_generated_by_version_probe(tmp_path: Path) -> None:
+    portable_root = _create_portable_root(tmp_path)
+    package_dir = (
+        portable_root / "EngineHost" / "python312" / "Lib" / "site-packages"
+    )
+
+    def command_runner(command: tuple[str, ...]) -> str:
+        if command[1:] == ("--version",):
+            return "Python 3.12.10"
+        if command[1:] == ("-m", "pip", "--version"):
+            cache_dir = package_dir / "__pycache__"
+            cache_dir.mkdir()
+            (cache_dir / "generated.cpython-312.pyc").write_text(
+                "",
+                encoding="utf-8",
+            )
+            return "pip 26.1.2 from fake (python 3.12)"
+        raise AssertionError(f"unexpected command: {command}")
+
+    result = audit_module().audit_portable_runtime(
+        portable_root,
+        command_runner=command_runner,
+    )
+
+    assert result.status == "warning"
+    assert (
+        "EngineHost/python312/Lib/site-packages/__pycache__/"
+        "generated.cpython-312.pyc"
+        in result.excluded_paths
+    )
+
+
 def test_audit_reports_dev_and_legacy_packages_as_warnings(
     tmp_path: Path,
 ) -> None:
