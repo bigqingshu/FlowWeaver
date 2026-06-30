@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowListView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="18">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding WorkflowsSectionText}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="#14171A"/>
+                <ProgressBar Grid.Column="1"
+                             Width="88"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsWorkflowBusy}"/>
+                <Button Grid.Column="2"
+                        Content="{Binding RefreshText}"
+                        Command="{Binding RefreshWorkflowsCommand}"
+                        MinWidth="84"/>
+                <Button Grid.Column="3"
+                        Content="{Binding RunText}"
+                        Command="{Binding StartSelectedWorkflowCommand}"
+                        MinWidth="72"/>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBox Text="{Binding NewWorkflowName}"
+                         Watermark="{Binding WorkflowNameWatermarkText}"/>
+                <Button Grid.Column="1"
+                        Content="{Binding CreateText}"
+                        Command="{Binding CreateTemplateWorkflowCommand}"
+                        MinWidth="84"/>
+            </Grid>
+
+            <ListBox Grid.Row="2"
+                     ItemsSource="{Binding Workflows}"
+                     SelectedItem="{Binding SelectedWorkflow}"
+                     BorderBrush="#E1E5EA"
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:WorkflowListItemViewModel"
+                                  x:DataType="vm:WorkflowListItemViewModel">
+                        <Grid ColumnDefinitions="*,Auto"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="12"
+                              Margin="8">
+                            <TextBlock Text="{Binding Name}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="#1F2933"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding VersionText}"
+                                       VerticalAlignment="Center"
+                                       Foreground="#4B5563"/>
+                            <TextBlock Grid.Row="1"
+                                       Text="{Binding WorkflowId}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="#697586"/>
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Text="{Binding Status}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Foreground="#4B5563"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding WorkflowMessage}"
+                               Foreground="#344054"/>
+                    <TextBlock Text="{Binding WorkflowErrorMessage}"
+                               TextWrapping="Wrap"
+                               Foreground="#B42318"
+                               IsVisible="{Binding HasWorkflowError}"/>
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding LastStartedRunId}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="#166534"
+                           IsVisible="{Binding HasLastStartedRun}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

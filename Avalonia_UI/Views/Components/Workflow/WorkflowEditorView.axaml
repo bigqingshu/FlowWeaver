@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowEditorView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding DraftJsonSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="#14171A"/>
+                <ProgressBar Grid.Column="1"
+                             Width="88"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsWorkflowDefinitionDraftBusy}"/>
+                <Button Grid.Column="2"
+                        Content="{Binding ValidateText}"
+                        Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
+                        MinWidth="92"/>
+                <Button Grid.Column="3"
+                        Content="{Binding SaveText}"
+                        Command="{Binding SaveWorkflowDefinitionDraftCommand}"
+                        MinWidth="78"/>
+            </Grid>
+
+            <TextBox Grid.Row="1"
+                     Text="{Binding WorkflowDefinitionDraftJson}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     FontFamily="Consolas"
+                     FontSize="12"/>
+
+            <StackPanel Grid.Row="2" Spacing="4">
+                <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
+                           Foreground="#344054"/>
+                <TextBlock Text="{Binding WorkflowDefinitionValidationErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="#B42318"
+                           IsVisible="{Binding HasWorkflowDefinitionValidationError}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
