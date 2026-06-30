@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Logs.AuditEventListView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+            <TextBlock Text="{Binding AuditEventsSectionText}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding AuditEvents}"
+                     BorderBrush="{DynamicResource ControlBorderBrush}"
+                     BorderThickness="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="vm:AuditEventListItemViewModel"
+                                  x:DataType="vm:AuditEventListItemViewModel">
+                        <Grid ColumnDefinitions="*,Auto"
+                              RowDefinitions="Auto,Auto,Auto"
+                              ColumnSpacing="12"
+                              Margin="8">
+                            <TextBlock Text="{Binding EventType}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Decision}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="1"
+                                       Text="{Binding AuditEventId}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2"
+                                       Text="{Binding WorkflowRunText}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Text="{Binding NodeRunText}"
+                                       FontSize="12"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Grid.Row="2" Spacing="4">
+                <TextBlock Text="{Binding AuditEventLogMessage}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding AuditEventLogErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextErrorBrush}"
+                           IsVisible="{Binding HasAuditEventLogError}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

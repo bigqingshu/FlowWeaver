@@ -13,7 +13,7 @@ __pycache__/
 .tmp/
 
 runtime/
-logs/
+/logs/
 temp/
 *.log
 *.db

@@ -111,6 +111,28 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsFalse(viewModel.HasSharedPublicationVersionError);
     }
 
+    [TestMethod]
+    public void DataRefreshCommandsRequireEngineActionsAndRequiredSelection()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        Assert.IsFalse(viewModel.RefreshTableRefsCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.RefreshSharedPublicationsCommand.CanExecute(null));
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        Assert.IsTrue(viewModel.RefreshTableRefsCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
+
+        viewModel.Token = string.Empty;
+
+        Assert.IsFalse(viewModel.RefreshTableRefsCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.RefreshSharedPublicationsCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
+    }
+
     private static MainWindowViewModel CreateViewModel(FakeApiClient apiClient)
     {
         return new MainWindowViewModel(
@@ -119,6 +141,7 @@ public sealed class MainWindowViewModelDataTests
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
+            ConnectionStatus = ConnectionStatus.Connected,
         };
     }
 

@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Logs.LogFilterBarView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto"
+              ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto,Auto"
+              RowSpacing="10"
+              ColumnSpacing="10">
+            <TextBlock Text="{Binding WorkflowRunFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+            <TextBox Grid.Column="1" Text="{Binding LogWorkflowRunIdFilter}" Watermark="{Binding RunIdWatermarkText}"/>
+            <TextBlock Grid.Column="2" Text="{Binding NodeRunFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+            <TextBox Grid.Column="3" Text="{Binding LogNodeRunIdFilter}" Watermark="{Binding NodeRunIdWatermarkText}"/>
+            <TextBlock Grid.Column="4" Text="{Binding EventTypeFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+            <TextBox Grid.Column="5" Text="{Binding LogEventTypeFilter}" Watermark="EVENT_TYPE"/>
+            <TextBlock Grid.Column="6" Text="{Binding AfterFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+            <TextBox Grid.Column="7" Text="{Binding RuntimeEventAfterSequenceNumberFilter}" Watermark="{Binding SequenceWatermarkText}"/>
+            <Button Grid.Column="8" Content="{Binding RuntimeText}" Command="{Binding RefreshRuntimeEventLogCommand}" MinWidth="92"/>
+            <Button Grid.Column="9" Content="{Binding AuditText}" Command="{Binding RefreshAuditEventsCommand}" MinWidth="84"/>
+
+            <TextBlock Grid.Row="1" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RuntimeEventLimitFilter}" Watermark="100"/>
+            <ProgressBar Grid.Row="1" Grid.Column="8" Grid.ColumnSpan="2" Height="8" VerticalAlignment="Center" IsIndeterminate="True" IsVisible="{Binding IsLogBusy}"/>
+        </Grid>
+    </Border>
+</UserControl>

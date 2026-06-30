@@ -31,6 +31,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private Task? _runtimeEventStreamTask;
     private int nodeRunsLoadVersion;
     private int tableRefsLoadVersion;
+    private int sharedPublicationsLoadVersion;
+    private int sharedPublicationVersionsLoadVersion;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -664,17 +666,20 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanRefreshTableRefs()
     {
-        return SelectedRun is not null && !IsLoadingTableRefs;
+        return CanUseEngineActions && SelectedRun is not null && !IsLoadingTableRefs;
     }
 
     private bool CanRefreshSharedPublications()
     {
-        return !IsLoadingSharedPublications;
+        return CanUseEngineActions && !IsLoadingSharedPublications;
     }
 
     private bool CanRefreshSharedPublicationVersions()
     {
-        return !IsLoadingSharedPublicationVersions;
+        return CanUseEngineActions
+            && !IsLoadingSharedPublicationVersions
+            && (NormalizeFilter(SharedPublicationVersionShareNameFilter) is not null
+                || SelectedSharedPublication is not null);
     }
 
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
@@ -1270,38 +1275,52 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var requestVersion = ++sharedPublicationsLoadVersion;
         IsLoadingSharedPublications = true;
         SharedPublicationMessage = T("data.loading_shared_publications");
         SharedPublicationErrorMessage = null;
 
-        var response = await _apiClient.ListSharedPublicationsAsync(
-            BuildSettings(),
-            NormalizeFilter(SharedPublicationShareNameFilter),
-            limit,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            var previousPublicationId = SelectedSharedPublication?.PublicationId;
-            SharedPublications.Clear();
-            foreach (var publication in response.Data)
+            var response = await _apiClient.ListSharedPublicationsAsync(
+                BuildSettings(),
+                NormalizeFilter(SharedPublicationShareNameFilter),
+                limit,
+                _shutdown.Token);
+
+            if (requestVersion != sharedPublicationsLoadVersion)
             {
-                SharedPublications.Add(
-                    new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
+                return;
             }
 
-            SelectedSharedPublication = SharedPublications.FirstOrDefault(
-                publication => publication.PublicationId == previousPublicationId)
-                ?? SharedPublications.FirstOrDefault();
-            SharedPublicationMessage =
-                F("format.loaded_shared_publications", SharedPublications.Count);
-            IsLoadingSharedPublications = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                var previousPublicationId = SelectedSharedPublication?.PublicationId;
+                SharedPublications.Clear();
+                foreach (var publication in response.Data)
+                {
+                    SharedPublications.Add(
+                        new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
+                }
 
-        SharedPublicationMessage = T("data.shared_publication_refresh_failed");
-        SharedPublicationErrorMessage = DescribeError(response);
-        IsLoadingSharedPublications = false;
+                SelectedSharedPublication = SharedPublications.FirstOrDefault(
+                    publication => publication.PublicationId == previousPublicationId)
+                    ?? SharedPublications.FirstOrDefault();
+                SharedPublicationMessage =
+                    F("format.loaded_shared_publications", SharedPublications.Count);
+                return;
+            }
+
+            SharedPublicationMessage = T("data.shared_publication_refresh_failed");
+            SharedPublicationErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == sharedPublicationsLoadVersion)
+            {
+                IsLoadingSharedPublications = false;
+            }
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshSharedPublicationVersions))]
@@ -1328,37 +1347,51 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var requestVersion = ++sharedPublicationVersionsLoadVersion;
         IsLoadingSharedPublicationVersions = true;
         SharedPublicationVersionMessage = F("format.loading_versions_for", shareName);
         SharedPublicationVersionErrorMessage = null;
 
-        var response = await _apiClient.ListSharedPublicationVersionsAsync(
-            BuildSettings(),
-            shareName,
-            limit,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            SharedPublicationVersions.Clear();
-            foreach (var publication in response.Data)
+            var response = await _apiClient.ListSharedPublicationVersionsAsync(
+                BuildSettings(),
+                shareName,
+                limit,
+                _shutdown.Token);
+
+            if (requestVersion != sharedPublicationVersionsLoadVersion)
             {
-                SharedPublicationVersions.Add(
-                    new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
+                return;
             }
 
-            SharedPublicationVersionMessage =
-                F(
-                    "format.loaded_shared_publication_versions",
-                    SharedPublicationVersions.Count,
-                    shareName);
-            IsLoadingSharedPublicationVersions = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                SharedPublicationVersions.Clear();
+                foreach (var publication in response.Data)
+                {
+                    SharedPublicationVersions.Add(
+                        new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
+                }
 
-        SharedPublicationVersionMessage = T("data.shared_publication_versions_refresh_failed");
-        SharedPublicationVersionErrorMessage = DescribeError(response);
-        IsLoadingSharedPublicationVersions = false;
+                SharedPublicationVersionMessage =
+                    F(
+                        "format.loaded_shared_publication_versions",
+                        SharedPublicationVersions.Count,
+                        shareName);
+                return;
+            }
+
+            SharedPublicationVersionMessage = T("data.shared_publication_versions_refresh_failed");
+            SharedPublicationVersionErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == sharedPublicationVersionsLoadVersion)
+            {
+                IsLoadingSharedPublicationVersions = false;
+            }
+        }
     }
 
     private async Task LoadNodeRunsForSelectedRunAsync()
@@ -2253,10 +2286,23 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedSharedPublicationChanged(SharedPublicationListItemViewModel? value)
     {
+        sharedPublicationVersionsLoadVersion++;
+        IsLoadingSharedPublicationVersions = false;
+        SharedPublicationVersions.Clear();
+        SharedPublicationVersionMessage = string.Empty;
+        SharedPublicationVersionErrorMessage = null;
+
         if (value is not null)
         {
             SharedPublicationVersionShareNameFilter = value.ShareName;
         }
+
+        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSharedPublicationVersionShareNameFilterChanged(string value)
+    {
+        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSharedPublicationErrorMessageChanged(string? value)
@@ -2299,6 +2345,9 @@ public partial class MainWindowViewModel : ViewModelBase
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        RefreshTableRefsCommand.NotifyCanExecuteChanged();
+        RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
+        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
 
     private static bool IsCancelableRunStatus(string? status)
