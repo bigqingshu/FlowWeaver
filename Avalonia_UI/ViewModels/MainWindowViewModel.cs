@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
@@ -267,6 +268,8 @@ public partial class MainWindowViewModel : ViewModelBase
                     IsSelected = language.Code == CurrentLanguageCode,
                 });
         }
+
+        RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
@@ -583,7 +586,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task CheckConnectionAsync()
     {
         ConnectionStatus = ConnectionStatus.Connecting;
-        StatusMessage = "Checking EngineHost...";
+        StatusMessage = T("status.checking_enginehost");
         ErrorMessage = null;
 
         var settings = new EngineHostConnectionSettings
@@ -621,7 +624,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RefreshWorkflowsAsync()
     {
         IsLoadingWorkflows = true;
-        WorkflowMessage = "Loading workflows...";
+        WorkflowMessage = T("workflow.loading");
         WorkflowErrorMessage = null;
 
         var response = await _apiClient.ListWorkflowsAsync(
@@ -640,12 +643,12 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedWorkflow = Workflows.FirstOrDefault(
                 workflow => workflow.WorkflowId == previousWorkflowId)
                 ?? Workflows.FirstOrDefault();
-            WorkflowMessage = $"Loaded {Workflows.Count} workflow(s).";
+            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
             IsLoadingWorkflows = false;
             return;
         }
 
-        WorkflowMessage = "Workflow refresh failed.";
+        WorkflowMessage = T("workflow.refresh_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsLoadingWorkflows = false;
     }
@@ -656,13 +659,13 @@ public partial class MainWindowViewModel : ViewModelBase
         var name = NewWorkflowName.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            WorkflowMessage = "Workflow creation rejected.";
-            WorkflowErrorMessage = "Workflow name is required.";
+            WorkflowMessage = T("workflow.creation_rejected");
+            WorkflowErrorMessage = T("workflow.name_required");
             return;
         }
 
         IsCreatingWorkflow = true;
-        WorkflowMessage = $"Creating {name}...";
+        WorkflowMessage = F("format.creating_workflow", name);
         WorkflowErrorMessage = null;
 
         using var definition = JsonDocument.Parse(TemplateWorkflowDefinitions.GeneratedTable);
@@ -674,13 +677,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (response.Ok && response.Data is not null)
         {
-            WorkflowMessage = $"Created workflow {response.Data.Name}.";
+            WorkflowMessage = F("format.created_workflow", response.Data.Name);
             IsCreatingWorkflow = false;
             await RefreshWorkflowsSelectingAsync(response.Data.WorkflowId);
             return;
         }
 
-        WorkflowMessage = "Workflow creation failed.";
+        WorkflowMessage = T("workflow.creation_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsCreatingWorkflow = false;
     }
@@ -695,7 +698,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var workflowId = SelectedWorkflow.WorkflowId;
         IsLoadingWorkflowDefinition = true;
-        WorkflowDefinitionMessage = $"Loading definition for {SelectedWorkflow.Name}...";
+        WorkflowDefinitionMessage = F(
+            "format.loading_definition_for",
+            SelectedWorkflow.Name);
         WorkflowDefinitionErrorMessage = null;
 
         var workflowResponse = await _apiClient.GetWorkflowAsync(
@@ -706,7 +711,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!workflowResponse.Ok || workflowResponse.Data is null)
         {
             WorkflowDefinitionDetail = null;
-            WorkflowDefinitionMessage = "Workflow definition load failed.";
+            WorkflowDefinitionMessage = T("definition.load_failed");
             WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
             IsLoadingWorkflowDefinition = false;
             return;
@@ -720,7 +725,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!revisionsResponse.Ok || revisionsResponse.Data is null)
         {
             WorkflowDefinitionDetail = null;
-            WorkflowDefinitionMessage = "Workflow revisions load failed.";
+            WorkflowDefinitionMessage = T("definition.revisions_load_failed");
             WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
             IsLoadingWorkflowDefinition = false;
             return;
@@ -730,10 +735,13 @@ public partial class MainWindowViewModel : ViewModelBase
             workflowResponse.Data,
             revisionsResponse.Data);
         WorkflowDefinitionDraftJson = WorkflowDefinitionDetail.RawDefinitionJson;
-        WorkflowDefinitionValidationMessage = "Draft JSON loaded. Validate before saving in a later stage.";
+        WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
         WorkflowDefinitionValidationErrorMessage = null;
         WorkflowDefinitionMessage =
-            $"Loaded {WorkflowDefinitionDetail.Name} {WorkflowDefinitionDetail.VersionText}.";
+            F(
+                "format.loaded_workflow_definition",
+                WorkflowDefinitionDetail.Name,
+                WorkflowDefinitionDetail.VersionText);
         IsLoadingWorkflowDefinition = false;
     }
 
@@ -742,8 +750,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson))
         {
-            WorkflowDefinitionValidationMessage = "Workflow draft validation rejected.";
-            WorkflowDefinitionValidationErrorMessage = "Definition draft JSON is required.";
+            WorkflowDefinitionValidationMessage = T("definition.validation_rejected");
+            WorkflowDefinitionValidationErrorMessage = T("definition.draft_required");
             return;
         }
 
@@ -755,13 +763,13 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (JsonException ex)
         {
-            WorkflowDefinitionValidationMessage = "Workflow draft JSON is invalid.";
+            WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
             WorkflowDefinitionValidationErrorMessage = ex.Message;
             return;
         }
 
         IsValidatingWorkflowDefinitionDraft = true;
-        WorkflowDefinitionValidationMessage = "Validating workflow draft...";
+        WorkflowDefinitionValidationMessage = T("definition.validating_draft");
         WorkflowDefinitionValidationErrorMessage = null;
 
         var response = await _apiClient.ValidateWorkflowDraftAsync(
@@ -772,14 +780,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (response.Ok && response.Data is not null)
         {
             WorkflowDefinitionValidationMessage = response.Data.Valid
-                ? "Workflow draft is valid."
-                : "Workflow draft has validation issues.";
+                ? T("definition.draft_valid")
+                : T("definition.draft_has_issues");
             WorkflowDefinitionValidationErrorMessage = FormatValidationIssues(response.Data);
             IsValidatingWorkflowDefinitionDraft = false;
             return;
         }
 
-        WorkflowDefinitionValidationMessage = "Workflow draft validation failed.";
+        WorkflowDefinitionValidationMessage = T("definition.validation_failed");
         WorkflowDefinitionValidationErrorMessage = DescribeError(response);
         IsValidatingWorkflowDefinitionDraft = false;
     }
@@ -789,8 +797,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (WorkflowDefinitionDetail is null)
         {
-            WorkflowDefinitionValidationMessage = "Workflow draft save rejected.";
-            WorkflowDefinitionValidationErrorMessage = "Load workflow definition before saving.";
+            WorkflowDefinitionValidationMessage = T("definition.save_rejected");
+            WorkflowDefinitionValidationErrorMessage = T("definition.load_before_saving");
             return;
         }
 
@@ -802,13 +810,13 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (JsonException ex)
         {
-            WorkflowDefinitionValidationMessage = "Workflow draft JSON is invalid.";
+            WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
             WorkflowDefinitionValidationErrorMessage = ex.Message;
             return;
         }
 
         IsSavingWorkflowDefinitionDraft = true;
-        WorkflowDefinitionValidationMessage = "Saving workflow draft...";
+        WorkflowDefinitionValidationMessage = T("definition.saving_draft");
         WorkflowDefinitionValidationErrorMessage = null;
 
         var saved = await _apiClient.UpdateWorkflowAsync(
@@ -822,14 +830,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (saved.Ok && saved.Data is not null)
         {
             WorkflowDefinitionValidationMessage =
-                $"Saved workflow {saved.Data.Name} v{saved.Data.Version}.";
+                F("format.saved_workflow", saved.Data.Name, saved.Data.Version);
             IsSavingWorkflowDefinitionDraft = false;
             await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
             await LoadSelectedWorkflowDefinitionAsync();
             return;
         }
 
-        WorkflowDefinitionValidationMessage = "Workflow draft save failed.";
+        WorkflowDefinitionValidationMessage = T("definition.save_failed");
         WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
         IsSavingWorkflowDefinitionDraft = false;
     }
@@ -843,7 +851,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsStartingWorkflow = true;
-        WorkflowMessage = $"Starting {SelectedWorkflow.Name}...";
+        WorkflowMessage = F("format.starting_workflow", SelectedWorkflow.Name);
         WorkflowErrorMessage = null;
         LastStartedRunId = null;
         LastStartedRunStatus = null;
@@ -858,13 +866,16 @@ public partial class MainWindowViewModel : ViewModelBase
             LastStartedRunId = response.Data.WorkflowRunId;
             LastStartedRunStatus = response.Data.Status;
             WorkflowMessage =
-                $"Started run {response.Data.WorkflowRunId} ({response.Data.Status}).";
+                F(
+                    "format.started_run_with_status",
+                    response.Data.WorkflowRunId,
+                    response.Data.Status);
             IsStartingWorkflow = false;
             await LoadRunsAsync(response.Data.WorkflowRunId);
             return;
         }
 
-        WorkflowMessage = "Workflow start failed.";
+        WorkflowMessage = T("workflow.start_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsStartingWorkflow = false;
     }
@@ -885,7 +896,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var workflowRunId = SelectedRun.WorkflowRunId;
         IsCancellingRun = true;
-        RunMessage = $"Cancelling run {workflowRunId}...";
+        RunMessage = F("format.cancelling_run", workflowRunId);
         RunErrorMessage = null;
 
         var response = await _apiClient.CancelRunAsync(
@@ -899,8 +910,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var processStatus = response.Data?.Status;
             var cancelMessage = string.IsNullOrWhiteSpace(processStatus)
-                ? $"Cancel requested for run {workflowRunId}."
-                : $"Cancel requested for run {workflowRunId} ({processStatus}).";
+                ? F("format.cancel_requested", workflowRunId)
+                : F("format.cancel_requested_with_status", workflowRunId, processStatus);
             await LoadRunsAsync(workflowRunId);
             if (!HasRunError)
             {
@@ -910,7 +921,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        RunMessage = "Run cancel failed.";
+        RunMessage = T("runs.cancel_failed");
         RunErrorMessage = DescribeError(response);
     }
 
@@ -929,13 +940,13 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex)
         {
-            RuntimeEventStreamMessage = "Event stream configuration invalid.";
+            RuntimeEventStreamMessage = T("events.stream_config_invalid");
             RuntimeEventStreamErrorMessage = ex.Message;
             return Task.CompletedTask;
         }
 
         RuntimeEventStreamErrorMessage = null;
-        RuntimeEventStreamMessage = "Connecting event stream...";
+        RuntimeEventStreamMessage = T("events.stream_connecting");
         RuntimeEvents.Clear();
         OnPropertyChanged(nameof(HasRuntimeEvents));
         LastRuntimeEventSequenceNumber = null;
@@ -961,7 +972,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        RuntimeEventStreamMessage = "Stopping event stream...";
+        RuntimeEventStreamMessage = T("events.stream_stopping");
         cancellation.Cancel();
 
         try
@@ -972,7 +983,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
         }
 
-        RuntimeEventStreamMessage = "Event stream stopped.";
+        RuntimeEventStreamMessage = T("events.stream_stopped");
         RuntimeEventStreamErrorMessage = null;
     }
 
@@ -981,13 +992,13 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!TryParseRuntimeEventLogFilters(out var afterSequenceNumber, out var limit, out var error))
         {
-            RuntimeEventLogMessage = "Runtime event refresh rejected.";
+            RuntimeEventLogMessage = T("logs.runtime_refresh_rejected");
             RuntimeEventLogErrorMessage = error;
             return;
         }
 
         IsLoadingRuntimeEventLog = true;
-        RuntimeEventLogMessage = "Loading runtime events...";
+        RuntimeEventLogMessage = T("logs.loading_runtime_events");
         RuntimeEventLogErrorMessage = null;
 
         var response = await _apiClient.ListEventsAsync(
@@ -1008,12 +1019,12 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             RuntimeEventLogMessage =
-                $"Loaded {RuntimeEventLogEntries.Count} runtime event(s).";
+                F("format.loaded_runtime_events", RuntimeEventLogEntries.Count);
             IsLoadingRuntimeEventLog = false;
             return;
         }
 
-        RuntimeEventLogMessage = "Runtime event refresh failed.";
+        RuntimeEventLogMessage = T("logs.runtime_refresh_failed");
         RuntimeEventLogErrorMessage = DescribeError(response);
         IsLoadingRuntimeEventLog = false;
     }
@@ -1022,7 +1033,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RefreshAuditEventsAsync()
     {
         IsLoadingAuditEventLog = true;
-        AuditEventLogMessage = "Loading audit events...";
+        AuditEventLogMessage = T("logs.loading_audit_events");
         AuditEventLogErrorMessage = null;
 
         var response = await _apiClient.ListAuditEventsAsync(
@@ -1040,12 +1051,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 AuditEvents.Add(new AuditEventListItemViewModel(auditEvent));
             }
 
-            AuditEventLogMessage = $"Loaded {AuditEvents.Count} audit event(s).";
+            AuditEventLogMessage = F("format.loaded_audit_events", AuditEvents.Count);
             IsLoadingAuditEventLog = false;
             return;
         }
 
-        AuditEventLogMessage = "Audit event refresh failed.";
+        AuditEventLogMessage = T("logs.audit_refresh_failed");
         AuditEventLogErrorMessage = DescribeError(response);
         IsLoadingAuditEventLog = false;
     }
@@ -1059,7 +1070,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsLoadingTableRefs = true;
-        TableRefMessage = $"Loading table refs for {SelectedRun.WorkflowRunId}...";
+        TableRefMessage = F("format.loading_table_refs_for", SelectedRun.WorkflowRunId);
         TableRefErrorMessage = null;
 
         var response = await _apiClient.ListTableRefsAsync(
@@ -1075,12 +1086,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 TableRefs.Add(new TableRefListItemViewModel(tableRef));
             }
 
-            TableRefMessage = $"Loaded {TableRefs.Count} table ref(s).";
+            TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
             IsLoadingTableRefs = false;
             return;
         }
 
-        TableRefMessage = "Table ref refresh failed.";
+        TableRefMessage = T("data.table_ref_refresh_failed");
         TableRefErrorMessage = DescribeError(response);
         IsLoadingTableRefs = false;
     }
@@ -1090,17 +1101,17 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (!TryParseLimit(
             SharedPublicationLimitFilter,
-            "Shared publication limit",
+            T("data.shared_publication_limit_label"),
             out var limit,
             out var error))
         {
-            SharedPublicationMessage = "Shared publication refresh rejected.";
+            SharedPublicationMessage = T("data.shared_publication_refresh_rejected");
             SharedPublicationErrorMessage = error;
             return;
         }
 
         IsLoadingSharedPublications = true;
-        SharedPublicationMessage = "Loading shared publications...";
+        SharedPublicationMessage = T("data.loading_shared_publications");
         SharedPublicationErrorMessage = null;
 
         var response = await _apiClient.ListSharedPublicationsAsync(
@@ -1122,12 +1133,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 publication => publication.PublicationId == previousPublicationId)
                 ?? SharedPublications.FirstOrDefault();
             SharedPublicationMessage =
-                $"Loaded {SharedPublications.Count} shared publication(s).";
+                F("format.loaded_shared_publications", SharedPublications.Count);
             IsLoadingSharedPublications = false;
             return;
         }
 
-        SharedPublicationMessage = "Shared publication refresh failed.";
+        SharedPublicationMessage = T("data.shared_publication_refresh_failed");
         SharedPublicationErrorMessage = DescribeError(response);
         IsLoadingSharedPublications = false;
     }
@@ -1139,25 +1150,25 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? SelectedSharedPublication?.ShareName;
         if (string.IsNullOrWhiteSpace(shareName))
         {
-            SharedPublicationVersionMessage = "Shared publication versions rejected.";
+            SharedPublicationVersionMessage = T("data.shared_publication_versions_rejected");
             SharedPublicationVersionErrorMessage =
-                "Share name is required to load shared publication versions.";
+                T("data.share_name_required_for_versions");
             return;
         }
 
         if (!TryParseLimit(
             SharedPublicationVersionLimitFilter,
-            "Shared publication version limit",
+            T("data.shared_publication_version_limit_label"),
             out var limit,
             out var error))
         {
-            SharedPublicationVersionMessage = "Shared publication versions rejected.";
+            SharedPublicationVersionMessage = T("data.shared_publication_versions_rejected");
             SharedPublicationVersionErrorMessage = error;
             return;
         }
 
         IsLoadingSharedPublicationVersions = true;
-        SharedPublicationVersionMessage = $"Loading versions for {shareName}...";
+        SharedPublicationVersionMessage = F("format.loading_versions_for", shareName);
         SharedPublicationVersionErrorMessage = null;
 
         var response = await _apiClient.ListSharedPublicationVersionsAsync(
@@ -1175,12 +1186,15 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             SharedPublicationVersionMessage =
-                $"Loaded {SharedPublicationVersions.Count} version(s) for {shareName}.";
+                F(
+                    "format.loaded_shared_publication_versions",
+                    SharedPublicationVersions.Count,
+                    shareName);
             IsLoadingSharedPublicationVersions = false;
             return;
         }
 
-        SharedPublicationVersionMessage = "Shared publication versions refresh failed.";
+        SharedPublicationVersionMessage = T("data.shared_publication_versions_refresh_failed");
         SharedPublicationVersionErrorMessage = DescribeError(response);
         IsLoadingSharedPublicationVersions = false;
     }
@@ -1193,7 +1207,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsLoadingNodeRuns = true;
-        NodeRunMessage = $"Loading nodes for {SelectedRun.WorkflowRunId}...";
+        NodeRunMessage = F("format.loading_nodes_for", SelectedRun.WorkflowRunId);
         NodeRunErrorMessage = null;
 
         var response = await _apiClient.ListNodeRunsAsync(
@@ -1209,12 +1223,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 NodeRuns.Add(new NodeRunListItemViewModel(nodeRun));
             }
 
-            NodeRunMessage = $"Loaded {NodeRuns.Count} node run(s).";
+            NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);
             IsLoadingNodeRuns = false;
             return;
         }
 
-        NodeRunMessage = "Node status refresh failed.";
+        NodeRunMessage = T("node_runs.refresh_failed");
         NodeRunErrorMessage = DescribeError(response);
         IsLoadingNodeRuns = false;
     }
@@ -1227,14 +1241,14 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 try
                 {
-                    RuntimeEventStreamMessage = "Connecting event stream...";
+                    RuntimeEventStreamMessage = T("events.stream_connecting");
                     RuntimeEventStreamErrorMessage = null;
 
                     await using var stream = await _runtimeEventStreamClient.ConnectAsync(
                         BuildSettings(),
                         cancellationToken);
                     IsRuntimeEventStreamConnected = true;
-                    RuntimeEventStreamMessage = "Event stream connected.";
+                    RuntimeEventStreamMessage = T("events.stream_connected");
                     await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
 
                     while (!cancellationToken.IsCancellationRequested)
@@ -1244,7 +1258,7 @@ public partial class MainWindowViewModel : ViewModelBase
                         {
                             IsRuntimeEventStreamConnected = false;
                             RuntimeEventStreamMessage =
-                                "Event stream disconnected. Reconnecting...";
+                                T("events.stream_disconnected_reconnecting");
                             await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
                             break;
                         }
@@ -1259,7 +1273,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 catch (Exception ex)
                 {
                     IsRuntimeEventStreamConnected = false;
-                    RuntimeEventStreamMessage = "Event stream error. Reconnecting...";
+                    RuntimeEventStreamMessage = T("events.stream_error_reconnecting");
                     RuntimeEventStreamErrorMessage =
                         EngineHostConnectionDiagnostics.DescribeRuntimeEventStreamException(ex);
                     await RecoverRuntimeStateAsync(cancellationToken: cancellationToken);
@@ -1297,7 +1311,10 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasRuntimeEvents));
         LastRuntimeEventSequenceNumber = runtimeEvent.SequenceNumber;
         RuntimeEventStreamMessage =
-            $"Received {runtimeEvent.EventType} #{runtimeEvent.SequenceNumber}.";
+            F(
+                "format.received_runtime_event",
+                runtimeEvent.EventType,
+                runtimeEvent.SequenceNumber);
         RuntimeEventStreamErrorMessage = null;
 
         await RecoverRuntimeStateAsync(
@@ -1331,8 +1348,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         IsLoadingRuns = true;
         RunMessage = SelectedWorkflow is null
-            ? "Loading runs..."
-            : $"Loading runs for {SelectedWorkflow.Name}...";
+            ? T("runs.loading")
+            : F("format.loading_runs_for", SelectedWorkflow.Name);
         RunErrorMessage = null;
 
         var workflowId = SelectedWorkflow?.WorkflowId;
@@ -1353,13 +1370,13 @@ public partial class MainWindowViewModel : ViewModelBase
             SelectedRun = Runs.FirstOrDefault(run => run.WorkflowRunId == previousRunId)
                 ?? Runs.FirstOrDefault();
             RunMessage = workflowId is null
-                ? $"Loaded {Runs.Count} run(s)."
-                : $"Loaded {Runs.Count} run(s) for {SelectedWorkflow?.Name}.";
+                ? F("format.loaded_runs", Runs.Count)
+                : F("format.loaded_runs_for", Runs.Count, SelectedWorkflow?.Name);
             IsLoadingRuns = false;
             return;
         }
 
-        RunMessage = "Run refresh failed.";
+        RunMessage = T("runs.refresh_failed");
         RunErrorMessage = DescribeError(response);
         IsLoadingRuns = false;
     }
@@ -1367,7 +1384,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RefreshWorkflowsSelectingAsync(string workflowId)
     {
         IsLoadingWorkflows = true;
-        WorkflowMessage = "Refreshing workflows...";
+        WorkflowMessage = T("workflow.refreshing");
         WorkflowErrorMessage = null;
 
         var response = await _apiClient.ListWorkflowsAsync(
@@ -1384,12 +1401,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
             SelectedWorkflow = Workflows.FirstOrDefault(workflow => workflow.WorkflowId == workflowId)
                 ?? Workflows.FirstOrDefault();
-            WorkflowMessage = $"Loaded {Workflows.Count} workflow(s).";
+            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
             IsLoadingWorkflows = false;
             return;
         }
 
-        WorkflowMessage = "Workflow refresh failed.";
+        WorkflowMessage = T("workflow.refresh_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsLoadingWorkflows = false;
     }
@@ -1457,7 +1474,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (!long.TryParse(afterSequenceNumberText, out var parsedAfterSequenceNumber)
                 || parsedAfterSequenceNumber < 0)
             {
-                error = "After sequence number must be a non-negative integer.";
+                error = T("logs.after_sequence_invalid");
                 return false;
             }
 
@@ -1473,7 +1490,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!int.TryParse(limitText, out var parsedLimit)
             || parsedLimit is < 1 or > 1000)
         {
-            error = "Runtime event limit must be between 1 and 1000.";
+            error = T("logs.runtime_event_limit_invalid");
             return false;
         }
 
@@ -1481,7 +1498,12 @@ public partial class MainWindowViewModel : ViewModelBase
         return true;
     }
 
-    private static bool TryParseLimit(
+    private string BuildLimitRangeError(string label)
+    {
+        return F("format.limit_between", label);
+    }
+
+    private bool TryParseLimit(
         string limitFilter,
         string label,
         out int limit,
@@ -1499,7 +1521,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!int.TryParse(limitText, out var parsedLimit)
             || parsedLimit is < 1 or > 1000)
         {
-            error = $"{label} must be between 1 and 1000.";
+            error = BuildLimitRangeError(label);
             return false;
         }
 
@@ -1517,6 +1539,7 @@ public partial class MainWindowViewModel : ViewModelBase
         bool save,
         CancellationToken cancellationToken)
     {
+        var previousDefaults = CaptureDefaultMessageSnapshot();
         await _localizationService.SetLanguageAsync(languageCode, cancellationToken);
         CurrentLanguageCode = _localizationService.CurrentLanguageCode;
         foreach (var language in Languages)
@@ -1525,6 +1548,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         NotifyLocalizedTextChanged();
+        RefreshDefaultMessagesForCurrentLanguage(previousDefaults);
         if (save)
         {
             await _uiSettingsStore.SaveAsync(
@@ -1536,6 +1560,125 @@ public partial class MainWindowViewModel : ViewModelBase
     private string T(string key)
     {
         return _localizationService.GetString(key);
+    }
+
+    private string F(string key, params object?[] args)
+    {
+        return _localizationService.Format(key, args);
+    }
+
+    private Dictionary<string, string> CaptureDefaultMessageSnapshot()
+    {
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["status.disconnected"] = T("status.disconnected"),
+            ["status.event_stream_disconnected"] = T("status.event_stream_disconnected"),
+            ["status.no_workflows_loaded"] = T("status.no_workflows_loaded"),
+            ["status.select_workflow_definition"] = T("status.select_workflow_definition"),
+            ["status.load_definition_to_edit"] = T("status.load_definition_to_edit"),
+            ["status.no_runs_loaded"] = T("status.no_runs_loaded"),
+            ["status.select_run_node_status"] = T("status.select_run_node_status"),
+            ["status.no_runtime_events_loaded"] = T("status.no_runtime_events_loaded"),
+            ["status.no_audit_events_loaded"] = T("status.no_audit_events_loaded"),
+            ["status.select_run_table_refs"] = T("status.select_run_table_refs"),
+            ["status.no_shared_publications_loaded"] = T("status.no_shared_publications_loaded"),
+            ["status.select_share_versions"] = T("status.select_share_versions"),
+        };
+    }
+
+    private void RefreshDefaultMessagesForCurrentLanguage(
+        IReadOnlyDictionary<string, string>? previousDefaults)
+    {
+        if (ShouldRefreshDefault(StatusMessage, previousDefaults, "status.disconnected"))
+        {
+            StatusMessage = T("status.disconnected");
+        }
+
+        if (ShouldRefreshDefault(
+            RuntimeEventStreamMessage,
+            previousDefaults,
+            "status.event_stream_disconnected"))
+        {
+            RuntimeEventStreamMessage = T("status.event_stream_disconnected");
+        }
+
+        if (ShouldRefreshDefault(WorkflowMessage, previousDefaults, "status.no_workflows_loaded"))
+        {
+            WorkflowMessage = T("status.no_workflows_loaded");
+        }
+
+        if (ShouldRefreshDefault(
+            WorkflowDefinitionMessage,
+            previousDefaults,
+            "status.select_workflow_definition"))
+        {
+            WorkflowDefinitionMessage = T("status.select_workflow_definition");
+        }
+
+        if (ShouldRefreshDefault(
+            WorkflowDefinitionValidationMessage,
+            previousDefaults,
+            "status.load_definition_to_edit"))
+        {
+            WorkflowDefinitionValidationMessage = T("status.load_definition_to_edit");
+        }
+
+        if (ShouldRefreshDefault(RunMessage, previousDefaults, "status.no_runs_loaded"))
+        {
+            RunMessage = T("status.no_runs_loaded");
+        }
+
+        if (ShouldRefreshDefault(NodeRunMessage, previousDefaults, "status.select_run_node_status"))
+        {
+            NodeRunMessage = T("status.select_run_node_status");
+        }
+
+        if (ShouldRefreshDefault(
+            RuntimeEventLogMessage,
+            previousDefaults,
+            "status.no_runtime_events_loaded"))
+        {
+            RuntimeEventLogMessage = T("status.no_runtime_events_loaded");
+        }
+
+        if (ShouldRefreshDefault(
+            AuditEventLogMessage,
+            previousDefaults,
+            "status.no_audit_events_loaded"))
+        {
+            AuditEventLogMessage = T("status.no_audit_events_loaded");
+        }
+
+        if (ShouldRefreshDefault(TableRefMessage, previousDefaults, "status.select_run_table_refs"))
+        {
+            TableRefMessage = T("status.select_run_table_refs");
+        }
+
+        if (ShouldRefreshDefault(
+            SharedPublicationMessage,
+            previousDefaults,
+            "status.no_shared_publications_loaded"))
+        {
+            SharedPublicationMessage = T("status.no_shared_publications_loaded");
+        }
+
+        if (ShouldRefreshDefault(
+            SharedPublicationVersionMessage,
+            previousDefaults,
+            "status.select_share_versions"))
+        {
+            SharedPublicationVersionMessage = T("status.select_share_versions");
+        }
+    }
+
+    private static bool ShouldRefreshDefault(
+        string currentValue,
+        IReadOnlyDictionary<string, string>? previousDefaults,
+        string key)
+    {
+        return previousDefaults is null
+            || (previousDefaults.TryGetValue(key, out var previousValue)
+                && string.Equals(currentValue, previousValue, StringComparison.Ordinal));
     }
 
     private void NotifyLocalizedTextChanged()
@@ -1635,22 +1778,22 @@ public partial class MainWindowViewModel : ViewModelBase
         Runs.Clear();
         SelectedRun = null;
         RunMessage = value is null
-            ? "No workflow selected. Refresh runs will load all runs."
-            : $"Selected {value.Name}. Refresh runs to load matching runs.";
+            ? T("runs.no_workflow_selected")
+            : F("format.selected_workflow_refresh_runs", value.Name);
         RunErrorMessage = null;
         if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
         {
             WorkflowDefinitionDetail = null;
             WorkflowDefinitionDraftJson = string.Empty;
             WorkflowDefinitionMessage = value is null
-                ? "Select a workflow to load definition."
-                : $"Selected {value.Name}. Load definition to inspect.";
+                ? T("status.select_workflow_definition")
+                : F("format.selected_workflow_load_definition", value.Name);
         }
 
         WorkflowDefinitionErrorMessage = null;
         WorkflowDefinitionValidationMessage = value is null
-            ? "Load definition to edit draft JSON."
-            : "Load definition before editing draft JSON.";
+            ? T("status.load_definition_to_edit")
+            : T("definition.load_before_editing");
         WorkflowDefinitionValidationErrorMessage = null;
     }
 
@@ -1721,12 +1864,12 @@ public partial class MainWindowViewModel : ViewModelBase
         NodeRuns.Clear();
         TableRefs.Clear();
         NodeRunMessage = value is null
-            ? "Select a run to load node status."
-            : $"Selected run {value.WorkflowRunId}. Refresh nodes to load status.";
+            ? T("status.select_run_node_status")
+            : F("format.selected_run_refresh_nodes", value.WorkflowRunId);
         NodeRunErrorMessage = null;
         TableRefMessage = value is null
-            ? "Select a run to load table refs."
-            : $"Selected run {value.WorkflowRunId}. Refresh table refs to load data outputs.";
+            ? T("status.select_run_table_refs")
+            : F("format.selected_run_refresh_table_refs", value.WorkflowRunId);
         TableRefErrorMessage = null;
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
