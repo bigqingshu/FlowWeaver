@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Settings.StreamConfigView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="18">
+        <Grid ColumnDefinitions="110,*,Auto,Auto"
+              RowSpacing="12"
+              ColumnSpacing="12">
+            <TextBlock Grid.Column="0"
+                       Text="{Binding ConnectionEventsText}"
+                       VerticalAlignment="Center"
+                       Foreground="#14171A"
+                       FontWeight="SemiBold"/>
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="12">
+                <TextBlock Text="{Binding RuntimeEventStreamMessage}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="#344054"/>
+                <TextBlock Text="{Binding RuntimeEventStreamErrorMessage}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="#B42318"
+                           IsVisible="{Binding HasRuntimeEventStreamError}"/>
+            </StackPanel>
+            <Button Grid.Column="2"
+                    Classes="Primary"
+                    Content="{Binding StreamText}"
+                    Command="{Binding StartRuntimeEventStreamCommand}"
+                    MinWidth="92"/>
+            <Button Grid.Column="3"
+                    Content="{Binding StopText}"
+                    Command="{Binding StopRuntimeEventStreamCommand}"
+                    MinWidth="76"/>
+        </Grid>
+    </Border>
+</UserControl>

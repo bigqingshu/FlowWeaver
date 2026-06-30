@@ -1,117 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:settings="using:Avalonia_UI.Views.Components.Settings"
              x:Class="Avalonia_UI.Views.Pages.SettingsPage"
              x:DataType="vm:MainWindowViewModel">
-    <StackPanel Spacing="16" Margin="12">
-        <Border Classes="Card"
-                Padding="18">
-            <StackPanel Spacing="12">
-                <TextBlock Text="{Binding SettingsMenuText}" FontSize="18" FontWeight="SemiBold" Foreground="#14171A"/>
-                <Menu>
-                    <MenuItem Header="{Binding LanguageMenuHeaderText}">
-                        <MenuItem Header="{Binding EnglishLanguageText}"
-                                  Command="{Binding ChangeLanguageCommand}"
-                                  CommandParameter="en-US"/>
-                        <MenuItem Header="{Binding SimplifiedChineseLanguageText}"
-                                  Command="{Binding ChangeLanguageCommand}"
-                                  CommandParameter="zh-Hans"/>
-                    </MenuItem>
-                </Menu>
-            </StackPanel>
-        </Border>
-
-        <Border Background="White"
-                BorderBrush="#D9DEE5"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="18">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto"
-                  ColumnDefinitions="110,*,Auto,Auto"
-                  RowSpacing="12"
-                  ColumnSpacing="12">
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           Text="{Binding ConnectionBaseUrlText}"
-                           VerticalAlignment="Center"
-                           Foreground="#2F3742"/>
-                <TextBox Grid.Row="0"
-                         Grid.Column="1"
-                         Text="{Binding BaseUrl}"
-                         Watermark="http://127.0.0.1:8000"/>
-                <Button Grid.Row="0"
-                        Grid.Column="2"
-                        Classes="Primary"
-                        Content="{Binding CheckConnectionText}"
-                        Command="{Binding CheckConnectionCommand}"
-                        MinWidth="92"/>
-
-                <TextBlock Grid.Row="1"
-                           Grid.Column="0"
-                           Text="{Binding ConnectionTokenText}"
-                           VerticalAlignment="Center"
-                           Foreground="#2F3742"/>
-                <TextBox Grid.Row="1"
-                         Grid.Column="1"
-                         Grid.ColumnSpan="3"
-                         Text="{Binding Token}"
-                         PasswordChar="*"/>
-
-                <TextBlock Grid.Row="2"
-                           Grid.Column="0"
-                           Text="{Binding ConnectionStatusText}"
-                           VerticalAlignment="Center"
-                           Foreground="#2F3742"/>
-                <StackPanel Grid.Row="2"
-                            Grid.Column="1"
-                            Grid.ColumnSpan="3"
-                            Orientation="Horizontal"
-                            Spacing="12">
-                    <TextBlock Text="{Binding StatusMessage}"
-                               VerticalAlignment="Center"
-                               Foreground="#166534"/>
-                    <ProgressBar Width="120"
-                                 Height="8"
-                                 VerticalAlignment="Center"
-                                 IsIndeterminate="True"
-                                 IsVisible="{Binding IsChecking}"/>
-                    <TextBlock Text="{Binding ErrorMessage}"
-                               TextWrapping="Wrap"
-                               Foreground="#B42318"
-                               IsVisible="{Binding HasError}"/>
-                </StackPanel>
-
-                <TextBlock Grid.Row="3"
-                           Grid.Column="0"
-                           Text="{Binding ConnectionEventsText}"
-                           VerticalAlignment="Center"
-                           Foreground="#2F3742"/>
-                <StackPanel Grid.Row="3"
-                            Grid.Column="1"
-                            Orientation="Horizontal"
-                            Spacing="12">
-                    <TextBlock Text="{Binding RuntimeEventStreamMessage}"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="#344054"/>
-                    <TextBlock Text="{Binding RuntimeEventStreamErrorMessage}"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="#B42318"
-                               IsVisible="{Binding HasRuntimeEventStreamError}"/>
-                </StackPanel>
-                <Button Grid.Row="3"
-                        Grid.Column="2"
-                        Classes="Primary"
-                        Content="{Binding StreamText}"
-                        Command="{Binding StartRuntimeEventStreamCommand}"
-                        MinWidth="92"/>
-                <Button Grid.Row="3"
-                        Grid.Column="3"
-                        Content="{Binding StopText}"
-                        Command="{Binding StopRuntimeEventStreamCommand}"
-                        MinWidth="76"/>
-            </Grid>
-        </Border>
-    </StackPanel>
+    <ScrollViewer>
+        <StackPanel Spacing="16" Margin="24" MaxWidth="800" HorizontalAlignment="Center">
+            <settings:LanguageSettingsView />
+            <settings:ConnectionConfigView />
+            <settings:StreamConfigView />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

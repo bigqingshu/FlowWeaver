@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Settings.ConnectionConfigView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="18">
+        <Grid RowDefinitions="Auto,Auto,Auto"
+              ColumnDefinitions="110,*,Auto"
+              RowSpacing="12"
+              ColumnSpacing="12">
+            <TextBlock Grid.Row="0"
+                       Grid.Column="0"
+                       Text="{Binding ConnectionBaseUrlText}"
+                       VerticalAlignment="Center"
+                       Foreground="#14171A"
+                       FontWeight="SemiBold"/>
+            <TextBox Grid.Row="0"
+                     Grid.Column="1"
+                     Text="{Binding BaseUrl}"
+                     Watermark="http://127.0.0.1:8000"/>
+            <Button Grid.Row="0"
+                    Grid.Column="2"
+                    Classes="Primary"
+                    Content="{Binding CheckConnectionText}"
+                    Command="{Binding CheckConnectionCommand}"
+                    MinWidth="92"/>
+
+            <TextBlock Grid.Row="1"
+                       Grid.Column="0"
+                       Text="{Binding ConnectionTokenText}"
+                       VerticalAlignment="Center"
+                       Foreground="#14171A"
+                       FontWeight="SemiBold"/>
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Grid.ColumnSpan="2"
+                     Text="{Binding Token}"
+                     PasswordChar="*"/>
+
+            <TextBlock Grid.Row="2"
+                       Grid.Column="0"
+                       Text="{Binding ConnectionStatusText}"
+                       VerticalAlignment="Center"
+                       Foreground="#14171A"
+                       FontWeight="SemiBold"/>
+            <StackPanel Grid.Row="2"
+                        Grid.Column="1"
+                        Grid.ColumnSpan="2"
+                        Orientation="Horizontal"
+                        Spacing="12">
+                <TextBlock Text="{Binding StatusMessage}"
+                           VerticalAlignment="Center"
+                           Foreground="#166534"/>
+                <ProgressBar Width="120"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsChecking}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="#B42318"
+                           IsVisible="{Binding HasError}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

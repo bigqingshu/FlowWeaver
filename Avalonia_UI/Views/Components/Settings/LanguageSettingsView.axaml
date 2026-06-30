@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Settings.LanguageSettingsView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="18">
+        <StackPanel Spacing="12">
+            <TextBlock Text="{Binding SettingsMenuText}" FontSize="18" FontWeight="SemiBold" Foreground="#14171A"/>
+            <Menu>
+                <MenuItem Header="{Binding LanguageMenuHeaderText}">
+                    <MenuItem Header="{Binding EnglishLanguageText}"
+                              Command="{Binding ChangeLanguageCommand}"
+                              CommandParameter="en-US"/>
+                    <MenuItem Header="{Binding SimplifiedChineseLanguageText}"
+                              Command="{Binding ChangeLanguageCommand}"
+                              CommandParameter="zh-Hans"/>
+                </MenuItem>
+            </Menu>
+        </StackPanel>
+    </Border>
+</UserControl>
