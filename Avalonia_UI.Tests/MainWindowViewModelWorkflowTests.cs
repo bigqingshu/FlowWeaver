@@ -411,13 +411,21 @@ public sealed class MainWindowViewModelWorkflowTests
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = """{"nodes":[],"connections":[]}""";
         await viewModel.SaveWorkflowDefinitionDraftCommand.ExecuteAsync(null);
 
         Assert.AreEqual("Workflow draft save failed.", viewModel.WorkflowDefinitionValidationMessage);
         Assert.AreEqual(
-            "WORKFLOW_REVISION_CONFLICT: Workflow revision has changed.",
+            "Revision conflict: the workflow has been modified by another session.",
             viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.IsTrue(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
+        Assert.AreEqual("""{"nodes":[],"connections":[]}""", viewModel.WorkflowDefinitionDraftJson);
+
+        viewModel.WorkflowDefinitionDraftJson = """{"nodes":[],"connections":[],"metadata":{"note":"keep draft"}}""";
+
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
+        Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -544,6 +552,47 @@ public sealed class MainWindowViewModelWorkflowTests
         var viewModel = CreateViewModel(new FakeApiClient());
 
         Assert.IsFalse(viewModel.LoadSelectedWorkflowDefinitionCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task LoadSelectedWorkflowDefinitionIsDisabledWithoutToken()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        viewModel.Token = string.Empty;
+
+        Assert.IsNotNull(viewModel.SelectedWorkflow);
+        Assert.IsFalse(viewModel.LoadSelectedWorkflowDefinitionCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SaveWorkflowDefinitionDraftIsEnabledOnlyWhenDirty()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
+
+        viewModel.WorkflowDefinitionDraftJson = """{"nodes":[],"connections":[]}""";
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsTrue(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
     }
 
     [TestMethod]

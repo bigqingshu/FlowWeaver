@@ -116,6 +116,8 @@
   "definition.load_before_saving": "Load workflow definition before saving.",
   "definition.saving_draft": "Saving workflow draft...",
   "definition.save_failed": "Workflow draft save failed.",
+  "definition.revision_conflict": "Revision conflict: the workflow has been modified by another session.",
+  "definition.validation_invalidated": "Draft modified, please re-validate.",
   "definition.load_before_editing": "Load definition before editing draft JSON.",
   "events.stream_config_invalid": "Event stream configuration invalid.",
   "events.stream_connecting": "Connecting event stream...",

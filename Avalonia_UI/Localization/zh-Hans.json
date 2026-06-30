@@ -116,6 +116,8 @@
   "definition.load_before_saving": "保存前请先加载工作流定义。",
   "definition.saving_draft": "正在保存工作流草稿...",
   "definition.save_failed": "工作流草稿保存失败。",
+  "definition.revision_conflict": "版本冲突：该工作流已被其他会话修改。",
+  "definition.validation_invalidated": "草稿已修改，请重新校验。",
   "definition.load_before_editing": "编辑草稿 JSON 前请先加载定义。",
   "events.stream_config_invalid": "事件流配置无效。",
   "events.stream_connecting": "正在连接事件流...",

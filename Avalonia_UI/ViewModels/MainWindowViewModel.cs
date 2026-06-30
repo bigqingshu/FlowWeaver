@@ -102,6 +102,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? workflowDefinitionValidationErrorMessage;
 
     [ObservableProperty]
+    private bool isWorkflowDefinitionDraftDirty;
+
+    [ObservableProperty]
+    private bool hasWorkflowDefinitionRevisionConflict;
+
+    private string originalWorkflowDefinitionJson = string.Empty;
+    private int workflowDefinitionLoadVersion = 0;
+
+    [ObservableProperty]
     private bool isLoadingRuns;
 
     [ObservableProperty]
@@ -555,19 +564,24 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanLoadSelectedWorkflowDefinition()
     {
-        return SelectedWorkflow is not null && !IsLoadingWorkflowDefinition;
+        return CanUseEngineActions
+            && SelectedWorkflow is not null
+            && !IsLoadingWorkflowDefinition;
     }
 
     private bool CanValidateWorkflowDefinitionDraft()
     {
-        return !IsWorkflowDefinitionDraftBusy && HasWorkflowDefinitionDraft;
+        return CanUseEngineActions && HasWorkflowDefinitionDraft && !IsWorkflowDefinitionDraftBusy;
     }
 
     private bool CanSaveWorkflowDefinitionDraft()
     {
-        return WorkflowDefinitionDetail is not null
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && HasWorkflowDefinitionDraft
+            && IsWorkflowDefinitionDraftDirty
             && !IsWorkflowDefinitionDraftBusy
-            && HasWorkflowDefinitionDraft;
+            && !HasWorkflowDefinitionRevisionConflict;
     }
 
     private bool CanRefreshRuns()
@@ -789,53 +803,74 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         var workflowId = SelectedWorkflow.WorkflowId;
+        var requestVersion = ++workflowDefinitionLoadVersion;
         IsLoadingWorkflowDefinition = true;
         WorkflowDefinitionMessage = F(
             "format.loading_definition_for",
             SelectedWorkflow.Name);
         WorkflowDefinitionErrorMessage = null;
 
-        var workflowResponse = await _apiClient.GetWorkflowAsync(
-            BuildSettings(),
-            workflowId,
-            _shutdown.Token);
-
-        if (!workflowResponse.Ok || workflowResponse.Data is null)
+        try
         {
-            WorkflowDefinitionDetail = null;
-            WorkflowDefinitionMessage = T("definition.load_failed");
-            WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
-            IsLoadingWorkflowDefinition = false;
-            return;
+            var workflowResponse = await _apiClient.GetWorkflowAsync(
+                BuildSettings(),
+                workflowId,
+                _shutdown.Token);
+
+            if (SelectedWorkflow?.WorkflowId != workflowId || requestVersion != workflowDefinitionLoadVersion)
+            {
+                return;
+            }
+
+            if (!workflowResponse.Ok || workflowResponse.Data is null)
+            {
+                WorkflowDefinitionDetail = null;
+                WorkflowDefinitionMessage = T("definition.load_failed");
+                WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
+                return;
+            }
+
+            var revisionsResponse = await _apiClient.ListWorkflowRevisionsAsync(
+                BuildSettings(),
+                workflowId,
+                _shutdown.Token);
+
+            if (SelectedWorkflow?.WorkflowId != workflowId || requestVersion != workflowDefinitionLoadVersion)
+            {
+                return;
+            }
+
+            if (!revisionsResponse.Ok || revisionsResponse.Data is null)
+            {
+                WorkflowDefinitionDetail = null;
+                WorkflowDefinitionMessage = T("definition.revisions_load_failed");
+                WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
+                return;
+            }
+
+            WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
+                workflowResponse.Data,
+                revisionsResponse.Data,
+                DisplayTextFormatter);
+            originalWorkflowDefinitionJson = WorkflowDefinitionDetail.RawDefinitionJson;
+            WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
+            IsWorkflowDefinitionDraftDirty = false;
+            HasWorkflowDefinitionRevisionConflict = false;
+            WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
+            WorkflowDefinitionValidationErrorMessage = null;
+            WorkflowDefinitionMessage =
+                F(
+                    "format.loaded_workflow_definition",
+                    WorkflowDefinitionDetail.Name,
+                    WorkflowDefinitionDetail.VersionText);
         }
-
-        var revisionsResponse = await _apiClient.ListWorkflowRevisionsAsync(
-            BuildSettings(),
-            workflowId,
-            _shutdown.Token);
-
-        if (!revisionsResponse.Ok || revisionsResponse.Data is null)
+        finally
         {
-            WorkflowDefinitionDetail = null;
-            WorkflowDefinitionMessage = T("definition.revisions_load_failed");
-            WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
-            IsLoadingWorkflowDefinition = false;
-            return;
+            if (requestVersion == workflowDefinitionLoadVersion)
+            {
+                IsLoadingWorkflowDefinition = false;
+            }
         }
-
-        WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
-            workflowResponse.Data,
-            revisionsResponse.Data,
-            DisplayTextFormatter);
-        WorkflowDefinitionDraftJson = WorkflowDefinitionDetail.RawDefinitionJson;
-        WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
-        WorkflowDefinitionValidationErrorMessage = null;
-        WorkflowDefinitionMessage =
-            F(
-                "format.loaded_workflow_definition",
-                WorkflowDefinitionDetail.Name,
-                WorkflowDefinitionDetail.VersionText);
-        IsLoadingWorkflowDefinition = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -912,27 +947,42 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowDefinitionValidationMessage = T("definition.saving_draft");
         WorkflowDefinitionValidationErrorMessage = null;
 
-        var saved = await _apiClient.UpdateWorkflowAsync(
-            BuildSettings(),
-            WorkflowDefinitionDetail.WorkflowId,
-            WorkflowDefinitionDetail.Name,
-            definition,
-            WorkflowDefinitionDetail.RevisionId,
-            _shutdown.Token);
-
-        if (saved.Ok && saved.Data is not null)
+        try
         {
-            WorkflowDefinitionValidationMessage =
-                F("format.saved_workflow", saved.Data.Name, saved.Data.Version);
-            IsSavingWorkflowDefinitionDraft = false;
-            await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
-            await LoadSelectedWorkflowDefinitionAsync();
-            return;
-        }
+            var saved = await _apiClient.UpdateWorkflowAsync(
+                BuildSettings(),
+                WorkflowDefinitionDetail.WorkflowId,
+                WorkflowDefinitionDetail.Name,
+                definition,
+                WorkflowDefinitionDetail.RevisionId,
+                _shutdown.Token);
 
-        WorkflowDefinitionValidationMessage = T("definition.save_failed");
-        WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
-        IsSavingWorkflowDefinitionDraft = false;
+            if (saved.Ok && saved.Data is not null)
+            {
+                WorkflowDefinitionValidationMessage =
+                    F("format.saved_workflow", saved.Data.Name, saved.Data.Version);
+                IsWorkflowDefinitionDraftDirty = false;
+                HasWorkflowDefinitionRevisionConflict = false;
+                await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
+                await LoadSelectedWorkflowDefinitionAsync();
+                return;
+            }
+
+            if (saved.Error?.ErrorCode == "WORKFLOW_REVISION_CONFLICT")
+            {
+                HasWorkflowDefinitionRevisionConflict = true;
+                WorkflowDefinitionValidationMessage = T("definition.save_failed");
+                WorkflowDefinitionValidationErrorMessage = T("definition.revision_conflict");
+                return;
+            }
+
+            WorkflowDefinitionValidationMessage = T("definition.save_failed");
+            WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
+        }
+        finally
+        {
+            IsSavingWorkflowDefinitionDraft = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -2003,6 +2053,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
+        workflowDefinitionLoadVersion++;
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
         Runs.Clear();
@@ -2014,7 +2065,10 @@ public partial class MainWindowViewModel : ViewModelBase
         if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
         {
             WorkflowDefinitionDetail = null;
+            originalWorkflowDefinitionJson = string.Empty;
             WorkflowDefinitionDraftJson = string.Empty;
+            IsWorkflowDefinitionDraftDirty = false;
+            HasWorkflowDefinitionRevisionConflict = false;
             WorkflowDefinitionMessage = value is null
                 ? T("status.select_workflow_definition")
                 : F("format.selected_workflow_load_definition", value.Name);
@@ -2056,7 +2110,28 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
+
+        IsWorkflowDefinitionDraftDirty = value != originalWorkflowDefinitionJson;
+
+        if (WorkflowDefinitionValidationMessage == T("definition.draft_valid") ||
+            WorkflowDefinitionValidationMessage == T("definition.draft_has_issues") ||
+            WorkflowDefinitionValidationMessage == T("definition.validation_failed"))
+        {
+            WorkflowDefinitionValidationMessage = T("definition.validation_invalidated");
+            WorkflowDefinitionValidationErrorMessage = null;
+        }
+
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsWorkflowDefinitionDraftDirtyChanged(bool value)
+    {
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
+    {
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -2221,6 +2296,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
         OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
+        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
+        ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
     private static bool IsCancelableRunStatus(string? status)
