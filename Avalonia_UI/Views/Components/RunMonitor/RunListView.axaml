@@ -21,10 +21,24 @@
                         Content="{Binding RefreshText}"
                         Command="{Binding RefreshRunsCommand}"
                         MinWidth="84"/>
-                <Button Grid.Column="3"
-                        Content="{Binding CancelText}"
-                        Command="{Binding CancelSelectedRunCommand}"
-                        MinWidth="78"/>
+                <Panel Grid.Column="3" Background="Transparent" ToolTip.Tip="{Binding CancelSelectedRunDisabledReasonText}">
+                    <Button Content="{Binding CancelText}"
+                            IsEnabled="{Binding CanUseCancelSelectedRunAction}"
+                            MinWidth="78">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding CancelConfirmTitleText}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding CancelConfirmMessageText}" MaxWidth="250" TextWrapping="Wrap"/>
+                                    <Button Content="{Binding CancelText}"
+                                            Command="{Binding CancelSelectedRunCommand}"
+                                            Classes="Primary"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Panel>
             </Grid>
 
             <ListBox Grid.Row="1"

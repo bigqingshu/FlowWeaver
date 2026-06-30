@@ -657,6 +657,81 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task CancelSelectedRunIsEnabledOnlyForRunningRunWithToken()
+    {
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "RUNNING") }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.CanUseCancelSelectedRunAction);
+        Assert.IsTrue(viewModel.CancelSelectedRunCommand.CanExecute(null));
+        Assert.IsNull(viewModel.CancelSelectedRunDisabledReasonText);
+    }
+
+    [TestMethod]
+    public async Task CancelSelectedRunIsDisabledWhenTokenIsMissing()
+    {
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "RUNNING") }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+        viewModel.Token = string.Empty;
+
+        Assert.IsFalse(viewModel.CanUseCancelSelectedRunAction);
+        Assert.IsFalse(viewModel.CancelSelectedRunCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because EngineHost is not connected or authenticated.",
+            viewModel.CancelSelectedRunDisabledReasonText);
+    }
+
+    [TestMethod]
+    public async Task CancelSelectedRunIsDisabledForTerminalRun()
+    {
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "SUCCEEDED") }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.CanUseCancelSelectedRunAction);
+        Assert.IsFalse(viewModel.CancelSelectedRunCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because the run has already reached a terminal state.",
+            viewModel.CancelSelectedRunDisabledReasonText);
+    }
+
+    [TestMethod]
+    public async Task CancelSelectedRunIsDisabledForPendingRun()
+    {
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "PENDING") }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.CanUseCancelSelectedRunAction);
+        Assert.IsFalse(viewModel.CancelSelectedRunCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because the run is not currently running.",
+            viewModel.CancelSelectedRunDisabledReasonText);
+    }
+
+    [TestMethod]
     public async Task RefreshNodeRunsLoadsProgressAndStageForSelectedRun()
     {
         var apiClient = new FakeApiClient
@@ -694,6 +769,7 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
+            ConnectionStatus = ConnectionStatus.Connected,
         };
     }
 

@@ -29,6 +29,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly CancellationTokenSource _shutdown = new();
     private CancellationTokenSource? _runtimeEventStreamCancellation;
     private Task? _runtimeEventStreamTask;
+    private int nodeRunsLoadVersion;
+    private int tableRefsLoadVersion;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -219,6 +221,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string currentThemeVariant = PersistedUiSettings.SystemThemeVariant;
+
+    public bool CanUseEngineActions =>
+        ConnectionStatus == ConnectionStatus.Connected
+        && !string.IsNullOrWhiteSpace(BaseUrl)
+        && !string.IsNullOrWhiteSpace(Token);
 
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
@@ -425,6 +432,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string CancelText => T("runs.cancel");
 
+    public string CancelConfirmTitleText => T("runs.cancel_confirm_title");
+
+    public string CancelConfirmMessageText => T("runs.cancel_confirm_message");
+
     public string NodeRunsSectionText => T("node_runs.section");
 
     public string WorkflowDefinitionSectionText => T("definition.section");
@@ -564,9 +575,52 @@ public partial class MainWindowViewModel : ViewModelBase
         return !IsRunBusy;
     }
 
-    private bool CanCancelSelectedRun()
+    private bool CanCancelSelectedRunCore()
     {
-        return SelectedRun is not null && !IsRunBusy;
+        return CanUseEngineActions
+            && SelectedRun is not null
+            && IsCancelableRunStatus(SelectedRun.Status)
+            && !IsRunBusy;
+    }
+
+    public bool CanUseCancelSelectedRunAction => CanCancelSelectedRunCore();
+
+    public string? CancelSelectedRunDisabledReasonText
+    {
+        get
+        {
+            if (IsRunBusy)
+            {
+                return T("action.disabled.busy");
+            }
+
+            if (!CanUseEngineActions)
+            {
+                return T("action.disabled.engine_not_connected");
+            }
+
+            if (SelectedRun is null)
+            {
+                return T("action.disabled.no_run_selected");
+            }
+
+            if (string.IsNullOrWhiteSpace(SelectedRun.Status) || SelectedRun.Status == "UNKNOWN")
+            {
+                return T("action.disabled.run_status_unknown");
+            }
+
+            if (IsTerminalRunStatus(SelectedRun.Status))
+            {
+                return T("action.disabled.run_terminal");
+            }
+
+            if (!IsCancelableRunStatus(SelectedRun.Status))
+            {
+                return T("action.disabled.run_not_running");
+            }
+
+            return null;
+        }
     }
 
     private bool CanRefreshNodeRuns()
@@ -925,7 +979,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return LoadRunsAsync();
     }
 
-    [RelayCommand(CanExecute = nameof(CanCancelSelectedRun))]
+    [RelayCommand(CanExecute = nameof(CanCancelSelectedRunCore))]
     private async Task CancelSelectedRunAsync()
     {
         if (SelectedRun is null)
@@ -1108,31 +1162,48 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var requestedRunId = SelectedRun.WorkflowRunId;
+        var requestVersion = ++tableRefsLoadVersion;
         IsLoadingTableRefs = true;
-        TableRefMessage = F("format.loading_table_refs_for", SelectedRun.WorkflowRunId);
+        TableRefMessage = F("format.loading_table_refs_for", requestedRunId);
         TableRefErrorMessage = null;
 
-        var response = await _apiClient.ListTableRefsAsync(
-            BuildSettings(),
-            SelectedRun.WorkflowRunId,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            TableRefs.Clear();
-            foreach (var tableRef in response.Data)
+            var response = await _apiClient.ListTableRefsAsync(
+                BuildSettings(),
+                requestedRunId,
+                _shutdown.Token);
+
+            if (
+                SelectedRun?.WorkflowRunId != requestedRunId
+                || requestVersion != tableRefsLoadVersion)
             {
-                TableRefs.Add(new TableRefListItemViewModel(tableRef));
+                return;
             }
 
-            TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
-            IsLoadingTableRefs = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                TableRefs.Clear();
+                foreach (var tableRef in response.Data)
+                {
+                    TableRefs.Add(new TableRefListItemViewModel(tableRef));
+                }
 
-        TableRefMessage = T("data.table_ref_refresh_failed");
-        TableRefErrorMessage = DescribeError(response);
-        IsLoadingTableRefs = false;
+                TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
+                return;
+            }
+
+            TableRefMessage = T("data.table_ref_refresh_failed");
+            TableRefErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == tableRefsLoadVersion)
+            {
+                IsLoadingTableRefs = false;
+            }
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshSharedPublications))]
@@ -1247,31 +1318,48 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var requestedRunId = SelectedRun.WorkflowRunId;
+        var requestVersion = ++nodeRunsLoadVersion;
         IsLoadingNodeRuns = true;
-        NodeRunMessage = F("format.loading_nodes_for", SelectedRun.WorkflowRunId);
+        NodeRunMessage = F("format.loading_nodes_for", requestedRunId);
         NodeRunErrorMessage = null;
 
-        var response = await _apiClient.ListNodeRunsAsync(
-            BuildSettings(),
-            SelectedRun.WorkflowRunId,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            NodeRuns.Clear();
-            foreach (var nodeRun in response.Data)
+            var response = await _apiClient.ListNodeRunsAsync(
+                BuildSettings(),
+                requestedRunId,
+                _shutdown.Token);
+
+            if (
+                SelectedRun?.WorkflowRunId != requestedRunId
+                || requestVersion != nodeRunsLoadVersion)
             {
-                NodeRuns.Add(new NodeRunListItemViewModel(nodeRun, DisplayTextFormatter));
+                return;
             }
 
-            NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);
-            IsLoadingNodeRuns = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                NodeRuns.Clear();
+                foreach (var nodeRun in response.Data)
+                {
+                    NodeRuns.Add(new NodeRunListItemViewModel(nodeRun, DisplayTextFormatter));
+                }
 
-        NodeRunMessage = T("node_runs.refresh_failed");
-        NodeRunErrorMessage = DescribeError(response);
-        IsLoadingNodeRuns = false;
+                NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);
+                return;
+            }
+
+            NodeRunMessage = T("node_runs.refresh_failed");
+            NodeRunErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == nodeRunsLoadVersion)
+            {
+                IsLoadingNodeRuns = false;
+            }
+        }
     }
 
     private async Task RunRuntimeEventStreamLoopAsync(CancellationToken cancellationToken)
@@ -1837,6 +1925,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowNameWatermarkText));
         OnPropertyChanged(nameof(RunsSectionText));
         OnPropertyChanged(nameof(CancelText));
+        OnPropertyChanged(nameof(CancelConfirmTitleText));
+        OnPropertyChanged(nameof(CancelConfirmMessageText));
         OnPropertyChanged(nameof(NodeRunsSectionText));
         OnPropertyChanged(nameof(WorkflowDefinitionSectionText));
         OnPropertyChanged(nameof(DetailsText));
@@ -1872,7 +1962,18 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnConnectionStatusChanged(ConnectionStatus value)
     {
         OnPropertyChanged(nameof(IsChecking));
+        NotifyEngineActionStateChanged();
         CheckConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnTokenChanged(string value)
+    {
+        NotifyEngineActionStateChanged();
+    }
+
+    partial void OnBaseUrlChanged(string value)
+    {
+        NotifyEngineActionStateChanged();
     }
 
     partial void OnErrorMessageChanged(string? value)
@@ -1990,6 +2091,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedRunChanged(WorkflowRunListItemViewModel? value)
     {
+        nodeRunsLoadVersion++;
+        tableRefsLoadVersion++;
+        IsLoadingNodeRuns = false;
+        IsLoadingTableRefs = false;
         NodeRuns.Clear();
         TableRefs.Clear();
         NodeRunMessage = value is null
@@ -2000,7 +2105,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ? T("status.select_run_table_refs")
             : F("format.selected_run_refresh_table_refs", value.WorkflowRunId);
         TableRefErrorMessage = null;
-        CancelSelectedRunCommand.NotifyCanExecuteChanged();
+        NotifyEngineActionStateChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
     }
@@ -2106,8 +2211,26 @@ public partial class MainWindowViewModel : ViewModelBase
     private void NotifyRunCommandStateChanged()
     {
         OnPropertyChanged(nameof(IsRunBusy));
+        NotifyEngineActionStateChanged();
         RefreshRunsCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyEngineActionStateChanged()
+    {
+        OnPropertyChanged(nameof(CanUseEngineActions));
+        OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
+        OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
+    }
+
+    private static bool IsCancelableRunStatus(string? status)
+    {
+        return status == "RUNNING";
+    }
+
+    private static bool IsTerminalRunStatus(string? status)
+    {
+        return status is "SUCCEEDED" or "FAILED" or "CANCELLED" or "ABORTED";
     }
 }
 
