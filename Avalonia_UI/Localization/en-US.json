@@ -118,6 +118,8 @@
   "data.share_name_required_for_versions": "Share name is required to load shared publication versions.",
   "data.shared_publication_version_limit_label": "Shared publication version limit",
   "data.shared_publication_versions_refresh_failed": "Shared publication versions refresh failed.",
+  "list.enabled": "enabled",
+  "list.disabled": "disabled",
   "format.loaded_workflows": "Loaded {0} workflow(s).",
   "format.loaded_runs": "Loaded {0} run(s).",
   "format.loaded_runs_for": "Loaded {0} run(s) for {1}.",
@@ -146,5 +148,9 @@
   "format.loading_versions_for": "Loading versions for {0}...",
   "format.loaded_shared_publication_versions": "Loaded {0} version(s) for {1}.",
   "format.received_runtime_event": "Received {0} #{1}.",
-  "format.limit_between": "{0} must be between 1 and 1000."
+  "format.limit_between": "{0} must be between 1 and 1000.",
+  "format.list_node_count": "{0} node(s)",
+  "format.list_connection_count": "{0} connection(s)",
+  "format.list_attempt": "attempt {0}",
+  "format.list_member_count": "{0} member(s)"
 }

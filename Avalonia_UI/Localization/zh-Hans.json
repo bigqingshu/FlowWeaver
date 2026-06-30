@@ -118,6 +118,8 @@
   "data.share_name_required_for_versions": "需要共享名称才能加载共享发布版本。",
   "data.shared_publication_version_limit_label": "共享发布版本限制",
   "data.shared_publication_versions_refresh_failed": "共享发布版本刷新失败。",
+  "list.enabled": "已启用",
+  "list.disabled": "已禁用",
   "format.loaded_workflows": "已加载 {0} 个工作流。",
   "format.loaded_runs": "已加载 {0} 条运行记录。",
   "format.loaded_runs_for": "已为 {1} 加载 {0} 条运行记录。",
@@ -146,5 +148,9 @@
   "format.loading_versions_for": "正在加载 {0} 的版本...",
   "format.loaded_shared_publication_versions": "已为 {1} 加载 {0} 个版本。",
   "format.received_runtime_event": "已接收 {0} #{1}。",
-  "format.limit_between": "{0}必须在 1 到 1000 之间。"
+  "format.limit_between": "{0}必须在 1 到 1000 之间。",
+  "format.list_node_count": "{0} 个节点",
+  "format.list_connection_count": "{0} 条连接",
+  "format.list_attempt": "第 {0} 次尝试",
+  "format.list_member_count": "{0} 个成员"
 }

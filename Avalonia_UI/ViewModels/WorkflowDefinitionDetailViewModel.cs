@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -11,8 +12,10 @@ public sealed class WorkflowDefinitionDetailViewModel
 {
     public WorkflowDefinitionDetailViewModel(
         WorkflowDefinitionDto workflow,
-        IEnumerable<WorkflowRevisionDto> revisions)
+        IEnumerable<WorkflowRevisionDto> revisions,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         WorkflowId = workflow.WorkflowId;
         Name = workflow.Name;
         RevisionId = workflow.RevisionId;
@@ -22,7 +25,7 @@ public sealed class WorkflowDefinitionDetailViewModel
         UpdatedAt = workflow.UpdatedAt;
         RawDefinitionJson = FormatJson(workflow.Definition);
         Nodes = new ObservableCollection<WorkflowDefinitionNodeListItemViewModel>(
-            ReadNodes(workflow.Definition));
+            ReadNodes(workflow.Definition, DisplayTextFormatter));
         Connections = new ObservableCollection<WorkflowDefinitionConnectionListItemViewModel>(
             ReadConnections(workflow.Definition));
         Revisions = new ObservableCollection<WorkflowRevisionListItemViewModel>(
@@ -45,6 +48,8 @@ public sealed class WorkflowDefinitionDetailViewModel
 
     public string RawDefinitionJson { get; }
 
+    public DisplayTextFormatter DisplayTextFormatter { get; }
+
     public ObservableCollection<WorkflowDefinitionNodeListItemViewModel> Nodes { get; }
 
     public ObservableCollection<WorkflowDefinitionConnectionListItemViewModel> Connections { get; }
@@ -55,12 +60,14 @@ public sealed class WorkflowDefinitionDetailViewModel
 
     public string UpdatedAtText => UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 
-    public string NodeCountText => $"{Nodes.Count} node(s)";
+    public string NodeCountText => DisplayTextFormatter.FormatNodeCount(Nodes.Count);
 
-    public string ConnectionCountText => $"{Connections.Count} connection(s)";
+    public string ConnectionCountText =>
+        DisplayTextFormatter.FormatConnectionCount(Connections.Count);
 
     private static IEnumerable<WorkflowDefinitionNodeListItemViewModel> ReadNodes(
-        JsonElement definition)
+        JsonElement definition,
+        DisplayTextFormatter displayTextFormatter)
     {
         if (!TryGetArray(definition, "nodes", out var nodes))
         {
@@ -77,7 +84,8 @@ public sealed class WorkflowDefinitionDetailViewModel
                 GetBool(node, "enabled", defaultValue: true),
                 TryGetProperty(node, "config", out var config)
                     ? FormatJson(config)
-                    : "{}");
+                    : "{}",
+                displayTextFormatter);
         }
     }
 
@@ -171,7 +179,8 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
         string nodeVersion,
         string displayName,
         bool enabled,
-        string configJson)
+        string configJson,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
         NodeInstanceId = nodeInstanceId;
         NodeType = nodeType;
@@ -179,6 +188,7 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
         DisplayName = displayName;
         Enabled = enabled;
         ConfigJson = configJson;
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
     }
 
     public string NodeInstanceId { get; }
@@ -193,12 +203,14 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
 
     public string ConfigJson { get; }
 
+    public DisplayTextFormatter DisplayTextFormatter { get; }
+
     public string TypeText => $"{NodeType}@{NodeVersion}";
 
     public string DisplayNameText =>
         string.IsNullOrWhiteSpace(DisplayName) ? "-" : DisplayName;
 
-    public string EnabledText => Enabled ? "enabled" : "disabled";
+    public string EnabledText => DisplayTextFormatter.FormatEnabled(Enabled);
 }
 
 public sealed class WorkflowDefinitionConnectionListItemViewModel

@@ -2,13 +2,17 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
 public sealed class SharedPublicationListItemViewModel
 {
-    public SharedPublicationListItemViewModel(SharedPublicationDto publication)
+    public SharedPublicationListItemViewModel(
+        SharedPublicationDto publication,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         PublicationId = publication.PublicationId;
         ShareName = publication.ShareName;
         PublicationVersion = publication.PublicationVersion;
@@ -39,11 +43,13 @@ public sealed class SharedPublicationListItemViewModel
 
     public ObservableCollection<SharedPublicationMemberListItemViewModel> Members { get; }
 
+    public DisplayTextFormatter DisplayTextFormatter { get; }
+
     public string VersionText => $"v{PublicationVersion}";
 
     public string CreatedAtText => CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
 
-    public string MemberCountText => $"{Members.Count} member(s)";
+    public string MemberCountText => DisplayTextFormatter.FormatMemberCount(Members.Count);
 
     public string InputSnapshotText =>
         string.IsNullOrWhiteSpace(InputSnapshotId) ? "-" : InputSnapshotId;

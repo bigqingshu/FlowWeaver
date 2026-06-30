@@ -103,6 +103,72 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task ListItemDisplayTextUsesCurrentLanguage()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0"
+                },
+                {
+                  "node_instance_id": "disabled-node",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "enabled": false
+                }
+              ],
+              "connections": [
+                {
+                  "connection_id": "c1",
+                  "source_node_id": "source",
+                  "source_port": "out",
+                  "target_node_id": "disabled-node",
+                  "target_port": "in"
+                }
+              ]
+            }
+            """;
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 2, definitionJson) }),
+            WorkflowDetailResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                    Workflow("wf-1", "Daily Load", 2, definitionJson)),
+            WorkflowRevisionsResponse =
+                ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                    new List<WorkflowRevisionDto>()),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1") }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-1", "run-1", "source") }),
+            SharedPublicationsResponse =
+                ApiResponseEnvelope<List<SharedPublicationDto>>.Success(
+                    new List<SharedPublicationDto> { SharedPublication("pub-1", "daily_report") }),
+        };
+        var viewModel = CreateViewModel(uiSettingsStore, apiClient);
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshSharedPublicationsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("2 个节点", viewModel.WorkflowDefinitionDetail?.NodeCountText);
+        Assert.AreEqual("1 条连接", viewModel.WorkflowDefinitionDetail?.ConnectionCountText);
+        Assert.AreEqual("已禁用", viewModel.WorkflowDefinitionDetail?.Nodes[1].EnabledText);
+        Assert.AreEqual("第 1 次尝试", viewModel.NodeRuns[0].AttemptText);
+        Assert.AreEqual("1 个成员", viewModel.SharedPublications[0].MemberCountText);
+    }
+
+    [TestMethod]
     public async Task ChangeLanguageCommandFallsBackForUnsupportedLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore();
@@ -171,6 +237,82 @@ public sealed class MainWindowViewModelLocalizationTests
         throw new DirectoryNotFoundException("Could not locate source localization directory.");
     }
 
+    private static WorkflowDefinitionDto Workflow(
+        string workflowId,
+        string name,
+        int version,
+        string definitionJson)
+    {
+        return new WorkflowDefinitionDto
+        {
+            WorkflowId = workflowId,
+            Name = name,
+            RevisionId = $"rev-{workflowId}",
+            Version = version,
+            DefinitionHash = $"hash-{workflowId}",
+            Definition = JsonDocument.Parse(definitionJson).RootElement.Clone(),
+            Status = "ACTIVE",
+            CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+            UpdatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+        };
+    }
+
+    private static WorkflowRunDto Run(string workflowRunId, string workflowId)
+    {
+        return new WorkflowRunDto
+        {
+            WorkflowRunId = workflowRunId,
+            WorkflowId = workflowId,
+            WorkflowVersion = 1,
+            Status = "RUNNING",
+            StateVersion = 1,
+            StartedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+        };
+    }
+
+    private static NodeRunDto NodeRun(
+        string nodeRunId,
+        string workflowRunId,
+        string nodeInstanceId)
+    {
+        return new NodeRunDto
+        {
+            NodeRunId = nodeRunId,
+            WorkflowRunId = workflowRunId,
+            NodeInstanceId = nodeInstanceId,
+            NodeType = "builtin.table",
+            Status = "RUNNING",
+            StateVersion = 1,
+            Attempt = 1,
+        };
+    }
+
+    private static SharedPublicationDto SharedPublication(
+        string publicationId,
+        string shareName)
+    {
+        return new SharedPublicationDto
+        {
+            PublicationId = publicationId,
+            ShareName = shareName,
+            PublicationVersion = 1,
+            ProducerWorkflowId = "wf-1",
+            ProducerRunId = "run-1",
+            Status = "PUBLISHED",
+            CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+            Members =
+            [
+                new SharedPublicationMemberDto
+                {
+                    PublicationId = publicationId,
+                    ExportName = "orders",
+                    TableRefId = "table-1",
+                    ExactTableVersion = 1,
+                },
+            ],
+        };
+    }
+
     private sealed class FakeUiSettingsStore : IUiSettingsStore
     {
         public PersistedUiSettings SettingsToLoad { get; set; } =
@@ -219,6 +361,23 @@ public sealed class MainWindowViewModelLocalizationTests
     {
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; init; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
+
+        public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; init; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No workflow detail response configured.");
+
+        public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; init; } =
+            ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
+
+        public ApiResponseEnvelope<List<WorkflowRunDto>> RunsResponse { get; init; } =
+            ApiResponseEnvelope<List<WorkflowRunDto>>.Success(new List<WorkflowRunDto>());
+
+        public ApiResponseEnvelope<List<NodeRunDto>> NodeRunsResponse { get; init; } =
+            ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>());
+
+        public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; init; } =
+            ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -276,7 +435,7 @@ public sealed class MainWindowViewModelLocalizationTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(WorkflowDetailResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
@@ -284,7 +443,7 @@ public sealed class MainWindowViewModelLocalizationTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(WorkflowRevisionsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(
@@ -310,8 +469,7 @@ public sealed class MainWindowViewModelLocalizationTests
             IReadOnlyCollection<string>? statuses = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<List<WorkflowRunDto>>.Success(new List<WorkflowRunDto>()));
+            return Task.FromResult(RunsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<NodeRunDto>>> ListNodeRunsAsync(
@@ -319,7 +477,7 @@ public sealed class MainWindowViewModelLocalizationTests
             string workflowRunId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(NodeRunsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelRunAsync(
@@ -366,7 +524,7 @@ public sealed class MainWindowViewModelLocalizationTests
             int limit = 100,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(SharedPublicationsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationVersionsAsync(

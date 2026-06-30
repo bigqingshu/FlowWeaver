@@ -294,6 +294,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<SharedPublicationListItemViewModel> SharedPublicationVersions { get; } =
         new();
 
+    private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
+
     public bool IsChecking => ConnectionStatus == ConnectionStatus.Connecting;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -733,7 +735,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
             workflowResponse.Data,
-            revisionsResponse.Data);
+            revisionsResponse.Data,
+            DisplayTextFormatter);
         WorkflowDefinitionDraftJson = WorkflowDefinitionDetail.RawDefinitionJson;
         WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
         WorkflowDefinitionValidationErrorMessage = null;
@@ -1126,7 +1129,8 @@ public partial class MainWindowViewModel : ViewModelBase
             SharedPublications.Clear();
             foreach (var publication in response.Data)
             {
-                SharedPublications.Add(new SharedPublicationListItemViewModel(publication));
+                SharedPublications.Add(
+                    new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
             }
 
             SelectedSharedPublication = SharedPublications.FirstOrDefault(
@@ -1182,7 +1186,8 @@ public partial class MainWindowViewModel : ViewModelBase
             SharedPublicationVersions.Clear();
             foreach (var publication in response.Data)
             {
-                SharedPublicationVersions.Add(new SharedPublicationListItemViewModel(publication));
+                SharedPublicationVersions.Add(
+                    new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
             }
 
             SharedPublicationVersionMessage =
@@ -1220,7 +1225,7 @@ public partial class MainWindowViewModel : ViewModelBase
             NodeRuns.Clear();
             foreach (var nodeRun in response.Data)
             {
-                NodeRuns.Add(new NodeRunListItemViewModel(nodeRun));
+                NodeRuns.Add(new NodeRunListItemViewModel(nodeRun, DisplayTextFormatter));
             }
 
             NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);

@@ -1,12 +1,15 @@
 using System;
 using System.Globalization;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
 public sealed class NodeRunListItemViewModel
 {
-    public NodeRunListItemViewModel(NodeRunDto nodeRun)
+    public NodeRunListItemViewModel(
+        NodeRunDto nodeRun,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
         NodeRunId = nodeRun.NodeRunId;
         WorkflowRunId = nodeRun.WorkflowRunId;
@@ -17,6 +20,7 @@ public sealed class NodeRunListItemViewModel
         CurrentStage = nodeRun.CurrentStage;
         Attempt = nodeRun.Attempt;
         LastHeartbeat = nodeRun.LastHeartbeat;
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
     }
 
     public string NodeRunId { get; }
@@ -37,6 +41,8 @@ public sealed class NodeRunListItemViewModel
 
     public DateTimeOffset? LastHeartbeat { get; }
 
+    public DisplayTextFormatter DisplayTextFormatter { get; }
+
     public string ProgressText =>
         Progress.HasValue
             ? string.Create(
@@ -47,7 +53,7 @@ public sealed class NodeRunListItemViewModel
     public string CurrentStageText =>
         string.IsNullOrWhiteSpace(CurrentStage) ? "-" : CurrentStage;
 
-    public string AttemptText => $"attempt {Attempt}";
+    public string AttemptText => DisplayTextFormatter.FormatAttempt(Attempt);
 
     public string LastHeartbeatText =>
         LastHeartbeat?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
