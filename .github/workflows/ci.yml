@@ -42,7 +42,9 @@ jobs:
           $getPipPath = Join-Path $env:RUNNER_TEMP "get-pip.py"
           Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPipPath
           .\python312\python.exe $getPipPath
-          .\python312\python.exe -m pip install --disable-pip-version-check --no-warn-script-location .
+          $requirementsPath = Join-Path $env:RUNNER_TEMP "flowweaver-runtime-requirements.txt"
+          uv export --frozen --no-dev --no-emit-project --format requirements.txt --no-hashes --output-file $requirementsPath
+          .\python312\python.exe -m pip install --disable-pip-version-check --no-warn-script-location -r $requirementsPath
           .\python312\python.exe -m uvicorn --version
 
       - name: Sync dependencies
