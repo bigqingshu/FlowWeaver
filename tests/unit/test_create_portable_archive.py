@@ -332,6 +332,40 @@ def test_create_portable_archive_release_strict_rejects_missing_desktop(
     assert not (repo_root / ".tmp" / "dist").exists()
 
 
+def test_create_portable_archive_release_strict_rejects_debug_desktop_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = archive_module()
+    monkeypatch.setattr(module, "_git_output", lambda *args: "abc123")
+    monkeypatch.setattr(module, "_git_dirty", lambda repo_root: False)
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    _write_python_package_license_metadata(portable_root)
+    _write_portable_desktop_executable(portable_root)
+    _write_empty_dotnet_project_assets(repo_root)
+    (portable_root / "Desktop" / "Avalonia.Diagnostics.dll").write_text(
+        "",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        module.ArchiveConfigurationError,
+        match="desktop_debug_payload_present",
+    ):
+        module.create_portable_archive(
+            repo_root=repo_root,
+            input_dir=portable_root,
+            output_dir=repo_root / ".tmp" / "dist",
+            release_strict=True,
+            command_runner=_fake_command_runner,
+        )
+
+    assert not (repo_root / ".tmp" / "dist").exists()
+
+
 def test_create_portable_archive_release_strict_accepts_clean_input(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -930,6 +964,15 @@ def _write_portable_desktop_executable(portable_root: Path) -> None:
     desktop_dir = portable_root / "Desktop"
     desktop_dir.mkdir(exist_ok=True)
     (desktop_dir / "Avalonia_UI.exe").write_text("", encoding="utf-8")
+    (desktop_dir / "Avalonia_UI.dll").write_text("", encoding="utf-8")
+    (desktop_dir / "Avalonia_UI.deps.json").write_text(
+        json.dumps({"libraries": {}}),
+        encoding="utf-8",
+    )
+    (desktop_dir / "Avalonia_UI.runtimeconfig.json").write_text(
+        json.dumps({"runtimeOptions": {}}),
+        encoding="utf-8",
+    )
 
 
 def _write_empty_dotnet_project_assets(repo_root: Path) -> None:

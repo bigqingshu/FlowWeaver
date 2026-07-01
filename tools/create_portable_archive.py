@@ -30,6 +30,15 @@ DEFAULT_OUTPUT = REPO_ROOT / ".tmp" / "dist"
 ARCHIVE_ROOT_NAME = "FlowWeaverPortable"
 SUPPORTED_TARGET_RUNTIME = "win-x64"
 SUPPORTED_DESKTOP_PUBLISH_MODE = "framework-dependent"
+REQUIRED_RELEASE_DESKTOP_FILES = frozenset(
+    {
+        "Avalonia_UI.exe",
+        "Avalonia_UI.dll",
+        "Avalonia_UI.deps.json",
+        "Avalonia_UI.runtimeconfig.json",
+    }
+)
+REJECTED_RELEASE_DESKTOP_FILES = frozenset({"Avalonia.Diagnostics.dll"})
 MANIFEST_ARCHIVE_PATH = f"{ARCHIVE_ROOT_NAME}/release-manifest.json"
 LICENSE_DIR_ARCHIVE_PATH = f"{ARCHIVE_ROOT_NAME}/licenses"
 FLOWWEAVER_LICENSE_ARCHIVE_PATH = (
@@ -345,8 +354,23 @@ def _validate_release_strict(
         errors.append("git_commit_unavailable")
     if _git_dirty(repo_root):
         errors.append("git_worktree_dirty")
-    if not (input_dir / "Desktop" / "Avalonia_UI.exe").is_file():
+    desktop_dir = input_dir / "Desktop"
+    if not (desktop_dir / "Avalonia_UI.exe").is_file():
         errors.append("desktop_executable_missing")
+    missing_desktop_files = sorted(
+        file_name
+        for file_name in REQUIRED_RELEASE_DESKTOP_FILES
+        if not (desktop_dir / file_name).is_file()
+    )
+    if missing_desktop_files:
+        errors.append("desktop_payload_incomplete")
+    rejected_desktop_files = sorted(
+        file_name
+        for file_name in REJECTED_RELEASE_DESKTOP_FILES
+        if (desktop_dir / file_name).exists()
+    )
+    if rejected_desktop_files:
+        errors.append("desktop_debug_payload_present")
     if errors:
         joined_errors = ", ".join(sorted(set(errors)))
         raise ArchiveConfigurationError(
