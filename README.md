@@ -154,7 +154,9 @@
 - P+4 release strict 模式分析已完成，明确默认开发归档保持 warning 可归档，正式发布门禁通过显式 `--release-strict` 启用，并优先阻断 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4_release_strict模式分析.md`
 - P+4a release strict 最小实现已完成，`tools/create_portable_archive.py` 支持显式 `--release-strict`，默认开发归档行为不变，strict 会拒绝 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4a_release_strict最小实现.md`
 - P 后续总体验收复核已完成，汇总 P+1 到 P+4a 的便携发布、用户手册、Desktop smoke、第三方许可证增强和 release strict 门禁状态，完成记录 `docs/FlowWeaver_阶段P后续_总体验收复核.md`
-- 下一步建议先推送本轮 P 后续提交；若继续正式发布方向，先分析“干净可分发 Python runtime”，让 `--release-strict` 有机会在真实发布输入上通过
+- P+5 干净可分发 Python runtime 边界分析已完成，确认当前 repo-local `python312/` 可用于开发和 smoke，但因 dev/test/build、旧 PySide6 GUI 栈、缓存路径和陈旧 `flowweaver==0.2.2` 等杂质，不应直接作为正式 strict runtime，完成记录 `docs/FlowWeaver_阶段P+5_干净可分发PythonRuntime边界分析.md`
+- P+5a 独立发布 Python runtime 生成入口已完成，新增 `tools/create_release_python_runtime.py`，`create_portable_layout.py` 可通过 `--python-runtime-dir` 接入独立 runtime，并修正 audit 读取 pip 版本时写入 bytecode cache 的副作用；真实生成 smoke 的 runtime audit 已达到 `checked`，完成记录 `docs/FlowWeaver_阶段P+5a_独立发布PythonRuntime生成入口.md`
+- 下一步建议进入 P+5b：release runtime 锁定与 strict 前置复核，先分析是否用 `uv.lock` 固定版本，再尝试完整 `create_portable_archive --release-strict` 链路
 
 ## 阶段 I 计划
 

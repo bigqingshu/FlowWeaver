@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from collections.abc import Callable, Sequence
@@ -248,10 +249,13 @@ def audit_portable_runtime(
 
 
 def run_command(command: Sequence[str]) -> str:
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     completed = subprocess.run(
         list(command),
         check=True,
         capture_output=True,
+        env=env,
         text=True,
     )
     return (completed.stdout or completed.stderr).strip()

@@ -12,12 +12,18 @@ def create_portable_layout(
     *,
     repo_root: Path = REPO_ROOT,
     output_dir: Path = DEFAULT_OUTPUT,
+    python_runtime_dir: Path | None = None,
     include_python: bool = True,
     include_desktop_build: bool = True,
     clean: bool = True,
 ) -> Path:
     repo_root = repo_root.resolve()
     output_dir = output_dir.resolve()
+    python_runtime_dir = (
+        _resolve_path(python_runtime_dir, base=repo_root)
+        if python_runtime_dir is not None
+        else repo_root / "python312"
+    )
     _validate_output_dir(repo_root=repo_root, output_dir=output_dir)
 
     if clean and output_dir.exists():
@@ -48,7 +54,7 @@ def create_portable_layout(
     )
 
     if include_python:
-        _copy_tree(repo_root / "python312", enginehost_dir / "python312")
+        _copy_tree(python_runtime_dir, enginehost_dir / "python312")
 
     if include_desktop_build:
         _copy_desktop_build(repo_root=repo_root, desktop_dir=desktop_dir)
@@ -61,6 +67,10 @@ def _validate_output_dir(*, repo_root: Path, output_dir: Path) -> None:
     if output_dir != tmp_root and tmp_root in output_dir.parents:
         return
     raise ValueError(f"output_dir must be a child directory inside {tmp_root}")
+
+
+def _resolve_path(path: Path, *, base: Path) -> Path:
+    return path.resolve() if path.is_absolute() else (base / path).resolve()
 
 
 def _copy_file(source: Path, target: Path) -> None:
@@ -191,6 +201,15 @@ def main() -> int:
         help="Skip copying repo-local python312 runtime.",
     )
     parser.add_argument(
+        "--python-runtime-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Copy this Python runtime into EngineHost/python312 instead of "
+            "repo-local python312."
+        ),
+    )
+    parser.add_argument(
         "--no-desktop-build",
         action="store_true",
         help="Skip copying existing Avalonia build output.",
@@ -203,6 +222,7 @@ def main() -> int:
     args = parser.parse_args()
     output_dir = create_portable_layout(
         output_dir=args.output,
+        python_runtime_dir=args.python_runtime_dir,
         include_python=not args.no_python,
         include_desktop_build=not args.no_desktop_build,
         clean=not args.no_clean,
