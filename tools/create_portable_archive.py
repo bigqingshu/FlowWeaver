@@ -376,10 +376,12 @@ def _build_third_party_license_metadata(
         )
         for package in runtime_audit.packages
     ]
-    dotnet_packages, dotnet_sources, dotnet_warnings = _collect_dotnet_packages(
-        repo_root=repo_root,
-        input_dir=input_dir,
-    )
+    (
+        dotnet_packages,
+        dotnet_sources,
+        dotnet_warnings,
+        dotnet_license_files,
+    ) = _collect_dotnet_packages(repo_root=repo_root, input_dir=input_dir)
     packages.extend(dotnet_packages)
     packages.sort(key=lambda package: (str(package["ecosystem"]), str(package["name"])))
 
@@ -402,7 +404,10 @@ def _build_third_party_license_metadata(
         "generated_from": generated_from,
         "packages": packages,
         "warnings": warnings,
-    }, copied_python_license_files.generated_files
+    }, {
+        **copied_python_license_files.generated_files,
+        **dotnet_license_files,
+    }
 
 
 @dataclass(frozen=True)
@@ -410,6 +415,18 @@ class CopiedLicenseFiles:
     generated_files: dict[str, bytes]
     copied_paths_by_package: dict[str, list[str]]
     warnings_by_package: dict[str, list[str]]
+
+
+@dataclass(frozen=True)
+class NuGetLicenseMetadata:
+    metadata_source_suffix: str | None
+    license_expression: str | None
+    license_text: str | None
+    license_files: tuple[str, ...]
+    copied_license_files: tuple[str, ...]
+    generated_files: dict[str, bytes]
+    license_status: str
+    warnings: tuple[str, ...]
 
 
 def _python_package_license_dict(
@@ -529,31 +546,31 @@ def _collect_dotnet_packages(
     *,
     repo_root: Path,
     input_dir: Path,
-) -> tuple[list[dict[str, object]], list[str], list[str]]:
+) -> tuple[list[dict[str, object]], list[str], list[str], dict[str, bytes]]:
     if not _desktop_payload_present(input_dir):
-        return [], [], []
+        return [], [], [], {}
 
     assets_path = repo_root / "Avalonia_UI" / "obj" / "project.assets.json"
     if assets_path.is_file():
         source = _relative_posix(assets_path, repo_root)
-        packages = _parse_dotnet_package_libraries(
+        packages, license_files = _parse_dotnet_package_libraries(
             data=_read_json_file(assets_path),
             source_path=source,
             metadata_source="project.assets.json",
         )
-        return packages, [source], []
+        return packages, [source], [], license_files
 
     deps_path = input_dir / "Desktop" / "Avalonia_UI.deps.json"
     if deps_path.is_file():
         source = _relative_posix(deps_path, input_dir)
-        packages = _parse_dotnet_package_libraries(
+        packages, license_files = _parse_dotnet_package_libraries(
             data=_read_json_file(deps_path),
             source_path=source,
             metadata_source="deps.json",
         )
-        return packages, [source], []
+        return packages, [source], [], license_files
 
-    return [], [], ["dotnet_dependency_source_missing"]
+    return [], [], ["dotnet_dependency_source_missing"], {}
 
 
 def _desktop_payload_present(input_dir: Path) -> bool:
@@ -568,14 +585,15 @@ def _parse_dotnet_package_libraries(
     data: object,
     source_path: str,
     metadata_source: str,
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], dict[str, bytes]]:
     if not isinstance(data, dict):
-        return []
+        return [], {}
     libraries = data.get("libraries")
     if not isinstance(libraries, dict):
-        return []
+        return [], {}
 
     packages: list[dict[str, object]] = []
+    generated_files: dict[str, bytes] = {}
     for key, value in sorted(libraries.items(), key=lambda item: item[0].lower()):
         if not isinstance(key, str) or not isinstance(value, dict):
             continue
@@ -585,15 +603,15 @@ def _parse_dotnet_package_libraries(
         if parsed is None:
             continue
         name, version = parsed
-        packages.append(
-            _build_dotnet_package_license_dict(
-                name=name,
-                version=version,
-                source_path=source_path,
-                metadata_source=metadata_source,
-            )
+        package, package_license_files = _build_dotnet_package_license_dict(
+            name=name,
+            version=version,
+            source_path=source_path,
+            metadata_source=metadata_source,
         )
-    return packages
+        packages.append(package)
+        generated_files.update(package_license_files)
+    return packages, generated_files
 
 
 def _build_dotnet_package_license_dict(
@@ -602,16 +620,13 @@ def _build_dotnet_package_license_dict(
     version: str,
     source_path: str,
     metadata_source: str,
-) -> dict[str, object]:
-    license_expression = _read_nuget_license_expression(name=name, version=version)
-    warnings: list[str] = []
-    license_status = "metadata_found"
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    license_metadata = _read_nuget_license_metadata(name=name, version=version)
     effective_metadata_source = metadata_source
-    if license_expression is None:
-        warnings.append("nuget_license_metadata_unavailable")
-        license_status = "missing_license_metadata"
-    else:
-        effective_metadata_source = f"{metadata_source}+nuspec"
+    if license_metadata.metadata_source_suffix is not None:
+        effective_metadata_source = (
+            f"{metadata_source}+{license_metadata.metadata_source_suffix}"
+        )
 
     return {
         "ecosystem": "dotnet",
@@ -619,14 +634,14 @@ def _build_dotnet_package_license_dict(
         "version": version,
         "path": f"{source_path}#{name}/{version}",
         "metadata_source": effective_metadata_source,
-        "license_expression": license_expression,
-        "license_text": None,
+        "license_expression": license_metadata.license_expression,
+        "license_text": license_metadata.license_text,
         "license_classifiers": [],
-        "license_files": [],
-        "copied_license_files": [],
-        "license_status": license_status,
-        "warnings": warnings,
-    }
+        "license_files": list(license_metadata.license_files),
+        "copied_license_files": list(license_metadata.copied_license_files),
+        "license_status": license_metadata.license_status,
+        "warnings": list(license_metadata.warnings),
+    }, license_metadata.generated_files
 
 
 def _parse_dotnet_package_key(key: str) -> tuple[str, str] | None:
@@ -638,19 +653,121 @@ def _parse_dotnet_package_key(key: str) -> tuple[str, str] | None:
     return name, version
 
 
-def _read_nuget_license_expression(*, name: str, version: str) -> str | None:
+def _read_nuget_license_metadata(*, name: str, version: str) -> NuGetLicenseMetadata:
     for root in _nuget_cache_roots():
-        nuspec_path = root / name.lower() / version.lower() / f"{name.lower()}.nuspec"
+        package_dir = root / name.lower() / version.lower()
+        nuspec_path = package_dir / f"{name.lower()}.nuspec"
         if not nuspec_path.is_file():
             continue
         root_element = ElementTree.parse(nuspec_path).getroot()
         for element in root_element.iter():
             if _xml_local_name(element.tag) != "license":
                 continue
-            if element.attrib.get("type") == "expression" and element.text:
+            license_type = element.attrib.get("type")
+            if license_type == "expression" and element.text:
                 expression = element.text.strip()
-                return expression or None
-    return None
+                if expression:
+                    return NuGetLicenseMetadata(
+                        metadata_source_suffix="nuspec",
+                        license_expression=expression,
+                        license_text=None,
+                        license_files=(),
+                        copied_license_files=(),
+                        generated_files={},
+                        license_status="metadata_found",
+                        warnings=(),
+                    )
+            if license_type == "file" and element.text:
+                return _read_nuget_license_file_metadata(
+                    name=name,
+                    version=version,
+                    package_dir=package_dir,
+                    declared_file=element.text.strip(),
+                )
+    return NuGetLicenseMetadata(
+        metadata_source_suffix=None,
+        license_expression=None,
+        license_text=None,
+        license_files=(),
+        copied_license_files=(),
+        generated_files={},
+        license_status="missing_license_metadata",
+        warnings=("nuget_license_metadata_unavailable",),
+    )
+
+
+def _read_nuget_license_file_metadata(
+    *,
+    name: str,
+    version: str,
+    package_dir: Path,
+    declared_file: str,
+) -> NuGetLicenseMetadata:
+    license_file = Path(declared_file)
+    source_label = (
+        f"nuget-cache/{name.lower()}/{version.lower()}/"
+        f"{license_file.as_posix()}"
+    )
+    if (
+        not declared_file
+        or license_file.is_absolute()
+        or ".." in license_file.parts
+    ):
+        return NuGetLicenseMetadata(
+            metadata_source_suffix="nuspec",
+            license_expression=None,
+            license_text=None,
+            license_files=(source_label,),
+            copied_license_files=(),
+            generated_files={},
+            license_status="license_file_missing",
+            warnings=("nuget_license_file_invalid",),
+        )
+
+    source_path = package_dir / license_file
+    if not source_path.is_file():
+        return NuGetLicenseMetadata(
+            metadata_source_suffix="nuspec",
+            license_expression=None,
+            license_text=None,
+            license_files=(source_label,),
+            copied_license_files=(),
+            generated_files={},
+            license_status="license_file_missing",
+            warnings=("nuget_license_file_missing",),
+        )
+
+    archive_path = _third_party_dotnet_license_archive_path(
+        package_name=name,
+        version=version,
+        license_file=license_file,
+    )
+    return NuGetLicenseMetadata(
+        metadata_source_suffix="nuspec",
+        license_expression=None,
+        license_text=None,
+        license_files=(source_label,),
+        copied_license_files=(archive_path,),
+        generated_files={archive_path: source_path.read_bytes()},
+        license_status="license_file_found",
+        warnings=(),
+    )
+
+
+def _third_party_dotnet_license_archive_path(
+    *,
+    package_name: str,
+    version: str,
+    license_file: Path,
+) -> str:
+    suffix = license_file.as_posix()
+    suffix_path = Path(suffix)
+    if suffix_path.is_absolute() or ".." in suffix_path.parts:
+        suffix = license_file.name
+    return (
+        f"{LICENSE_DIR_ARCHIVE_PATH}/third-party/dotnet/"
+        f"{package_name}/{version}/{suffix}"
+    )
 
 
 def _nuget_cache_roots() -> tuple[Path, ...]:

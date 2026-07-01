@@ -443,6 +443,86 @@ def test_create_portable_archive_collects_dotnet_metadata_from_project_assets(
     ]
 
 
+def test_create_portable_archive_copies_dotnet_nuget_license_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root, portable_root = _create_repo_with_portable_layout(tmp_path)
+    (portable_root / "Desktop").mkdir()
+    (portable_root / "Desktop" / "Avalonia_UI.exe").write_text("", encoding="utf-8")
+    assets_path = repo_root / "Avalonia_UI" / "obj" / "project.assets.json"
+    assets_path.parent.mkdir(parents=True)
+    assets_path.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "libraries": {
+                    "File.Package/1.2.3": {"type": "package"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    nuget_root = tmp_path / "nuget"
+    package_dir = nuget_root / "file.package" / "1.2.3"
+    package_dir.mkdir(parents=True)
+    (package_dir / "file.package.nuspec").write_text(
+        "\n".join(
+            [
+                '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">',
+                "  <metadata>",
+                '    <license type="file">LICENSE</license>',
+                "  </metadata>",
+                "</package>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (package_dir / "LICENSE").write_text("NuGet package license", encoding="utf-8")
+    monkeypatch.setenv("NUGET_PACKAGES", str(nuget_root))
+
+    result = archive_module().create_portable_archive(
+        repo_root=repo_root,
+        input_dir=portable_root,
+        output_dir=repo_root / ".tmp" / "dist",
+        command_runner=_fake_command_runner,
+    )
+
+    copied_path = (
+        "FlowWeaverPortable/licenses/third-party/dotnet/"
+        "File.Package/1.2.3/LICENSE"
+    )
+    with zipfile.ZipFile(result.archive_path) as archive:
+        assert archive.read(copied_path).decode("utf-8") == "NuGet package license"
+        third_party = json.loads(
+            archive.read(
+                "FlowWeaverPortable/licenses/third-party-licenses.json"
+            ).decode("utf-8")
+        )
+
+    assert third_party["warnings"] == []
+    assert third_party["packages"] == [
+        {
+            "ecosystem": "dotnet",
+            "name": "File.Package",
+            "version": "1.2.3",
+            "path": (
+                "Avalonia_UI/obj/project.assets.json#"
+                "File.Package/1.2.3"
+            ),
+            "metadata_source": "project.assets.json+nuspec",
+            "license_expression": None,
+            "license_text": None,
+            "license_classifiers": [],
+            "license_files": ["nuget-cache/file.package/1.2.3/LICENSE"],
+            "copied_license_files": [copied_path],
+            "license_status": "license_file_found",
+            "warnings": [],
+        }
+    ]
+
+
 def test_create_portable_archive_collects_dotnet_metadata_from_deps_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -157,7 +157,8 @@
 - P+5 干净可分发 Python runtime 边界分析已完成，确认当前 repo-local `python312/` 可用于开发和 smoke，但因 dev/test/build、旧 PySide6 GUI 栈、缓存路径和陈旧 `flowweaver==0.2.2` 等杂质，不应直接作为正式 strict runtime，完成记录 `docs/FlowWeaver_阶段P+5_干净可分发PythonRuntime边界分析.md`
 - P+5a 独立发布 Python runtime 生成入口已完成，新增 `tools/create_release_python_runtime.py`，`create_portable_layout.py` 可通过 `--python-runtime-dir` 接入独立 runtime，并修正 audit 读取 pip 版本时写入 bytecode cache 的副作用；真实生成 smoke 的 runtime audit 已达到 `checked`，完成记录 `docs/FlowWeaver_阶段P+5a_独立发布PythonRuntime生成入口.md`
 - P+5b release runtime 锁定与可复现生成已完成，`tools/create_release_python_runtime.py --locked` 会从 `uv.lock` 的运行依赖闭包生成固定版本和 wheel hash requirements，并用 `--require-hashes --only-binary=:all:` 安装；真实 locked runtime smoke 的 runtime audit 已达到 `checked`，完成记录 `docs/FlowWeaver_阶段P+5b_releaseRuntime锁定与可复现生成.md`
-- 下一步建议进入 P+5c：release strict 前置复核，使用 locked runtime 生成完整 portable layout 后，逐项确认 Desktop executable、dirty git、NuGet metadata 和第三方许可证 warning 等 strict 门禁
+- P+5c release strict 前置复核与 NuGet 文件许可证收口已完成，初次 strict 发现 `git_worktree_dirty` 和 `third_party_license_warning`，已补齐 NuGet `<license type="file">LICENSE</license>` 识别与许可证文件复制，复测后 strict 仅剩 dirty git 阻断，完成记录 `docs/FlowWeaver_阶段P+5c_releaseStrict前置复核与NuGet文件许可证收口.md`
+- 下一步建议进入 P+5d：正式 Desktop publish 来源边界复核，明确 release strict 是否必须要求 Release publish 目录或 build source marker，同时保留默认开发 layout 的 Debug fallback
 
 ## 阶段 I 计划
 
