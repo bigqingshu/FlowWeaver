@@ -96,6 +96,81 @@ public sealed class MainWindowViewModelLogTests
         Assert.IsFalse(viewModel.HasAuditEventLogError);
     }
 
+    [TestMethod]
+    public async Task RuntimeEventFilterChangeReleasesBusyAndIgnoresStaleResponse()
+    {
+        var pendingResponse =
+            new TaskCompletionSource<ApiResponseEnvelope<List<RuntimeEventDto>>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiClient = new FakeApiClient
+        {
+            EventsResponseTask = pendingResponse.Task,
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        var refreshTask = viewModel.RefreshRuntimeEventLogCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.IsLoadingRuntimeEventLog);
+        Assert.IsFalse(viewModel.RefreshRuntimeEventLogCommand.CanExecute(null));
+
+        viewModel.LogWorkflowRunIdFilter = "run-new";
+
+        Assert.IsFalse(viewModel.IsLoadingRuntimeEventLog);
+        Assert.IsTrue(viewModel.RefreshRuntimeEventLogCommand.CanExecute(null));
+
+        pendingResponse.SetResult(
+            ApiResponseEnvelope<List<RuntimeEventDto>>.Success(
+                new List<RuntimeEventDto>
+                {
+                    RuntimeEvent("evt-old", 1, "NODE_STARTED", "run-old", "node-old"),
+                }));
+        await refreshTask;
+
+        Assert.IsFalse(viewModel.IsLoadingRuntimeEventLog);
+        Assert.IsEmpty(viewModel.RuntimeEventLogEntries);
+    }
+
+    [TestMethod]
+    public async Task AuditEventFilterChangeReleasesBusyAndIgnoresStaleResponse()
+    {
+        var pendingResponse =
+            new TaskCompletionSource<ApiResponseEnvelope<List<AuditEventDto>>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiClient = new FakeApiClient
+        {
+            AuditEventsResponseTask = pendingResponse.Task,
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        var refreshTask = viewModel.RefreshAuditEventsCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.IsLoadingAuditEventLog);
+        Assert.IsFalse(viewModel.RefreshAuditEventsCommand.CanExecute(null));
+
+        viewModel.LogEventTypeFilter = "PERMISSION_CHECK";
+
+        Assert.IsFalse(viewModel.IsLoadingAuditEventLog);
+        Assert.IsTrue(viewModel.RefreshAuditEventsCommand.CanExecute(null));
+
+        pendingResponse.SetResult(
+            ApiResponseEnvelope<List<AuditEventDto>>.Success(
+                new List<AuditEventDto>
+                {
+                    new()
+                    {
+                        AuditEventId = "audit-old",
+                        EventType = "PERMISSION_CHECK",
+                        Decision = "granted",
+                        WorkflowRunId = "run-old",
+                        NodeRunId = "node-old",
+                    },
+                }));
+        await refreshTask;
+
+        Assert.IsFalse(viewModel.IsLoadingAuditEventLog);
+        Assert.IsEmpty(viewModel.AuditEvents);
+    }
+
     private static MainWindowViewModel CreateViewModel(FakeApiClient apiClient)
     {
         return new MainWindowViewModel(
@@ -133,8 +208,12 @@ public sealed class MainWindowViewModelLogTests
         public ApiResponseEnvelope<List<RuntimeEventDto>> EventsResponse { get; set; } =
             ApiResponseEnvelope<List<RuntimeEventDto>>.Success(new List<RuntimeEventDto>());
 
+        public Task<ApiResponseEnvelope<List<RuntimeEventDto>>>? EventsResponseTask { get; set; }
+
         public ApiResponseEnvelope<List<AuditEventDto>> AuditEventsResponse { get; set; } =
             ApiResponseEnvelope<List<AuditEventDto>>.Success(new List<AuditEventDto>());
+
+        public Task<ApiResponseEnvelope<List<AuditEventDto>>>? AuditEventsResponseTask { get; set; }
 
         public int ListEventsCallCount { get; private set; }
 
@@ -295,6 +374,11 @@ public sealed class MainWindowViewModelLogTests
             LastEventNodeRunId = nodeRunId;
             LastEventType = eventType;
             LastEventLimit = limit;
+            if (EventsResponseTask is not null)
+            {
+                return EventsResponseTask;
+            }
+
             return Task.FromResult(EventsResponse);
         }
 
@@ -308,6 +392,11 @@ public sealed class MainWindowViewModelLogTests
             LastAuditWorkflowRunId = workflowRunId;
             LastAuditNodeRunId = nodeRunId;
             LastAuditEventType = eventType;
+            if (AuditEventsResponseTask is not null)
+            {
+                return AuditEventsResponseTask;
+            }
+
             return Task.FromResult(AuditEventsResponse);
         }
 

@@ -33,6 +33,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private int tableRefsLoadVersion;
     private int sharedPublicationsLoadVersion;
     private int sharedPublicationVersionsLoadVersion;
+    private int runtimeEventLogLoadVersion;
+    private int auditEventLogLoadVersion;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -1142,7 +1144,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RuntimeEventStreamErrorMessage = null;
     }
 
-    [RelayCommand(CanExecute = nameof(CanRefreshRuntimeEventLog))]
+    [RelayCommand(CanExecute = nameof(CanRefreshRuntimeEventLog), AllowConcurrentExecutions = true)]
     private async Task RefreshRuntimeEventLogAsync()
     {
         if (!TryParseRuntimeEventLogFilters(out var afterSequenceNumber, out var limit, out var error))
@@ -1152,68 +1154,96 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        var requestVersion = ++runtimeEventLogLoadVersion;
         IsLoadingRuntimeEventLog = true;
         RuntimeEventLogMessage = T("logs.loading_runtime_events");
         RuntimeEventLogErrorMessage = null;
 
-        var response = await _apiClient.ListEventsAsync(
-            BuildSettings(),
-            afterSequenceNumber,
-            NormalizeFilter(LogWorkflowRunIdFilter),
-            NormalizeFilter(LogNodeRunIdFilter),
-            NormalizeFilter(LogEventTypeFilter),
-            limit,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            RuntimeEventLogEntries.Clear();
-            foreach (var runtimeEvent in response.Data)
+            var response = await _apiClient.ListEventsAsync(
+                BuildSettings(),
+                afterSequenceNumber,
+                NormalizeFilter(LogWorkflowRunIdFilter),
+                NormalizeFilter(LogNodeRunIdFilter),
+                NormalizeFilter(LogEventTypeFilter),
+                limit,
+                _shutdown.Token);
+
+            if (requestVersion != runtimeEventLogLoadVersion)
             {
-                RuntimeEventLogEntries.Add(new RuntimeEventListItemViewModel(runtimeEvent));
+                return;
             }
 
-            RuntimeEventLogMessage =
-                F("format.loaded_runtime_events", RuntimeEventLogEntries.Count);
-            IsLoadingRuntimeEventLog = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                RuntimeEventLogEntries.Clear();
+                foreach (var runtimeEvent in response.Data)
+                {
+                    RuntimeEventLogEntries.Add(new RuntimeEventListItemViewModel(runtimeEvent));
+                }
 
-        RuntimeEventLogMessage = T("logs.runtime_refresh_failed");
-        RuntimeEventLogErrorMessage = DescribeError(response);
-        IsLoadingRuntimeEventLog = false;
+                RuntimeEventLogMessage =
+                    F("format.loaded_runtime_events", RuntimeEventLogEntries.Count);
+                return;
+            }
+
+            RuntimeEventLogMessage = T("logs.runtime_refresh_failed");
+            RuntimeEventLogErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == runtimeEventLogLoadVersion)
+            {
+                IsLoadingRuntimeEventLog = false;
+            }
+        }
     }
 
-    [RelayCommand(CanExecute = nameof(CanRefreshAuditEvents))]
+    [RelayCommand(CanExecute = nameof(CanRefreshAuditEvents), AllowConcurrentExecutions = true)]
     private async Task RefreshAuditEventsAsync()
     {
+        var requestVersion = ++auditEventLogLoadVersion;
         IsLoadingAuditEventLog = true;
         AuditEventLogMessage = T("logs.loading_audit_events");
         AuditEventLogErrorMessage = null;
 
-        var response = await _apiClient.ListAuditEventsAsync(
-            BuildSettings(),
-            NormalizeFilter(LogWorkflowRunIdFilter),
-            NormalizeFilter(LogNodeRunIdFilter),
-            NormalizeFilter(LogEventTypeFilter),
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        try
         {
-            AuditEvents.Clear();
-            foreach (var auditEvent in response.Data)
+            var response = await _apiClient.ListAuditEventsAsync(
+                BuildSettings(),
+                NormalizeFilter(LogWorkflowRunIdFilter),
+                NormalizeFilter(LogNodeRunIdFilter),
+                NormalizeFilter(LogEventTypeFilter),
+                _shutdown.Token);
+
+            if (requestVersion != auditEventLogLoadVersion)
             {
-                AuditEvents.Add(new AuditEventListItemViewModel(auditEvent));
+                return;
             }
 
-            AuditEventLogMessage = F("format.loaded_audit_events", AuditEvents.Count);
-            IsLoadingAuditEventLog = false;
-            return;
-        }
+            if (response.Ok && response.Data is not null)
+            {
+                AuditEvents.Clear();
+                foreach (var auditEvent in response.Data)
+                {
+                    AuditEvents.Add(new AuditEventListItemViewModel(auditEvent));
+                }
 
-        AuditEventLogMessage = T("logs.audit_refresh_failed");
-        AuditEventLogErrorMessage = DescribeError(response);
-        IsLoadingAuditEventLog = false;
+                AuditEventLogMessage = F("format.loaded_audit_events", AuditEvents.Count);
+                return;
+            }
+
+            AuditEventLogMessage = T("logs.audit_refresh_failed");
+            AuditEventLogErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            if (requestVersion == auditEventLogLoadVersion)
+            {
+                IsLoadingAuditEventLog = false;
+            }
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshTableRefs))]
@@ -2329,6 +2359,31 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSharedPublicationVersionShareNameFilterChanged(string value)
     {
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnLogWorkflowRunIdFilterChanged(string value)
+    {
+        InvalidateLogLoads();
+    }
+
+    partial void OnLogNodeRunIdFilterChanged(string value)
+    {
+        InvalidateLogLoads();
+    }
+
+    partial void OnLogEventTypeFilterChanged(string value)
+    {
+        InvalidateLogLoads();
+    }
+
+    private void InvalidateLogLoads()
+    {
+        runtimeEventLogLoadVersion++;
+        auditEventLogLoadVersion++;
+        IsLoadingRuntimeEventLog = false;
+        IsLoadingAuditEventLog = false;
+        RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
+        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSharedPublicationErrorMessageChanged(string? value)
