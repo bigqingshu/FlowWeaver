@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.3a AppShellPageHost 页面承载隔离已落地
-> 当前执行点：MainWindow.axaml 已改为引用 AppShellPageHost，TabControl 和五个固定页面迁入 Host，尚未迁移 ItemsSource 或页面实例创建
+> 文档状态：UI-COMPONENT-2b.3b AppShellPageHost 稳定性复核
+> 当前执行点：为 MainWindow 与 AppShellPageHost 的职责分布补充结构测试，仍未迁移 ItemsSource 或页面实例创建
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -864,6 +864,30 @@ Avalonia_UI/Views/MainWindow.axaml
 
 ```text
 UI-COMPONENT-2b.3b：AppShellPageHost 稳定性复核，先确认 MainWindow 瘦身后的布局、DataContext 和语言切换边界，再决定是否进入 ItemsSource。
+```
+
+### 2.34 UI-COMPONENT-2b.3b 稳定性复核
+
+2b.3b 的目标是复核 2b.3a 的边界是否稳定，而不是进入动态页面系统。
+
+已补充结构测试：
+
+```text
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+```
+
+测试锁定以下事实：
+
+* `MainWindow.axaml` 只引用 `AppShellPageHost`，不再直接引用五个页面 View。
+* `AppShellPageHost.axaml` 内部仍使用固定 `TabControl`。
+* 五个 `TabItem.Header` 仍读取稳定导航项的 `HeaderText`。
+* 五个页面 View 仍固定存在于 `AppShellPageHost`。
+* `AppShellPageHost` 仍未引入 `ItemsSource` 或 `ContentTemplate`。
+
+2b.3b 完成后，才能进入下一步分析：
+
+```text
+UI-COMPONENT-2b.4：是否继续做 ItemsSource 前置模型，先分析，不直接改页面承载。
 ```
 
 ---
