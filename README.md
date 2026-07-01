@@ -146,7 +146,8 @@
 - P+1 发布包内完整用户手册与 docs 入口已完成，便携 layout 生成时会复制 `docs/FlowWeaver_便携版用户手册.md`，短 README 会指向完整手册，归档 manifest 和 clean-room smoke 已覆盖该手册文件，完成记录 `docs/FlowWeaver_阶段P+1_发布包内完整用户手册与docs入口.md`
 - P+2 真实 Desktop clean-room smoke 已完成，新增显式环境变量保护的发布 zip 解压后真实 Desktop 最小进程级 smoke，覆盖 EngineHost health、token 鉴权、Desktop pid 日志、日志生成、退出清理和 token 脱敏，完成记录 `docs/FlowWeaver_阶段P+2_真实DesktopCleanRoomSmoke.md`
 - P+3 第三方许可证增强方案已完成，明确 `third-party-licenses.json` 从 `summary-only` 渐进升级到 `metadata-only` 的数据来源、缺失策略、默认不阻断边界和 P+3a/P+3b/P+3c 后续顺序，完成记录 `docs/FlowWeaver_阶段P+3_第三方许可证增强方案.md`
-- 下一步建议进入 P+3a：Python 包许可证 metadata 采集，先增强 `dist-info/METADATA` 解析和 JSON schema，不复制许可证正文、不改变默认阻断策略
+- P+3a Python 包许可证 metadata 采集已完成，`third-party-licenses.json` 已升级为 `metadata-only` schema，能记录 `License-Expression`、`License`、license classifier、`License-File`、许可证正文路径和包级 warning，且不改变默认归档阻断策略，完成记录 `docs/FlowWeaver_阶段P+3a_Python包许可证Metadata采集.md`
+- 下一步建议进入 P+3b：.NET NuGet 依赖许可证 metadata 方案落地，继续保持只读 metadata 采集，不复制 NuGet 许可证正文，不依赖联网
 
 ## 阶段 I 计划
 

@@ -193,6 +193,126 @@ def test_audit_reports_dev_and_legacy_packages_as_warnings(
     assert len(result.warnings) == 2
 
 
+def test_audit_collects_python_package_license_metadata(tmp_path: Path) -> None:
+    portable_root = _create_portable_root(
+        tmp_path,
+        packages={"FastAPI": "0.124.0"},
+    )
+    dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / "FastAPI-0.124.0.dist-info"
+    )
+    (dist_info_dir / "METADATA").write_text(
+        "\n".join(
+            [
+                "Metadata-Version: 2.4",
+                "Name: FastAPI",
+                "Version: 0.124.0",
+                "License-Expression: MIT",
+                "Classifier: License :: OSI Approved :: MIT License",
+                "License-File: LICENSE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (dist_info_dir / "LICENSE").write_text("MIT license", encoding="utf-8")
+
+    result = audit_module().audit_portable_runtime(
+        portable_root,
+        command_runner=_fake_command_runner(),
+    )
+
+    assert result.status == "checked"
+    assert result.warnings == ()
+    assert len(result.packages) == 1
+    package = result.packages[0]
+    assert package.ecosystem == "python"
+    assert package.name == "fastapi"
+    assert package.version == "0.124.0"
+    assert package.metadata_source == "METADATA"
+    assert package.license_expression == "MIT"
+    assert package.license_text is None
+    assert package.license_classifiers == (
+        "License :: OSI Approved :: MIT License",
+    )
+    assert package.license_files == (
+        "EngineHost/python312/Lib/site-packages/"
+        "FastAPI-0.124.0.dist-info/LICENSE",
+    )
+    assert package.license_status == "license_file_found"
+    assert package.warnings == ()
+
+
+def test_audit_records_package_license_warnings_without_audit_warning(
+    tmp_path: Path,
+) -> None:
+    portable_root = _create_portable_root(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+
+    result = audit_module().audit_portable_runtime(
+        portable_root,
+        command_runner=_fake_command_runner(),
+    )
+
+    assert result.status == "checked"
+    assert result.warnings == ()
+    assert len(result.packages) == 1
+    package = result.packages[0]
+    assert package.metadata_source is None
+    assert package.license_status == "missing_metadata"
+    assert package.warnings == ("metadata_file_missing",)
+
+
+def test_audit_records_missing_declared_license_file(tmp_path: Path) -> None:
+    portable_root = _create_portable_root(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / "fastapi-0.124.0.dist-info"
+    )
+    (dist_info_dir / "METADATA").write_text(
+        "\n".join(
+            [
+                "Metadata-Version: 2.4",
+                "Name: fastapi",
+                "Version: 0.124.0",
+                "License: MIT",
+                "License-File: LICENSE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_module().audit_portable_runtime(
+        portable_root,
+        command_runner=_fake_command_runner(),
+    )
+
+    assert result.status == "checked"
+    assert result.warnings == ()
+    package = result.packages[0]
+    assert package.license_text == "MIT"
+    assert package.license_status == "license_file_missing"
+    assert package.warnings == (
+        "declared_license_file_missing:LICENSE",
+        "license_file_missing",
+    )
+
+
 def test_audit_warns_when_pip_version_is_unavailable(tmp_path: Path) -> None:
     portable_root = _create_portable_root(tmp_path)
 

@@ -292,17 +292,49 @@ def _build_generated_files(
     if not python_license_path.is_file():
         raise ArchiveConfigurationError("Python LICENSE.txt is required")
 
-    third_party = {
-        "status": "summary-only",
-        "packages": [
-            {"name": package.name, "version": package.version, "path": package.path}
-            for package in runtime_audit.packages
-        ],
-    }
     return {
         FLOWWEAVER_LICENSE_ARCHIVE_PATH: flowweaver_license_path.read_bytes(),
         PYTHON_LICENSE_ARCHIVE_PATH: python_license_path.read_bytes(),
-        THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(third_party),
+        THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(
+            _build_third_party_license_metadata(runtime_audit)
+        ),
+    }
+
+
+def _build_third_party_license_metadata(
+    runtime_audit: RuntimeAuditResult,
+) -> dict[str, object]:
+    packages = [
+        {
+            "ecosystem": package.ecosystem,
+            "name": package.name,
+            "version": package.version,
+            "path": package.path,
+            "metadata_source": package.metadata_source,
+            "license_expression": package.license_expression,
+            "license_text": package.license_text,
+            "license_classifiers": list(package.license_classifiers),
+            "license_files": list(package.license_files),
+            "license_status": package.license_status,
+            "warnings": list(package.warnings),
+        }
+        for package in runtime_audit.packages
+    ]
+    warnings = sorted(
+        {
+            warning
+            for package in runtime_audit.packages
+            for warning in package.warnings
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "metadata-only",
+        "generated_from": {
+            "python_runtime": "EngineHost/python312",
+        },
+        "packages": packages,
+        "warnings": warnings,
     }
 
 
@@ -411,7 +443,7 @@ def _build_manifest(
             {
                 "name": "Third-party packages",
                 "path": THIRD_PARTY_LICENSES_ARCHIVE_PATH,
-                "kind": "summary",
+                "kind": "metadata",
             },
         ],
     }

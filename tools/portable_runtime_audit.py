@@ -6,6 +6,8 @@ import re
 import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
+from email.parser import Parser
+from email.policy import default as EMAIL_POLICY
 from pathlib import Path
 from typing import Literal
 
@@ -18,6 +20,8 @@ DEFAULT_PORTABLE_ROOT = Path(__file__).resolve().parents[1] / ".tmp" / (
 PYTHON_VERSION_PATTERN = re.compile(r"Python\s+(?P<version>\d+\.\d+(?:\.\d+)?)")
 PIP_VERSION_PATTERN = re.compile(r"\bpip\s+(?P<version>[^\s]+)")
 DIST_INFO_SUFFIX = ".dist-info"
+PACKAGE_METADATA_FILE_NAMES = ("METADATA", "PKG-INFO")
+LICENSE_FILE_PATTERNS = ("LICENSE*", "COPYING*", "NOTICE*")
 
 DEV_OR_LEGACY_PACKAGE_NAMES = frozenset(
     {
@@ -62,6 +66,25 @@ class RuntimePackage:
     name: str
     version: str
     path: str
+    ecosystem: str
+    metadata_source: str | None
+    license_expression: str | None
+    license_text: str | None
+    license_classifiers: tuple[str, ...]
+    license_files: tuple[str, ...]
+    license_status: str
+    warnings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PackageLicenseMetadata:
+    metadata_source: str | None
+    license_expression: str | None
+    license_text: str | None
+    license_classifiers: tuple[str, ...]
+    license_files: tuple[str, ...]
+    license_status: str
+    warnings: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -347,14 +370,151 @@ def _discover_packages(
         if "-" not in raw:
             continue
         name, version = raw.rsplit("-", 1)
+        license_metadata = _read_package_license_metadata(
+            dist_info_dir=path,
+            portable_root=portable_root,
+        )
         packages.append(
             RuntimePackage(
                 name=_normalize_package_name(name),
                 version=version,
                 path=_relative_posix(path, portable_root),
+                ecosystem="python",
+                metadata_source=license_metadata.metadata_source,
+                license_expression=license_metadata.license_expression,
+                license_text=license_metadata.license_text,
+                license_classifiers=license_metadata.license_classifiers,
+                license_files=license_metadata.license_files,
+                license_status=license_metadata.license_status,
+                warnings=license_metadata.warnings,
             )
         )
     return tuple(packages)
+
+
+def _read_package_license_metadata(
+    *,
+    dist_info_dir: Path,
+    portable_root: Path,
+) -> PackageLicenseMetadata:
+    warnings: list[str] = []
+    metadata_path = _find_package_metadata_file(dist_info_dir)
+    metadata_source: str | None = None
+    license_expression: str | None = None
+    license_text: str | None = None
+    license_classifiers: tuple[str, ...] = ()
+    declared_license_files: tuple[str, ...] = ()
+
+    if metadata_path is None:
+        warnings.append("metadata_file_missing")
+    else:
+        metadata_source = metadata_path.name
+        message = Parser(policy=EMAIL_POLICY).parsestr(
+            metadata_path.read_text(encoding="utf-8", errors="replace")
+        )
+        license_expression = _clean_metadata_value(
+            message.get("License-Expression")
+        )
+        license_text = _clean_metadata_value(message.get("License"))
+        license_classifiers = tuple(
+            sorted(
+                classifier.strip()
+                for classifier in message.get_all("Classifier", [])
+                if classifier.strip().startswith("License ::")
+            )
+        )
+        declared_license_files = tuple(
+            sorted(
+                file_name.strip()
+                for file_name in message.get_all("License-File", [])
+                if file_name.strip()
+            )
+        )
+
+    license_files = set(_discover_package_license_files(dist_info_dir, portable_root))
+    for file_name in declared_license_files:
+        candidate = _resolve_declared_license_file(dist_info_dir, file_name)
+        if candidate is None or not candidate.is_file():
+            warnings.append(f"declared_license_file_missing:{file_name}")
+            continue
+        license_files.add(_relative_posix(candidate, portable_root))
+
+    has_license_metadata = any(
+        (license_expression, license_text, license_classifiers)
+    )
+    if metadata_path is not None and not has_license_metadata:
+        warnings.append("license_metadata_missing")
+    if metadata_path is not None and has_license_metadata and not license_files:
+        warnings.append("license_file_missing")
+
+    has_missing_declared_file = any(
+        warning.startswith("declared_license_file_missing:")
+        for warning in warnings
+    )
+    if has_missing_declared_file:
+        license_status = "license_file_missing"
+    elif metadata_path is None:
+        license_status = "missing_metadata"
+    elif license_files:
+        license_status = "license_file_found"
+    elif has_license_metadata:
+        license_status = "metadata_found"
+    else:
+        license_status = "missing_license_metadata"
+
+    return PackageLicenseMetadata(
+        metadata_source=metadata_source,
+        license_expression=license_expression,
+        license_text=license_text,
+        license_classifiers=license_classifiers,
+        license_files=tuple(sorted(license_files)),
+        license_status=license_status,
+        warnings=tuple(sorted(dict.fromkeys(warnings))),
+    )
+
+
+def _find_package_metadata_file(dist_info_dir: Path) -> Path | None:
+    for name in PACKAGE_METADATA_FILE_NAMES:
+        path = dist_info_dir / name
+        if path.is_file():
+            return path
+    return None
+
+
+def _discover_package_license_files(
+    dist_info_dir: Path,
+    portable_root: Path,
+) -> tuple[str, ...]:
+    files: set[str] = set()
+    for pattern in LICENSE_FILE_PATTERNS:
+        for path in dist_info_dir.glob(pattern):
+            if path.is_file():
+                files.add(_relative_posix(path, portable_root))
+
+    licenses_dir = dist_info_dir / "licenses"
+    if licenses_dir.is_dir():
+        for path in licenses_dir.rglob("*"):
+            if path.is_file():
+                files.add(_relative_posix(path, portable_root))
+    return tuple(sorted(files))
+
+
+def _resolve_declared_license_file(
+    dist_info_dir: Path,
+    file_name: str,
+) -> Path | None:
+    declared = Path(file_name)
+    if declared.is_absolute() or ".." in declared.parts:
+        return None
+    candidates = (
+        dist_info_dir / declared,
+        dist_info_dir / "licenses" / declared,
+        dist_info_dir.parent / declared,
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
 
 
 def _collect_path_findings(
@@ -418,6 +578,15 @@ def _relative_posix(path: Path, root: Path) -> str:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _clean_metadata_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned or cleaned.upper() == "UNKNOWN":
+        return None
+    return cleaned
 
 
 def _normalize_package_name(name: str) -> str:

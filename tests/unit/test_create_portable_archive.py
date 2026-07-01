@@ -38,6 +38,29 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
         tmp_path,
         packages={"fastapi": "0.124.0"},
     )
+    dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / "fastapi-0.124.0.dist-info"
+    )
+    (dist_info_dir / "METADATA").write_text(
+        "\n".join(
+            [
+                "Metadata-Version: 2.4",
+                "Name: fastapi",
+                "Version: 0.124.0",
+                "License-Expression: MIT",
+                "Classifier: License :: OSI Approved :: MIT License",
+                "License-File: LICENSE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (dist_info_dir / "LICENSE").write_text("MIT license", encoding="utf-8")
 
     result = archive_module().create_portable_archive(
         repo_root=repo_root,
@@ -78,6 +101,16 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
         assert manifest["runtime_audit_status"] == "checked"
         assert manifest["manifest_path"] == "FlowWeaverPortable/release-manifest.json"
         assert manifest["manifest_integrity"] == "covered_by_external_zip_sha256"
+        license_entries = {
+            license_entry["path"]: license_entry
+            for license_entry in manifest["licenses"]
+        }
+        assert (
+            license_entries[
+                "FlowWeaverPortable/licenses/third-party-licenses.json"
+            ]["kind"]
+            == "metadata"
+        )
 
         entries = {entry["path"]: entry for entry in manifest["entries"]}
         assert "FlowWeaverPortable/release-manifest.json" not in entries
@@ -92,15 +125,33 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
                 "FlowWeaverPortable/licenses/third-party-licenses.json"
             ).decode("utf-8")
         )
-        assert third_party["status"] == "summary-only"
+        assert third_party["schema_version"] == 1
+        assert third_party["status"] == "metadata-only"
+        assert third_party["generated_from"] == {
+            "python_runtime": "EngineHost/python312"
+        }
+        assert third_party["warnings"] == []
         assert third_party["packages"] == [
             {
+                "ecosystem": "python",
                 "name": "fastapi",
                 "version": "0.124.0",
                 "path": (
                     "EngineHost/python312/Lib/site-packages/"
                     "fastapi-0.124.0.dist-info"
                 ),
+                "metadata_source": "METADATA",
+                "license_expression": "MIT",
+                "license_text": None,
+                "license_classifiers": [
+                    "License :: OSI Approved :: MIT License"
+                ],
+                "license_files": [
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info/LICENSE"
+                ],
+                "license_status": "license_file_found",
+                "warnings": [],
             }
         ]
 
@@ -147,6 +198,15 @@ def test_create_portable_archive_accepts_warning_audit_and_excludes_cache(
             "module.cpython-312.pyc"
             in manifest["excluded_paths"]
         )
+        third_party = json.loads(
+            archive.read(
+                "FlowWeaverPortable/licenses/third-party-licenses.json"
+            ).decode("utf-8")
+        )
+        assert third_party["status"] == "metadata-only"
+        assert third_party["warnings"] == ["metadata_file_missing"]
+        assert third_party["packages"][0]["license_status"] == "missing_metadata"
+        assert third_party["packages"][0]["warnings"] == ["metadata_file_missing"]
 
 
 def test_create_portable_archive_rejects_version_mismatch(tmp_path: Path) -> None:
