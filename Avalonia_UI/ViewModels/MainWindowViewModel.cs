@@ -306,11 +306,15 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
+        RefreshShellNavigationItems();
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
 
     public ObservableCollection<ThemeMenuItemViewModel> Themes { get; } = new();
+
+    public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; } =
+        new();
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
@@ -1901,6 +1905,32 @@ public partial class MainWindowViewModel : ViewModelBase
         return _localizationService.Format(key, args);
     }
 
+    private void RefreshShellNavigationItems()
+    {
+        ShellNavigationItems.Clear();
+        foreach (var descriptor in BuiltinShellPages.All.OrderBy(page => page.SortOrder))
+        {
+            ShellNavigationItems.Add(
+                new ShellNavigationItemViewModel(
+                    descriptor,
+                    ResolveShellPageHeaderText(descriptor)));
+        }
+    }
+
+    private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
+    {
+        return descriptor.HeaderPropertyName switch
+        {
+            nameof(WorkflowsSectionText) => WorkflowsSectionText,
+            nameof(RunsSectionText) => RunsSectionText,
+            nameof(DataTabText) => DataTabText,
+            nameof(LogsTabText) => LogsTabText,
+            nameof(SettingsMenuText) => SettingsMenuText,
+            _ => throw new InvalidOperationException(
+                $"Unknown shell page header property '{descriptor.HeaderPropertyName}'."),
+        };
+    }
+
     private Dictionary<string, string> CaptureDefaultMessageSnapshot()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
@@ -2085,6 +2115,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShareText));
         OnPropertyChanged(nameof(ShareNameWatermarkText));
         OnPropertyChanged(nameof(VersionsText));
+        RefreshShellNavigationItems();
     }
 
     partial void OnConnectionStatusChanged(ConnectionStatus value)

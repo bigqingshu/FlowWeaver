@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,6 +62,46 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("版本", viewModel.VersionsText);
         Assert.AreEqual(1, uiSettingsStore.SaveCount);
         Assert.AreEqual("zh-Hans", uiSettingsStore.SavedSettings?.LanguageCode);
+    }
+
+    [TestMethod]
+    public void ShellNavigationItemsMirrorBuiltinShellPages()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        CollectionAssert.AreEqual(
+            BuiltinShellPages.All.Select(page => page.Key).ToArray(),
+            viewModel.ShellNavigationItems.Select(item => item.Key).ToArray());
+        CollectionAssert.AreEqual(
+            BuiltinShellPages.All.Select(page => page.SortOrder).ToArray(),
+            viewModel.ShellNavigationItems.Select(item => item.SortOrder).ToArray());
+        CollectionAssert.AreEqual(
+            BuiltinShellPages.All.Select(page => page.HeaderPropertyName).ToArray(),
+            viewModel.ShellNavigationItems.Select(item => item.HeaderPropertyName).ToArray());
+        CollectionAssert.AreEqual(
+            BuiltinShellPages.All.Select(page => page.ViewTypeName).ToArray(),
+            viewModel.ShellNavigationItems.Select(item => item.ViewTypeName).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Workflows", "Runs", "Data", "Logs", "Settings" },
+            viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
+
+        foreach (var item in viewModel.ShellNavigationItems)
+        {
+            Assert.IsTrue(item.IsVisible, $"{item.Key} should be visible by default.");
+            Assert.IsTrue(item.IsEnabled, $"{item.Key} should be enabled by default.");
+        }
+    }
+
+    [TestMethod]
+    public async Task ChangeLanguageRefreshesShellNavigationItemHeaders()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        CollectionAssert.AreEqual(
+            new[] { "工作流", "运行", "数据", "日志", "设置" },
+            viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
     }
 
     [TestMethod]
