@@ -153,7 +153,8 @@
 - P+3c-2 正文复制冲突与缺失复核已完成，缺失源文件、输入目录外路径和复制目标冲突都会写入 warning，不阻断开发归档，完成记录 `docs/FlowWeaver_阶段P+3c-2_正文复制冲突与缺失复核.md`
 - P+4 release strict 模式分析已完成，明确默认开发归档保持 warning 可归档，正式发布门禁通过显式 `--release-strict` 启用，并优先阻断 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4_release_strict模式分析.md`
 - P+4a release strict 最小实现已完成，`tools/create_portable_archive.py` 支持显式 `--release-strict`，默认开发归档行为不变，strict 会拒绝 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4a_release_strict最小实现.md`
-- 下一步建议做 P 阶段后续总体验收复核，汇总 P+3c 到 P+4a 的许可证和 strict 发布门禁状态，再决定是否推送或进入更重的分发阶段
+- P 后续总体验收复核已完成，汇总 P+1 到 P+4a 的便携发布、用户手册、Desktop smoke、第三方许可证增强和 release strict 门禁状态，完成记录 `docs/FlowWeaver_阶段P后续_总体验收复核.md`
+- 下一步建议先推送本轮 P 后续提交；若继续正式发布方向，先分析“干净可分发 Python runtime”，让 `--release-strict` 有机会在真实发布输入上通过
 
 ## 阶段 I 计划
 
