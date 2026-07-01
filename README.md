@@ -159,7 +159,9 @@
 - P+5b release runtime 锁定与可复现生成已完成，`tools/create_release_python_runtime.py --locked` 会从 `uv.lock` 的运行依赖闭包生成固定版本和 wheel hash requirements，并用 `--require-hashes --only-binary=:all:` 安装；真实 locked runtime smoke 的 runtime audit 已达到 `checked`，完成记录 `docs/FlowWeaver_阶段P+5b_releaseRuntime锁定与可复现生成.md`
 - P+5c release strict 前置复核与 NuGet 文件许可证收口已完成，初次 strict 发现 `git_worktree_dirty` 和 `third_party_license_warning`，已补齐 NuGet `<license type="file">LICENSE</license>` 识别与许可证文件复制，复测后 strict 仅剩 dirty git 阻断，完成记录 `docs/FlowWeaver_阶段P+5c_releaseStrict前置复核与NuGet文件许可证收口.md`
 - P+5d 正式 Desktop publish 来源边界收口已完成，`--release-strict` 新增 Desktop payload 完整性检查并拒绝 `Avalonia.Diagnostics.dll` Debug 产物信号；正式顺序改为 layout `--no-desktop-build` 后显式 `tools/publish_desktop.py --output <layout>/Desktop`，复测后 strict 仍仅剩 dirty git 阻断，完成记录 `docs/FlowWeaver_阶段P+5d_正式DesktopPublish来源边界收口.md`
-- 下一步建议进入 P+5e：dirty git 与正式 strict 最终复核边界，先决策未跟踪 `docs/UI组件MainWindow的后续计划.MD` 如何处理，再在干净工作区重跑正式 `--release-strict`
+- P+5e dirty git 与正式 strict 最终复核已完成，在临时 clean clone 中按正式顺序生成 locked runtime、portable layout、Release framework-dependent Desktop publish 和 strict archive，manifest 显示 `release_strict=true`、`git_dirty=false`、`runtime_audit_status=checked`，第三方许可证 warning 为空，完成记录 `docs/FlowWeaver_阶段P+5e_dirtyGit与正式Strict最终复核.md`
+- P 阶段正式发布前置完成清单已固化，汇总 P+5b-P+5e 完成矩阵、正式验证顺序、strict 门禁、clean clone 验证摘要、明确不支持能力和主工作区未跟踪 UI 文档边界，完成记录 `docs/FlowWeaver_阶段P_正式发布前置完成清单.md`
+- 下一步建议不要继续扩大 P 阶段，转入独立 Distribution 方向分析；若要在主工作区直接运行 strict，需要先决策未跟踪 `docs/UI组件MainWindow的后续计划.MD` 如何处理
 
 ## 阶段 I 计划
 
