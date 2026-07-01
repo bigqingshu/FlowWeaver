@@ -42,6 +42,10 @@ def create_portable_layout(
     _write_start_cmd(output_dir / "start_flowweaver.cmd")
     _write_start_desktop_cmd(output_dir / "start_flowweaver_desktop.cmd")
     _write_readme(output_dir / "docs" / "README.txt")
+    _copy_file(
+        repo_root / "docs" / "FlowWeaver_便携版用户手册.md",
+        output_dir / "docs" / "FlowWeaver_便携版用户手册.md",
+    )
 
     if include_python:
         _copy_tree(repo_root / "python312", enginehost_dir / "python312")
@@ -147,6 +151,9 @@ def _write_readme(path: Path) -> None:
                 "EngineHost/python312/python.exe portable_launcher.py",
                 "",
                 "Optional launcher arguments can be passed through both cmd wrappers.",
+                "",
+                "Full portable user manual:",
+                "docs/FlowWeaver_便携版用户手册.md",
                 "Backend-only example:",
                 "start_flowweaver.cmd --port 8000 --health-timeout-seconds 30",
                 "Desktop combo example:",

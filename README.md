@@ -143,7 +143,8 @@
 - P.6 用户手册内容收口已补齐 `docs/FlowWeaver_便携版用户手册.md` 的首次启动、运行要求、发布包结构、启动方式、workflow 中断风险、token 连接、runtime 备份、日志排查、升级迁移、不支持能力和诊断信息正文，完成记录 `docs/FlowWeaver_阶段P.6_用户手册内容收口.md`
 - P.7 阶段 P 总体验收复核已汇总 P.0/P.0a 到 P.6 的完成矩阵、发布归档、runtime audit、manifest/hash/license、clean-room smoke、用户手册、验收命令和明确不支持能力，完成记录 `docs/FlowWeaver_阶段P.7_总体验收复核.md`
 - P 后边界分析已明确优先收口发布包内完整用户手册与 docs 入口，再考虑真实 Desktop clean-room smoke；第三方许可证增强和 release 严格模式先分析，self-contained Desktop、代码签名、安装器、自动更新、后台服务和系统托盘保留为独立阶段候选，完成记录 `docs/FlowWeaver_阶段P后_边界分析.md`
-- 下一步建议进入 P+1：发布包内完整用户手册与 docs 入口，只改便携 layout、归档内容和测试，不改变 EngineHost、Desktop、token、runtime 或 workflow 行为
+- P+1 发布包内完整用户手册与 docs 入口已完成，便携 layout 生成时会复制 `docs/FlowWeaver_便携版用户手册.md`，短 README 会指向完整手册，归档 manifest 和 clean-room smoke 已覆盖该手册文件，完成记录 `docs/FlowWeaver_阶段P+1_发布包内完整用户手册与docs入口.md`
+- 下一步建议进入 P+2：真实 Desktop clean-room smoke，继续使用显式环境变量保护，不默认打开真实 Avalonia 窗口
 
 ## 阶段 I 计划
 

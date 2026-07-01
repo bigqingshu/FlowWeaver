@@ -57,6 +57,8 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
     with zipfile.ZipFile(result.archive_path) as archive:
         names = set(archive.namelist())
         assert "FlowWeaverPortable/start_flowweaver.cmd" in names
+        assert "FlowWeaverPortable/docs/README.txt" in names
+        assert "FlowWeaverPortable/docs/FlowWeaver_便携版用户手册.md" in names
         assert "FlowWeaverPortable/EngineHost/python312/python.exe" in names
         assert "FlowWeaverPortable/release-manifest.json" in names
         assert "FlowWeaverPortable/licenses/FlowWeaver-LICENSE.txt" in names
@@ -288,6 +290,15 @@ def _create_repo_with_portable_layout(
     )
     (portable_root / "start_flowweaver_desktop.cmd").write_text(
         "desktop launcher",
+        encoding="utf-8",
+    )
+    (portable_root / "docs").mkdir()
+    (portable_root / "docs" / "README.txt").write_text(
+        "See docs/FlowWeaver_便携版用户手册.md",
+        encoding="utf-8",
+    )
+    (portable_root / "docs" / "FlowWeaver_便携版用户手册.md").write_text(
+        "# FlowWeaver 便携版用户手册\n",
         encoding="utf-8",
     )
     (portable_root / "EngineHost" / "src" / "flowweaver").mkdir(parents=True)

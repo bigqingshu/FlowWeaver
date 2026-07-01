@@ -35,11 +35,15 @@ def test_n4_portable_layout_enginehost_starts_from_generated_directory() -> None
     assert (portable_dir / "portable_launcher.py").is_file()
     assert (portable_dir / "start_flowweaver.cmd").is_file()
     assert (portable_dir / "start_flowweaver_desktop.cmd").is_file()
+    user_manual = portable_dir / "docs" / "FlowWeaver_便携版用户手册.md"
+    assert user_manual.is_file()
+    assert "FlowWeaver 便携版用户手册" in user_manual.read_text(encoding="utf-8")
     readme = (portable_dir / "docs" / "README.txt").read_text(encoding="utf-8")
     assert "start_flowweaver.cmd" in readme
     assert "start_flowweaver_desktop.cmd" in readme
     assert "portable_launcher.py --no-desktop" in readme
     assert "EngineHost/python312/python.exe portable_launcher.py" in readme
+    assert "docs/FlowWeaver_便携版用户手册.md" in readme
     start_cmd = (portable_dir / "start_flowweaver.cmd").read_text(encoding="utf-8")
     assert "portable_launcher.py" in start_cmd
     assert "--no-desktop" in start_cmd

@@ -69,10 +69,15 @@ def test_p4_portable_archive_clean_room_backend_only_smoke() -> None:
         log_dir = runtime_dir / "logs"
         launcher_log_path = log_dir / "portable-launcher.log"
         manifest_path = portable_root / "release-manifest.json"
+        user_manual_path = portable_root / "docs" / "FlowWeaver_便携版用户手册.md"
 
         assert portable_root.is_dir()
         assert python_exe.is_file()
         assert manifest_path.is_file()
+        assert user_manual_path.is_file()
+        assert "FlowWeaver 便携版用户手册" in user_manual_path.read_text(
+            encoding="utf-8"
+        )
         assert not runtime_dir.exists()
         assert repo_root.resolve() not in portable_root.resolve().parents
         assert " " in str(portable_root)
@@ -83,6 +88,8 @@ def test_p4_portable_archive_clean_room_backend_only_smoke() -> None:
         assert manifest["target_runtime"] == "win-x64"
         assert manifest["desktop_publish_mode"] == "framework-dependent"
         assert manifest["runtime_audit_status"] in {"checked", "warning"}
+        entries = {entry["path"]: entry for entry in manifest["entries"]}
+        assert "FlowWeaverPortable/docs/FlowWeaver_便携版用户手册.md" in entries
 
         port = free_port()
         base_url = f"http://127.0.0.1:{port}"
