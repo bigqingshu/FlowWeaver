@@ -6,7 +6,7 @@ import json
 import sys
 import zipfile
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -347,6 +347,155 @@ def test_create_portable_archive_collects_dotnet_metadata_from_deps_json(
             "license_status": "missing_license_metadata",
             "warnings": ["nuget_license_metadata_unavailable"],
         }
+    ]
+
+
+def test_third_party_license_metadata_records_missing_python_license_source(
+    tmp_path: Path,
+) -> None:
+    repo_root, portable_root = _create_repo_with_portable_layout(tmp_path)
+    runtime_audit = SimpleNamespace(
+        packages=(
+            SimpleNamespace(
+                ecosystem="python",
+                name="fastapi",
+                version="0.124.0",
+                path=(
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info"
+                ),
+                metadata_source="METADATA",
+                license_expression="MIT",
+                license_text=None,
+                license_classifiers=(),
+                license_files=(
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info/MISSING-LICENSE",
+                ),
+                license_status="license_file_found",
+                warnings=(),
+            ),
+        )
+    )
+
+    metadata, generated_files = archive_module()._build_third_party_license_metadata(
+        runtime_audit,
+        repo_root=repo_root,
+        input_dir=portable_root,
+    )
+
+    assert generated_files == {}
+    assert metadata["warnings"] == ["license_file_source_missing"]
+    assert metadata["packages"][0]["copied_license_files"] == []
+    assert metadata["packages"][0]["warnings"] == ["license_file_source_missing"]
+
+
+def test_third_party_license_metadata_records_outside_python_license_source(
+    tmp_path: Path,
+) -> None:
+    repo_root, portable_root = _create_repo_with_portable_layout(tmp_path)
+    runtime_audit = SimpleNamespace(
+        packages=(
+            SimpleNamespace(
+                ecosystem="python",
+                name="fastapi",
+                version="0.124.0",
+                path=(
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info"
+                ),
+                metadata_source="METADATA",
+                license_expression="MIT",
+                license_text=None,
+                license_classifiers=(),
+                license_files=("../outside/LICENSE",),
+                license_status="license_file_found",
+                warnings=(),
+            ),
+        )
+    )
+
+    metadata, generated_files = archive_module()._build_third_party_license_metadata(
+        runtime_audit,
+        repo_root=repo_root,
+        input_dir=portable_root,
+    )
+
+    assert generated_files == {}
+    assert metadata["warnings"] == ["license_file_source_outside_input"]
+    assert metadata["packages"][0]["copied_license_files"] == []
+    assert metadata["packages"][0]["warnings"] == [
+        "license_file_source_outside_input"
+    ]
+
+
+def test_third_party_license_metadata_records_python_license_copy_conflict(
+    tmp_path: Path,
+) -> None:
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / "fastapi-0.124.0.dist-info"
+    )
+    (dist_info_dir / "LICENSE").write_text("one", encoding="utf-8")
+    other_dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / "other-1.0.0.dist-info"
+    )
+    other_dist_info_dir.mkdir()
+    (other_dist_info_dir / "LICENSE").write_text("two", encoding="utf-8")
+    runtime_audit = SimpleNamespace(
+        packages=(
+            SimpleNamespace(
+                ecosystem="python",
+                name="fastapi",
+                version="0.124.0",
+                path=(
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info"
+                ),
+                metadata_source="METADATA",
+                license_expression="MIT",
+                license_text=None,
+                license_classifiers=(),
+                license_files=(
+                    "EngineHost/python312/Lib/site-packages/"
+                    "fastapi-0.124.0.dist-info/LICENSE",
+                    "EngineHost/python312/Lib/site-packages/"
+                    "other-1.0.0.dist-info/LICENSE",
+                ),
+                license_status="license_file_found",
+                warnings=(),
+            ),
+        )
+    )
+
+    metadata, generated_files = archive_module()._build_third_party_license_metadata(
+        runtime_audit,
+        repo_root=repo_root,
+        input_dir=portable_root,
+    )
+
+    assert list(generated_files) == [
+        "FlowWeaverPortable/licenses/third-party/python/fastapi/LICENSE"
+    ]
+    assert metadata["warnings"] == ["license_file_copy_name_conflict"]
+    assert metadata["packages"][0]["copied_license_files"] == [
+        "FlowWeaverPortable/licenses/third-party/python/fastapi/LICENSE"
+    ]
+    assert metadata["packages"][0]["warnings"] == [
+        "license_file_copy_name_conflict"
     ]
 
 
