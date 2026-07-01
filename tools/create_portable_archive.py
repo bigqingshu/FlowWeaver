@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tomllib
@@ -296,46 +297,210 @@ def _build_generated_files(
         FLOWWEAVER_LICENSE_ARCHIVE_PATH: flowweaver_license_path.read_bytes(),
         PYTHON_LICENSE_ARCHIVE_PATH: python_license_path.read_bytes(),
         THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(
-            _build_third_party_license_metadata(runtime_audit)
+            _build_third_party_license_metadata(
+                runtime_audit,
+                repo_root=repo_root,
+                input_dir=input_dir,
+            )
         ),
     }
 
 
 def _build_third_party_license_metadata(
     runtime_audit: RuntimeAuditResult,
+    *,
+    repo_root: Path,
+    input_dir: Path,
 ) -> dict[str, object]:
     packages = [
-        {
-            "ecosystem": package.ecosystem,
-            "name": package.name,
-            "version": package.version,
-            "path": package.path,
-            "metadata_source": package.metadata_source,
-            "license_expression": package.license_expression,
-            "license_text": package.license_text,
-            "license_classifiers": list(package.license_classifiers),
-            "license_files": list(package.license_files),
-            "license_status": package.license_status,
-            "warnings": list(package.warnings),
-        }
+        _python_package_license_dict(package)
         for package in runtime_audit.packages
     ]
+    dotnet_packages, dotnet_sources, dotnet_warnings = _collect_dotnet_packages(
+        repo_root=repo_root,
+        input_dir=input_dir,
+    )
+    packages.extend(dotnet_packages)
+    packages.sort(key=lambda package: (str(package["ecosystem"]), str(package["name"])))
+
     warnings = sorted(
         {
             warning
-            for package in runtime_audit.packages
-            for warning in package.warnings
+            for package in packages
+            for warning in package["warnings"]
         }
+        | set(dotnet_warnings)
     )
+    generated_from: dict[str, object] = {
+        "python_runtime": "EngineHost/python312",
+    }
+    if dotnet_sources:
+        generated_from["dotnet_sources"] = dotnet_sources
     return {
         "schema_version": 1,
         "status": "metadata-only",
-        "generated_from": {
-            "python_runtime": "EngineHost/python312",
-        },
+        "generated_from": generated_from,
         "packages": packages,
         "warnings": warnings,
     }
+
+
+def _python_package_license_dict(package: object) -> dict[str, object]:
+    return {
+        "ecosystem": package.ecosystem,
+        "name": package.name,
+        "version": package.version,
+        "path": package.path,
+        "metadata_source": package.metadata_source,
+        "license_expression": package.license_expression,
+        "license_text": package.license_text,
+        "license_classifiers": list(package.license_classifiers),
+        "license_files": list(package.license_files),
+        "license_status": package.license_status,
+        "warnings": list(package.warnings),
+    }
+
+
+def _collect_dotnet_packages(
+    *,
+    repo_root: Path,
+    input_dir: Path,
+) -> tuple[list[dict[str, object]], list[str], list[str]]:
+    if not _desktop_payload_present(input_dir):
+        return [], [], []
+
+    assets_path = repo_root / "Avalonia_UI" / "obj" / "project.assets.json"
+    if assets_path.is_file():
+        source = _relative_posix(assets_path, repo_root)
+        packages = _parse_dotnet_package_libraries(
+            data=_read_json_file(assets_path),
+            source_path=source,
+            metadata_source="project.assets.json",
+        )
+        return packages, [source], []
+
+    deps_path = input_dir / "Desktop" / "Avalonia_UI.deps.json"
+    if deps_path.is_file():
+        source = _relative_posix(deps_path, input_dir)
+        packages = _parse_dotnet_package_libraries(
+            data=_read_json_file(deps_path),
+            source_path=source,
+            metadata_source="deps.json",
+        )
+        return packages, [source], []
+
+    return [], [], ["dotnet_dependency_source_missing"]
+
+
+def _desktop_payload_present(input_dir: Path) -> bool:
+    desktop_dir = input_dir / "Desktop"
+    return desktop_dir.is_dir() and any(
+        path.is_file() for path in desktop_dir.rglob("*")
+    )
+
+
+def _parse_dotnet_package_libraries(
+    *,
+    data: object,
+    source_path: str,
+    metadata_source: str,
+) -> list[dict[str, object]]:
+    if not isinstance(data, dict):
+        return []
+    libraries = data.get("libraries")
+    if not isinstance(libraries, dict):
+        return []
+
+    packages: list[dict[str, object]] = []
+    for key, value in sorted(libraries.items(), key=lambda item: item[0].lower()):
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        if value.get("type") != "package":
+            continue
+        parsed = _parse_dotnet_package_key(key)
+        if parsed is None:
+            continue
+        name, version = parsed
+        packages.append(
+            _build_dotnet_package_license_dict(
+                name=name,
+                version=version,
+                source_path=source_path,
+                metadata_source=metadata_source,
+            )
+        )
+    return packages
+
+
+def _build_dotnet_package_license_dict(
+    *,
+    name: str,
+    version: str,
+    source_path: str,
+    metadata_source: str,
+) -> dict[str, object]:
+    license_expression = _read_nuget_license_expression(name=name, version=version)
+    warnings: list[str] = []
+    license_status = "metadata_found"
+    effective_metadata_source = metadata_source
+    if license_expression is None:
+        warnings.append("nuget_license_metadata_unavailable")
+        license_status = "missing_license_metadata"
+    else:
+        effective_metadata_source = f"{metadata_source}+nuspec"
+
+    return {
+        "ecosystem": "dotnet",
+        "name": name,
+        "version": version,
+        "path": f"{source_path}#{name}/{version}",
+        "metadata_source": effective_metadata_source,
+        "license_expression": license_expression,
+        "license_text": None,
+        "license_classifiers": [],
+        "license_files": [],
+        "license_status": license_status,
+        "warnings": warnings,
+    }
+
+
+def _parse_dotnet_package_key(key: str) -> tuple[str, str] | None:
+    if "/" not in key:
+        return None
+    name, version = key.rsplit("/", 1)
+    if not name or not version:
+        return None
+    return name, version
+
+
+def _read_nuget_license_expression(*, name: str, version: str) -> str | None:
+    for root in _nuget_cache_roots():
+        nuspec_path = root / name.lower() / version.lower() / f"{name.lower()}.nuspec"
+        if not nuspec_path.is_file():
+            continue
+        root_element = ElementTree.parse(nuspec_path).getroot()
+        for element in root_element.iter():
+            if _xml_local_name(element.tag) != "license":
+                continue
+            if element.attrib.get("type") == "expression" and element.text:
+                expression = element.text.strip()
+                return expression or None
+    return None
+
+
+def _nuget_cache_roots() -> tuple[Path, ...]:
+    configured = os.environ.get("NUGET_PACKAGES")
+    if configured:
+        return (Path(configured),)
+    return (Path.home() / ".nuget" / "packages",)
+
+
+def _xml_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _read_json_file(path: Path) -> object:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _collect_input_file_entries(
