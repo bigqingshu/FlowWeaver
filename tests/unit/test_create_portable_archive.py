@@ -87,6 +87,9 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
         assert "FlowWeaverPortable/licenses/FlowWeaver-LICENSE.txt" in names
         assert "FlowWeaverPortable/licenses/Python-LICENSE.txt" in names
         assert "FlowWeaverPortable/licenses/third-party-licenses.json" in names
+        assert (
+            "FlowWeaverPortable/licenses/third-party/python/fastapi/LICENSE" in names
+        )
 
         manifest = json.loads(
             archive.read("FlowWeaverPortable/release-manifest.json").decode("utf-8")
@@ -126,7 +129,7 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
             ).decode("utf-8")
         )
         assert third_party["schema_version"] == 1
-        assert third_party["status"] == "metadata-only"
+        assert third_party["status"] == "metadata-and-files"
         assert third_party["generated_from"] == {
             "python_runtime": "EngineHost/python312"
         }
@@ -149,6 +152,9 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
                 "license_files": [
                     "EngineHost/python312/Lib/site-packages/"
                     "fastapi-0.124.0.dist-info/LICENSE"
+                ],
+                "copied_license_files": [
+                    "FlowWeaverPortable/licenses/third-party/python/fastapi/LICENSE"
                 ],
                 "license_status": "license_file_found",
                 "warnings": [],
@@ -203,9 +209,10 @@ def test_create_portable_archive_accepts_warning_audit_and_excludes_cache(
                 "FlowWeaverPortable/licenses/third-party-licenses.json"
             ).decode("utf-8")
         )
-        assert third_party["status"] == "metadata-only"
+        assert third_party["status"] == "metadata-and-files"
         assert third_party["warnings"] == ["metadata_file_missing"]
         assert third_party["packages"][0]["license_status"] == "missing_metadata"
+        assert third_party["packages"][0]["copied_license_files"] == []
         assert third_party["packages"][0]["warnings"] == ["metadata_file_missing"]
 
 
@@ -280,6 +287,7 @@ def test_create_portable_archive_collects_dotnet_metadata_from_project_assets(
             "license_text": None,
             "license_classifiers": [],
             "license_files": [],
+            "copied_license_files": [],
             "license_status": "metadata_found",
             "warnings": [],
         }
@@ -335,6 +343,7 @@ def test_create_portable_archive_collects_dotnet_metadata_from_deps_json(
             "license_text": None,
             "license_classifiers": [],
             "license_files": [],
+            "copied_license_files": [],
             "license_status": "missing_license_metadata",
             "warnings": ["nuget_license_metadata_unavailable"],
         }

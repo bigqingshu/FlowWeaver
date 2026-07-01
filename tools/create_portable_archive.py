@@ -293,16 +293,18 @@ def _build_generated_files(
     if not python_license_path.is_file():
         raise ArchiveConfigurationError("Python LICENSE.txt is required")
 
+    third_party_metadata, third_party_license_files = (
+        _build_third_party_license_metadata(
+            runtime_audit,
+            repo_root=repo_root,
+            input_dir=input_dir,
+        )
+    )
     return {
         FLOWWEAVER_LICENSE_ARCHIVE_PATH: flowweaver_license_path.read_bytes(),
         PYTHON_LICENSE_ARCHIVE_PATH: python_license_path.read_bytes(),
-        THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(
-            _build_third_party_license_metadata(
-                runtime_audit,
-                repo_root=repo_root,
-                input_dir=input_dir,
-            )
-        ),
+        THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(third_party_metadata),
+        **third_party_license_files,
     }
 
 
@@ -311,9 +313,21 @@ def _build_third_party_license_metadata(
     *,
     repo_root: Path,
     input_dir: Path,
-) -> dict[str, object]:
+) -> tuple[dict[str, object], dict[str, bytes]]:
+    copied_python_license_files = _collect_python_license_file_copies(
+        runtime_audit=runtime_audit,
+        input_dir=input_dir,
+    )
     packages = [
-        _python_package_license_dict(package)
+        _python_package_license_dict(
+            package,
+            copied_license_files=copied_python_license_files.copied_paths_by_package[
+                package.path
+            ],
+            copy_warnings=copied_python_license_files.warnings_by_package[
+                package.path
+            ],
+        )
         for package in runtime_audit.packages
     ]
     dotnet_packages, dotnet_sources, dotnet_warnings = _collect_dotnet_packages(
@@ -338,14 +352,27 @@ def _build_third_party_license_metadata(
         generated_from["dotnet_sources"] = dotnet_sources
     return {
         "schema_version": 1,
-        "status": "metadata-only",
+        "status": "metadata-and-files",
         "generated_from": generated_from,
         "packages": packages,
         "warnings": warnings,
-    }
+    }, copied_python_license_files.generated_files
 
 
-def _python_package_license_dict(package: object) -> dict[str, object]:
+@dataclass(frozen=True)
+class CopiedLicenseFiles:
+    generated_files: dict[str, bytes]
+    copied_paths_by_package: dict[str, list[str]]
+    warnings_by_package: dict[str, list[str]]
+
+
+def _python_package_license_dict(
+    package: object,
+    *,
+    copied_license_files: Sequence[str],
+    copy_warnings: Sequence[str],
+) -> dict[str, object]:
+    warnings = sorted(set(package.warnings) | set(copy_warnings))
     return {
         "ecosystem": package.ecosystem,
         "name": package.name,
@@ -356,9 +383,100 @@ def _python_package_license_dict(package: object) -> dict[str, object]:
         "license_text": package.license_text,
         "license_classifiers": list(package.license_classifiers),
         "license_files": list(package.license_files),
+        "copied_license_files": list(copied_license_files),
         "license_status": package.license_status,
-        "warnings": list(package.warnings),
+        "warnings": warnings,
     }
+
+
+def _collect_python_license_file_copies(
+    *,
+    runtime_audit: RuntimeAuditResult,
+    input_dir: Path,
+) -> CopiedLicenseFiles:
+    generated_files: dict[str, bytes] = {}
+    copied_paths_by_package: dict[str, list[str]] = {
+        package.path: [] for package in runtime_audit.packages
+    }
+    warnings_by_package: dict[str, list[str]] = {
+        package.path: [] for package in runtime_audit.packages
+    }
+
+    for package in runtime_audit.packages:
+        for license_file in package.license_files:
+            source_path = _resolve_input_relative_file(
+                input_dir=input_dir,
+                relative_path=license_file,
+            )
+            if source_path is None:
+                warnings_by_package[package.path].append(
+                    "license_file_source_outside_input"
+                )
+                continue
+            if not source_path.is_file():
+                warnings_by_package[package.path].append("license_file_source_missing")
+                continue
+
+            archive_path = _third_party_python_license_archive_path(
+                package_name=package.name,
+                package_path=package.path,
+                license_file=license_file,
+            )
+            content = source_path.read_bytes()
+            existing_content = generated_files.get(archive_path)
+            if existing_content is not None and existing_content != content:
+                warnings_by_package[package.path].append(
+                    "license_file_copy_name_conflict"
+                )
+                continue
+            generated_files[archive_path] = content
+            copied_paths_by_package[package.path].append(archive_path)
+
+    for paths in copied_paths_by_package.values():
+        paths.sort()
+    for warnings in warnings_by_package.values():
+        warnings[:] = sorted(set(warnings))
+    return CopiedLicenseFiles(
+        generated_files=generated_files,
+        copied_paths_by_package=copied_paths_by_package,
+        warnings_by_package=warnings_by_package,
+    )
+
+
+def _resolve_input_relative_file(
+    *,
+    input_dir: Path,
+    relative_path: str,
+) -> Path | None:
+    path = Path(relative_path)
+    if path.is_absolute() or ".." in path.parts:
+        return None
+    source_path = (input_dir / path).resolve()
+    try:
+        source_path.relative_to(input_dir.resolve())
+    except ValueError:
+        return None
+    return source_path
+
+
+def _third_party_python_license_archive_path(
+    *,
+    package_name: str,
+    package_path: str,
+    license_file: str,
+) -> str:
+    prefix = f"{package_path}/"
+    if license_file.startswith(prefix):
+        suffix = license_file[len(prefix) :]
+    else:
+        suffix = Path(license_file).name
+    suffix_path = Path(suffix)
+    if suffix_path.is_absolute() or ".." in suffix_path.parts:
+        suffix = Path(license_file).name
+    return (
+        f"{LICENSE_DIR_ARCHIVE_PATH}/third-party/python/"
+        f"{package_name}/{Path(suffix).as_posix()}"
+    )
 
 
 def _collect_dotnet_packages(
@@ -459,6 +577,7 @@ def _build_dotnet_package_license_dict(
         "license_text": None,
         "license_classifiers": [],
         "license_files": [],
+        "copied_license_files": [],
         "license_status": license_status,
         "warnings": warnings,
     }
