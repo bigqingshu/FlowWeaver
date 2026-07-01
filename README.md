@@ -152,7 +152,8 @@
 - P+3c-1 Python 许可证正文复制最小实现已完成，Python 包 `license_files` 会复制到 `licenses/third-party/python/<package>/...` 并写入 `copied_license_files`，NuGet 包保持空数组，默认阻断策略不变，完成记录 `docs/FlowWeaver_阶段P+3c-1_Python许可证正文复制最小实现.md`
 - P+3c-2 正文复制冲突与缺失复核已完成，缺失源文件、输入目录外路径和复制目标冲突都会写入 warning，不阻断开发归档，完成记录 `docs/FlowWeaver_阶段P+3c-2_正文复制冲突与缺失复核.md`
 - P+4 release strict 模式分析已完成，明确默认开发归档保持 warning 可归档，正式发布门禁通过显式 `--release-strict` 启用，并优先阻断 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4_release_strict模式分析.md`
-- 下一步建议进入 P+4a：`--release-strict` 最小实现与单元测试，继续保持默认开发归档行为不变
+- P+4a release strict 最小实现已完成，`tools/create_portable_archive.py` 支持显式 `--release-strict`，默认开发归档行为不变，strict 会拒绝 runtime audit warning、第三方许可证 warning、dirty git、缺失 commit 和缺失 Desktop executable，完成记录 `docs/FlowWeaver_阶段P+4a_release_strict最小实现.md`
+- 下一步建议做 P 阶段后续总体验收复核，汇总 P+3c 到 P+4a 的许可证和 strict 发布门禁状态，再决定是否推送或进入更重的分发阶段
 
 ## 阶段 I 计划
 

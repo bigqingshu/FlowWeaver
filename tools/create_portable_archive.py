@@ -71,6 +71,7 @@ def create_portable_archive(
     version: str | None = None,
     target_runtime: str = SUPPORTED_TARGET_RUNTIME,
     desktop_publish_mode: str = SUPPORTED_DESKTOP_PUBLISH_MODE,
+    release_strict: bool = False,
     command_runner: CommandRunner | None = None,
 ) -> PortableArchiveResult:
     repo_root = repo_root.resolve()
@@ -103,16 +104,23 @@ def create_portable_archive(
             f"archive output already exists: {archive_path}"
         )
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     file_entries = _collect_input_file_entries(
         input_dir=input_dir,
         excluded_paths=set(runtime_audit.excluded_paths),
     )
-    generated_files = _build_generated_files(
+    generated_files, third_party_metadata = _build_generated_files(
         repo_root=repo_root,
         input_dir=input_dir,
         runtime_audit=runtime_audit,
     )
+    if release_strict:
+        _validate_release_strict(
+            repo_root=repo_root,
+            input_dir=input_dir,
+            runtime_audit=runtime_audit,
+            third_party_metadata=third_party_metadata,
+        )
+    output_dir.mkdir(parents=True, exist_ok=True)
     file_entries.extend(
         ArchiveEntry(
             path=archive_path,
@@ -134,6 +142,7 @@ def create_portable_archive(
         runtime_audit=runtime_audit,
         entries=file_entries,
         repo_root=repo_root,
+        release_strict=release_strict,
     )
     manifest_bytes = _json_bytes(manifest)
 
@@ -193,6 +202,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=[SUPPORTED_DESKTOP_PUBLISH_MODE, "self-contained"],
         help="Desktop publish mode. P.3 supports framework-dependent only.",
     )
+    parser.add_argument(
+        "--release-strict",
+        action="store_true",
+        help=(
+            "Enable formal release gates: reject warnings, dirty git state, "
+            "missing git commit, and missing Desktop executable."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -205,6 +222,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             version=args.version,
             target_runtime=args.target_runtime,
             desktop_publish_mode=args.desktop_publish_mode,
+            release_strict=args.release_strict,
         )
     except ArchiveConfigurationError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -216,6 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "archive_path": str(result.archive_path),
                 "sha256_path": str(result.sha256_path),
                 "runtime_audit_status": result.runtime_audit.status,
+                "release_strict": args.release_strict,
             },
             ensure_ascii=False,
             indent=2,
@@ -285,7 +304,7 @@ def _build_generated_files(
     repo_root: Path,
     input_dir: Path,
     runtime_audit: RuntimeAuditResult,
-) -> dict[str, bytes]:
+) -> tuple[dict[str, bytes], dict[str, object]]:
     flowweaver_license_path = repo_root / "LICENSE"
     python_license_path = input_dir / "EngineHost" / "python312" / "LICENSE.txt"
     if not flowweaver_license_path.is_file():
@@ -305,7 +324,34 @@ def _build_generated_files(
         PYTHON_LICENSE_ARCHIVE_PATH: python_license_path.read_bytes(),
         THIRD_PARTY_LICENSES_ARCHIVE_PATH: _json_bytes(third_party_metadata),
         **third_party_license_files,
-    }
+    }, third_party_metadata
+
+
+def _validate_release_strict(
+    *,
+    repo_root: Path,
+    input_dir: Path,
+    runtime_audit: RuntimeAuditResult,
+    third_party_metadata: dict[str, object],
+) -> None:
+    errors: list[str] = []
+    if runtime_audit.status == "warning":
+        errors.append("runtime_audit_warning")
+    elif runtime_audit.status != "checked":
+        errors.append(f"runtime_audit_{runtime_audit.status}")
+    if third_party_metadata.get("warnings"):
+        errors.append("third_party_license_warning")
+    if _git_output(repo_root, "rev-parse", "HEAD") is None:
+        errors.append("git_commit_unavailable")
+    if _git_dirty(repo_root):
+        errors.append("git_worktree_dirty")
+    if not (input_dir / "Desktop" / "Avalonia_UI.exe").is_file():
+        errors.append("desktop_executable_missing")
+    if errors:
+        joined_errors = ", ".join(sorted(set(errors)))
+        raise ArchiveConfigurationError(
+            f"release strict rejected portable input: {joined_errors}"
+        )
 
 
 def _build_third_party_license_metadata(
@@ -686,6 +732,7 @@ def _build_manifest(
     runtime_audit: RuntimeAuditResult,
     entries: Sequence[ArchiveEntry],
     repo_root: Path,
+    release_strict: bool,
 ) -> dict[str, object]:
     return {
         "manifest_schema_version": 1,
@@ -693,6 +740,7 @@ def _build_manifest(
         "release_version": release_version,
         "archive_name": archive_name,
         "target_runtime": target_runtime,
+        "release_strict": release_strict,
         "created_at_utc": _utc_timestamp(),
         "git_commit": _git_output(repo_root, "rev-parse", "HEAD"),
         "git_dirty": _git_dirty(repo_root),

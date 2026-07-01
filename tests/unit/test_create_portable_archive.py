@@ -98,6 +98,7 @@ def test_create_portable_archive_generates_zip_manifest_hash_and_licenses(
         assert manifest["python_project_version"] == "0.1.0"
         assert manifest["desktop_project_version"] == "0.1.0-desktop"
         assert manifest["target_runtime"] == "win-x64"
+        assert manifest["release_strict"] is False
         assert manifest["desktop_publish_mode"] == "framework-dependent"
         assert manifest["desktop_self_contained"] is False
         assert manifest["dotnet_runtime_required"] is True
@@ -214,6 +215,154 @@ def test_create_portable_archive_accepts_warning_audit_and_excludes_cache(
         assert third_party["packages"][0]["license_status"] == "missing_metadata"
         assert third_party["packages"][0]["copied_license_files"] == []
         assert third_party["packages"][0]["warnings"] == ["metadata_file_missing"]
+
+
+def test_create_portable_archive_release_strict_rejects_runtime_audit_warning(
+    tmp_path: Path,
+) -> None:
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"pytest": "8.4.0"},
+    )
+    _write_python_package_license_metadata(
+        portable_root,
+        name="pytest",
+        version="8.4.0",
+    )
+    _write_portable_desktop_executable(portable_root)
+
+    with pytest.raises(
+        archive_module().ArchiveConfigurationError,
+        match="runtime_audit_warning",
+    ):
+        archive_module().create_portable_archive(
+            repo_root=repo_root,
+            input_dir=portable_root,
+            output_dir=repo_root / ".tmp" / "dist",
+            release_strict=True,
+            command_runner=_fake_command_runner,
+        )
+
+    assert not (repo_root / ".tmp" / "dist").exists()
+
+
+def test_create_portable_archive_release_strict_rejects_license_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = archive_module()
+    monkeypatch.setattr(module, "_git_output", lambda *args: "abc123")
+    monkeypatch.setattr(module, "_git_dirty", lambda repo_root: False)
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    _write_portable_desktop_executable(portable_root)
+
+    with pytest.raises(
+        module.ArchiveConfigurationError,
+        match="third_party_license_warning",
+    ):
+        module.create_portable_archive(
+            repo_root=repo_root,
+            input_dir=portable_root,
+            output_dir=repo_root / ".tmp" / "dist",
+            release_strict=True,
+            command_runner=_fake_command_runner,
+        )
+
+    assert not (repo_root / ".tmp" / "dist").exists()
+
+
+def test_create_portable_archive_release_strict_rejects_dirty_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = archive_module()
+    monkeypatch.setattr(module, "_git_output", lambda *args: "abc123")
+    monkeypatch.setattr(module, "_git_dirty", lambda repo_root: True)
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    _write_python_package_license_metadata(portable_root)
+    _write_portable_desktop_executable(portable_root)
+    _write_empty_dotnet_project_assets(repo_root)
+
+    with pytest.raises(
+        module.ArchiveConfigurationError,
+        match="git_worktree_dirty",
+    ):
+        module.create_portable_archive(
+            repo_root=repo_root,
+            input_dir=portable_root,
+            output_dir=repo_root / ".tmp" / "dist",
+            release_strict=True,
+            command_runner=_fake_command_runner,
+        )
+
+    assert not (repo_root / ".tmp" / "dist").exists()
+
+
+def test_create_portable_archive_release_strict_rejects_missing_desktop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = archive_module()
+    monkeypatch.setattr(module, "_git_output", lambda *args: "abc123")
+    monkeypatch.setattr(module, "_git_dirty", lambda repo_root: False)
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    _write_python_package_license_metadata(portable_root)
+
+    with pytest.raises(
+        module.ArchiveConfigurationError,
+        match="desktop_executable_missing",
+    ):
+        module.create_portable_archive(
+            repo_root=repo_root,
+            input_dir=portable_root,
+            output_dir=repo_root / ".tmp" / "dist",
+            release_strict=True,
+            command_runner=_fake_command_runner,
+        )
+
+    assert not (repo_root / ".tmp" / "dist").exists()
+
+
+def test_create_portable_archive_release_strict_accepts_clean_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = archive_module()
+    monkeypatch.setattr(module, "_git_output", lambda *args: "abc123")
+    monkeypatch.setattr(module, "_git_dirty", lambda repo_root: False)
+    repo_root, portable_root = _create_repo_with_portable_layout(
+        tmp_path,
+        packages={"fastapi": "0.124.0"},
+    )
+    _write_python_package_license_metadata(portable_root)
+    _write_portable_desktop_executable(portable_root)
+    _write_empty_dotnet_project_assets(repo_root)
+
+    result = module.create_portable_archive(
+        repo_root=repo_root,
+        input_dir=portable_root,
+        output_dir=repo_root / ".tmp" / "dist",
+        release_strict=True,
+        command_runner=_fake_command_runner,
+    )
+
+    assert result.archive_path.is_file()
+    assert result.manifest["release_strict"] is True
+
+
+def test_create_portable_archive_parse_args_accepts_release_strict() -> None:
+    args = archive_module().parse_args(["--release-strict"])
+
+    assert args.release_strict is True
 
 
 def test_create_portable_archive_collects_dotnet_metadata_from_project_assets(
@@ -665,6 +814,51 @@ def _create_repo_with_portable_layout(
     for name, version in (packages or {}).items():
         (site_packages / f"{name}-{version}.dist-info").mkdir()
     return repo_root, portable_root
+
+
+def _write_python_package_license_metadata(
+    portable_root: Path,
+    *,
+    name: str = "fastapi",
+    version: str = "0.124.0",
+) -> None:
+    dist_info_dir = (
+        portable_root
+        / "EngineHost"
+        / "python312"
+        / "Lib"
+        / "site-packages"
+        / f"{name}-{version}.dist-info"
+    )
+    (dist_info_dir / "METADATA").write_text(
+        "\n".join(
+            [
+                "Metadata-Version: 2.4",
+                f"Name: {name}",
+                f"Version: {version}",
+                "License-Expression: MIT",
+                "License-File: LICENSE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (dist_info_dir / "LICENSE").write_text("MIT license", encoding="utf-8")
+
+
+def _write_portable_desktop_executable(portable_root: Path) -> None:
+    desktop_dir = portable_root / "Desktop"
+    desktop_dir.mkdir(exist_ok=True)
+    (desktop_dir / "Avalonia_UI.exe").write_text("", encoding="utf-8")
+
+
+def _write_empty_dotnet_project_assets(repo_root: Path) -> None:
+    assets_path = repo_root / "Avalonia_UI" / "obj" / "project.assets.json"
+    assets_path.parent.mkdir(parents=True)
+    assets_path.write_text(
+        json.dumps({"version": 3, "libraries": {}}),
+        encoding="utf-8",
+    )
 
 
 def _fake_command_runner(
