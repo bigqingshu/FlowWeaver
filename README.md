@@ -148,7 +148,8 @@
 - P+3 第三方许可证增强方案已完成，明确 `third-party-licenses.json` 从 `summary-only` 渐进升级到 `metadata-only` 的数据来源、缺失策略、默认不阻断边界和 P+3a/P+3b/P+3c 后续顺序，完成记录 `docs/FlowWeaver_阶段P+3_第三方许可证增强方案.md`
 - P+3a Python 包许可证 metadata 采集已完成，`third-party-licenses.json` 已升级为 `metadata-only` schema，能记录 `License-Expression`、`License`、license classifier、`License-File`、许可证正文路径和包级 warning，且不改变默认归档阻断策略，完成记录 `docs/FlowWeaver_阶段P+3a_Python包许可证Metadata采集.md`
 - P+3b .NET NuGet 依赖许可证 metadata 采集已完成，Desktop payload 存在时会从 `project.assets.json` 或发布目录 `.deps.json` 记录 NuGet 包 metadata，并可从本机 `.nuspec` 读取 license expression；缺失 metadata 只写入包级 warning，不复制正文、不联网、不改变阻断策略，完成记录 `docs/FlowWeaver_阶段P+3b_DotNetNuGet许可证Metadata采集.md`
-- 下一步建议进入 P+3c：许可证正文复制评估，先评估哪些第三方许可证正文可以稳定定位和复制，不直接扩大 release strict 阻断策略
+- P+3c 许可证正文复制评估已完成，结论是最小实现只复制 Python 包中已位于发布输入内的许可证正文，NuGet 正文复制继续后置，release strict 阻断策略留到 P+4，完成记录 `docs/FlowWeaver_阶段P+3c_许可证正文复制评估.md`
+- 下一步建议进入 P+3c-1：Python 许可证正文复制最小实现，只复制 Python 包 `license_files`，写入 `copied_license_files`，不复制 NuGet 正文、不改变默认阻断策略
 
 ## 阶段 I 计划
 
