@@ -563,7 +563,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private bool CanStartSelectedWorkflow()
     {
-        return CanUseEngineActions && SelectedWorkflow is not null && !IsWorkflowBusy;
+        return CanUseEngineActions
+            && SelectedWorkflow is not null
+            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
+            && !IsWorkflowBusy;
     }
 
     private bool CanCreateTemplateWorkflow()
@@ -2446,6 +2449,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private static bool IsTerminalRunStatus(string? status)
     {
         return status is "SUCCEEDED" or "FAILED" or "CANCELLED" or "ABORTED";
+    }
+
+    private static bool IsActiveWorkflowStatus(string? status)
+    {
+        return status == "ACTIVE";
     }
 }
 

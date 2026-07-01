@@ -684,6 +684,19 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public void StartSelectedWorkflowIsDisabledForInactiveWorkflow()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-deleted", "Deleted Workflow", 1) with
+            {
+                Status = "DELETED",
+            });
+
+        Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task RefreshRunsLoadsRunsForSelectedWorkflow()
     {
         var apiClient = new FakeApiClient
