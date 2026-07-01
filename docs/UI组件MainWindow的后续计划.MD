@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.2a Header-only bridge 已落地
-> 当前执行点：MainWindow.axaml 的五个导航 Header 已读取 ShellNavigationItems，尚未迁移 ItemsSource 或页面实例创建
+> 文档状态：UI-COMPONENT-2b.3a AppShellPageHost 页面承载隔离已落地
+> 当前执行点：MainWindow.axaml 已改为引用 AppShellPageHost，TabControl 和五个固定页面迁入 Host，尚未迁移 ItemsSource 或页面实例创建
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -722,6 +722,148 @@ Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
 
 ```text
 UI-COMPONENT-2b.3 前置分析：是否引入 ShellPageContentTemplateSelector 或 AppShellPageHost，先只分析，不直接迁移 ItemsSource。
+```
+
+### 2.26 UI-COMPONENT-2b.3 前置分析
+
+2b.3 需要回答的问题是：
+
+```text
+要不要从 Header-only bridge 继续推进到真正的 TabControl.ItemsSource + 页面内容动态承载？
+```
+
+当前结论：
+
+```text
+可以继续推进，但不建议下一步直接实现 TabControl.ItemsSource + ContentTemplateSelector。
+更稳路线是先引入 AppShellPageHost，把五个页面承载从 MainWindow.axaml 中隔离出去。
+```
+
+原因是当前 `MainWindow.axaml` 中五个 `TabItem` 的页面内容仍是直接写死的：
+
+```text
+WorkflowPage
+RunMonitorPage
+DataPage
+LogsAuditPage
+SettingsPage
+```
+
+如果马上迁移 `TabControl.ItemsSource`，必须同时解决“选中导航项如何变成对应页面 View”的问题。这一步会把页面创建、DataContext、模板绑定和页面缓存策略揉在一起，风险高于 Header-only bridge。
+
+### 2.27 方案对比
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| 继续硬编码 | 维持五个 `TabItem` 内容不动 | 零风险 | `MainWindow.axaml` 仍承担页面承载 | 只是暂停，不是演进 |
+| `ShellPageContentTemplateSelector` | `TabControl.ItemsSource` 绑定导航项，由模板选择器返回页面 View | 一步完成动态导航和内容 | 会立即引入页面创建策略、缓存策略和模板调试成本 | 暂不推荐 |
+| `AppShellPageHost` | 先新建一个 Shell 页面承载组件，内部仍用五个固定页面 | 先把页面承载职责从 MainWindow 隔离出去，风险较低 | 仍未完全动态化 | 推荐下一小步 |
+| 页面级 ViewModel + ViewLocator | 为五个页面建立独立 ViewModel，再由现有 `ViewLocator` 承载 | 长期更干净 | 会牵动业务状态拆分，范围过大 | 后置 |
+
+2b.3 推荐先采用 `AppShellPageHost` 前置隔离，而不是直接做完整 `ItemsSource + ContentTemplateSelector`。
+
+### 2.28 AppShellPageHost 的推荐边界
+
+`AppShellPageHost` 第一版只做页面承载隔离：
+
+```text
+Avalonia_UI/Views/Components/Shell/AppShellPageHost.axaml
+Avalonia_UI/Views/Components/Shell/AppShellPageHost.axaml.cs
+```
+
+第一版职责：
+
+* 承载当前固定 `TabControl` 和五个页面 View。
+* 继续继承 `MainWindowViewModel` DataContext。
+* 不创建页面级 ViewModel。
+* 不通过反射创建 View。
+* 不读取外部 DLL。
+* 不改变五个页面内部布局。
+
+第一版可以仍使用固定结构，例如内部保留五个页面槽位；目标只是让 `MainWindow.axaml` 从“知道所有页面内容”收敛为“把页面承载交给 Shell 组件”。
+
+### 2.29 暂不直接做 ContentTemplateSelector 的原因
+
+`ShellPageContentTemplateSelector` 会让设计变得更接近最终形态，但此刻直接实现会带来几个额外决策：
+
+* 页面是否每次选中都重新创建。
+* 页面是否需要缓存。
+* 页面创建失败如何显示。
+* `ShellNavigationItemViewModel.ViewTypeName` 是否允许反射创建 View。
+* 是否把页面 View 类型从字符串改为 `Type`。
+* 模板内 DataContext 是导航项还是 `MainWindowViewModel`。
+* 当前五个页面共享 `MainWindowViewModel` 的状态如何继承。
+
+这些决策都不应该和 `MainWindow.axaml` 瘦身放在同一步。
+
+### 2.30 2b.3 推荐拆分
+
+推荐拆分为：
+
+```text
+UI-COMPONENT-2b.3a
+新增 AppShellPageHost 组件，把五个页面内容从 MainWindow.axaml 移进去，不迁移 TabControl.ItemsSource。
+
+UI-COMPONENT-2b.3b
+复核 AppShellPageHost 稳定性，再评估是否让它根据 ShellNavigationItemViewModel.Key 显示页面。
+
+UI-COMPONENT-2b.3c
+最后才评估 ShellPageContentTemplateSelector 或页面工厂。
+```
+
+其中 2b.3a 的目标不是“动态页面系统”，而是“MainWindow 页面承载瘦身”。
+
+### 2.31 2b.3a 验收标准
+
+如果进入 2b.3a，实现后应满足：
+
+* `MainWindow.axaml` 不再直接列出五个页面 View。
+* 固定 `TabControl` 和五个页面 View 迁移到 `AppShellPageHost` 内部。
+* `TabItem.Header` 仍读取 `ShellNavigationItems`。
+* 五个页面仍继承当前 `MainWindowViewModel` DataContext。
+* 不新增页面工厂、模板选择器或反射创建。
+* `MainWindow.axaml.cs` 仍只有 `InitializeComponent()`。
+* `dotnet test "Avalonia_UI\Avalonia_UI.sln" --no-restore` 通过。
+
+### 2.32 2b.3 前置分析结论
+
+结论：
+
+```text
+不直接做 ShellPageContentTemplateSelector。
+下一步建议做 UI-COMPONENT-2b.3a：AppShellPageHost 页面承载隔离。
+```
+
+这样可以继续让 `MainWindow.axaml` 变薄，同时不把页面动态创建、页面缓存和 ViewModel 拆分提前拉进当前小步。
+
+### 2.33 UI-COMPONENT-2b.3a 完成记录
+
+2b.3a 已完成页面承载隔离：
+
+```text
+Avalonia_UI/Views/Components/Shell/AppShellPageHost.axaml
+Avalonia_UI/Views/Components/Shell/AppShellPageHost.axaml.cs
+Avalonia_UI/Views/MainWindow.axaml
+```
+
+已实现内容：
+
+* 新增 `AppShellPageHost` 组件。
+* 将固定 `TabControl` 和五个页面 View 从 `MainWindow.axaml` 移入 `AppShellPageHost`。
+* `MainWindow.axaml` 只保留 Shell Header 和 `AppShellPageHost` 引用。
+* `TabItem.Header` 仍读取 `ShellNavigationItems` 派生文本。
+* 未迁移 `TabControl.ItemsSource`。
+* 未新增 `ContentTemplate`、模板选择器、页面工厂、反射创建或 code-behind 页面切换逻辑。
+
+测试结果：
+
+* `dotnet test "Avalonia_UI\Avalonia_UI.sln" --no-restore --filter "BuiltinShellPagesTests|MainWindowViewModelLocalizationTests"` 通过。
+* `dotnet test "Avalonia_UI\Avalonia_UI.sln" --no-restore` 通过。
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.3b：AppShellPageHost 稳定性复核，先确认 MainWindow 瘦身后的布局、DataContext 和语言切换边界，再决定是否进入 ItemsSource。
 ```
 
 ---

@@ -1,8 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Avalonia_UI.ViewModels"
-        xmlns:pages="using:Avalonia_UI.Views.Pages"
         xmlns:components="using:Avalonia_UI.Views.Components"
+        xmlns:shell="using:Avalonia_UI.Views.Components.Shell"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="760"
@@ -167,23 +167,6 @@
             <components:ConnectionStatusView Grid.Column="1" VerticalAlignment="Center"/>
         </Grid>
 
-        <!-- Shell Sidebar Navigation & Main Content -->
-        <TabControl Grid.Row="1" TabStripPlacement="Left">
-            <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
-                <pages:WorkflowPage />
-            </TabItem>
-            <TabItem Header="{Binding RunsNavigationItem.HeaderText}">
-                <pages:RunMonitorPage />
-            </TabItem>
-            <TabItem Header="{Binding DataNavigationItem.HeaderText}">
-                <pages:DataPage />
-            </TabItem>
-            <TabItem Header="{Binding LogsNavigationItem.HeaderText}">
-                <pages:LogsAuditPage />
-            </TabItem>
-            <TabItem Header="{Binding SettingsNavigationItem.HeaderText}">
-                <pages:SettingsPage />
-            </TabItem>
-        </TabControl>
+        <shell:AppShellPageHost Grid.Row="1" />
     </Grid>
 </Window>

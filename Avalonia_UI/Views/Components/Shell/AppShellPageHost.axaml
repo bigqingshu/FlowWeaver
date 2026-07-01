@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:pages="using:Avalonia_UI.Views.Pages"
+             x:Class="Avalonia_UI.Views.Components.Shell.AppShellPageHost"
+             x:DataType="vm:MainWindowViewModel">
+    <TabControl TabStripPlacement="Left">
+        <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
+            <pages:WorkflowPage />
+        </TabItem>
+        <TabItem Header="{Binding RunsNavigationItem.HeaderText}">
+            <pages:RunMonitorPage />
+        </TabItem>
+        <TabItem Header="{Binding DataNavigationItem.HeaderText}">
+            <pages:DataPage />
+        </TabItem>
+        <TabItem Header="{Binding LogsNavigationItem.HeaderText}">
+            <pages:LogsAuditPage />
+        </TabItem>
+        <TabItem Header="{Binding SettingsNavigationItem.HeaderText}">
+            <pages:SettingsPage />
+        </TabItem>
+    </TabControl>
+</UserControl>
