@@ -169,19 +169,19 @@
 
         <!-- Shell Sidebar Navigation & Main Content -->
         <TabControl Grid.Row="1" TabStripPlacement="Left">
-            <TabItem Header="{Binding WorkflowsSectionText}">
+            <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
                 <pages:WorkflowPage />
             </TabItem>
-            <TabItem Header="{Binding RunsSectionText}">
+            <TabItem Header="{Binding RunsNavigationItem.HeaderText}">
                 <pages:RunMonitorPage />
             </TabItem>
-            <TabItem Header="{Binding DataTabText}">
+            <TabItem Header="{Binding DataNavigationItem.HeaderText}">
                 <pages:DataPage />
             </TabItem>
-            <TabItem Header="{Binding LogsTabText}">
+            <TabItem Header="{Binding LogsNavigationItem.HeaderText}">
                 <pages:LogsAuditPage />
             </TabItem>
-            <TabItem Header="{Binding SettingsMenuText}">
+            <TabItem Header="{Binding SettingsNavigationItem.HeaderText}">
                 <pages:SettingsPage />
             </TabItem>
         </TabControl>

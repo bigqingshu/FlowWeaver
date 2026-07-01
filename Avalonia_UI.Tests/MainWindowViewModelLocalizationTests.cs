@@ -84,6 +84,16 @@ public sealed class MainWindowViewModelLocalizationTests
         CollectionAssert.AreEqual(
             new[] { "Workflows", "Runs", "Data", "Logs", "Settings" },
             viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                viewModel.WorkflowsNavigationItem.HeaderText,
+                viewModel.RunsNavigationItem.HeaderText,
+                viewModel.DataNavigationItem.HeaderText,
+                viewModel.LogsNavigationItem.HeaderText,
+                viewModel.SettingsNavigationItem.HeaderText,
+            },
+            viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
 
         foreach (var item in viewModel.ShellNavigationItems)
         {
@@ -102,6 +112,11 @@ public sealed class MainWindowViewModelLocalizationTests
         CollectionAssert.AreEqual(
             new[] { "工作流", "运行", "数据", "日志", "设置" },
             viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
+        Assert.AreEqual("工作流", viewModel.WorkflowsNavigationItem.HeaderText);
+        Assert.AreEqual("运行", viewModel.RunsNavigationItem.HeaderText);
+        Assert.AreEqual("数据", viewModel.DataNavigationItem.HeaderText);
+        Assert.AreEqual("日志", viewModel.LogsNavigationItem.HeaderText);
+        Assert.AreEqual("设置", viewModel.SettingsNavigationItem.HeaderText);
     }
 
     [TestMethod]

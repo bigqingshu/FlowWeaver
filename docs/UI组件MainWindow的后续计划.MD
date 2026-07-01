@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.2 MainWindow 导航迁移前置复核
-> 当前执行点：评估 MainWindow.axaml 是否可先读取 ShellNavigationItems，尚未迁移 MainWindow.axaml
+> 文档状态：UI-COMPONENT-2b.2a Header-only bridge 已落地
+> 当前执行点：MainWindow.axaml 的五个导航 Header 已读取 ShellNavigationItems，尚未迁移 ItemsSource 或页面实例创建
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -693,6 +693,36 @@ UI-COMPONENT-2b.3：是否引入 ShellPageContentTemplateSelector 或 AppShellPa
 ```
 
 该后置方向才会讨论真正的 `ItemsSource + ContentTemplate`，不应和 2b.2a 混在同一个提交里。
+
+### 2.25 UI-COMPONENT-2b.2a 完成记录
+
+2b.2a 已完成 Header-only bridge：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI/Views/MainWindow.axaml
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+已实现内容：
+
+* `MainWindowViewModel` 暴露五个稳定导航项属性：`WorkflowsNavigationItem`、`RunsNavigationItem`、`DataNavigationItem`、`LogsNavigationItem`、`SettingsNavigationItem`。
+* `MainWindow.axaml` 的五个 `TabItem.Header` 改为读取对应导航项的 `HeaderText`。
+* 五个 `TabItem` 的页面内容仍保持原有 `WorkflowPage`、`RunMonitorPage`、`DataPage`、`LogsAuditPage`、`SettingsPage`。
+* 未迁移 `TabControl.ItemsSource`。
+* 未新增 `ContentTemplate`、模板选择器、页面工厂或 code-behind 页面切换逻辑。
+
+测试覆盖：
+
+* 导航项集合与五个稳定属性保持一致。
+* 中英文切换后导航项 HeaderText 刷新。
+* 全量 Avalonia 测试通过。
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.3 前置分析：是否引入 ShellPageContentTemplateSelector 或 AppShellPageHost，先只分析，不直接迁移 ItemsSource。
+```
 
 ---
 

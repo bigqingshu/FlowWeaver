@@ -316,6 +316,21 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; } =
         new();
 
+    public ShellNavigationItemViewModel WorkflowsNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.Workflows);
+
+    public ShellNavigationItemViewModel RunsNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.Runs);
+
+    public ShellNavigationItemViewModel DataNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.Data);
+
+    public ShellNavigationItemViewModel LogsNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.Logs);
+
+    public ShellNavigationItemViewModel SettingsNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.Settings);
+
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
     public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
@@ -1915,6 +1930,24 @@ public partial class MainWindowViewModel : ViewModelBase
                     descriptor,
                     ResolveShellPageHeaderText(descriptor)));
         }
+
+        NotifyShellNavigationItemsChanged();
+    }
+
+    private ShellNavigationItemViewModel GetShellNavigationItem(ShellPageKey key)
+    {
+        return ShellNavigationItems.FirstOrDefault(item => item.Key == key)
+            ?? throw new InvalidOperationException($"Shell navigation item '{key}' was not found.");
+    }
+
+    private void NotifyShellNavigationItemsChanged()
+    {
+        OnPropertyChanged(nameof(ShellNavigationItems));
+        OnPropertyChanged(nameof(WorkflowsNavigationItem));
+        OnPropertyChanged(nameof(RunsNavigationItem));
+        OnPropertyChanged(nameof(DataNavigationItem));
+        OnPropertyChanged(nameof(LogsNavigationItem));
+        OnPropertyChanged(nameof(SettingsNavigationItem));
     }
 
     private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
