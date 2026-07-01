@@ -1036,6 +1036,42 @@ def test_runtime_store_marks_stale_workflow_process_lost(tmp_path: Path) -> None
     assert loaded.status == "LOST"
 
 
+def test_runtime_store_marks_workflow_process_lost_at_cutoff_boundary(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Process workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(workflow_id=workflow.workflow_id)
+    process = store.create_workflow_process(workflow_run_id=run.workflow_run_id)
+    store.record_workflow_process_heartbeat(process.process_id)
+    cutoff = utc_now()
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE workflow_processes "
+                "SET last_heartbeat_at = :last_heartbeat_at "
+                "WHERE process_id = :process_id"
+            ),
+            {
+                "last_heartbeat_at": cutoff.isoformat(),
+                "process_id": process.process_id,
+            },
+        )
+
+    lost = store.mark_lost_workflow_processes(stale_before=cutoff)
+
+    assert [item.process_id for item in lost] == [process.process_id]
+    loaded = store.get_workflow_process(process.process_id)
+    assert loaded is not None
+    assert loaded.status == "LOST"
+
+
 def test_sqlite_pragmas_enable_foreign_keys_and_wal(tmp_path: Path) -> None:
     database_path = tmp_path / "metadata.db"
     migrate(database_path)

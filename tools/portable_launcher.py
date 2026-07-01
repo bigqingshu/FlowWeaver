@@ -24,6 +24,18 @@ ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost"})
 APP_IMPORT_TARGET = "flowweaver.api.app:create_default_app"
 
 
+def configure_console_encoding() -> None:
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            continue
+
+
 class LauncherConfigurationError(ValueError):
     """Raised when the portable launcher configuration is invalid."""
 
@@ -511,6 +523,7 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    configure_console_encoding()
     try:
         install_launcher_signal_handlers()
         settings = parse_launcher_args(argv)

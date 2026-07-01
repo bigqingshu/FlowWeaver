@@ -792,12 +792,12 @@ class RuntimeStore:
                 if record.status == WorkflowProcessStatus.STARTING.value:
                     if (
                         starting_stale_before is None
-                        or record.started_at >= _datetime_to_text(starting_stale_before)
+                        or record.started_at > _datetime_to_text(starting_stale_before)
                     ):
                         continue
                 elif (
                     record.last_heartbeat_at is None
-                    or record.last_heartbeat_at >= _datetime_to_text(stale_before)
+                    or record.last_heartbeat_at > _datetime_to_text(stale_before)
                 ):
                     continue
                 record.status = WorkflowProcessStatus.LOST.value
