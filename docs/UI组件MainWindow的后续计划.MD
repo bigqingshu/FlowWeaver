@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2o WorkflowSummaryView 节点配置表单最小接入已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2p 节点配置表单后置复核
+> 文档状态：UI-NODE-CONFIG-2p 节点配置表单后置复核已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2q 节点配置阶段总体验收与进入 WORKFLOW-EDIT 前复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5456,6 +5456,54 @@ UI-NODE-CONFIG-2p：
 节点配置表单后置复核，
 重点检查布局高度、空状态、revision conflict 下 Apply 禁用、
 以及真实 UI 中字段输入 + Apply + Draft JSON 的最小链路。
+```
+
+### 2.108 UI-NODE-CONFIG-2p 节点配置表单后置复核
+
+阶段目标：
+
+```text
+复核节点配置表单最小接入后的 XAML 绑定、Apply 可用性和测试证据。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2p_节点配置表单后置复核.md
+```
+
+已完成：
+
+* schema 未加载时 Apply 不可用的 ViewModel 测试。
+* schema 加载后 Apply 可用的 ViewModel 测试。
+* XAML 绑定 `DisplayLabel` / `TypeText` / `RequiredText` / `WarningText` 的结构测试。
+* XAML 绑定 `IsTextInput` / `IsEnumInput` / `IsBooleanInput` / `BooleanValues` 的结构测试。
+* 确认 XAML 未引入 converter。
+
+验证结果：
+
+```text
+dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore
+成功，警告：0，错误：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowSummaryViewStructureTests|MainWindowViewModelWorkflowTests"
+通过：46，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：216，失败：0，跳过：0
+```
+
+保留项：
+
+* 未做真实桌面截图核验。
+* 未做字段级错误高质量可视化回填。
+* 未做 array / object JSON fallback 编辑器。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2q：
+节点配置阶段总体验收与进入 WORKFLOW-EDIT 前复核。
 ```
 
 ---

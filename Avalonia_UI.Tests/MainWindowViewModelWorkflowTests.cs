@@ -782,6 +782,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsNotNull(viewModel.SelectedNodeConfigDraft);
         Assert.IsFalse(viewModel.SelectedNodeConfigDraft.IsSupported);
         Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
+        Assert.IsFalse(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
 
         await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
 
@@ -794,6 +795,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.HasCount(2, viewModel.SelectedNodeConfigEditableDraft.Fields);
         Assert.IsTrue(viewModel.HasSelectedNodeConfigEditableInputFields);
         Assert.HasCount(2, viewModel.SelectedNodeConfigEditableInputFields);
+        Assert.IsTrue(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
         Assert.AreEqual(
             "amount",
             viewModel.SelectedNodeConfigEditableDraft.Fields
