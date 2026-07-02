@@ -238,6 +238,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string currentThemeVariant = PersistedUiSettings.SystemThemeVariant;
 
+    [ObservableProperty]
+    private ShellPageKey selectedShellPageKey = ShellPageKey.Workflows;
+
     public bool CanUseEngineActions =>
         ConnectionStatus == ConnectionStatus.Connected
         && !string.IsNullOrWhiteSpace(BaseUrl)
@@ -330,6 +333,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ShellNavigationItemViewModel SettingsNavigationItem =>
         GetShellNavigationItem(ShellPageKey.Settings);
+
+    public ShellNavigationItemViewModel SelectedShellNavigationItem =>
+        GetShellNavigationItem(SelectedShellPageKey);
+
+    public ShellPageContentKey SelectedShellPageContentKey =>
+        SelectedShellNavigationItem.ContentKey;
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
@@ -1940,6 +1949,11 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? throw new InvalidOperationException($"Shell navigation item '{key}' was not found.");
     }
 
+    private static bool IsKnownShellPageKey(ShellPageKey key)
+    {
+        return BuiltinShellPages.All.Any(page => page.Key == key);
+    }
+
     private void NotifyShellNavigationItemsChanged()
     {
         OnPropertyChanged(nameof(ShellNavigationItems));
@@ -1948,6 +1962,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataNavigationItem));
         OnPropertyChanged(nameof(LogsNavigationItem));
         OnPropertyChanged(nameof(SettingsNavigationItem));
+        OnPropertyChanged(nameof(SelectedShellNavigationItem));
+        OnPropertyChanged(nameof(SelectedShellPageContentKey));
     }
 
     private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
@@ -2156,6 +2172,20 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsChecking));
         NotifyEngineActionStateChanged();
         CheckConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedShellPageKeyChanging(ShellPageKey value)
+    {
+        if (!IsKnownShellPageKey(value))
+        {
+            throw new InvalidOperationException($"Unknown shell page key '{value}'.");
+        }
+    }
+
+    partial void OnSelectedShellPageKeyChanged(ShellPageKey value)
+    {
+        OnPropertyChanged(nameof(SelectedShellNavigationItem));
+        OnPropertyChanged(nameof(SelectedShellPageContentKey));
     }
 
     partial void OnTokenChanged(string value)

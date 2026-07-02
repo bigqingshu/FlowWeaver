@@ -106,6 +106,54 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public void ShellSelectionDefaultsToWorkflowsPage()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        Assert.AreEqual(ShellPageKey.Workflows, viewModel.SelectedShellPageKey);
+        Assert.AreEqual(
+            ShellPageKey.Workflows,
+            viewModel.SelectedShellNavigationItem.Key);
+        Assert.AreEqual(
+            ShellPageContentKey.Workflows,
+            viewModel.SelectedShellPageContentKey);
+    }
+
+    [TestMethod]
+    public async Task ShellSelectionUsesStableKeyWhenNavigationItemsRefresh()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+        viewModel.SelectedShellPageKey = ShellPageKey.Logs;
+
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellNavigationItem.Key);
+        Assert.AreEqual(ShellPageContentKey.Logs, viewModel.SelectedShellPageContentKey);
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellNavigationItem.Key);
+        Assert.AreEqual(ShellPageContentKey.Logs, viewModel.SelectedShellPageContentKey);
+        Assert.AreEqual("日志", viewModel.SelectedShellNavigationItem.HeaderText);
+    }
+
+    [TestMethod]
+    public void ShellSelectionRejectsUnknownPageKey()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        try
+        {
+            viewModel.SelectedShellPageKey = (ShellPageKey)999;
+            Assert.Fail("Expected an InvalidOperationException.");
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        Assert.AreEqual(ShellPageKey.Workflows, viewModel.SelectedShellPageKey);
+    }
+
+    [TestMethod]
     public async Task ChangeLanguageRefreshesShellNavigationItemHeaders()
     {
         var viewModel = CreateViewModel(new FakeUiSettingsStore());

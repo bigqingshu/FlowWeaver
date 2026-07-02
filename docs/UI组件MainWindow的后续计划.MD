@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4b 选中状态前置分析
-> 当前执行点：分析 SelectedShellNavigationItem / SelectedShellPageKey 的最小状态边界，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
+> 文档状态：UI-COMPONENT-2b.4b.1 SelectedShellPageKey 前置状态已落地
+> 当前执行点：已新增 SelectedShellPageKey / SelectedShellNavigationItem / SelectedShellPageContentKey，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1123,6 +1123,37 @@ public ShellPageContentKey SelectedShellPageContentKey
 
 ```text
 下一步建议做 UI-COMPONENT-2b.4b.1：SelectedShellPageKey 前置状态，只补 ViewModel 状态和测试，不改 XAML。
+```
+
+### 2.48 UI-COMPONENT-2b.4b.1 完成记录
+
+2b.4b.1 已完成前置状态落地：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+已实现内容：
+
+* 新增 `SelectedShellPageKey`，默认值为 `Workflows`。
+* 新增派生属性 `SelectedShellNavigationItem`。
+* 新增派生属性 `SelectedShellPageContentKey`。
+* 切换语言导致 `ShellNavigationItems` 重建后，选中状态仍通过稳定 key 找回。
+* 未知 `ShellPageKey` 会被明确拒绝。
+
+界面显示影响：
+
+```text
+无。
+```
+
+本小步没有修改 `MainWindow.axaml`、`AppShellPageHost.axaml` 或任何页面/组件 XAML，也没有绑定 `TabControl.SelectedItem`。因此不需要提供 Gemini UI 修改文档。
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.4c 前置分析：AppShellPageHost 是否根据 SelectedShellPageContentKey 显示固定页面，先只分析。
 ```
 
 ---
