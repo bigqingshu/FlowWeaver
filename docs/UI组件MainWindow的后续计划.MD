@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.6f AddConnection / DeleteConnection 命令最小接入已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6g 结构化编辑命令后置复核
+> 文档状态：WORKFLOW-EDIT-1.6g 结构化编辑命令后置复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7 结构化编辑 View 协作说明
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6101,6 +6101,37 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 WORKFLOW-EDIT-1.6g：
 结构化编辑命令后置复核，
 先文档化完成矩阵和下一步 View 协作边界。
+```
+
+### 2.123 WORKFLOW-EDIT-1.6g 结构化编辑命令后置复核
+
+阶段目标：
+
+```text
+复核 WORKFLOW-EDIT-1.0 到 1.6f 的结构化编辑命令闭环，
+明确是否可以进入 View 协作说明。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.6g_结构化编辑命令后置复核.md
+```
+
+当前结论：
+
+* AddNode / DeleteNode / AddConnection / DeleteConnection 的 ViewModel 命令最小闭环已完成。
+* 成功后统一写回 `WorkflowDefinitionDraftJson`。
+* 已复用 dirty、validation invalidation、draft structure refresh、revision conflict 和 busy guard。
+* XAML 输入区、按钮和画布都尚未实现。
+* 下一步建议先写 Gemini View 协作说明，而不是继续扩展命令逻辑。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.7：
+结构化编辑 View 协作说明，
+只写 Gemini 可执行说明，不直接改 XAML。
 ```
 
 ---
