@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4c 前置分析已补充
-> 当前执行点：已确认 AppShellPageHost 暂不应直接按 SelectedShellPageContentKey 显示页面，需先补选中状态同步边界
+> 文档状态：UI-COMPONENT-2b.4c.1 选中状态同步前置方案已补充
+> 当前执行点：建议先用固定 TabControl 的 SelectedIndex 桥接 SelectedShellPageKey，暂不进入动态页面承载
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1236,6 +1236,93 @@ Gemini 协作判断：
 
 ```text
 UI-COMPONENT-2b.4c.1：AppShellPageHost / TabControl 选中状态同步前置方案，先只分析绑定边界。
+```
+
+### 2.50 UI-COMPONENT-2b.4c.1 选中状态同步前置方案
+
+目标：
+
+```text
+在不迁移 TabControl.ItemsSource、不引入模板选择器、不创建页面工厂的前提下，
+让 AppShellPageHost 内部固定 TabControl 的当前选中页可以同步到 MainWindowViewModel 的 SelectedShellPageKey。
+```
+
+可选方案：
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| A | 绑定 `TabControl.SelectedIndex` 到 ViewModel 新增的 `SelectedShellPageIndex` | 与当前固定五页 TabControl 最匹配，实现小，测试清楚 | index 是 UI 顺序语义，需要由内置页面清单统一约束 | 推荐 |
+| B | 绑定每个 `TabItem.IsSelected` 到 `SelectedShellPageKey` | key 语义更直接 | 需要 converter 或多个布尔派生属性，XAML 噪声更大 | 暂不采用 |
+| C | 绑定 `TabControl.SelectedItem` 到 `SelectedShellNavigationItem` | 语义接近导航项 | 当前 TabItem 不是由导航项生成，SelectedItem 实际是 TabItem 控件，容易错位 | 不采用 |
+| D | 立即迁移为 `ItemsSource + ContentTemplateSelector` | 长期更动态 | 范围过大，会提前进入后续阶段 | 禁止 |
+
+推荐方案：
+
+```text
+采用方案 A：
+
+新增 SelectedShellPageIndex 作为固定 TabControl 的桥接属性。
+SelectedShellPageIndex 只负责 UI 固定顺序与 SelectedShellPageKey 之间的同步。
+业务语义仍以 SelectedShellPageKey / SelectedShellPageContentKey 为准。
+```
+
+推荐实现边界：
+
+```text
+MainWindowViewModel
+  SelectedShellPageKey
+  SelectedShellNavigationItem
+  SelectedShellPageContentKey
+  SelectedShellPageIndex
+
+AppShellPageHost.axaml
+  <TabControl TabStripPlacement="Left"
+              SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}">
+      固定五个 TabItem
+  </TabControl>
+```
+
+同步规则：
+
+* `SelectedShellPageKey` 变更时，重新计算 `SelectedShellPageIndex`。
+* `SelectedShellPageIndex` 变更时，按当前 `ShellNavigationItems` 顺序找回对应 `ShellPageKey`。
+* 语言切换只刷新 Header，不应改变 `SelectedShellPageKey` 或 `SelectedShellPageIndex`。
+* `SelectedShellPageIndex` 超出当前内置页面范围时应明确拒绝。
+* `SelectedShellPageKey` 仍然拒绝未知 enum 值。
+
+测试建议：
+
+* 默认 `SelectedShellPageIndex == 0`。
+* 设置 `SelectedShellPageIndex` 为日志页索引后，`SelectedShellPageKey == Logs`。
+* 设置 `SelectedShellPageKey == Settings` 后，`SelectedShellPageIndex` 更新到设置页索引。
+* 语言切换后，key、content key、index 均保持一致。
+* 非法 index 被拒绝，且原选中状态不被破坏。
+* `AppShellPageHost.axaml` 只增加 `SelectedIndex` 绑定，仍不包含 `ItemsSource` 或 `ContentTemplate`。
+
+界面显示影响：
+
+```text
+预计无视觉变化。
+
+用户仍看到同一个左侧 TabControl 和同五个页面；
+变化只在内部状态同步，让用户点选页面后 ViewModel 能知道当前页。
+```
+
+Gemini 协作判断：
+
+```text
+不需要 Gemini 做视觉重设计。
+
+如果需要让 Gemini 执行 View 层修改，只需给出绑定级任务：
+在 AppShellPageHost.axaml 的现有固定 TabControl 上增加 SelectedIndex 双向绑定，
+不得改页面顺序、样式、布局、Header 绑定或 TabItem 内容。
+```
+
+2b.4c.1 结论：
+
+```text
+下一步建议做 UI-COMPONENT-2b.4c.2：
+实现 SelectedShellPageIndex 与固定 TabControl.SelectedIndex 的最小同步。
 ```
 
 ---
