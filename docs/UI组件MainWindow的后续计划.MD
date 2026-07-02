@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.7 推送前总复核已完成
-> 当前执行点：等待确认人工 Desktop smoke 是否阻塞推送
+> 文档状态：WORKFLOW-EDIT-2.8 推送后状态同步已完成
+> 当前执行点：节点配置与结构化编辑主线已推送完成，人工 Desktop smoke 保留为发布前手动验收项
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -7040,6 +7040,40 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.7_推送前总复核与人工DesktopSmoke确认.
 
 方案 B：
 人工 Desktop smoke 阻塞当前推送，先执行真实 Desktop 手动 smoke。
+```
+
+---
+
+### 2.149 WORKFLOW-EDIT-2.8 推送后状态同步
+
+阶段目标：
+
+```text
+同步 WORKFLOW-EDIT-2.7 之后的真实仓库状态，
+修正“推送前等待确认”的文档语义。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.8_推送后状态同步.md
+```
+
+当前结论：
+
+* 已按方案 A 处理。
+* 人工 Desktop smoke 不阻塞当前推送。
+* 人工 Desktop smoke 保留为发布前手动验收项。
+* `git push` 返回 `Everything up-to-date`。
+* 当前 `main` 与 `origin/main` 已对齐。
+* 最新提交为 `e72b043 复核结构化编辑推送前状态`。
+* 节点配置与结构化编辑主线已推送完成。
+
+后续建议：
+
+```text
+如继续推进，先另起阶段分析；
+不要直接扩 port/schema/画布能力。
 ```
 
 ---
