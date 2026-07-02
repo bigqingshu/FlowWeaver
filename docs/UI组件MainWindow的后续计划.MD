@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2c.3 CombinedShellRegion 命名与结构守护清单已补充
-> 当前执行点：将当前固定 TabControl 明确为 CombinedShellRegion，固化结构守护和后续变更门槛
+> 文档状态：UI-COMPONENT-3.0 样式 ResourceDictionary 拆分前置分析已补充
+> 当前执行点：只分析 MainWindow.Window.Styles 的拆分边界，不改 XAML、不新增样式文件、不改变视觉效果
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2158,6 +2158,156 @@ UI-COMPONENT-3.0：
 原因：
 当前 Shell 承载边界已经收紧，
 继续降低 MainWindow.axaml 体积时，样式拆分比页面动态承载风险更低。
+```
+
+### 2.59 UI-COMPONENT-3.0 样式 ResourceDictionary 拆分前置分析
+
+分析目标：
+
+```text
+复核 MainWindow.axaml 当前 Window.Styles，
+明确后续哪些样式适合拆入 ResourceDictionary，
+哪些样式暂不拆，
+以及拆分后的验证清单。
+
+本小步只写文档，不改 Avalonia 源码，不新增样式文件。
+```
+
+当前事实：
+
+```text
+Avalonia_UI/App.axaml
+  Application.Resources
+    ResourceInclude -> Styles/ColorPalette.axaml
+  Application.Styles
+    FluentTheme
+
+Avalonia_UI/Styles/ColorPalette.axaml
+  Light / Dark ThemeDictionaries
+  Brush 资源
+
+Avalonia_UI/Views/MainWindow.axaml
+  Window.Styles
+    Button
+    Button.Primary
+    ListBoxItem
+    TabControl
+    TabItem
+    Border.Card
+```
+
+当前已经完成的样式分层：
+
+* 颜色和主题 Brush 已在 `Styles/ColorPalette.axaml`。
+* `App.axaml` 已通过 `ResourceInclude` 引入 `ColorPalette.axaml`。
+* 页面和组件大量使用 `DynamicResource` 引用颜色资源。
+
+当前尚未完成的样式分层：
+
+* 控件样式仍集中在 `MainWindow.axaml` 的 `Window.Styles`。
+* `Button`、`ListBoxItem`、`TabControl`、`TabItem`、`Border.Card` 样式还未独立成 ResourceDictionary。
+* `MainWindow.axaml` 仍承担窗口布局和控件样式两个职责。
+
+拆分候选分组：
+
+| 分组 | 当前选择器 | 建议目标文件 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| 通用按钮样式 | `Button`、`Button:pointerover`、`Button:pressed`、`Button.Primary` | `Styles/Controls/ButtonStyles.axaml` 或 `Styles/ControlStyles.axaml` | 影响全局按钮视觉 | 可作为首批候选 |
+| 列表项样式 | `ListBoxItem`、hover、selected | `Styles/Controls/ListStyles.axaml` 或 `Styles/ControlStyles.axaml` | 影响工作流、运行、日志、数据列表 | 第二批候选 |
+| Shell 导航样式 | `TabControl`、`TabItem` 及 Fluent 模板部件选择器 | `Styles/Shell/ShellNavigationStyles.axaml` | 与 CombinedShellRegion 强绑定，模板选择器较敏感 | 暂缓，后拆 |
+| 卡片边框样式 | `Border.Card` | `Styles/Controls/CardStyles.axaml` 或 `Styles/ControlStyles.axaml` | 影响所有 Card 外观 | 可作为首批候选 |
+
+推荐拆分顺序：
+
+```text
+3.1
+先建立样式拆分清单和目标文件命名，不改 XAML。
+
+3.2
+只迁移低风险通用样式：
+Button + Border.Card。
+
+3.3
+迁移 ListBoxItem 样式。
+
+3.4
+再评估 TabControl / TabItem Shell 导航样式是否迁移。
+```
+
+不建议第一步就迁移 `TabControl` / `TabItem` 的原因：
+
+* 它们是 `CombinedShellRegion` 当前视觉和交互的核心。
+* 包含 FluentTheme 模板部件选择器，例如 `PART_SelectedContentHost`、`PART_ItemsPresenter`、`PART_SelectedPipe`。
+* 一旦迁移错误，可能导致左侧导航间距、选中态或内容区 Padding 变化。
+* 当前 Shell 承载刚刚收口，导航样式应等通用样式拆分验证稳定后再动。
+
+ResourceDictionary 命名建议：
+
+```text
+Avalonia_UI/Styles/ColorPalette.axaml
+  已存在，继续只负责颜色和 Brush。
+
+Avalonia_UI/Styles/ControlStyles.axaml
+  近期建议优先方案，先集中承载 Button、ListBoxItem、Border.Card。
+
+Avalonia_UI/Styles/ShellStyles.axaml
+  后续可选，承载 TabControl / TabItem / CombinedShellRegion 相关样式。
+```
+
+短期不建议立刻拆成太多文件：
+
+```text
+ButtonStyles.axaml
+ListStyles.axaml
+CardStyles.axaml
+ShellNavigationStyles.axaml
+```
+
+原因：
+
+* 当前样式数量还不大。
+* 文件过细会增加 `App.axaml` ResourceInclude 维护成本。
+* 第一轮更需要验证样式迁移机制，而不是追求最终文件颗粒度。
+
+3.0 拆分边界：
+
+* 只分析，不改 `MainWindow.axaml`。
+* 不新增 `ResourceDictionary` 文件。
+* 不修改 `App.axaml`。
+* 不修改 `ColorPalette.axaml`。
+* 不修改控件视觉参数。
+* 不移动 `CombinedShellRegion`。
+* 不触碰 `ItemsSource`、模板选择器、页面工厂或插件化。
+
+后续实现时的验收清单：
+
+* `dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore` 通过。
+* `App.axaml` 正确引入新增样式 ResourceDictionary。
+* `ColorPalette.axaml` 仍只负责颜色和 Brush。
+* `MainWindow.axaml` 中被迁移的样式不再重复存在。
+* 迁移前后 `Button.Primary` 仍存在。
+* 迁移前后 `Border.Card` 仍存在。
+* 迁移前后 `CombinedShellRegion` 结构测试仍通过。
+* 若迁移 Tab 样式，必须额外复核左侧导航视觉和 `SelectedShellPageIndex` 绑定。
+
+Gemini 协作判断：
+
+```text
+3.0 不需要 Gemini 修改 View。
+
+后续 3.2 / 3.3 如果只是搬迁样式文件，也优先由 Codex 执行；
+Gemini 仅在需要视觉重设计或样式参数调整时参与。
+```
+
+3.0 结论：
+
+```text
+可以进入样式 ResourceDictionary 拆分路线。
+
+下一小步建议：
+UI-COMPONENT-3.1：样式拆分清单与目标文件命名固化。
+
+仍然只写文档和验收标准，不改 XAML。
 ```
 
 ---
