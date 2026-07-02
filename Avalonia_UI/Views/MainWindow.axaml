@@ -1,7 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Avalonia_UI.ViewModels"
-        xmlns:components="using:Avalonia_UI.Views.Components"
         xmlns:shell="using:Avalonia_UI.Views.Components.Shell"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -75,21 +74,7 @@
     </Window.Styles>
 
     <Grid RowDefinitions="Auto,*" Margin="24">
-        <!-- Shell Header -->
-        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,24">
-            <StackPanel Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="{Binding AppTitleText}"
-                           FontSize="28"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <TextBlock Text="{Binding AppSubtitleText}"
-                           FontSize="14"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-            </StackPanel>
-
-            <components:ConnectionStatusView Grid.Column="1" VerticalAlignment="Center"/>
-        </Grid>
-
+        <shell:ShellHeaderView />
         <shell:AppShellPageHost Grid.Row="1" />
     </Grid>
 </Window>

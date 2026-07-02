@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-4.1 ShellHeaderView 最小抽取前置方案已补充
-> 当前执行点：固化 Shell Header 组件边界和测试守护清单，下一步可最小实现 ShellHeaderView
+> 文档状态：UI-COMPONENT-4.2 ShellHeaderView 最小实现已完成
+> 当前执行点：Shell Header 已从 MainWindow 抽为 ShellHeaderView，视觉参数和绑定语义保持不变
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3028,6 +3028,53 @@ Avalonia_UI.Tests/MainWindowShellStructureTests.cs
 最小实现 ShellHeaderView 组件。
 
 实现时只移动 Header XAML，不改变视觉参数、不改绑定语义、不新增 ViewModel。
+```
+
+### 2.67 UI-COMPONENT-4.2 ShellHeaderView 最小实现完成记录
+
+4.2 已完成最小实现：
+
+```text
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml.cs
+Avalonia_UI/Views/MainWindow.axaml
+Avalonia_UI.Tests/MainWindowShellStructureTests.cs
+```
+
+已实现内容：
+
+* 新增 `ShellHeaderView` 组件。
+* 将 `AppTitleText` / `AppSubtitleText` / `ConnectionStatusView` 从 `MainWindow.axaml` 移入 `ShellHeaderView.axaml`。
+* `MainWindow.axaml` 改为引用 `<shell:ShellHeaderView />`。
+* 移除 `MainWindow.axaml` 中不再使用的 `components` 命名空间。
+* 新增结构测试，确认 `MainWindow.axaml` 不再直接持有 Header 绑定。
+* 新增结构测试，确认 `ShellHeaderView.axaml` 持有 Header 绑定和 `ConnectionStatusView`。
+
+边界确认：
+
+* 未改变 Header 视觉参数。
+* 未新增 ViewModel。
+* 未修改 `ConnectionStatusView`。
+* 未移动 `AppShellPageHost`。
+* 未移动 `CombinedShellRegion`。
+* 未修改 TabControl / TabItem 样式。
+* 未触碰 `ItemsSource`、模板选择器、页面工厂、页面缓存或插件化。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：148
+失败：0
+跳过：0
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-4.3：
+MainWindow 剩余职责与阶段总体验收复核。
 ```
 
 ---

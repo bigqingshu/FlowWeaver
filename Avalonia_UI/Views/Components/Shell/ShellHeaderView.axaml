@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:components="using:Avalonia_UI.Views.Components"
+             x:Class="Avalonia_UI.Views.Components.Shell.ShellHeaderView"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,24">
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="{Binding AppTitleText}"
+                       FontSize="28"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Text="{Binding AppSubtitleText}"
+                       FontSize="14"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </StackPanel>
+
+        <components:ConnectionStatusView Grid.Column="1" VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>
