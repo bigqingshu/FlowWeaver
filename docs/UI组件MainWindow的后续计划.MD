@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2q 节点配置阶段总体验收与 WORKFLOW-EDIT 前复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.0 工作流结构化编辑前置边界分析
+> 文档状态：WORKFLOW-EDIT-1.0 工作流结构化编辑前置边界分析已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.1 WorkflowDefinitionDraftStructure 只读解析模型和测试
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5535,6 +5535,39 @@ WORKFLOW-EDIT-1.0：
 工作流结构化编辑前置边界分析，
 先列清 nodes / connections / draft JSON / revision conflict 的边界，
 不直接实现节点增删或连线编辑。
+```
+
+### 2.110 WORKFLOW-EDIT-1.0 工作流结构化编辑前置边界分析
+
+阶段目标：
+
+```text
+在节点配置主线收口后，
+先明确完整 workflow definition 结构化编辑的最小边界，
+避免把已有 node config Apply 误扩展成完整 Workflow 编辑器。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.0_工作流结构化编辑前置边界分析.md
+```
+
+当前结论：
+
+* `WorkflowDefinitionDraftJson` 继续作为唯一保存源。
+* 结构化编辑必须复用现有 dirty、validation invalidation、Save 和 revision conflict 语义。
+* 当前 `WorkflowDefinitionDetail.Nodes` / `Connections` 是已加载 definition 的只读投影，不等同于可编辑草稿结构。
+* WORKFLOW-EDIT-1 先做结构化 JSON 草稿模型和纯 patcher，不引入画布、拖拽、后端 partial patch API。
+* WORKFLOW-EDIT-2 再考虑图形化体验、节点专用编辑器、复杂 config 表单、撤销/重做等能力。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.1：
+建立 WorkflowDefinitionDraftStructure 只读解析模型和测试，
+只解析当前 WorkflowDefinitionDraftJson 中的 nodes / connections，
+不修改 ViewModel，不修改 XAML，不新增结构化写入命令。
 ```
 
 ---
