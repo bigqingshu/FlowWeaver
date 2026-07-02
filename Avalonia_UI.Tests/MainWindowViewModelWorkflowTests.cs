@@ -429,6 +429,123 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task SelectingNewDraftNodeDefinitionFillsNodeInput()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single();
+
+        Assert.AreEqual("GenerateTestTableNode", viewModel.NewDraftNodeType);
+        Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
+        Assert.AreEqual("Generate Test Table", viewModel.NewDraftNodeDisplayName);
+        Assert.AreEqual("generate_test_table", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task SelectingNewDraftNodeDefinitionSuggestsUniqueNodeInstanceId()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate_test_table", "node_type": "GenerateTestTableNode", "node_version": "1.0"},
+                {"node_instance_id": "generate_test_table_2", "node_type": "GenerateTestTableNode", "node_version": "1.0"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single();
+
+        Assert.AreEqual("generate_test_table_3", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task SelectingNewDraftNodeDefinitionDoesNotOverwriteManualNodeInstanceId()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("FilterRowsNode", "Filter Rows"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.NewDraftNodeInstanceId = "custom_filter";
+
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single();
+
+        Assert.AreEqual("FilterRowsNode", viewModel.NewDraftNodeType);
+        Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
+        Assert.AreEqual("custom_filter", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
     public async Task AddWorkflowDefinitionDraftNodeCommandAddsNodeToDraft()
     {
         var definitionJson =

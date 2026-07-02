@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -123,6 +124,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
 
     [ObservableProperty]
+    private NodeDefinitionListItemViewModel? selectedNewDraftNodeDefinition;
+
+    [ObservableProperty]
     private string newDraftNodeInstanceId = string.Empty;
 
     [ObservableProperty]
@@ -177,6 +181,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool hasWorkflowDefinitionRevisionConflict;
 
     private string originalWorkflowDefinitionJson = string.Empty;
+    private string lastSuggestedNewDraftNodeInstanceId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
     [ObservableProperty]
@@ -1170,6 +1175,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (response.Ok && response.Data is not null)
             {
+                SelectedNewDraftNodeDefinition = null;
                 NodeDefinitions.Clear();
                 foreach (var definition in response.Data
                     .OrderBy(definition => definition.DisplayName)
@@ -1191,6 +1197,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             NodeDefinitionCatalogMessage = T("node_catalog.refresh_failed");
             NodeDefinitionCatalogErrorMessage = DescribeError(response);
+            SelectedNewDraftNodeDefinition = null;
             OnPropertyChanged(nameof(HasNodeDefinitions));
             OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
             RefreshSelectedNodeConfigDraftState();
@@ -2255,6 +2262,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ResetNewDraftNodeInput()
     {
+        lastSuggestedNewDraftNodeInstanceId = string.Empty;
+        SelectedNewDraftNodeDefinition = null;
         NewDraftNodeInstanceId = string.Empty;
         NewDraftNodeType = string.Empty;
         NewDraftNodeVersion = "1.0";
@@ -2317,6 +2326,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ResetWorkflowDefinitionStructuredEditInput()
     {
+        lastSuggestedNewDraftNodeInstanceId = string.Empty;
         ResetNewDraftNodeInput();
         ResetNewDraftConnectionInput();
         ResetWorkflowDefinitionDraftSelectionInput();
@@ -2552,6 +2562,100 @@ public partial class MainWindowViewModel : ViewModelBase
             "TARGET_PORT_REQUIRED" => T("definition.warning.target_port_required"),
             _ => warning,
         };
+    }
+
+    private void ApplySelectedNewDraftNodeDefinition(
+        NodeDefinitionListItemViewModel definition)
+    {
+        NewDraftNodeType = definition.NodeType;
+        NewDraftNodeVersion = string.IsNullOrWhiteSpace(definition.NodeVersion)
+            ? "1.0"
+            : definition.NodeVersion;
+
+        if (string.IsNullOrWhiteSpace(NewDraftNodeDisplayName))
+        {
+            NewDraftNodeDisplayName = definition.DisplayNameText;
+        }
+
+        if (ShouldApplySuggestedNewDraftNodeInstanceId())
+        {
+            lastSuggestedNewDraftNodeInstanceId =
+                BuildUniqueNewDraftNodeInstanceId(definition.NodeType);
+            NewDraftNodeInstanceId = lastSuggestedNewDraftNodeInstanceId;
+        }
+    }
+
+    private bool ShouldApplySuggestedNewDraftNodeInstanceId()
+    {
+        return string.IsNullOrWhiteSpace(NewDraftNodeInstanceId)
+            || string.Equals(
+                NewDraftNodeInstanceId,
+                lastSuggestedNewDraftNodeInstanceId,
+                StringComparison.Ordinal);
+    }
+
+    private string BuildUniqueNewDraftNodeInstanceId(string nodeType)
+    {
+        var baseId = BuildNewDraftNodeInstanceIdBase(nodeType);
+        var existingIds = WorkflowDefinitionDraftStructure?.Nodes
+            .Select(node => node.NodeInstanceId)
+            .ToHashSet(StringComparer.Ordinal)
+            ?? new HashSet<string>(StringComparer.Ordinal);
+
+        var candidate = baseId;
+        var suffix = 2;
+        while (existingIds.Contains(candidate))
+        {
+            candidate = $"{baseId}_{suffix}";
+            suffix++;
+        }
+
+        return candidate;
+    }
+
+    private static string BuildNewDraftNodeInstanceIdBase(string nodeType)
+    {
+        var source = string.IsNullOrWhiteSpace(nodeType)
+            ? "node"
+            : nodeType.Trim();
+
+        if (source.EndsWith("Node", StringComparison.Ordinal) && source.Length > 4)
+        {
+            source = source[..^4];
+        }
+
+        var builder = new StringBuilder();
+        for (var index = 0; index < source.Length; index++)
+        {
+            var current = source[index];
+            if (char.IsLetterOrDigit(current))
+            {
+                var previous = index > 0 ? source[index - 1] : '\0';
+                var next = index + 1 < source.Length ? source[index + 1] : '\0';
+                var shouldSeparate =
+                    char.IsUpper(current)
+                    && builder.Length > 0
+                    && builder[^1] != '_'
+                    && (char.IsLower(previous)
+                        || char.IsDigit(previous)
+                        || char.IsLower(next));
+
+                if (shouldSeparate)
+                {
+                    builder.Append('_');
+                }
+
+                builder.Append(char.ToLowerInvariant(current));
+            }
+            else if (builder.Length > 0 && builder[^1] != '_')
+            {
+                builder.Append('_');
+            }
+        }
+
+        return builder.ToString().Trim('_') is { Length: > 0 } value
+            ? value
+            : "node";
     }
 
     private void RefreshShellNavigationItems()
@@ -3135,6 +3239,15 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionValidationErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionValidationError));
+    }
+
+    partial void OnSelectedNewDraftNodeDefinitionChanged(
+        NodeDefinitionListItemViewModel? value)
+    {
+        if (value is not null)
+        {
+            ApplySelectedNewDraftNodeDefinition(value);
+        }
     }
 
     partial void OnNewDraftNodeInstanceIdChanged(string value)
