@@ -26,6 +26,14 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         var input = new NodeConfigEditableFieldInputViewModel(field);
 
         Assert.AreEqual("operator", input.Name);
+        Assert.AreEqual("Operator", input.DisplayLabel);
+        Assert.AreEqual("Enum", input.TypeText);
+        Assert.AreEqual("*", input.RequiredText);
+        Assert.IsTrue(input.IsEnumInput);
+        Assert.IsFalse(input.IsTextInput);
+        Assert.IsFalse(input.IsBooleanInput);
+        Assert.IsTrue(input.HasWarnings);
+        Assert.AreEqual("CONFIG_DRAFT_FIELD_REQUIRED_MISSING", input.WarningText);
         Assert.AreEqual("GT", input.InputValue);
         Assert.IsTrue(input.HasInputValue);
         Assert.IsFalse(input.IsDirty);
@@ -45,5 +53,40 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         CollectionAssert.Contains(
             updated.Warnings.ToArray(),
             "CONFIG_DRAFT_FIELD_REQUIRED_MISSING");
+    }
+
+    [TestMethod]
+    public void InputFieldExposesViewHelpersForTextAndBooleanInputs()
+    {
+        var textInput = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "field",
+                Type = NodeConfigFieldType.String,
+                InputValue = "amount",
+                HasInputValue = true,
+            });
+        var booleanInput = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "enabled",
+                Type = NodeConfigFieldType.Boolean,
+                InputValue = "true",
+                HasInputValue = true,
+            });
+
+        Assert.AreEqual("field", textInput.DisplayLabel);
+        Assert.IsTrue(textInput.IsTextInput);
+        Assert.IsFalse(textInput.IsEnumInput);
+        Assert.IsFalse(textInput.IsBooleanInput);
+        Assert.IsFalse(textInput.HasWarnings);
+        Assert.AreEqual(string.Empty, textInput.WarningText);
+
+        Assert.IsFalse(booleanInput.IsTextInput);
+        Assert.IsFalse(booleanInput.IsEnumInput);
+        Assert.IsTrue(booleanInput.IsBooleanInput);
+        CollectionAssert.AreEqual(
+            new[] { "true", "false" },
+            booleanInput.BooleanValues.ToArray());
     }
 }

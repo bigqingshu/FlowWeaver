@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2m 节点配置表单 View 协作说明已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2n 输入字段 View 辅助属性
+> 文档状态：UI-NODE-CONFIG-2n 输入字段 View 辅助属性已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2o WorkflowSummaryView 节点配置表单最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5353,6 +5353,55 @@ docs/FlowWeaver_UI-NODE-CONFIG-2m_节点配置表单View协作说明.md
 UI-NODE-CONFIG-2n：
 为 NodeConfigEditableFieldInputViewModel 补充 View 友好辅助属性和测试，
 再交给 Gemini 做 XAML 会更稳。
+```
+
+### 2.106 UI-NODE-CONFIG-2n 输入字段 View 辅助属性
+
+阶段目标：
+
+```text
+为 NodeConfigEditableFieldInputViewModel 补充 XAML 友好属性，
+减少后续 View 层对 converter / code-behind 的依赖。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2n_输入字段View辅助属性.md
+```
+
+已完成：
+
+* 新增 `DisplayLabel`。
+* 新增 `TypeText` / `RequiredText`。
+* 新增 `IsTextInput` / `IsEnumInput` / `IsBooleanInput`。
+* 新增 `BooleanValues`。
+* 新增 `HasWarnings` / `WarningText`。
+* 补充输入字段 ViewModel 测试。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不新增 converter。
+* 不新增 code-behind。
+* 不改变 Apply / Validate / Save 语义。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigEditableFieldInputViewModelTests|NodeConfigEditableFieldInputConfigBuilderTests"
+通过：5，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：214，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2o：
+WorkflowSummaryView.axaml 节点配置表单最小接入，
+只改 View，绑定 SelectedNodeConfigEditableInputFields 和 ApplySelectedNodeConfigDraftCommand。
 ```
 
 ---

@@ -7,6 +7,9 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
 {
+    private static readonly IReadOnlyList<string> BooleanInputValues =
+        ["true", "false"];
+
     public NodeConfigEditableFieldInputViewModel(NodeConfigEditableDraftField field)
     {
         Name = field.Name;
@@ -36,6 +39,28 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     public IReadOnlyList<string> EnumValues { get; }
 
     public IReadOnlyList<string> Warnings { get; }
+
+    public string DisplayLabel =>
+        string.IsNullOrWhiteSpace(Title) ? Name : Title;
+
+    public string TypeText => Type.ToString();
+
+    public string RequiredText => Required ? "*" : string.Empty;
+
+    public bool IsTextInput =>
+        Type is NodeConfigFieldType.String
+            or NodeConfigFieldType.Integer
+            or NodeConfigFieldType.Number;
+
+    public bool IsEnumInput => Type == NodeConfigFieldType.Enum;
+
+    public bool IsBooleanInput => Type == NodeConfigFieldType.Boolean;
+
+    public IReadOnlyList<string> BooleanValues => BooleanInputValues;
+
+    public bool HasWarnings => Warnings.Count > 0;
+
+    public string WarningText => string.Join(", ", Warnings);
 
     public bool IsDirty =>
         !string.Equals(InputValue, OriginalInputValue, StringComparison.Ordinal)
