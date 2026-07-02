@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.2d 新增节点 View 最小接入已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.2e node type 与 node instance id 输入体验后置复核
+> 文档状态：WORKFLOW-EDIT-2.2e node type 与 node instance id 输入体验后置复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.3a connection source / target / id 输入体验前置分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6565,6 +6565,47 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-2.2e：
 node type 与 node instance id 输入体验后置复核。
+```
+
+### 2.136 WORKFLOW-EDIT-2.2e node type 与 node instance id 输入体验后置复核
+
+阶段目标：
+
+```text
+复核 WORKFLOW-EDIT-2.2 是否完成 node type 选择、
+node instance id 自动建议和手动输入降级边界。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.2e_NodeType与NodeInstanceId输入体验后置复核.md
+```
+
+当前结论：
+
+* `SelectedNewDraftNodeDefinition` 已接入 ViewModel。
+* 选择 node definition 会填充 node type / version / display name。
+* node instance id 会自动建议并避开重复。
+* 用户手动 node instance id 不会被覆盖。
+* `WorkflowSummaryView` 已接入 node catalog ComboBox。
+* `NewDraftNodeType` 和 `NewDraftNodeInstanceId` 手动输入仍保留。
+
+验证结果：
+
+```text
+dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore
+成功，警告：0，错误：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：261，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.3a：
+connection source / target / id 输入体验前置分析。
 ```
 
 ---
