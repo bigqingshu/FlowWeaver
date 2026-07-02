@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.2 ViewModel 只读草稿结构状态接入已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.3 节点新增纯 patcher 前置实现
+> 文档状态：WORKFLOW-EDIT-1.3 节点新增纯 patcher 已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.4 节点删除 preflight / patcher
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5659,6 +5659,51 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 WORKFLOW-EDIT-1.3：
 节点新增纯 patcher 前置实现，
 只新增模型和测试，不接 ViewModel 命令，不修改 XAML。
+```
+
+### 2.113 WORKFLOW-EDIT-1.3 节点新增纯 patcher
+
+阶段目标：
+
+```text
+先建立新增节点的纯 JSON patch 能力，
+为后续 ViewModel 命令和 UI 输入提供可测试的底层边界。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/Models/WorkflowDefinitionDraftNodePatcher.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftNodePatchResult.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftNodePatchStatus.cs
+Avalonia_UI.Tests/WorkflowDefinitionDraftNodePatcherTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.3_节点新增纯Patcher.md
+```
+
+当前结论：
+
+* `AddNode` 会 append 新节点，并保留 root 其他字段和现有 `connections`。
+* 已校验根对象、nodes/connections 数组、必填身份字段、重复 node_instance_id、config object 边界。
+* 本小步没有接 ViewModel 命令，也没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowDefinitionDraftNodePatcherTests"
+通过：9，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：232，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.4：
+节点删除 preflight / patcher，
+先识别连接依赖，默认不做级联删除，
+不接 ViewModel 命令，不修改 XAML。
 ```
 
 ---
