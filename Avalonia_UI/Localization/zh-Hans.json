@@ -57,6 +57,8 @@
   "definition.hash": "哈希",
   "definition.updated": "更新时间",
   "definition.nodes": "节点",
+  "definition.node_config": "节点配置",
+  "definition.apply_node_config": "应用配置",
   "definition.connections": "连接",
   "definition.draft_json": "草稿 JSON",
   "definition.validate": "校验",

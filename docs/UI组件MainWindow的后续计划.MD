@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2n 输入字段 View 辅助属性已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2o WorkflowSummaryView 节点配置表单最小接入
+> 文档状态：UI-NODE-CONFIG-2o WorkflowSummaryView 节点配置表单最小接入已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2p 节点配置表单后置复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5402,6 +5402,60 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 UI-NODE-CONFIG-2o：
 WorkflowSummaryView.axaml 节点配置表单最小接入，
 只改 View，绑定 SelectedNodeConfigEditableInputFields 和 ApplySelectedNodeConfigDraftCommand。
+```
+
+### 2.107 UI-NODE-CONFIG-2o WorkflowSummaryView 节点配置表单最小接入
+
+阶段目标：
+
+```text
+将节点配置字段表单和 Apply 按钮接入 WorkflowSummaryView.axaml，
+让当前 ViewModel 契约在 UI 中可见。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2o_WorkflowSummaryView节点配置表单最小接入.md
+```
+
+已完成：
+
+* Nodes Card 底部新增节点配置区域。
+* 字段列表绑定 `SelectedNodeConfigEditableInputFields`。
+* Apply 按钮绑定 `ApplySelectedNodeConfigDraftCommand`。
+* string / integer / number 使用 `TextBox`。
+* enum / boolean 使用 `ComboBox`。
+* 新增 `NodeConfigSectionText` / `ApplyNodeConfigText` 和中英文资源。
+* 补充 XAML 结构测试。
+
+本阶段明确未做：
+
+* 不改 `MainWindow.axaml`。
+* 不改 `WorkflowPage.axaml` 三列结构。
+* 不新增 converter / code-behind。
+* 不改 Apply / Validate / Save 语义。
+
+验证结果：
+
+```text
+dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore
+成功，警告：0，错误：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowSummaryViewStructureTests|MainWindowViewModelWorkflowTests"
+通过：45，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：215，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2p：
+节点配置表单后置复核，
+重点检查布局高度、空状态、revision conflict 下 Apply 禁用、
+以及真实 UI 中字段输入 + Apply + Draft JSON 的最小链路。
 ```
 
 ---

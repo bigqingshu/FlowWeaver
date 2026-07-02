@@ -566,6 +566,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string NodesSectionText => T("definition.nodes");
 
+    public string NodeConfigSectionText => T("definition.node_config");
+
+    public string ApplyNodeConfigText => T("definition.apply_node_config");
+
     public string ConnectionsSectionText => T("definition.connections");
 
     public string NodeCatalogSectionText => T("node_catalog.section");
@@ -2493,6 +2497,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HashLabelText));
         OnPropertyChanged(nameof(UpdatedLabelText));
         OnPropertyChanged(nameof(NodesSectionText));
+        OnPropertyChanged(nameof(NodeConfigSectionText));
+        OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(ConnectionsSectionText));
         OnPropertyChanged(nameof(NodeCatalogSectionText));
         OnPropertyChanged(nameof(NodeText));

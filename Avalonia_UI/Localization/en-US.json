@@ -57,6 +57,8 @@
   "definition.hash": "Hash",
   "definition.updated": "Updated",
   "definition.nodes": "Nodes",
+  "definition.node_config": "Node config",
+  "definition.apply_node_config": "Apply config",
   "definition.connections": "Connections",
   "definition.draft_json": "Draft JSON",
   "definition.validate": "Validate",

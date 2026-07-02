@@ -43,6 +43,29 @@ public sealed class WorkflowSummaryViewStructureTests
         Assert.IsFalse(xaml.Contains("ListNodeDefinitionsAsync", StringComparison.Ordinal));
     }
 
+    [TestMethod]
+    public void NodeConfigEditorBindsToInputFieldsAndApplyCommand()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(
+            xaml,
+            "ItemsSource=\"{Binding SelectedNodeConfigEditableInputFields}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding ApplySelectedNodeConfigDraftCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "x:DataType=\"vm:NodeConfigEditableFieldInputViewModel\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding InputValue, Mode=TwoWay");
+        StringAssert.Contains(xaml, "SelectedItem=\"{Binding InputValue, Mode=TwoWay}\"");
+    }
+
     private static string ReadSourceFile(params string[] pathParts)
     {
         var repoRoot = GetRepoRoot();
