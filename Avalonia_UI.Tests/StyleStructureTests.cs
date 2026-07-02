@@ -50,8 +50,41 @@ public sealed class StyleStructureTests
         Assert.IsFalse(xaml.Contains("Selector=\"ListBoxItem:pointerover\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("Selector=\"ListBoxItem:selected\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("Selector=\"Border.Card\"", StringComparison.Ordinal));
-        StringAssert.Contains(xaml, "Selector=\"TabControl\"");
-        StringAssert.Contains(xaml, "Selector=\"TabItem\"");
+    }
+
+    [TestMethod]
+    public void MainWindowStillOwnsCombinedShellRegionStyles()
+    {
+        var appXaml = ReadSourceFile("Avalonia_UI", "App.axaml");
+        var controlStylesXaml = ReadSourceFile("Avalonia_UI", "Styles", "ControlStyles.axaml");
+        var mainWindowXaml = ReadSourceFile("Avalonia_UI", "Views", "MainWindow.axaml");
+
+        Assert.IsFalse(appXaml.Contains("ShellStyles.axaml", StringComparison.Ordinal));
+        Assert.IsFalse(controlStylesXaml.Contains("Selector=\"TabControl\"", StringComparison.Ordinal));
+        Assert.IsFalse(controlStylesXaml.Contains("Selector=\"TabItem\"", StringComparison.Ordinal));
+        StringAssert.Contains(mainWindowXaml, "Selector=\"TabControl\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabControl[TabStripPlacement=Left] /template/ ContentPresenter#PART_SelectedContentHost\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabControl[TabStripPlacement=Left] /template/ ItemsPresenter#PART_ItemsPresenter\"");
+        StringAssert.Contains(mainWindowXaml, "Selector=\"TabItem\"");
+        StringAssert.Contains(mainWindowXaml, "Selector=\"TabItem > TextBlock\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabItem:pointerover /template/ Border#PART_LayoutRoot\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabItem:pointerover /template/ ContentPresenter\"");
+        StringAssert.Contains(mainWindowXaml, "Selector=\"TabItem:pointerover\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabItem:selected /template/ ContentPresenter\"");
+        StringAssert.Contains(mainWindowXaml, "Selector=\"TabItem:selected\"");
+        StringAssert.Contains(
+            mainWindowXaml,
+            "Selector=\"TabItem:selected /template/ Border#PART_SelectedPipe\"");
     }
 
     private static string ReadSourceFile(params string[] pathParts)

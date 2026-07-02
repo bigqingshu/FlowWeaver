@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3.3 ListBoxItem 样式迁移已完成
-> 当前执行点：Button / Button.Primary / ListBoxItem / Border.Card 已迁入 ControlStyles.axaml，Shell 样式仍暂留 MainWindow
+> 文档状态：UI-COMPONENT-3.4 Shell 样式迁移评估与守护已完成
+> 当前执行点：TabControl / TabItem / CombinedShellRegion 样式暂缓迁移，已用结构测试守护当前归属
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2638,6 +2638,93 @@ UI-COMPONENT-3.4：
 评估 TabControl / TabItem / CombinedShellRegion 相关 Shell 样式是否迁移。
 
 建议先分析，不直接迁移。
+```
+
+### 2.63 UI-COMPONENT-3.4 Shell 样式迁移评估与守护
+
+3.4 评估对象：
+
+```text
+MainWindow.axaml 中剩余的 Window.Styles：
+
+TabControl
+TabControl[TabStripPlacement=Left] /template/ ContentPresenter#PART_SelectedContentHost
+TabControl[TabStripPlacement=Left] /template/ ItemsPresenter#PART_ItemsPresenter
+TabItem
+TabItem > TextBlock
+TabItem:pointerover /template/ Border#PART_LayoutRoot
+TabItem:pointerover /template/ ContentPresenter
+TabItem:pointerover
+TabItem:selected /template/ ContentPresenter
+TabItem:selected
+TabItem:selected /template/ Border#PART_SelectedPipe
+```
+
+当前结论：
+
+```text
+暂缓迁移 Shell 样式。
+```
+
+原因：
+
+* 这些样式直接服务 `CombinedShellRegion` 的左侧导航。
+* 样式中包含 FluentTheme 模板部件选择器，迁移风险高于普通控件样式。
+* 如果迁移到 `Application.Styles`，`TabItem` 通用选择器会扩大到未来所有 Tab 控件。
+* 如果要避免全局作用域，需要先设计 Shell 专属 class 或局部 `StyleInclude` 策略，这会进入新的 XAML 结构决策。
+* 当前 `CombinedShellRegion` 刚刚完成边界收口，暂缓迁移更稳。
+
+本小步实际处理：
+
+```text
+不迁移 TabControl / TabItem 样式。
+补充结构测试，明确当前 Shell 样式仍由 MainWindow.axaml 持有。
+```
+
+涉及文件：
+
+```text
+Avalonia_UI.Tests/StyleStructureTests.cs
+docs/UI组件MainWindow的后续计划.MD
+```
+
+新增/增强测试：
+
+* 确认 `App.axaml` 未引入 `ShellStyles.axaml`。
+* 确认 `ControlStyles.axaml` 不持有 `TabControl` / `TabItem` 样式。
+* 确认 `MainWindow.axaml` 仍持有全部 `TabControl` / `TabItem` / Fluent 模板部件样式。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：146
+失败：0
+跳过：0
+```
+
+后续重新评估 Shell 样式迁移的门槛：
+
+* 已明确是否允许 Shell 样式全局化。
+* 或已设计 `CombinedShellRegion` 专属 class / 局部样式作用域。
+* 已准备视觉复核方案，至少覆盖左侧导航间距、选中态、hover、内容区 Padding。
+* 已明确是否需要 Gemini 参与视觉确认。
+
+3.4 结论：
+
+```text
+UI-COMPONENT-3 的真实样式拆分到此收口：
+
+ControlStyles.axaml 负责通用控件样式；
+MainWindow.axaml 暂时保留 CombinedShellRegion 的 Shell 导航样式。
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-3 后置总体验收复核：
+汇总 3.0 到 3.4 的完成矩阵、测试结果、未迁移项和后续风险。
 ```
 
 ---
