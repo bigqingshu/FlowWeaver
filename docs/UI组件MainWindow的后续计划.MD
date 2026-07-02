@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.7c WorkflowSummaryView 结构化编辑表单纯 View 接入已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7d 结构化编辑 View 后置复核
+> 文档状态：WORKFLOW-EDIT-1.7d 结构化编辑 View 后置复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.8 WORKFLOW-EDIT-1 阶段总体验收复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6285,6 +6285,35 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-1.7d：
 结构化编辑 View 后置复核。
+```
+
+### 2.128 WORKFLOW-EDIT-1.7d 结构化编辑 View 后置复核
+
+阶段目标：
+
+```text
+对结构化编辑 View 接入做后置复核，
+确认是否可以进入 WORKFLOW-EDIT-1 阶段总体验收。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.7d_结构化编辑View后置复核.md
+```
+
+当前结论：
+
+* `WorkflowSummaryView` 已完成结构化编辑最小表单接入。
+* 已保持无 converter、无 code-behind、无 ViewModel/模型/后端改动。
+* 完整 Avalonia 测试通过。
+* 下一步建议进入 WORKFLOW-EDIT-1 阶段总体验收复核。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.8：
+WORKFLOW-EDIT-1 阶段总体验收复核。
 ```
 
 ---
