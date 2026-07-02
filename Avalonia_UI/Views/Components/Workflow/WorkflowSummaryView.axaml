@@ -208,8 +208,27 @@
                                    Text="{Binding NodeTypeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Column="3"
-                                 Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <StackPanel Grid.Column="3" Spacing="4">
+                            <ComboBox ItemsSource="{Binding NodeDefinitions}"
+                                      SelectedItem="{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"
+                                                  x:DataType="vm:NodeDefinitionListItemViewModel">
+                                        <Grid RowDefinitions="Auto,Auto">
+                                            <TextBlock Text="{Binding DisplayNameText}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding TypeText}"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="1"
                                    Text="{Binding NodeVersionText}"

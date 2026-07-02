@@ -113,6 +113,15 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay");
         StringAssert.Contains(
             xaml,
+            "ItemsSource=\"{Binding NodeDefinitions}\"");
+        StringAssert.Contains(
+            xaml,
+            "SelectedItem=\"{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "x:DataType=\"vm:NodeDefinitionListItemViewModel\"");
+        StringAssert.Contains(
+            xaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(
             xaml,
