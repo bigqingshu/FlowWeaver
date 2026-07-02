@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.6 结构化编辑目标完成审计已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.7 推送前总复核与人工 Desktop smoke 是否阻塞的最终确认
+> 文档状态：WORKFLOW-EDIT-2.7 推送前总复核已完成
+> 当前执行点：等待确认人工 Desktop smoke 是否阻塞推送
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -7001,6 +7001,45 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.6_目标完成审计与人工DesktopSmoke决策.
 ```text
 WORKFLOW-EDIT-2.7：
 推送前总复核与人工 Desktop smoke 是否阻塞的最终确认。
+```
+
+---
+
+### 2.148 WORKFLOW-EDIT-2.7 推送前总复核与人工 Desktop smoke 确认
+
+阶段目标：
+
+```text
+在不新增功能、不推送的前提下，
+对当前本地待推送范围做总复核，
+并明确人工 Desktop smoke 是否阻塞推送需要用户确认。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.7_推送前总复核与人工DesktopSmoke确认.md
+```
+
+当前结论：
+
+* `main` 本地领先 `origin/main` 23 个提交。
+* 工作区干净。
+* 本次补跑后端 node definitions targeted pytest，通过 2 个测试。
+* 本次补跑 Avalonia 全量测试，通过 265 个测试。
+* 发布 Desktop API/WebSocket 自动 smoke 已完成。
+* Headless GUI smoke 已完成。
+* 真实人工 Desktop 点击 smoke 尚未执行。
+* 是否推送需要先确认人工 Desktop smoke 是否阻塞。
+
+下一步等待确认：
+
+```text
+方案 A：
+人工 Desktop smoke 不阻塞当前推送，执行 git push。
+
+方案 B：
+人工 Desktop smoke 阻塞当前推送，先执行真实 Desktop 手动 smoke。
 ```
 
 ---
