@@ -20,6 +20,7 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeEditorStatusText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding ConfigJson}\"");
+        StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto,Auto,Auto\"");
         Assert.IsFalse(xaml.Contains("NodeEditorStatusText}\" Command=", StringComparison.Ordinal));
     }

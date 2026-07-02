@@ -93,6 +93,7 @@
 
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding WorkflowDefinitionDetail.Nodes}"
+                         SelectedItem="{Binding SelectedWorkflowDefinitionNode}"
                          BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
                          MinHeight="100">

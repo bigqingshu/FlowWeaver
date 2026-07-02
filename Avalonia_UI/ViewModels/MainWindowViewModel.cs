@@ -90,6 +90,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private WorkflowDefinitionDetailViewModel? workflowDefinitionDetail;
 
     [ObservableProperty]
+    private WorkflowDefinitionNodeListItemViewModel? selectedWorkflowDefinitionNode;
+
+    [ObservableProperty]
     private string workflowDefinitionMessage = "Select a workflow to load definition.";
 
     [ObservableProperty]
@@ -932,6 +935,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (!workflowResponse.Ok || workflowResponse.Data is null)
             {
                 WorkflowDefinitionDetail = null;
+                SelectedWorkflowDefinitionNode = null;
                 WorkflowDefinitionMessage = T("definition.load_failed");
                 WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
                 return;
@@ -950,6 +954,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (!revisionsResponse.Ok || revisionsResponse.Data is null)
             {
                 WorkflowDefinitionDetail = null;
+                SelectedWorkflowDefinitionNode = null;
                 WorkflowDefinitionMessage = T("definition.revisions_load_failed");
                 WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
                 return;
@@ -959,6 +964,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 workflowResponse.Data,
                 revisionsResponse.Data,
                 DisplayTextFormatter);
+            SelectedWorkflowDefinitionNode =
+                WorkflowDefinitionDetail.Nodes.FirstOrDefault();
             originalWorkflowDefinitionJson = WorkflowDefinitionDetail.RawDefinitionJson;
             WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
             IsWorkflowDefinitionDraftDirty = false;
@@ -2462,6 +2469,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
         {
             WorkflowDefinitionDetail = null;
+            SelectedWorkflowDefinitionNode = null;
             originalWorkflowDefinitionJson = string.Empty;
             WorkflowDefinitionDraftJson = string.Empty;
             IsWorkflowDefinitionDraftDirty = false;

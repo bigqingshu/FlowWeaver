@@ -263,6 +263,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.HasCount(2, detail.Nodes);
         Assert.HasCount(1, detail.Connections);
         Assert.HasCount(2, detail.Revisions);
+        Assert.AreSame(detail.Nodes[0], viewModel.SelectedWorkflowDefinitionNode);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
         Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
@@ -281,6 +282,50 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
         StringAssert.Contains(viewModel.WorkflowDefinitionDraftJson, "\"schema_version\": \"1.0\"");
         Assert.IsTrue(viewModel.ValidateWorkflowDefinitionDraftCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task ChangingWorkflowClearsSelectedWorkflowDefinitionNode()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0"
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    Workflow("wf-1", "Daily Load", 1),
+                    Workflow("wf-2", "Other Flow", 1),
+                }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsNotNull(viewModel.SelectedWorkflowDefinitionNode);
+
+        viewModel.SelectedWorkflow = viewModel.Workflows[1];
+
+        Assert.IsNull(viewModel.WorkflowDefinitionDetail);
+        Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
     }
 
     [TestMethod]

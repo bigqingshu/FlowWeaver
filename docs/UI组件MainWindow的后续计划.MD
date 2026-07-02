@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2 配置草稿与表单写回边界前置分析已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2a 选中 workflow 节点实例状态，不生成表单
+> 文档状态：UI-NODE-CONFIG-2a 选中 workflow 节点实例状态已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2b NodeConfigDraft 纯模型和 builder 测试
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4666,6 +4666,47 @@ UI-NODE-CONFIG-2a：
 新增 SelectedWorkflowDefinitionNode 前置状态和测试，
 允许在 WorkflowDefinitionDetail.Nodes 中选择节点实例，
 不生成配置表单，不写回 JSON。
+```
+
+### 2.91 UI-NODE-CONFIG-2a 选中 workflow 节点实例状态
+
+阶段目标：
+
+```text
+为后续节点配置草稿提供稳定的 workflow node instance 选择状态，
+但不生成配置表单，不读取 config draft，不写回 JSON。
+```
+
+已完成：
+
+* `MainWindowViewModel` 新增 `SelectedWorkflowDefinitionNode`。
+* 成功加载 workflow definition 后默认选中第一个节点实例。
+* workflow detail 加载失败、revision 加载失败或切换 workflow 时清空选中节点实例。
+* `WorkflowSummaryView` 的节点列表绑定 `SelectedItem`。
+* 测试覆盖默认选中、切换 workflow 清空以及 XAML 选择绑定。
+
+本阶段明确未做：
+
+* 不生成配置表单。
+* 不构建 `NodeConfigDraft`。
+* 不读取或修改节点 `config`。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Validate / Save / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests|WorkflowSummaryViewStructureTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-2b：
+新增 NodeConfigDraft 纯模型和 builder 测试，
+从 WorkflowDefinitionDraftJson + selected node + node definition schema 生成草稿，
+不显示表单，不写回 JSON。
 ```
 
 ---
