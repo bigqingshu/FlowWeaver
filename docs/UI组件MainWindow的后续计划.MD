@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2d.1 NodeConfigDraftJsonPatcher 纯模型和测试已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d.2 ApplySelectedNodeConfigDraftCommand 最小接入评估
+> 文档状态：UI-NODE-CONFIG-2d.2 Apply 命令接入评估已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2e NodeConfigEditableDraft 纯模型和测试
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4894,6 +4894,45 @@ UI-NODE-CONFIG-2d.2：
 先评估并最小接入 ApplySelectedNodeConfigDraftCommand，
 只把当前 config draft 写回 WorkflowDefinitionDraftJson，
 不做动态字段编辑控件。
+```
+
+### 2.96 UI-NODE-CONFIG-2d.2 Apply 命令接入评估
+
+阶段目标：
+
+```text
+评估是否应立即接入 ApplySelectedNodeConfigDraftCommand，
+避免在没有字段草稿输入模型时暴露语义不清的 Apply 按钮。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2d.2_Apply命令接入评估.md
+```
+
+当前结论：
+
+* 不建议现在直接接入 Apply 命令或按钮。
+* 当前没有字段草稿输入模型，直接 Apply 只能原样重写当前 config，用户价值不足。
+* Apply 前应先具备 editable draft、字段级校验、可编辑值到 JsonObject 的转换。
+* `array`、`object`、`unsupported` 仍应走 JSON fallback。
+* revision conflict 状态下 Apply 仍必须不可用或拒绝，不能清空冲突状态。
+
+本阶段明确未做：
+
+* 不改 Avalonia 代码。
+* 不新增 Apply 命令。
+* 不新增按钮或表单。
+* 不写回 `WorkflowDefinitionDraftJson`。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2e：
+新增 NodeConfigEditableDraft 纯模型和测试，
+只把 NodeConfigDraft 中可编辑字段转换为可输入草稿，
+不接 XAML，不接 ViewModel Apply。
 ```
 
 ---
