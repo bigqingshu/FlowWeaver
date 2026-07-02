@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.3 节点新增纯 patcher 已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.4 节点删除 preflight / patcher
+> 文档状态：WORKFLOW-EDIT-1.4 节点删除 preflight / patcher 已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.5 connection 新增 / 删除纯 patcher
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5704,6 +5704,50 @@ WORKFLOW-EDIT-1.4：
 节点删除 preflight / patcher，
 先识别连接依赖，默认不做级联删除，
 不接 ViewModel 命令，不修改 XAML。
+```
+
+### 2.114 WORKFLOW-EDIT-1.4 节点删除 preflight / patcher
+
+阶段目标：
+
+```text
+建立删除节点的纯 JSON patch 能力，
+并先通过 preflight 阻断仍被 connection 引用的节点。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/Models/WorkflowDefinitionDraftNodePatcher.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftNodePatchStatus.cs
+Avalonia_UI.Tests/WorkflowDefinitionDraftNodePatcherTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.4_节点删除Preflight与Patcher.md
+```
+
+当前结论：
+
+* `DeleteNode` 只删除无连接依赖的节点。
+* 存在 incoming/outgoing connection 时返回 `NODE_HAS_CONNECTIONS`。
+* 第一版明确不做默认级联删除。
+* 本小步没有接 ViewModel 命令，也没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowDefinitionDraftNodePatcherTests"
+通过：14，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：237，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.5：
+connection 新增 / 删除纯 patcher，
+只新增模型和测试，不接 ViewModel 命令，不修改 XAML。
 ```
 
 ---

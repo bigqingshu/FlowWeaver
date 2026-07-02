@@ -84,7 +84,7 @@ public static class WorkflowDefinitionDraftNodePatcher
         {
             if (node is JsonObject nodeObject &&
                 string.Equals(
-                    nodeObject["node_instance_id"]?.GetValue<string>(),
+                    GetStringValue(nodeObject, "node_instance_id"),
                     nodeInstanceId,
                     StringComparison.Ordinal))
             {
@@ -125,5 +125,158 @@ public static class WorkflowDefinitionDraftNodePatcher
             Status = status,
             Warning = warning,
         };
+    }
+
+    private static string? GetStringValue(JsonObject jsonObject, string propertyName)
+    {
+        return jsonObject[propertyName] is JsonValue jsonValue &&
+            jsonValue.TryGetValue<string>(out var value)
+                ? value
+                : null;
+    }
+
+    public static WorkflowDefinitionDraftNodePatchResult DeleteNode(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeInstanceId))
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        var readResult = ReadMutableDraft(workflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            return Failed(readResult.Status, readResult.Warning);
+        }
+
+        var nodes = readResult.Nodes;
+        var targetIndex = -1;
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            if (nodes[index] is JsonObject nodeObject &&
+                string.Equals(
+                    GetStringValue(nodeObject, "node_instance_id"),
+                    nodeInstanceId,
+                    StringComparison.Ordinal))
+            {
+                targetIndex = index;
+                break;
+            }
+        }
+
+        if (targetIndex < 0)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeNotFound,
+                "NODE_NOT_FOUND");
+        }
+
+        foreach (var connection in readResult.Connections)
+        {
+            if (connection is JsonObject connectionObject &&
+                (string.Equals(
+                    GetStringValue(connectionObject, "source_node_id"),
+                    nodeInstanceId,
+                    StringComparison.Ordinal)
+                || string.Equals(
+                    GetStringValue(connectionObject, "target_node_id"),
+                    nodeInstanceId,
+                    StringComparison.Ordinal)))
+            {
+                return Failed(
+                    WorkflowDefinitionDraftNodePatchStatus.NodeHasConnections,
+                    "NODE_HAS_CONNECTIONS");
+            }
+        }
+
+        nodes.RemoveAt(targetIndex);
+        return new WorkflowDefinitionDraftNodePatchResult
+        {
+            Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            UpdatedWorkflowDefinitionDraftJson =
+                readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
+    private static MutableWorkflowDraftReadResult ReadMutableDraft(
+        string workflowDefinitionDraftJson)
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(workflowDefinitionDraftJson);
+        }
+        catch (JsonException)
+        {
+            return MutableWorkflowDraftReadResult.Failed(
+                WorkflowDefinitionDraftNodePatchStatus.JsonInvalid,
+                "WORKFLOW_DRAFT_JSON_INVALID");
+        }
+
+        if (root is not JsonObject rootObject)
+        {
+            return MutableWorkflowDraftReadResult.Failed(
+                WorkflowDefinitionDraftNodePatchStatus.RootNotObject,
+                "WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
+        }
+
+        if (rootObject["nodes"] is not JsonArray nodes)
+        {
+            return MutableWorkflowDraftReadResult.Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodesMissing,
+                "WORKFLOW_DRAFT_NODES_MISSING");
+        }
+
+        if (rootObject["connections"] is not JsonArray connections)
+        {
+            return MutableWorkflowDraftReadResult.Failed(
+                WorkflowDefinitionDraftNodePatchStatus.ConnectionsMissing,
+                "WORKFLOW_DRAFT_CONNECTIONS_MISSING");
+        }
+
+        return MutableWorkflowDraftReadResult.Success(rootObject, nodes, connections);
+    }
+
+    private sealed record MutableWorkflowDraftReadResult
+    {
+        public WorkflowDefinitionDraftNodePatchStatus Status { get; private init; }
+
+        public string Warning { get; private init; } = string.Empty;
+
+        public JsonObject Root { get; private init; } = new();
+
+        public JsonArray Nodes { get; private init; } = new();
+
+        public JsonArray Connections { get; private init; } = new();
+
+        public bool Succeeded => Status == WorkflowDefinitionDraftNodePatchStatus.Succeeded;
+
+        public static MutableWorkflowDraftReadResult Success(
+            JsonObject root,
+            JsonArray nodes,
+            JsonArray connections)
+        {
+            return new MutableWorkflowDraftReadResult
+            {
+                Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+                Root = root,
+                Nodes = nodes,
+                Connections = connections,
+            };
+        }
+
+        public static MutableWorkflowDraftReadResult Failed(
+            WorkflowDefinitionDraftNodePatchStatus status,
+            string warning)
+        {
+            return new MutableWorkflowDraftReadResult
+            {
+                Status = status,
+                Warning = warning,
+            };
+        }
     }
 }
