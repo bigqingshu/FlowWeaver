@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.4c 人工 Desktop smoke 清单与后置复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4d 人工 Desktop 点击 smoke 执行记录
+> 文档状态：WORKFLOW-EDIT-2.4d Headless GUI 自动 smoke 已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.5 结构化编辑阶段小结与后续边界分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6896,7 +6896,42 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.4c_人工DesktopSmoke清单与后置复核.md
 
 ```text
 WORKFLOW-EDIT-2.4d：
-人工 Desktop 点击 smoke 执行记录。
+Headless GUI 自动 smoke，补齐 View 运行时加载与关键绑定验收。
+```
+
+---
+
+### 2.145 WORKFLOW-EDIT-2.4d Headless GUI 自动 smoke
+
+阶段目标：
+
+```text
+在不启动真实 Desktop 窗口、不接入 EngineHost 的前提下，
+确认 WorkflowSummaryView 可以在 Avalonia Headless runtime 中加载，
+并且结构化编辑关键 ComboBox 能获得 ViewModel 绑定数据。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.4d_HeadlessGUI自动Smoke.md
+```
+
+当前结论：
+
+* 新增 `WorkflowSummaryViewHeadlessSmokeTests`。
+* 新增测试侧 `Avalonia.Headless 11.3.12` 依赖。
+* Headless smoke 覆盖节点类型下拉和 connection source / target 下拉的运行时绑定。
+* `dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore` 通过，0 警告，0 错误。
+* `dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowSummaryViewHeadlessSmokeTests"` 通过。
+* `dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore` 通过：265 个测试。
+* 本步骤仍不等同于人工 Desktop 点击 smoke。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.5：
+结构化编辑阶段小结与后续边界分析。
 ```
 
 ---

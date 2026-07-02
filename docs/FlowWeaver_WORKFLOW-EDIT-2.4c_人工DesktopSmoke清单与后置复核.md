@@ -96,7 +96,7 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "DesktopPublishWor
 
 ```text
 WORKFLOW-EDIT-2.4d：
-人工 Desktop 点击 smoke 执行记录。
+Headless GUI 自动 smoke，先补齐 View 运行时加载与关键绑定验收。
 ```
 
-如果暂时不执行人工点击，则可先暂停在该边界，后续继续时从 2.4d 开始。
+人工 Desktop 点击 smoke 仍保留为后续人工验收项；如果暂时不执行人工点击，可先用 2.4d 的 Headless smoke 作为自动回归边界。
