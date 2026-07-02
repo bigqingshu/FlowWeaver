@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.2e node type 与 node instance id 输入体验后置复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.3a connection source / target / id 输入体验前置分析
+> 文档状态：WORKFLOW-EDIT-2.3a connection source / target / id 输入体验前置分析已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.3b connection source / target 选择状态与 connection id 自动建议
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6606,6 +6606,37 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-2.3a：
 connection source / target / id 输入体验前置分析。
+```
+
+### 2.137 WORKFLOW-EDIT-2.3a connection source / target / id 输入体验前置分析
+
+阶段目标：
+
+```text
+明确 connection 新增表单如何复用当前 draft nodes，
+并在不引入 port schema 深校验的前提下，
+为 source / target 选择和 connection id 自动建议做前置设计。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.3a_Connection输入体验前置分析.md
+```
+
+当前结论：
+
+* 2.3 应复用 `WorkflowDefinitionDraftStructure` 中的 draft nodes。
+* ViewModel 可先新增 source / target 选择状态。
+* 选择 source / target 时填充现有 connection 输入字段。
+* connection id 可基于 `source_to_target` 自动建议，并避开重复。
+* source / target port 继续保持手动输入，不做 schema 深校验。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.3b：
+connection source / target 选择状态与 connection id 自动建议。
 ```
 
 ---
