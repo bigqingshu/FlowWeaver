@@ -552,6 +552,52 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task SelectedWorkflowDefinitionDraftNodeInputResetsAndClearsWhenDraftChanges()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "stale";
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(string.Empty, viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+
+        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "source";
+
+        Assert.AreEqual("source", viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+
+        Assert.AreEqual(string.Empty, viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
     {
         var definitionJson =

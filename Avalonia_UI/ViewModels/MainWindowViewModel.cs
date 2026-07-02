@@ -138,6 +138,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private string newDraftNodeConfigJson = "{}";
 
     [ObservableProperty]
+    private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -2101,6 +2104,7 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionDraftJson)
             ? null
             : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
+        ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
     }
 
     private void ResetNewDraftNodeInput()
@@ -2110,6 +2114,36 @@ public partial class MainWindowViewModel : ViewModelBase
         NewDraftNodeVersion = "1.0";
         NewDraftNodeDisplayName = string.Empty;
         NewDraftNodeConfigJson = "{}";
+    }
+
+    private void ResetWorkflowDefinitionDraftSelectionInput()
+    {
+        SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
+    }
+
+    private void ClearSelectedWorkflowDefinitionDraftNodeIfMissing()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftNodeInstanceId))
+        {
+            return;
+        }
+
+        if (WorkflowDefinitionDraftStructure?.Nodes.Any(node =>
+            string.Equals(
+                node.NodeInstanceId,
+                SelectedWorkflowDefinitionDraftNodeInstanceId,
+                StringComparison.Ordinal)) == true)
+        {
+            return;
+        }
+
+        SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
+    }
+
+    private void ResetWorkflowDefinitionStructuredEditInput()
+    {
+        ResetNewDraftNodeInput();
+        ResetWorkflowDefinitionDraftSelectionInput();
     }
 
     private void RefreshSelectedNodeConfigDraftState()
@@ -2766,7 +2800,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
-        ResetNewDraftNodeInput();
+        ResetWorkflowDefinitionStructuredEditInput();
         OnPropertyChanged(nameof(HasWorkflowDefinition));
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
