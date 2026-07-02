@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.3b connection source / target 选择状态与 connection id 自动建议已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.3c connection View 接入任务说明
+> 文档状态：WORKFLOW-EDIT-2.3c connection View 接入任务说明已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.3d connection View 最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6681,6 +6681,37 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-2.3c：
 connection View 接入任务说明。
+```
+
+### 2.139 WORKFLOW-EDIT-2.3c connection View 接入任务说明
+
+阶段目标：
+
+```text
+为 WorkflowSummaryView 的新增 connection 表单接入 source / target 选择入口，
+明确纯 View 修改范围和测试要求。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.3c_ConnectionView接入任务说明.md
+```
+
+当前结论：
+
+* View 接入应绑定 `WorkflowDefinitionDraftStructure.Nodes`。
+* source ComboBox 绑定 `SelectedNewDraftConnectionSourceNode`。
+* target ComboBox 绑定 `SelectedNewDraftConnectionTargetNode`。
+* ComboBox 只是辅助选择，必须保留 source / target node id 手动输入。
+* source / target port 继续保留手动输入，不做端口下拉。
+* 不允许新增 converter、code-behind 或后端改动。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.3d：
+connection View 最小接入。
 ```
 
 ---
