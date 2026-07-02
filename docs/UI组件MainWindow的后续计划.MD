@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3 阶段总体验收复核已完成
-> 当前执行点：通用控件样式已迁入 ControlStyles.axaml，CombinedShellRegion 的 Shell 导航样式暂留 MainWindow 并由测试守护
+> 文档状态：UI-COMPONENT-4.0 MainWindow 剩余职责与拆分候选分析已补充
+> 当前执行点：复核 MainWindow 剩余职责，优先候选为 Shell Header 组件化，暂不迁移 CombinedShellRegion 或 Shell 样式
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2843,6 +2843,99 @@ MainWindow 剩余职责复核与下一轮低风险拆分方向分析。
 
 不要直接进入 ShellStyles 迁移，除非先明确 Shell 样式作用域策略。
 ```
+
+### 2.65 UI-COMPONENT-4.0 MainWindow 剩余职责与拆分候选分析
+
+阶段目标：
+
+```text
+在 UI-COMPONENT-3 完成样式拆分后，
+复核 MainWindow.axaml 当前还承担哪些职责，
+选择下一轮最低风险拆分方向。
+
+本小步只写文档，不改 Avalonia 源码。
+```
+
+当前 `MainWindow.axaml` 剩余职责：
+
+```text
+Window 声明
+  Title / Icon / Width / Height / MinWidth / MinHeight / Background
+
+Design.DataContext
+  设计时 MainWindowViewModel
+
+Window.Styles
+  CombinedShellRegion 相关 TabControl / TabItem 样式
+
+Root Grid
+  Shell Header
+    AppTitleText
+    AppSubtitleText
+    ConnectionStatusView
+
+  AppShellPageHost
+    CombinedShellRegion
+```
+
+职责评估：
+
+| 职责 | 是否仍应留在 MainWindow | 原因 |
+| --- | --- | --- |
+| Window 属性 | 是 | 属于窗口壳本身 |
+| Design.DataContext | 是 | 设计时辅助，拆分收益低 |
+| CombinedShellRegion 样式 | 暂时是 | TabControl / TabItem 样式暂缓迁移，已有测试守护 |
+| Shell Header 布局 | 可拆 | Header 是独立固定区域，已有 `ConnectionStatusView` 组件，可继续组件化 |
+| ConnectionStatusView | 已拆 | 当前由 Header 区引用 |
+| AppShellPageHost | 已拆 | 页面承载已从 MainWindow 隔离 |
+
+拆分候选：
+
+| 候选 | 目标 | 风险 | 结论 |
+| --- | --- | --- | --- |
+| `ShellHeaderView` | 把顶部标题、副标题和连接状态组合抽成组件 | 低，绑定仍继承 `MainWindowViewModel` | 推荐 |
+| `MainWindowShellLayout` | 把 Root Grid 整体抽成组件 | 中，会让 MainWindow 只剩 Window 壳，但组件边界更大 | 暂缓 |
+| `ShellStyles.axaml` | 迁移 TabControl / TabItem 样式 | 中高，涉及 CombinedShellRegion 视觉和样式作用域 | 暂缓 |
+| `WindowChrome` / 外壳组件 | 抽窗口级属性或窗口行为 | 高，收益不明显 | 不做 |
+
+推荐下一步：
+
+```text
+UI-COMPONENT-4.1：
+ShellHeaderView 最小抽取前置方案。
+
+只分析组件边界、输入输出、文件路径、测试守护，不直接改 XAML。
+```
+
+ShellHeaderView 推荐边界：
+
+```text
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml.cs
+```
+
+预期内容：
+
+* 标题 `AppTitleText`。
+* 副标题 `AppSubtitleText`。
+* `ConnectionStatusView`。
+
+预期不包含：
+
+* `AppShellPageHost`。
+* `CombinedShellRegion`。
+* TabControl / TabItem 样式。
+* 页面内容。
+* 连接配置表单。
+* 任何命令逻辑。
+
+4.0 边界确认：
+
+* 不修改 Avalonia 源码。
+* 不迁移 Shell 样式。
+* 不改 `ControlStyles.axaml`。
+* 不改页面承载。
+* 不触碰 `ItemsSource`、模板选择器、页面工厂、页面缓存或插件化。
 
 ---
 
