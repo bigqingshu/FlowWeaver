@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.4 节点删除 preflight / patcher 已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.5 connection 新增 / 删除纯 patcher
+> 文档状态：WORKFLOW-EDIT-1.5 connection 新增 / 删除纯 patcher 已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6 结构化编辑 ViewModel 命令接入前置分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5748,6 +5748,51 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 WORKFLOW-EDIT-1.5：
 connection 新增 / 删除纯 patcher，
 只新增模型和测试，不接 ViewModel 命令，不修改 XAML。
+```
+
+### 2.115 WORKFLOW-EDIT-1.5 connection 新增 / 删除纯 patcher
+
+阶段目标：
+
+```text
+建立 connection 新增和删除的纯 JSON patch 能力，
+为后续 ViewModel 命令接入提供可测试底层。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/Models/WorkflowDefinitionDraftConnectionPatcher.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftConnectionPatchResult.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftConnectionPatchStatus.cs
+Avalonia_UI.Tests/WorkflowDefinitionDraftConnectionPatcherTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.5_Connection新增删除纯Patcher.md
+```
+
+当前结论：
+
+* `AddConnection` 会校验 connection_id 不重复、source / target node 存在、端口非空。
+* `DeleteConnection` 会校验目标 connection 存在。
+* 第一版不做端口 schema 深校验。
+* 本小步没有接 ViewModel 命令，也没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowDefinitionDraftConnectionPatcherTests"
+通过：8，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：245，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.6：
+结构化编辑 ViewModel 命令接入前置分析，
+先只分析命令、输入状态和错误消息边界。
 ```
 
 ---
