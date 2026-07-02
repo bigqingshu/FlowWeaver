@@ -141,6 +141,24 @@ public partial class MainWindowViewModel : ViewModelBase
     private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
 
     [ObservableProperty]
+    private string newDraftConnectionId = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftConnectionSourceNodeId = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftConnectionSourcePort = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftConnectionTargetNodeId = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftConnectionTargetPort = string.Empty;
+
+    [ObservableProperty]
+    private string selectedWorkflowDefinitionDraftConnectionId = string.Empty;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -2133,6 +2151,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ? null
             : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
+        ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
     }
 
     private void ResetNewDraftNodeInput()
@@ -2147,6 +2166,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ResetWorkflowDefinitionDraftSelectionInput()
     {
         SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
+        SelectedWorkflowDefinitionDraftConnectionId = string.Empty;
+    }
+
+    private void ResetNewDraftConnectionInput()
+    {
+        NewDraftConnectionId = string.Empty;
+        NewDraftConnectionSourceNodeId = string.Empty;
+        NewDraftConnectionSourcePort = string.Empty;
+        NewDraftConnectionTargetNodeId = string.Empty;
+        NewDraftConnectionTargetPort = string.Empty;
     }
 
     private void ClearSelectedWorkflowDefinitionDraftNodeIfMissing()
@@ -2168,9 +2197,29 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
     }
 
+    private void ClearSelectedWorkflowDefinitionDraftConnectionIfMissing()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftConnectionId))
+        {
+            return;
+        }
+
+        if (WorkflowDefinitionDraftStructure?.Connections.Any(connection =>
+            string.Equals(
+                connection.ConnectionId,
+                SelectedWorkflowDefinitionDraftConnectionId,
+                StringComparison.Ordinal)) == true)
+        {
+            return;
+        }
+
+        SelectedWorkflowDefinitionDraftConnectionId = string.Empty;
+    }
+
     private void ResetWorkflowDefinitionStructuredEditInput()
     {
         ResetNewDraftNodeInput();
+        ResetNewDraftConnectionInput();
         ResetWorkflowDefinitionDraftSelectionInput();
     }
 
