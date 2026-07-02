@@ -14,6 +14,8 @@ public sealed record NodeConfigEditableDraftField
 
     public string InputValue { get; init; } = string.Empty;
 
+    public bool HasInputValue { get; init; }
+
     public IReadOnlyList<string> EnumValues { get; init; } = [];
 
     public IReadOnlyList<string> Warnings { get; init; } = [];

@@ -40,6 +40,7 @@ public static class NodeConfigEditableDraftBuilder
             Title = field.Title,
             Required = field.Required,
             InputValue = FormatInputValue(field),
+            HasInputValue = field.HasCurrentValue || field.DefaultValue.HasValue,
             EnumValues = field.Type == NodeConfigFieldType.Enum
                 ? field.EnumValues
                 : [],

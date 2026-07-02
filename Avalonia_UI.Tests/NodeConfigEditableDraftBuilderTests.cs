@@ -58,6 +58,7 @@ public sealed class NodeConfigEditableDraftBuilderTests
         Assert.AreEqual(
             "amount",
             editableDraft.Fields.Single(field => field.Name == "field").InputValue);
+        Assert.IsTrue(editableDraft.Fields.Single(field => field.Name == "field").HasInputValue);
         Assert.AreEqual(
             "3",
             editableDraft.Fields.Single(field => field.Name == "limit").InputValue);
@@ -102,9 +103,11 @@ public sealed class NodeConfigEditableDraftBuilderTests
         Assert.AreEqual(
             "10",
             editableDraft.Fields.Single(field => field.Name == "limit").InputValue);
+        Assert.IsTrue(editableDraft.Fields.Single(field => field.Name == "limit").HasInputValue);
         Assert.AreEqual(
             "true",
             editableDraft.Fields.Single(field => field.Name == "enabled").InputValue);
+        Assert.IsTrue(editableDraft.Fields.Single(field => field.Name == "enabled").HasInputValue);
     }
 
     [TestMethod]
@@ -128,6 +131,7 @@ public sealed class NodeConfigEditableDraftBuilderTests
 
         var field = editableDraft.Fields.Single();
         Assert.AreEqual(string.Empty, field.InputValue);
+        Assert.IsFalse(field.HasInputValue);
         CollectionAssert.Contains(
             field.Warnings.ToArray(),
             "CONFIG_DRAFT_FIELD_REQUIRED_MISSING");

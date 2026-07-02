@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2e NodeConfigEditableDraft 纯模型和测试已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2f 可编辑草稿转 JsonObject 边界评估
+> 文档状态：UI-NODE-CONFIG-2f 可编辑草稿转 Config 纯模型已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2g MainWindowViewModel 接入边界评估
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4991,6 +4991,68 @@ UI-NODE-CONFIG-2f：
 先评估并实现可编辑草稿到 JsonObject/config JSON 的纯转换模型，
 只处理 string、integer、number、boolean、enum 的输入解析和错误状态，
 仍不接 XAML，不接 MainWindowViewModel Apply。
+```
+
+### 2.98 UI-NODE-CONFIG-2f 可编辑草稿转 Config 纯模型
+
+阶段目标：
+
+```text
+把 NodeConfigEditableDraft 转换为节点 config JSON object，
+为后续 Apply 写回提供安全输入。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2f_可编辑草稿转Config边界与验收清单.md
+```
+
+已完成：
+
+* 新增 `NodeConfigEditableDraftConfigBuildStatus`。
+* 新增 `NodeConfigEditableDraftConfigFieldError`。
+* 新增 `NodeConfigEditableDraftConfigResult`。
+* 新增 `NodeConfigEditableDraftConfigBuilder`。
+* `NodeConfigEditableDraftField` 补充 `HasInputValue`，用于区分缺失字段和显式输入。
+* `NodeConfigEditableDraftBuilder` 会根据当前 config/default 设置 `HasInputValue`。
+* 新增 `NodeConfigEditableDraftConfigBuilderTests`。
+
+当前能力：
+
+* 支持 `string`、`integer`、`number`、`boolean`、`enum` 转 config JSON。
+* 缺失的可选字段不会被静默写入 config。
+* 显式空字符串可以保留。
+* 必填空值、非法 integer/number/boolean/enum 会返回字段级错误。
+* unsupported 类型会拒绝转换。
+* 无可编辑字段会返回 `DraftUnsupported`。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不接 MainWindowViewModel。
+* 不新增 Apply 命令。
+* 不调用 `NodeConfigDraftJsonPatcher`。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Validate / Save / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigEditableDraftConfigBuilderTests|NodeConfigEditableDraftBuilderTests|NodeConfigDraftJsonPatcherTests"
+通过：19，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：205，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2g：
+先分析 MainWindowViewModel 接入边界，
+确认 SelectedNodeConfigEditableDraft、选中节点切换、草稿 JSON 变化、
+schema 变化和后续 Apply 命令的最小状态来源。
 ```
 
 ---
