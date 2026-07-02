@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4b.1 SelectedShellPageKey 前置状态已落地
-> 当前执行点：已新增 SelectedShellPageKey / SelectedShellNavigationItem / SelectedShellPageContentKey，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
+> 文档状态：UI-COMPONENT-2b.4c 前置分析已补充
+> 当前执行点：已确认 AppShellPageHost 暂不应直接按 SelectedShellPageContentKey 显示页面，需先补选中状态同步边界
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1154,6 +1154,88 @@ Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
 
 ```text
 UI-COMPONENT-2b.4c 前置分析：AppShellPageHost 是否根据 SelectedShellPageContentKey 显示固定页面，先只分析。
+```
+
+### 2.49 UI-COMPONENT-2b.4c 前置分析
+
+问题：
+
+```text
+AppShellPageHost 是否应该现在就根据 SelectedShellPageContentKey 显示固定页面？
+```
+
+当前事实：
+
+* `MainWindowViewModel` 已有 `SelectedShellPageKey`。
+* `SelectedShellNavigationItem` 可以从稳定 key 找回当前导航项。
+* `SelectedShellPageContentKey` 已能派生出当前页面内容键。
+* `AppShellPageHost.axaml` 内部仍是固定 `TabControl` 和五个固定 `TabItem`。
+* 当前 `TabControl` 的选中状态仍由 Avalonia 控件内部维护，尚未与 `SelectedShellPageKey` 建立绑定或同步。
+
+因此，现阶段不建议直接让 `AppShellPageHost` 按 `SelectedShellPageContentKey` 显示固定页面。
+
+原因：
+
+* `SelectedShellPageContentKey` 目前只代表 ViewModel 默认/程序侧状态，不代表用户在左侧 Tab 中实际点选的页面。
+* 如果直接用内容键控制 Host 显隐页面，可能出现 ViewModel 认为选中了 A 页面，但 TabControl 实际仍停留在 B 页面的状态分裂。
+* 这会让后续测试只能验证“派生属性存在”，不能验证“用户导航动作驱动页面承载”。
+* 直接跳到内容键显隐也容易诱导提前实现 `ContentTemplateSelector`、页面工厂或 `ItemsSource` 迁移，不符合当前小步边界。
+
+本小步结论：
+
+```text
+2b.4c 只确认边界：
+
+暂不让 AppShellPageHost 根据 SelectedShellPageContentKey 显示页面。
+先补一个更小的选中状态同步边界，让固定 TabControl 的当前页与 SelectedShellPageKey 对齐。
+```
+
+建议后续顺序：
+
+| 小步 | 目标 | 是否改 XAML | 是否有可见变化 |
+| --- | --- | --- | --- |
+| 2b.4c.1 | 选中状态同步前置方案，明确 TabControl 与 SelectedShellPageKey 的绑定/桥接方式 | 否，先分析 | 否 |
+| 2b.4c.2 | 最小同步实现，让固定 TabControl 选中项能更新 SelectedShellPageKey | 是，绑定级修改 | 理论无视觉变化 |
+| 2b.4c.3 | 同步稳定性测试，覆盖默认页、用户切换、语言切换后仍保持同一页 | 视测试需要 | 否 |
+| 2b.4c.4 | 再评估是否让 Host 按 SelectedShellPageContentKey 做固定内容分发 | 待定 | 待定 |
+
+2b.4c.2 如果进入实现，应继续禁止：
+
+* `TabControl.ItemsSource`
+* `ContentTemplateSelector`
+* 页面工厂
+* 反射创建页面
+* 外部插件化
+* 动态模块加载
+
+界面显示影响：
+
+```text
+本分析小步无界面显示变化。
+
+后续 2b.4c.2 可能改 AppShellPageHost.axaml 的绑定方式，但目标只是让现有固定 TabControl 的选中状态同步到 ViewModel，不改变五个页面、左侧 Tab 形态、布局、文案或视觉层级。
+```
+
+Gemini 协作判断：
+
+```text
+当前 2b.4c 只改文档，不需要 Gemini 修改 View。
+
+如果后续进入 2b.4c.2，属于绑定级 XAML 调整，原则上也不需要重新设计界面；
+只有当需要改变 Tab 外观、布局层级或页面承载视觉结构时，才单独提供 Gemini View 层任务文档。
+```
+
+2b.4c 验收标准：
+
+* 文档明确“不直接按 `SelectedShellPageContentKey` 显示页面”的原因。
+* 文档明确下一步先做选中状态同步边界。
+* 文档继续禁止 `ItemsSource`、模板选择器、页面工厂、反射创建和外部插件化。
+* 不修改 Avalonia 源码。
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.4c.1：AppShellPageHost / TabControl 选中状态同步前置方案，先只分析绑定边界。
 ```
 
 ---
