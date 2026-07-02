@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2l ApplySelectedNodeConfigDraftCommand 最小接入已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2m 节点配置表单 View 协作说明
+> 文档状态：UI-NODE-CONFIG-2m 节点配置表单 View 协作说明已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2n 输入字段 View 辅助属性
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5321,6 +5321,38 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 UI-NODE-CONFIG-2m：
 整理节点配置字段表单和 Apply 按钮的 XAML 接入说明，
 明确给 Gemini 的绑定对象、Command、控件类型和不可改边界。
+```
+
+### 2.105 UI-NODE-CONFIG-2m 节点配置表单 View 协作说明
+
+阶段目标：
+
+```text
+在交给 Gemini 修改 XAML 前，
+明确节点配置字段表单和 Apply 按钮的 View 接入边界。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2m_节点配置表单View协作说明.md
+```
+
+当前结论：
+
+* 第一小步建议只改 `WorkflowSummaryView.axaml`。
+* 节点配置表单应放在 Nodes Card 底部。
+* 绑定入口是 `SelectedNodeConfigEditableInputFields`。
+* Apply 按钮绑定 `ApplySelectedNodeConfigDraftCommand`。
+* 不改 `MainWindowViewModel.cs`、不写 code-behind、不改后端。
+* 当前缺少 `IsEnum` / `IsBoolean` / `DisplayLabel` 等 View 友好辅助属性。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2n：
+为 NodeConfigEditableFieldInputViewModel 补充 View 友好辅助属性和测试，
+再交给 Gemini 做 XAML 会更稳。
 ```
 
 ---
