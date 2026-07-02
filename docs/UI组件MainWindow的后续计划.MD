@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.2b SelectedNewDraftNodeDefinition 与 node instance id 自动建议 ViewModel 状态已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.2c 新增节点 View 接入前置复核 / Gemini 任务说明
+> 文档状态：WORKFLOW-EDIT-2.2c 新增节点 View 接入任务说明已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.2d 新增节点 View 最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6492,6 +6492,36 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-2.2c：
 新增节点 View 接入前置复核 / Gemini 任务说明。
+```
+
+### 2.134 WORKFLOW-EDIT-2.2c 新增节点 View 接入任务说明
+
+阶段目标：
+
+```text
+为 WorkflowSummaryView 的新增节点表单接入 node catalog 选择入口，
+明确纯 View 修改范围和测试要求。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.2c_新增节点View接入任务说明.md
+```
+
+当前结论：
+
+* View 接入应绑定 `NodeDefinitions` 与 `SelectedNewDraftNodeDefinition`。
+* ComboBox 只是辅助选择，必须保留 `NewDraftNodeType` 手动输入。
+* 必须保留 `NewDraftNodeInstanceId` 手动输入。
+* 不允许新增 converter、code-behind 或后端改动。
+* 结构测试应覆盖 ComboBox 绑定和原手动输入仍存在。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.2d：
+新增节点 View 最小接入。
 ```
 
 ---
