@@ -145,6 +145,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
 
     [ObservableProperty]
+    private WorkflowDefinitionDraftNode? selectedNewDraftConnectionSourceNode;
+
+    [ObservableProperty]
+    private WorkflowDefinitionDraftNode? selectedNewDraftConnectionTargetNode;
+
+    [ObservableProperty]
     private string newDraftConnectionId = string.Empty;
 
     [ObservableProperty]
@@ -182,6 +188,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string originalWorkflowDefinitionJson = string.Empty;
     private string lastSuggestedNewDraftNodeInstanceId = string.Empty;
+    private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
     [ObservableProperty]
@@ -2258,6 +2265,7 @@ public partial class MainWindowViewModel : ViewModelBase
             : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
         ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
+        ClearSelectedNewDraftConnectionNodesIfMissing();
     }
 
     private void ResetNewDraftNodeInput()
@@ -2279,6 +2287,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ResetNewDraftConnectionInput()
     {
+        lastSuggestedNewDraftConnectionId = string.Empty;
+        SelectedNewDraftConnectionSourceNode = null;
+        SelectedNewDraftConnectionTargetNode = null;
         NewDraftConnectionId = string.Empty;
         NewDraftConnectionSourceNodeId = string.Empty;
         NewDraftConnectionSourcePort = string.Empty;
@@ -2324,9 +2335,34 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedWorkflowDefinitionDraftConnectionId = string.Empty;
     }
 
+    private void ClearSelectedNewDraftConnectionNodesIfMissing()
+    {
+        if (SelectedNewDraftConnectionSourceNode is not null &&
+            !DraftNodeExists(SelectedNewDraftConnectionSourceNode.NodeInstanceId))
+        {
+            SelectedNewDraftConnectionSourceNode = null;
+        }
+
+        if (SelectedNewDraftConnectionTargetNode is not null &&
+            !DraftNodeExists(SelectedNewDraftConnectionTargetNode.NodeInstanceId))
+        {
+            SelectedNewDraftConnectionTargetNode = null;
+        }
+    }
+
+    private bool DraftNodeExists(string nodeInstanceId)
+    {
+        return WorkflowDefinitionDraftStructure?.Nodes.Any(node =>
+            string.Equals(
+                node.NodeInstanceId,
+                nodeInstanceId,
+                StringComparison.Ordinal)) == true;
+    }
+
     private void ResetWorkflowDefinitionStructuredEditInput()
     {
         lastSuggestedNewDraftNodeInstanceId = string.Empty;
+        lastSuggestedNewDraftConnectionId = string.Empty;
         ResetNewDraftNodeInput();
         ResetNewDraftConnectionInput();
         ResetWorkflowDefinitionDraftSelectionInput();
@@ -2624,6 +2660,78 @@ public partial class MainWindowViewModel : ViewModelBase
             source = source[..^4];
         }
 
+        return BuildSnakeCaseIdentifier(source, "node");
+    }
+
+    private void ApplySelectedNewDraftConnectionSourceNode(
+        WorkflowDefinitionDraftNode node)
+    {
+        NewDraftConnectionSourceNodeId = node.NodeInstanceId;
+        ApplySuggestedNewDraftConnectionId();
+    }
+
+    private void ApplySelectedNewDraftConnectionTargetNode(
+        WorkflowDefinitionDraftNode node)
+    {
+        NewDraftConnectionTargetNodeId = node.NodeInstanceId;
+        ApplySuggestedNewDraftConnectionId();
+    }
+
+    private void ApplySuggestedNewDraftConnectionId()
+    {
+        if (string.IsNullOrWhiteSpace(NewDraftConnectionSourceNodeId) ||
+            string.IsNullOrWhiteSpace(NewDraftConnectionTargetNodeId) ||
+            !ShouldApplySuggestedNewDraftConnectionId())
+        {
+            return;
+        }
+
+        lastSuggestedNewDraftConnectionId = BuildUniqueNewDraftConnectionId(
+            NewDraftConnectionSourceNodeId,
+            NewDraftConnectionTargetNodeId);
+        NewDraftConnectionId = lastSuggestedNewDraftConnectionId;
+    }
+
+    private bool ShouldApplySuggestedNewDraftConnectionId()
+    {
+        return string.IsNullOrWhiteSpace(NewDraftConnectionId)
+            || string.Equals(
+                NewDraftConnectionId,
+                lastSuggestedNewDraftConnectionId,
+                StringComparison.Ordinal);
+    }
+
+    private string BuildUniqueNewDraftConnectionId(
+        string sourceNodeId,
+        string targetNodeId)
+    {
+        var baseId = BuildNewDraftConnectionIdBase(sourceNodeId, targetNodeId);
+        var existingIds = WorkflowDefinitionDraftStructure?.Connections
+            .Select(connection => connection.ConnectionId)
+            .ToHashSet(StringComparer.Ordinal)
+            ?? new HashSet<string>(StringComparer.Ordinal);
+
+        var candidate = baseId;
+        var suffix = 2;
+        while (existingIds.Contains(candidate))
+        {
+            candidate = $"{baseId}_{suffix}";
+            suffix++;
+        }
+
+        return candidate;
+    }
+
+    private static string BuildNewDraftConnectionIdBase(
+        string sourceNodeId,
+        string targetNodeId)
+    {
+        return
+            $"{BuildSnakeCaseIdentifier(sourceNodeId, "source")}_to_{BuildSnakeCaseIdentifier(targetNodeId, "target")}";
+    }
+
+    private static string BuildSnakeCaseIdentifier(string source, string fallback)
+    {
         var builder = new StringBuilder();
         for (var index = 0; index < source.Length; index++)
         {
@@ -2655,7 +2763,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         return builder.ToString().Trim('_') is { Length: > 0 } value
             ? value
-            : "node";
+            : fallback;
     }
 
     private void RefreshShellNavigationItems()
@@ -3273,6 +3381,24 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowDefinitionDraftNodeInstanceIdChanged(string value)
     {
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedNewDraftConnectionSourceNodeChanged(
+        WorkflowDefinitionDraftNode? value)
+    {
+        if (value is not null)
+        {
+            ApplySelectedNewDraftConnectionSourceNode(value);
+        }
+    }
+
+    partial void OnSelectedNewDraftConnectionTargetNodeChanged(
+        WorkflowDefinitionDraftNode? value)
+    {
+        if (value is not null)
+        {
+            ApplySelectedNewDraftConnectionTargetNode(value);
+        }
     }
 
     partial void OnNewDraftConnectionIdChanged(string value)

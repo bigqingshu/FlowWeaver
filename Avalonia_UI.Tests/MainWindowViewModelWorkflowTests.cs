@@ -876,6 +876,125 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task SelectingNewDraftConnectionNodesFillsEndpointsAndSuggestsConnectionId()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedNewDraftConnectionSourceNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "source");
+        viewModel.SelectedNewDraftConnectionTargetNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "filter");
+
+        Assert.AreEqual("source", viewModel.NewDraftConnectionSourceNodeId);
+        Assert.AreEqual("filter", viewModel.NewDraftConnectionTargetNodeId);
+        Assert.AreEqual("source_to_filter", viewModel.NewDraftConnectionId);
+    }
+
+    [TestMethod]
+    public async Task SelectingNewDraftConnectionNodesSuggestsUniqueConnectionId()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "source_to_filter_2", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedNewDraftConnectionSourceNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "source");
+        viewModel.SelectedNewDraftConnectionTargetNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "filter");
+
+        Assert.AreEqual("source_to_filter_3", viewModel.NewDraftConnectionId);
+    }
+
+    [TestMethod]
+    public async Task SelectingNewDraftConnectionNodesDoesNotOverwriteManualConnectionId()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftConnectionId = "custom_link";
+        viewModel.SelectedNewDraftConnectionSourceNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "source");
+        viewModel.SelectedNewDraftConnectionTargetNode =
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes.Single(node =>
+                node.NodeInstanceId == "filter");
+
+        Assert.AreEqual("source", viewModel.NewDraftConnectionSourceNodeId);
+        Assert.AreEqual("filter", viewModel.NewDraftConnectionTargetNodeId);
+        Assert.AreEqual("custom_link", viewModel.NewDraftConnectionId);
+    }
+
+    [TestMethod]
     public async Task AddWorkflowDefinitionDraftConnectionCommandAddsConnectionToDraft()
     {
         var definitionJson =
