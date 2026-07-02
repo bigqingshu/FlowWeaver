@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：NODE-CONFIG-SCHEMA-1 后端配置 Schema 最小 API 字段已完成
-> 当前执行点：下一步可进入 UI-SCHEMA-0，只做 Avalonia schema 解析模型与渲染边界分析
+> 文档状态：UI-SCHEMA-0 Avalonia 配置 Schema 解析模型边界清单已完成
+> 当前执行点：下一步可进入 UI-SCHEMA-1 解析模型和 parser 测试，仍不生成动态表单
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4486,6 +4486,48 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 UI-SCHEMA-0：
 只做 Avalonia schema 解析模型与渲染边界分析，
 不要直接生成节点配置表单。
+```
+
+### 2.87 UI-SCHEMA-0 Avalonia 配置 Schema 解析模型边界清单
+
+阶段目标：
+
+```text
+在后端 config_schema API 字段可用之后，
+先固定 Avalonia 如何解析、回退和承接 schema，
+不直接进入动态表单生成。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-SCHEMA-0_Avalonia配置Schema解析模型边界清单.md
+```
+
+当前结论：
+
+* schema 解析模型建议放在 `Avalonia_UI/Models`。
+* 第一版 descriptor 只承接字段名、类型、标题、必填、默认值、最小值、枚举、数组 item type、描述和 warning。
+* `ConfigSchema` 缺失、未知版本、根类型不支持、字段类型未知时，UI 应回退为只读提示或 JSON fallback，不阻断节点目录加载。
+* 专用节点编辑器优先，通用 schema editor 次之，JSON editor 兜底。
+* 第一版只允许只读摘要，不写回 `WorkflowDefinitionDraftJson`，不改变 Save / Validate / revision conflict 行为。
+* Gemini 视图协作只允许做只读 schema 摘要展示，不要求动态控件生成。
+
+本阶段明确未做：
+
+* 不改 Avalonia 代码。
+* 不实现动态配置表单。
+* 不实现 config 草稿对象模型。
+* 不实现 workflow definition 写回。
+* 不实现字段选择器、表选择器或复杂数组对象编辑器。
+
+建议下一步：
+
+```text
+UI-SCHEMA-1：
+新增 Avalonia schema 解析模型和 parser 测试，
+只解析 NodeDefinitionDto.ConfigSchema，
+不生成 UI 表单。
 ```
 
 ---
