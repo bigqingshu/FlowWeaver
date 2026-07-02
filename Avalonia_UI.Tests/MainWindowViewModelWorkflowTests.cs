@@ -598,6 +598,99 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task DeleteWorkflowDefinitionDraftNodeCommandDeletesUnconnectedNode()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"},
+                {"node_instance_id": "orphan", "node_type": "FilterRowsNode", "node_version": "1.0"}
+              ],
+              "connections": [
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "source", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "orphan";
+
+        Assert.IsTrue(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(1, draft.RootElement.GetProperty("nodes").GetArrayLength());
+        Assert.AreEqual(
+            "source",
+            draft.RootElement.GetProperty("nodes")[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+        Assert.AreEqual(
+            "Node deleted from draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(string.Empty, viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task DeleteWorkflowDefinitionDraftNodeCommandRejectsConnectedNode()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0"}
+              ],
+              "connections": [
+                {"connection_id": "c1", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "filter";
+
+        viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.AreEqual("Node delete failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("NODE_HAS_CONNECTIONS", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
     {
         var definitionJson =
@@ -843,10 +936,12 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.NewDraftNodeType = "GenerateTestTableNode";
         viewModel.NewDraftNodeVersion = "1.0";
         viewModel.NewDraftNodeConfigJson = "{}";
+        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "source";
 
         Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
         Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
         Assert.IsFalse(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
     }
 
     [TestMethod]

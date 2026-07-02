@@ -137,6 +137,8 @@
   "definition.node_added": "节点已添加到草稿。保存前请重新校验。",
   "definition.node_add_failed": "节点新增失败。",
   "definition.node_add_config_json_invalid": "节点配置 JSON 无效。",
+  "definition.node_deleted": "节点已从草稿删除。保存前请重新校验。",
+  "definition.node_delete_failed": "节点删除失败。",
   "definition.load_before_editing": "编辑草稿 JSON 前请先加载定义。",
   "node_catalog.loading": "正在加载节点定义...",
   "node_catalog.refresh_failed": "节点定义刷新失败。",
