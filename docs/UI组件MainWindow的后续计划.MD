@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2c.1 ShellNavigationRegion / ShellContentRegion 最小结构方案已补充
-> 当前执行点：只固化导航区和内容区的输入输出方案，不改 XAML、不引入动态页面承载
+> 文档状态：UI-COMPONENT-2c.2 AppShellPageHost 纯 XAML 层级整理前置分析已补充
+> 当前执行点：确认当前固定 TabControl 不适合强行拆成独立导航/内容区域，暂缓真实 XAML 层级拆分
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1925,6 +1925,105 @@ UI-COMPONENT-2c.2 前置分析：
 如果答案为可以，再给 Gemini 或 Codex 一个极小 View-only 任务；
 如果答案为不可以，则继续保持当前固定 TabControl 结构，转向样式 ResourceDictionary 拆分或状态所有权复核。
 ```
+
+### 2.57 UI-COMPONENT-2c.2 AppShellPageHost 纯 XAML 层级整理前置分析
+
+分析问题：
+
+```text
+是否可以在不改变视觉、不引入动态承载的前提下，
+对 AppShellPageHost.axaml 做一次纯 XAML 层级整理？
+```
+
+当前 `AppShellPageHost.axaml` 结构：
+
+```xml
+<TabControl TabStripPlacement="Left"
+            SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}">
+    <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
+        <pages:WorkflowPage />
+    </TabItem>
+    ...
+</TabControl>
+```
+
+关键事实：
+
+* 当前固定 `TabControl` 同时拥有导航 Header 和选中内容承载。
+* `TabItem.Header` 是导航入口。
+* `TabItem.Content` 是页面内容。
+* `SelectedIndex` 是当前导航和内容同步的桥。
+* Avalonia 的 `TabControl` 模板内部负责 Header 区和 SelectedContent 区的呈现。
+
+因此，若仍保留固定 `TabControl`，就不能真正把导航区和内容区拆成两个独立 XAML 区域。
+
+可做的整理级别：
+
+| 整理方式 | 是否可做 | 风险 | 结论 |
+| --- | --- | --- | --- |
+| 增加 XAML 注释标明当前 `TabControl` 是 combined shell region | 可以 | 无视觉变化，但收益较小 | 可选 |
+| 给 `TabControl` 增加 `x:Name` 或辅助属性 | 可以 | 可能引入无用字段或误导后续依赖控件名 | 暂不需要 |
+| 用外层 `Grid`/`Border` 包一层并命名为 Shell region | 可以 | 可能影响布局、样式命中或视觉间距 | 暂不推荐 |
+| 拆成 `ShellNavigationRegion` 和 `ShellContentRegion` 两个 UserControl | 不应现在做 | 会打破 `TabControl` 的 Header/Content 内聚，需要重建选择和内容显示 | 暂不做 |
+| 改成 `ListBox + ContentControl` | 不应现在做 | 需要内容分发、模板、页面生命周期策略 | 暂不做 |
+| 改成 `ItemsSource + ContentTemplateSelector` | 禁止 | 直接进入动态承载 | 不做 |
+
+2c.2 结论：
+
+```text
+不建议现在对 AppShellPageHost.axaml 做真实 XAML 层级拆分。
+
+当前最稳做法是继续保留固定 TabControl，
+并把它明确命名为“CombinedShellRegion”语义：
+它暂时同时承担 ShellNavigationRegion 和 ShellContentRegion 的固定承载职责。
+```
+
+原因：
+
+* 真正拆开导航区和内容区，会迫使我们重新实现 `TabControl` 已经稳定处理的选择和内容显示。
+* 如果不引入 `ItemsSource`、`ContentTemplateSelector` 或页面工厂，拆分后的内容区只能靠显隐绑定或重复条件逻辑驱动，复杂度会变高。
+* 当前 `SelectedShellPageIndex` 桥接已经能满足固定五页阶段的选中同步。
+* 现阶段继续用固定 `TabControl` 更符合“小步、低风险、可验收”的路线。
+
+对 Gemini 的判断：
+
+```text
+暂不建议让 Gemini 执行 2c.2 的 XAML 拆分。
+
+如果只是增加注释或调整格式，收益不足以抵消协作返工成本；
+如果做真实拆分，又会超过当前边界。
+```
+
+后续方向建议：
+
+```text
+UI-COMPONENT-2c.2 可以作为“暂缓真实 XAML 层级拆分”的分析收口。
+
+下一步更稳方向二选一：
+
+A. UI-COMPONENT-2c.3：CombinedShellRegion 命名与结构守护清单
+   只写文档/测试清单，明确当前固定 TabControl 的角色。
+
+B. UI-COMPONENT-3.0：样式 ResourceDictionary 拆分前置分析
+   从低风险样式拆分继续降低 MainWindow.axaml 体积。
+```
+
+建议优先：
+
+```text
+先做 A。
+
+原因是当前还在 Shell 承载边界线上，
+先把 CombinedShellRegion 的命名和守护清单补齐，再转向样式拆分更稳。
+```
+
+2c.2 验收标准：
+
+* 文档明确当前固定 `TabControl` 不能在不改变承载策略的情况下真实拆成独立导航区和内容区。
+* 文档明确暂缓 XAML 层级拆分。
+* 文档明确暂不需要 Gemini 执行 View 修改。
+* 文档明确下一步优先做 CombinedShellRegion 命名与结构守护清单。
+* 不修改 Avalonia 源码。
 
 ---
 
