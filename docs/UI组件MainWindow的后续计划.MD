@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CATALOG-2 只读节点目录状态复核已完成
-> 当前执行点：节点目录空态、加载态、错误态和禁用提示已收口
+> 文档状态：NODE-CONFIG-SCHEMA-0 后端配置 Schema 边界清单已完成
+> 当前执行点：下一步可进入 NODE-CONFIG-SCHEMA-1 最小 API 字段实现
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4387,6 +4387,57 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 
 先只做后端 config_schema 边界分析和契约清单，
 不要直接实现 API 字段或前端表单。
+```
+
+### 2.85 NODE-CONFIG-SCHEMA-0 后端配置 Schema 边界清单
+
+阶段目标：
+
+```text
+从只读节点目录进入真实节点配置前，
+先固定后端 config_schema 的语义边界和最小契约。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_NODE-CONFIG-SCHEMA-0_后端配置Schema边界清单.md
+```
+
+当前结论：
+
+* 当前 `NodeDefinitionSpec` 还没有 `config_schema`。
+* 当前 `GET /api/v1/node-definitions` 还没有返回 `config_schema`。
+* 当前 workflow validation 还没有校验节点 config。
+* 第一版建议新增 `config_schema_version` 和 `config_schema`。
+* 第一版 schema 采用 FlowWeaver 最小子集，不承诺完整 JSON Schema。
+* NODE-CONFIG-SCHEMA-1 只落后端字段、API 映射和 DTO 测试，不做 UI 表单。
+
+四个普通内置节点的字段草案：
+
+| 节点 | 字段 |
+| --- | --- |
+| `GenerateTestTableNode` | `rows`、`seed`、`columns` |
+| `FilterRowsNode` | `field`、`operator`、`value` |
+| `PublishSharedTablesNode` | `share_name`、`export_names`、`retention_seconds` |
+| `ReadSharedTablesNode` | `share_name`、`version_policy`、`exact_version`、`selected_members` |
+
+边界确认：
+
+* 不实现 Avalonia 动态表单。
+* 不实现节点添加/删除。
+* 不实现拖拽画布。
+* 不实现字段选择器或表选择器。
+* 不改变 Workflow Save / Validate / revision conflict 流程。
+* 不改变节点运行时 config 校验行为。
+* 不把 Fault / Delay 测试节点暴露给普通 UI。
+
+建议下一步：
+
+```text
+NODE-CONFIG-SCHEMA-1：
+增加后端 config_schema_version / config_schema 最小 API 字段，
+并补后端 API 测试与 Avalonia DTO 反序列化测试。
 ```
 
 ---
