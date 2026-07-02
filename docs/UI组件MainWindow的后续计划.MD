@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-SCHEMA-1 Avalonia 配置 Schema 解析模型与 parser 测试已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-1 只读节点配置摘要，不写回 workflow JSON
+> 文档状态：UI-NODE-CONFIG-1 只读节点配置摘要已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2 前置分析，先确认配置草稿和表单写回边界
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4579,6 +4579,50 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 UI-NODE-CONFIG-1：
 基于 parser 结果给节点目录或节点定义详情增加只读配置摘要，
 不进入编辑控件、不写回 workflow JSON。
+```
+
+### 2.89 UI-NODE-CONFIG-1 只读节点配置摘要
+
+阶段目标：
+
+```text
+基于 UI-SCHEMA-1 的 parser 结果，
+在节点目录中展示只读配置字段摘要，
+但不提供编辑控件，也不写回 workflow JSON。
+```
+
+已完成：
+
+* `NodeDefinitionListItemViewModel` 解析 `NodeDefinitionDto.ConfigSchema`。
+* 节点目录项新增 `ConfigSchemaSummaryText`。
+* `DisplayTextFormatter` 新增配置 schema 摘要格式化入口。
+* `WorkflowNodeCatalogView` 在节点目录项中显示只读配置摘要。
+* `MainWindowViewModel` 创建节点目录项时传入当前本地化 formatter。
+* 中英文资源补齐配置摘要文本。
+* 测试覆盖有 schema、无 schema 和 XAML 只读绑定。
+
+本阶段明确未做：
+
+* 不新增配置按钮。
+* 不新增动态表单控件。
+* 不创建 config 草稿对象。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Validate / Save / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeDefinitionListItemViewModelTests|WorkflowNodeCatalogViewStructureTests|NodeConfigSchemaParserTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-2 前置分析：
+先确认配置草稿对象、字段控件映射、JSON fallback、
+以及保存前如何与 WorkflowDefinitionDraftJson 建立边界，
+不要直接做大表单。
 ```
 
 ---

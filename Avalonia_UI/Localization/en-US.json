@@ -64,6 +64,8 @@
   "node_catalog.section": "Node catalog",
   "node_catalog.node": "Node",
   "node_catalog.empty_state": "No node definitions loaded. Connect to EngineHost and refresh the node catalog.",
+  "node_catalog.config_schema_unavailable": "Config schema unavailable",
+  "node_catalog.no_config_fields": "No config fields",
   "node_catalog.inputs": "Inputs",
   "node_catalog.outputs": "Outputs",
   "node_catalog.mode": "Mode",
@@ -200,5 +202,6 @@
   "format.list_node_count": "{0} node(s)",
   "format.list_connection_count": "{0} connection(s)",
   "format.list_attempt": "attempt {0}",
-  "format.list_member_count": "{0} member(s)"
+  "format.list_member_count": "{0} member(s)",
+  "format.config_fields": "{0} config field(s): {1}"
 }

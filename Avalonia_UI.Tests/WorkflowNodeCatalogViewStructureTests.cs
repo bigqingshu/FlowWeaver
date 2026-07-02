@@ -25,6 +25,7 @@ public sealed class WorkflowNodeCatalogViewStructureTests
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNodeDefinitionCatalogEmptyState}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeCatalogEmptyStateText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DisplayNameText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding ConfigSchemaSummaryText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding InputPortsText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding OutputPortsText}\"");
     }

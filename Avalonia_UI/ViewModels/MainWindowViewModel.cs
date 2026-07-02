@@ -1007,7 +1007,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     .ThenBy(definition => definition.NodeType)
                     .ThenBy(definition => definition.NodeVersion))
                 {
-                    NodeDefinitions.Add(new NodeDefinitionListItemViewModel(definition));
+                    NodeDefinitions.Add(new NodeDefinitionListItemViewModel(
+                        definition,
+                        DisplayTextFormatter));
                 }
 
                 OnPropertyChanged(nameof(HasNodeDefinitions));

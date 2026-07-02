@@ -49,6 +49,21 @@ public sealed class DisplayTextFormatter
             : statusKey);
     }
 
+    public string FormatConfigSchemaUnavailable()
+    {
+        return Text("node_catalog.config_schema_unavailable");
+    }
+
+    public string FormatNoConfigFields()
+    {
+        return Text("node_catalog.no_config_fields");
+    }
+
+    public string FormatConfigFields(int count, string fieldNames)
+    {
+        return Format("format.config_fields", count, fieldNames);
+    }
+
     private string Text(string key)
     {
         return _localizationService?.GetString(key) ?? GetFallbackString(key);
@@ -74,6 +89,9 @@ public sealed class DisplayTextFormatter
             "node_editor.status.builtin" => "Built-in editor",
             "node_editor.status.json_fallback" => "JSON fallback",
             "node_editor.status.unregistered_json_fallback" => "Not registered, JSON fallback",
+            "node_catalog.config_schema_unavailable" => "Config schema unavailable",
+            "node_catalog.no_config_fields" => "No config fields",
+            "format.config_fields" => "{0} config field(s): {1}",
             _ => key,
         };
     }
