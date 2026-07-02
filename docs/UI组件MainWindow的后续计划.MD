@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-1 只读节点配置摘要已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2 前置分析，先确认配置草稿和表单写回边界
+> 文档状态：UI-NODE-CONFIG-2 配置草稿与表单写回边界前置分析已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2a 选中 workflow 节点实例状态，不生成表单
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4623,6 +4623,49 @@ UI-NODE-CONFIG-2 前置分析：
 先确认配置草稿对象、字段控件映射、JSON fallback、
 以及保存前如何与 WorkflowDefinitionDraftJson 建立边界，
 不要直接做大表单。
+```
+
+### 2.90 UI-NODE-CONFIG-2 配置草稿与表单写回边界前置分析
+
+阶段目标：
+
+```text
+在进入任何动态表单实现前，
+先确认节点实例选择、配置草稿、JSON fallback 和写回 WorkflowDefinitionDraftJson 的边界。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2_配置草稿与表单写回边界前置分析.md
+```
+
+当前结论：
+
+* `NodeDefinition` 是节点类型目录，workflow node instance 的 `config` 才是可编辑对象。
+* 配置草稿读取来源必须是 `WorkflowDefinitionDraftJson`，不能直接读旧的 `WorkflowDefinitionDetail.RawDefinitionJson`。
+* 结构化配置编辑只能显式 Apply 回 `WorkflowDefinitionDraftJson`，再沿用现有 Validate / Save。
+* Save 必须继续走 `UpdateWorkflowAsync(..., base_revision_id)`，不能绕过 revision conflict。
+* 第一版可编辑字段只考虑 `string`、`integer`、`number`、`boolean`、`enum`。
+* `array`、`object`、`unsupported` 先走只读摘要或 JSON fallback。
+* 后端 config 静态校验不混入 UI-NODE-CONFIG-2。
+
+本阶段明确未做：
+
+* 不改 Avalonia 代码。
+* 不新增动态表单。
+* 不新增 Apply 命令。
+* 不写回 workflow JSON。
+* 不改后端 API。
+* 不改变 Save / Validate / revision conflict 行为。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2a：
+新增 SelectedWorkflowDefinitionNode 前置状态和测试，
+允许在 WorkflowDefinitionDetail.Nodes 中选择节点实例，
+不生成配置表单，不写回 JSON。
 ```
 
 ---
