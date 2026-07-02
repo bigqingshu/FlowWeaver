@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.7 结构化编辑 View 协作说明已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7a 结构化编辑 View 辅助文本属性
+> 文档状态：WORKFLOW-EDIT-1.7a 结构化编辑 View 辅助文本属性已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7b 结构化编辑 Gemini View 修改任务说明
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6164,6 +6164,51 @@ WORKFLOW-EDIT-1.7a：
 结构化编辑 View 辅助文本属性，
 只补 Localization 和 MainWindowViewModel 文本属性，
 不修改 XAML。
+```
+
+### 2.125 WORKFLOW-EDIT-1.7a 结构化编辑 View 辅助文本属性
+
+阶段目标：
+
+```text
+补齐结构化编辑表单进入 XAML 前所需的本地化文本属性，
+避免 Gemini 后续在 View 中写死英文或中文。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI/Localization/en-US.json
+Avalonia_UI/Localization/zh-Hans.json
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.7a_结构化编辑View辅助文本属性.md
+```
+
+当前结论：
+
+* 已新增节点/连接结构化编辑表单所需文本属性。
+* 已补英文和简体中文资源。
+* 已接入语言切换通知。
+* 本小步没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelLocalizationTests|JsonLocalizationServiceTests"
+通过：28，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：256，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.7b：
+结构化编辑 Gemini View 修改任务说明，
+只写协作文档，不直接改 XAML。
 ```
 
 ---

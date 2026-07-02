@@ -621,7 +621,37 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ApplyNodeConfigText => T("definition.apply_node_config");
 
+    public string StructuredEditSectionText => T("definition.structured_edit");
+
+    public string AddNodeText => T("definition.add_node");
+
+    public string DeleteNodeText => T("definition.delete_node");
+
+    public string NodeInstanceIdText => T("definition.node_instance_id");
+
+    public string NodeTypeText => T("definition.node_type");
+
+    public string NodeVersionText => T("definition.node_version");
+
+    public string DisplayNameText => T("definition.display_name");
+
+    public string ConfigJsonText => T("definition.config_json");
+
     public string ConnectionsSectionText => T("definition.connections");
+
+    public string AddConnectionText => T("definition.add_connection");
+
+    public string DeleteConnectionText => T("definition.delete_connection");
+
+    public string ConnectionIdText => T("definition.connection_id");
+
+    public string SourceNodeText => T("definition.source_node");
+
+    public string SourcePortText => T("definition.source_port");
+
+    public string TargetNodeText => T("definition.target_node");
+
+    public string TargetPortText => T("definition.target_port");
 
     public string NodeCatalogSectionText => T("node_catalog.section");
 
@@ -2772,7 +2802,22 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(NodesSectionText));
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
+        OnPropertyChanged(nameof(StructuredEditSectionText));
+        OnPropertyChanged(nameof(AddNodeText));
+        OnPropertyChanged(nameof(DeleteNodeText));
+        OnPropertyChanged(nameof(NodeInstanceIdText));
+        OnPropertyChanged(nameof(NodeTypeText));
+        OnPropertyChanged(nameof(NodeVersionText));
+        OnPropertyChanged(nameof(DisplayNameText));
+        OnPropertyChanged(nameof(ConfigJsonText));
         OnPropertyChanged(nameof(ConnectionsSectionText));
+        OnPropertyChanged(nameof(AddConnectionText));
+        OnPropertyChanged(nameof(DeleteConnectionText));
+        OnPropertyChanged(nameof(ConnectionIdText));
+        OnPropertyChanged(nameof(SourceNodeText));
+        OnPropertyChanged(nameof(SourcePortText));
+        OnPropertyChanged(nameof(TargetNodeText));
+        OnPropertyChanged(nameof(TargetPortText));
         OnPropertyChanged(nameof(NodeCatalogSectionText));
         OnPropertyChanged(nameof(NodeText));
         OnPropertyChanged(nameof(NodeCatalogEmptyStateText));
