@@ -755,6 +755,156 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task AddWorkflowDefinitionDraftConnectionCommandAddsConnectionToDraft()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftConnectionId = "source_to_filter";
+        viewModel.NewDraftConnectionSourceNodeId = "source";
+        viewModel.NewDraftConnectionSourcePort = "out";
+        viewModel.NewDraftConnectionTargetNodeId = "filter";
+        viewModel.NewDraftConnectionTargetPort = "in";
+
+        Assert.IsTrue(viewModel.AddWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
+
+        viewModel.AddWorkflowDefinitionDraftConnectionCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var connection = draft.RootElement.GetProperty("connections")[0];
+        Assert.AreEqual("source_to_filter", connection.GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connection.GetProperty("source_node_id").GetString());
+        Assert.AreEqual("out", connection.GetProperty("source_port").GetString());
+        Assert.AreEqual("filter", connection.GetProperty("target_node_id").GetString());
+        Assert.AreEqual("in", connection.GetProperty("target_port").GetString());
+        Assert.AreEqual(
+            "Connection added to draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftConnectionId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftConnectionSourceNodeId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftConnectionSourcePort);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftConnectionTargetNodeId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftConnectionTargetPort);
+    }
+
+    [TestMethod]
+    public async Task AddWorkflowDefinitionDraftConnectionCommandShowsEndpointError()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftConnectionId = "source_to_filter";
+        viewModel.NewDraftConnectionSourceNodeId = "source";
+        viewModel.NewDraftConnectionSourcePort = "out";
+        viewModel.NewDraftConnectionTargetNodeId = "filter";
+        viewModel.NewDraftConnectionTargetPort = "in";
+
+        viewModel.AddWorkflowDefinitionDraftConnectionCommand.Execute(null);
+
+        Assert.AreEqual("Connection add failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("TARGET_NODE_NOT_FOUND", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.AreEqual("source_to_filter", viewModel.NewDraftConnectionId);
+    }
+
+    [TestMethod]
+    public async Task DeleteWorkflowDefinitionDraftConnectionCommandDeletesConnection()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": [
+                {"connection_id": "remove", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "source", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
+
+        viewModel.SelectedWorkflowDefinitionDraftConnectionId = "remove";
+
+        Assert.IsTrue(viewModel.DeleteWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
+
+        viewModel.DeleteWorkflowDefinitionDraftConnectionCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+        Assert.AreEqual(
+            "keep",
+            draft.RootElement.GetProperty("connections")[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "Connection deleted from draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.AreEqual(string.Empty, viewModel.SelectedWorkflowDefinitionDraftConnectionId);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
     {
         var definitionJson =
@@ -1001,11 +1151,19 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.NewDraftNodeVersion = "1.0";
         viewModel.NewDraftNodeConfigJson = "{}";
         viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "source";
+        viewModel.NewDraftConnectionId = "c1";
+        viewModel.NewDraftConnectionSourceNodeId = "source";
+        viewModel.NewDraftConnectionSourcePort = "out";
+        viewModel.NewDraftConnectionTargetNodeId = "target";
+        viewModel.NewDraftConnectionTargetPort = "in";
+        viewModel.SelectedWorkflowDefinitionDraftConnectionId = "c1";
 
         Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
         Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
         Assert.IsFalse(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.AddWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
     }
 
     [TestMethod]

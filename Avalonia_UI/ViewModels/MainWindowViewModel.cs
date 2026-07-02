@@ -789,6 +789,30 @@ public partial class MainWindowViewModel : ViewModelBase
             && !string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftNodeInstanceId);
     }
 
+    private bool CanAddWorkflowDefinitionDraftConnection()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict
+            && !string.IsNullOrWhiteSpace(NewDraftConnectionId)
+            && !string.IsNullOrWhiteSpace(NewDraftConnectionSourceNodeId)
+            && !string.IsNullOrWhiteSpace(NewDraftConnectionSourcePort)
+            && !string.IsNullOrWhiteSpace(NewDraftConnectionTargetNodeId)
+            && !string.IsNullOrWhiteSpace(NewDraftConnectionTargetPort);
+    }
+
+    private bool CanDeleteWorkflowDefinitionDraftConnection()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict
+            && !string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftConnectionId);
+    }
+
     private bool CanSaveWorkflowDefinitionDraft()
     {
         return CanUseEngineActions
@@ -1288,6 +1312,47 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
         WorkflowDefinitionValidationMessage = T("definition.node_deleted");
+        WorkflowDefinitionValidationErrorMessage = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftConnection))]
+    private void AddWorkflowDefinitionDraftConnection()
+    {
+        var patchResult = WorkflowDefinitionDraftConnectionPatcher.AddConnection(
+            WorkflowDefinitionDraftJson,
+            NewDraftConnectionId,
+            NewDraftConnectionSourceNodeId,
+            NewDraftConnectionSourcePort,
+            NewDraftConnectionTargetNodeId,
+            NewDraftConnectionTargetPort);
+        if (!patchResult.Succeeded)
+        {
+            WorkflowDefinitionValidationMessage = T("definition.connection_add_failed");
+            WorkflowDefinitionValidationErrorMessage = patchResult.Warning;
+            return;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        WorkflowDefinitionValidationMessage = T("definition.connection_added");
+        WorkflowDefinitionValidationErrorMessage = null;
+        ResetNewDraftConnectionInput();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDeleteWorkflowDefinitionDraftConnection))]
+    private void DeleteWorkflowDefinitionDraftConnection()
+    {
+        var patchResult = WorkflowDefinitionDraftConnectionPatcher.DeleteConnection(
+            WorkflowDefinitionDraftJson,
+            SelectedWorkflowDefinitionDraftConnectionId);
+        if (!patchResult.Succeeded)
+        {
+            WorkflowDefinitionValidationMessage = T("definition.connection_delete_failed");
+            WorkflowDefinitionValidationErrorMessage = patchResult.Warning;
+            return;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        WorkflowDefinitionValidationMessage = T("definition.connection_deleted");
         WorkflowDefinitionValidationErrorMessage = null;
     }
 
@@ -2883,6 +2948,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -2930,6 +2997,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -2952,6 +3021,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -2962,6 +3033,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -2972,6 +3045,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
@@ -3003,6 +3078,36 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowDefinitionDraftNodeInstanceIdChanged(string value)
     {
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNewDraftConnectionIdChanged(string value)
+    {
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNewDraftConnectionSourceNodeIdChanged(string value)
+    {
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNewDraftConnectionSourcePortChanged(string value)
+    {
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNewDraftConnectionTargetNodeIdChanged(string value)
+    {
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNewDraftConnectionTargetPortChanged(string value)
+    {
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedWorkflowDefinitionDraftConnectionIdChanged(string value)
+    {
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsLoadingRunsChanged(bool value)
@@ -3197,6 +3302,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
         RefreshAuditEventsCommand.NotifyCanExecuteChanged();
