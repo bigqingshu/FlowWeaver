@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.7a 结构化编辑 View 辅助文本属性已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7b 结构化编辑 Gemini View 修改任务说明
+> 文档状态：WORKFLOW-EDIT-1.7b 结构化编辑 Gemini View 修改任务说明已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7c WorkflowSummaryView 结构化编辑表单纯 View 接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6209,6 +6209,36 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 WORKFLOW-EDIT-1.7b：
 结构化编辑 Gemini View 修改任务说明，
 只写协作文档，不直接改 XAML。
+```
+
+### 2.126 WORKFLOW-EDIT-1.7b Gemini 结构化编辑 View 修改任务说明
+
+阶段目标：
+
+```text
+整理给 Gemini 的纯 View 修改任务说明，
+明确可用绑定、允许修改文件和禁止范围。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.7b_Gemini结构化编辑View修改任务说明.md
+```
+
+当前结论：
+
+* Gemini 后续只应修改 `WorkflowSummaryView.axaml`。
+* 第一版只做节点/连接结构化编辑表单，不做画布。
+* 必须使用 1.7a 新增的本地化文本属性。
+* 不允许 Gemini 修改 ViewModel、模型、本地化资源、测试或后端。
+* 不允许引入 converters 或 code-behind。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.7c：
+WorkflowSummaryView 结构化编辑表单纯 View 接入。
 ```
 
 ---
