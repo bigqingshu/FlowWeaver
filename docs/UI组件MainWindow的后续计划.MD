@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2a 选中 workflow 节点实例状态已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2b NodeConfigDraft 纯模型和 builder 测试
+> 文档状态：UI-NODE-CONFIG-2b NodeConfigDraft 纯模型和 builder 测试已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2c 选中节点 config draft 只读摘要
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4707,6 +4707,56 @@ UI-NODE-CONFIG-2b：
 新增 NodeConfigDraft 纯模型和 builder 测试，
 从 WorkflowDefinitionDraftJson + selected node + node definition schema 生成草稿，
 不显示表单，不写回 JSON。
+```
+
+### 2.92 UI-NODE-CONFIG-2b NodeConfigDraft 纯模型和 builder 测试
+
+阶段目标：
+
+```text
+在不接入 ViewModel 和 XAML 的前提下，
+建立从 WorkflowDefinitionDraftJson + selected node + schema 生成配置草稿的纯模型边界。
+```
+
+已完成：
+
+* 新增 `NodeConfigDraftStatus`。
+* 新增 `NodeConfigDraftField`。
+* 新增 `NodeConfigDraft`。
+* 新增 `NodeConfigDraftBuilder`。
+* 新增 `NodeConfigDraftBuilderTests`。
+
+builder 当前能力：
+
+* 从 `WorkflowDefinitionDraftJson` 的 `nodes[]` 中定位 `node_instance_id`。
+* 读取节点实例 `config`，缺失时按 `{}` 处理。
+* 结合 `NodeConfigSchemaDescriptor` 生成字段草稿。
+* 标记当前值、默认值、required、可编辑性和 warning。
+* 对 invalid JSON、找不到节点、schema unsupported 返回状态和 warning。
+
+本阶段明确未做：
+
+* 不接入 `MainWindowViewModel`。
+* 不改 XAML。
+* 不展示 config draft。
+* 不生成动态表单。
+* 不提供 Apply 写回。
+* 不修改 `WorkflowDefinitionDraftJson`。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigDraftBuilderTests|NodeConfigSchemaParserTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-2c：
+基于 SelectedWorkflowDefinitionNode 和 NodeConfigDraftBuilder，
+展示选中节点 config draft 只读摘要，
+不生成编辑控件，不写回 JSON。
 ```
 
 ---
