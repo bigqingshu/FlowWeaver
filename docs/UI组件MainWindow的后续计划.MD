@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4a ShellPageContentKey 前置模型已落地
-> 当前执行点：已新增 ShellPageContentKey 并接入 ShellPageDescriptor / ShellNavigationItemViewModel，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
+> 文档状态：UI-COMPONENT-2b.4b 选中状态前置分析
+> 当前执行点：分析 SelectedShellNavigationItem / SelectedShellPageKey 的最小状态边界，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1025,6 +1025,104 @@ Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
 
 ```text
 UI-COMPONENT-2b.4b：SelectedShellNavigationItem / SelectedShellPageKey 前置状态分析，先只分析。
+```
+
+### 2.42 UI-COMPONENT-2b.4b 选中状态前置分析
+
+2b.4b 的问题是：
+
+```text
+在 AppShellPageHost 能根据页面键显示内容之前，是否需要先把“当前选中的 Shell 页面”变成显式状态？
+```
+
+当前结论：
+
+```text
+需要，但本小步只分析，不直接新增状态代码。
+```
+
+原因是当前导航仍由固定 `TabControl` 自己维护选中项，`MainWindowViewModel` 并不知道当前 Shell 页面。后续如果想让 `AppShellPageHost` 根据内容键显示页面，必须先有一个稳定的 Shell 选中状态，否则 Host 只能继续依赖 XAML 固定 TabItem。
+
+### 2.43 选中状态候选
+
+可选方案如下：
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| `SelectedShellPageKey` | ViewModel 保存当前 `ShellPageKey` | 简单、稳定、易测试 | 需要通过 key 再找到导航项和内容键 | 推荐 |
+| `SelectedShellNavigationItem` | ViewModel 保存当前导航项对象 | XAML 绑定直观 | 语言切换重建集合时对象引用容易失效 | 暂不推荐作为唯一状态 |
+| `SelectedShellPageContentKey` | ViewModel 保存内容键 | 适合 Host 显示内容 | 会丢失导航项身份和 Header 信息 | 可作为派生属性 |
+| 直接让 Host 查询 TabControl | Host 自己读控件选中状态 | 不改 ViewModel | 控件耦合强，不利于测试 | 禁止 |
+
+推荐以 `SelectedShellPageKey` 作为源状态，再派生：
+
+```text
+SelectedShellNavigationItem
+SelectedShellPageContentKey
+```
+
+这样语言切换导致 `ShellNavigationItems` 重建时，可以通过稳定 key 重新解析当前导航项。
+
+### 2.44 推荐状态边界
+
+后续最小实现可考虑：
+
+```text
+private ShellPageKey selectedShellPageKey = ShellPageKey.Workflows;
+
+public ShellPageKey SelectedShellPageKey
+public ShellNavigationItemViewModel SelectedShellNavigationItem
+public ShellPageContentKey SelectedShellPageContentKey
+```
+
+第一版只作为状态模型，不接 `TabControl.SelectedItem`，也不驱动 Host 内容切换。
+
+状态刷新要求：
+
+* 默认选中 `Workflows`。
+* 语言切换重建 `ShellNavigationItems` 后，`SelectedShellNavigationItem` 仍能按 key 找回。
+* `SelectedShellPageContentKey` 来自当前导航项的 `ContentKey`。
+* 选中 key 非法时启动即拒绝或抛出明确错误，不做静默回退。
+
+### 2.45 与 ItemsSource 的关系
+
+`SelectedShellPageKey` 不是 `ItemsSource` 迁移本身，而是 ItemsSource 前置条件：
+
+```text
+2b.4b.1 先有稳定选中状态
+2b.4c 再考虑 Host 是否根据 SelectedShellPageContentKey 显示固定页面
+2b.4d 最后才考虑 TabControl.ItemsSource
+```
+
+因此本阶段仍不做：
+
+```text
+不改 MainWindow.axaml
+不改 AppShellPageHost.axaml
+不绑定 TabControl.SelectedItem
+不迁移 TabControl.ItemsSource
+不新增 ContentTemplate
+不新增页面工厂
+不创建或缓存页面实例
+```
+
+### 2.46 2b.4b 建议验收
+
+如果进入代码实现，验收标准建议为：
+
+* 默认 `SelectedShellPageKey` 为 `Workflows`。
+* `SelectedShellNavigationItem.Key` 与 `SelectedShellPageKey` 一致。
+* `SelectedShellPageContentKey` 与当前导航项 `ContentKey` 一致。
+* 切换语言后选中状态仍保持同一个 key。
+* 不改任何 XAML。
+* 全量 Avalonia 测试通过。
+
+### 2.47 2b.4b 结论
+
+结论：
+
+```text
+下一步建议做 UI-COMPONENT-2b.4b.1：SelectedShellPageKey 前置状态，只补 ViewModel 状态和测试，不改 XAML。
 ```
 
 ---
