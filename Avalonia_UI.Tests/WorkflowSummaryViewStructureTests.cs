@@ -90,6 +90,59 @@ public sealed class WorkflowSummaryViewStructureTests
         Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
     }
 
+    [TestMethod]
+    public void StructuredEditFormsBindToDraftInputsAndCommands()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding StructuredEditSectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeInstanceIdText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeTypeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeVersionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DisplayNameText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding ConfigJsonText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeInstanceId, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeType, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeVersion, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeDisplayName, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding ConnectionIdText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SourceNodeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SourcePortText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding TargetNodeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding TargetPortText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionId, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionSourcePort, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay");
+        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionTargetPort, Mode=TwoWay");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "Text=\"{Binding SelectedWorkflowDefinitionDraftConnectionId, Mode=TwoWay");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding DeleteWorkflowDefinitionDraftConnectionCommand}\"");
+        Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
+    }
+
     private static string ReadSourceFile(params string[] pathParts)
     {
         var repoRoot = GetRepoRoot();

@@ -78,7 +78,7 @@
 
         <!-- Nodes Card -->
         <Border Grid.Row="1" Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="10">
+            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding NodesSectionText}"
                                FontSize="16"
@@ -186,12 +186,89 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
+
+                <StackPanel Grid.Row="4"
+                            Spacing="8"
+                            IsVisible="{Binding HasWorkflowDefinition}">
+                    <TextBlock Text="{Binding StructuredEditSectionText}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <Grid ColumnDefinitions="120,*,120,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto"
+                          ColumnSpacing="10"
+                          RowSpacing="6">
+                        <TextBlock Text="{Binding NodeInstanceIdText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding NewDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding NodeTypeText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="3"
+                                 Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding NodeVersionText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="1"
+                                 Text="{Binding NewDraftNodeVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Text="{Binding DisplayNameText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="3"
+                                 Text="{Binding NewDraftNodeDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding ConfigJsonText}"
+                                   VerticalAlignment="Top"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="2"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="3"
+                                 MinHeight="56"
+                                 MaxHeight="96"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <Button Grid.Row="3"
+                                Grid.Column="3"
+                                Content="{Binding AddNodeText}"
+                                Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
+                                HorizontalAlignment="Right"
+                                MinWidth="104"/>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="120,*,Auto"
+                          ColumnSpacing="10">
+                        <TextBlock Text="{Binding NodeInstanceIdText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Column="2"
+                                Content="{Binding DeleteNodeText}"
+                                Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
+                                MinWidth="104"/>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- Connections Card -->
         <Border Grid.Row="2" Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,*" RowSpacing="10">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding ConnectionsSectionText}"
                                FontSize="16"
@@ -219,6 +296,75 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <StackPanel Grid.Row="2"
+                            Spacing="8"
+                            IsVisible="{Binding HasWorkflowDefinition}">
+                    <TextBlock Text="{Binding StructuredEditSectionText}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <Grid ColumnDefinitions="120,*,120,*"
+                          RowDefinitions="Auto,Auto,Auto"
+                          ColumnSpacing="10"
+                          RowSpacing="6">
+                        <TextBlock Text="{Binding ConnectionIdText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding NewDraftConnectionId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding SourceNodeText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="3"
+                                 Text="{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding SourcePortText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="1"
+                                 Text="{Binding NewDraftConnectionSourcePort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Text="{Binding TargetNodeText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="3"
+                                 Text="{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding TargetPortText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="2"
+                                 Grid.Column="1"
+                                 Text="{Binding NewDraftConnectionTargetPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Row="2"
+                                Grid.Column="3"
+                                Content="{Binding AddConnectionText}"
+                                Command="{Binding AddWorkflowDefinitionDraftConnectionCommand}"
+                                HorizontalAlignment="Right"
+                                MinWidth="128"/>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="120,*,Auto"
+                          ColumnSpacing="10">
+                        <TextBlock Text="{Binding ConnectionIdText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding SelectedWorkflowDefinitionDraftConnectionId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Column="2"
+                                Content="{Binding DeleteConnectionText}"
+                                Command="{Binding DeleteWorkflowDefinitionDraftConnectionCommand}"
+                                MinWidth="128"/>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

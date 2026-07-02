@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.7b 结构化编辑 Gemini View 修改任务说明已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7c WorkflowSummaryView 结构化编辑表单纯 View 接入
+> 文档状态：WORKFLOW-EDIT-1.7c WorkflowSummaryView 结构化编辑表单纯 View 接入已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7d 结构化编辑 View 后置复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6239,6 +6239,52 @@ docs/FlowWeaver_WORKFLOW-EDIT-1.7b_Gemini结构化编辑View修改任务说明.m
 ```text
 WORKFLOW-EDIT-1.7c：
 WorkflowSummaryView 结构化编辑表单纯 View 接入。
+```
+
+### 2.127 WORKFLOW-EDIT-1.7c WorkflowSummaryView 结构化编辑表单纯 View 接入
+
+阶段目标：
+
+```text
+将结构化编辑命令以紧凑表单方式接入 WorkflowSummaryView，
+只改 XAML 和结构测试。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/Views/Components/Workflow/WorkflowSummaryView.axaml
+Avalonia_UI.Tests/WorkflowSummaryViewStructureTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.7c_WorkflowSummaryView结构化编辑表单接入.md
+```
+
+当前结论：
+
+* Nodes Card 已增加节点新增/删除表单。
+* Connections Card 已增加 connection 新增/删除表单。
+* 表单绑定现有输入状态、文本属性和命令。
+* 没有新增 converter 或 code-behind。
+* 没有修改 ViewModel、模型、本地化资源或后端。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore
+成功，警告：0，错误：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowSummaryViewStructureTests|MainWindowViewModelWorkflowTests|MainWindowViewModelLocalizationTests"
+通过：81，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：257，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.7d：
+结构化编辑 View 后置复核。
 ```
 
 ---
