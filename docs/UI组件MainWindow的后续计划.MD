@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.5 connection 新增 / 删除纯 patcher 已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6 结构化编辑 ViewModel 命令接入前置分析
+> 文档状态：WORKFLOW-EDIT-1.6 ViewModel 命令接入前置分析已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6a 节点新增输入状态最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5793,6 +5793,39 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 WORKFLOW-EDIT-1.6：
 结构化编辑 ViewModel 命令接入前置分析，
 先只分析命令、输入状态和错误消息边界。
+```
+
+### 2.116 WORKFLOW-EDIT-1.6 ViewModel 命令接入前置分析
+
+阶段目标：
+
+```text
+在已有纯 patcher 之后，
+先明确 ViewModel 命令接入顺序、输入状态和错误消息边界，
+避免一次性接入节点增删和 connection 增删。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.6_ViewModel命令接入前置分析.md
+```
+
+当前结论：
+
+* 结构化命令必须只写回 `WorkflowDefinitionDraftJson`。
+* dirty、validation invalidation、Save 和 revision conflict 继续复用现有语义。
+* 不建议一次性接入 AddNode / DeleteNode / AddConnection / DeleteConnection。
+* 建议先补节点新增输入状态，再接 AddNode 命令。
+* XAML 和 Gemini View 协作继续后置。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.6a：
+节点新增输入状态最小接入，
+只新增 ViewModel 属性和测试，
+不调用 patcher，不修改 WorkflowDefinitionDraftJson，不修改 XAML。
 ```
 
 ---
