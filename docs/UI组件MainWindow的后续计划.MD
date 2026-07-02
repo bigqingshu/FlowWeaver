@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3.4 Shell 样式迁移评估与守护已完成
-> 当前执行点：TabControl / TabItem / CombinedShellRegion 样式暂缓迁移，已用结构测试守护当前归属
+> 文档状态：UI-COMPONENT-3 阶段总体验收复核已完成
+> 当前执行点：通用控件样式已迁入 ControlStyles.axaml，CombinedShellRegion 的 Shell 导航样式暂留 MainWindow 并由测试守护
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2725,6 +2725,123 @@ MainWindow.axaml 暂时保留 CombinedShellRegion 的 Shell 导航样式。
 ```text
 UI-COMPONENT-3 后置总体验收复核：
 汇总 3.0 到 3.4 的完成矩阵、测试结果、未迁移项和后续风险。
+```
+
+### 2.64 UI-COMPONENT-3 阶段总体验收复核
+
+阶段目标：
+
+```text
+降低 MainWindow.axaml 的样式职责，
+将低风险通用控件样式迁入独立样式文件，
+并明确 CombinedShellRegion 相关 Shell 样式暂缓迁移。
+```
+
+完成矩阵：
+
+| 小阶段 | 内容 | 结果 |
+| --- | --- | --- |
+| 3.0 | 样式 ResourceDictionary 拆分前置分析 | 已完成 |
+| 3.1 | 样式拆分清单与目标文件命名固化 | 已完成 |
+| 3.2 | 新增 `ControlStyles.axaml`，迁移 `Button` / `Button.Primary` / `Border.Card` | 已完成 |
+| 3.3 | 迁移 `ListBoxItem` 样式 | 已完成 |
+| 3.4 | 评估 Shell 样式迁移，暂缓并补结构守护测试 | 已完成 |
+
+当前文件职责：
+
+```text
+Avalonia_UI/Styles/ColorPalette.axaml
+  Light / Dark Brush 资源
+
+Avalonia_UI/Styles/ControlStyles.axaml
+  Button
+  Button.Primary
+  ListBoxItem
+  Border.Card
+
+Avalonia_UI/Views/MainWindow.axaml
+  Window 壳
+  Shell Header
+  AppShellPageHost 引用
+  CombinedShellRegion 相关 TabControl / TabItem 样式
+```
+
+已迁移样式：
+
+* `Button`
+* `Button:pointerover /template/ ContentPresenter`
+* `Button:pointerover`
+* `Button:pressed /template/ ContentPresenter`
+* `Button:pressed`
+* `Button.Primary`
+* `Button.Primary:pointerover /template/ ContentPresenter`
+* `Button.Primary:pressed /template/ ContentPresenter`
+* `ListBoxItem`
+* `ListBoxItem:pointerover`
+* `ListBoxItem:selected`
+* `Border.Card`
+
+未迁移样式：
+
+* `TabControl`
+* `TabControl[TabStripPlacement=Left] /template/ ContentPresenter#PART_SelectedContentHost`
+* `TabControl[TabStripPlacement=Left] /template/ ItemsPresenter#PART_ItemsPresenter`
+* `TabItem`
+* `TabItem > TextBlock`
+* `TabItem:pointerover /template/ Border#PART_LayoutRoot`
+* `TabItem:pointerover /template/ ContentPresenter`
+* `TabItem:pointerover`
+* `TabItem:selected /template/ ContentPresenter`
+* `TabItem:selected`
+* `TabItem:selected /template/ Border#PART_SelectedPipe`
+
+未迁移原因：
+
+```text
+这些样式属于 CombinedShellRegion 的 Shell 导航视觉。
+直接迁入 Application.Styles 会扩大作用域；
+局部迁移则需要先设计 Shell 专属 class 或局部 StyleInclude 策略。
+```
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/StyleStructureTests.cs
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：146
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未修改 `ColorPalette.axaml`。
+* 未修改视觉参数。
+* 未移动 `CombinedShellRegion`。
+* 未迁移 `TabControl.ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未引入页面工厂。
+* 未引入页面缓存策略。
+* 未反射创建页面。
+* 未引入外部插件化。
+
+后续建议：
+
+```text
+UI-COMPONENT-3 可以收口。
+
+下一阶段建议先做 UI-COMPONENT-4.0：
+MainWindow 剩余职责复核与下一轮低风险拆分方向分析。
+
+不要直接进入 ShellStyles 迁移，除非先明确 Shell 样式作用域策略。
 ```
 
 ---
