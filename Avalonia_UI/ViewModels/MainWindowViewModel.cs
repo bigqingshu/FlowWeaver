@@ -399,6 +399,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasNodeDefinitions => NodeDefinitions.Count > 0;
 
+    public bool HasNodeDefinitionCatalogEmptyState =>
+        !IsLoadingNodeDefinitions && !HasNodeDefinitions;
+
+    public string? RefreshNodeDefinitionsDisabledReasonText
+    {
+        get
+        {
+            if (IsLoadingNodeDefinitions)
+            {
+                return T("action.disabled.busy");
+            }
+
+            if (!CanUseEngineActions)
+            {
+                return T("action.disabled.engine_not_connected");
+            }
+
+            return null;
+        }
+    }
+
     public bool IsWorkflowDefinitionDraftBusy =>
         IsValidatingWorkflowDefinitionDraft || IsSavingWorkflowDefinitionDraft;
 
@@ -528,6 +549,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public string NodeCatalogSectionText => T("node_catalog.section");
 
     public string NodeText => T("node_catalog.node");
+
+    public string NodeCatalogEmptyStateText => T("node_catalog.empty_state");
 
     public string InputsText => T("node_catalog.inputs");
 
@@ -988,6 +1011,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 }
 
                 OnPropertyChanged(nameof(HasNodeDefinitions));
+                OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
                 NodeDefinitionCatalogMessage =
                     F("format.loaded_node_definitions", NodeDefinitions.Count);
                 return;
@@ -996,6 +1020,7 @@ public partial class MainWindowViewModel : ViewModelBase
             NodeDefinitionCatalogMessage = T("node_catalog.refresh_failed");
             NodeDefinitionCatalogErrorMessage = DescribeError(response);
             OnPropertyChanged(nameof(HasNodeDefinitions));
+            OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
         }
         finally
         {
@@ -2276,6 +2301,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CheckConnectionText));
         OnPropertyChanged(nameof(StreamText));
         OnPropertyChanged(nameof(StopText));
+        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
         OnPropertyChanged(nameof(ExecutionTabText));
         OnPropertyChanged(nameof(DefinitionTabText));
         OnPropertyChanged(nameof(LogsTabText));
@@ -2302,6 +2328,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ConnectionsSectionText));
         OnPropertyChanged(nameof(NodeCatalogSectionText));
         OnPropertyChanged(nameof(NodeText));
+        OnPropertyChanged(nameof(NodeCatalogEmptyStateText));
         OnPropertyChanged(nameof(InputsText));
         OnPropertyChanged(nameof(OutputsText));
         OnPropertyChanged(nameof(ModeText));
@@ -2477,6 +2504,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnIsLoadingNodeDefinitionsChanged(bool value)
     {
+        OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
         RefreshNodeDefinitionsCommand.NotifyCanExecuteChanged();
     }
 
@@ -2711,6 +2740,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanUseEngineActions));
         OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
         OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
+        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();

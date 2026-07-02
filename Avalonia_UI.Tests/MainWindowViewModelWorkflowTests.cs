@@ -672,7 +672,28 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("Loaded 2 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
         Assert.IsFalse(viewModel.HasNodeDefinitionCatalogError);
         Assert.IsTrue(viewModel.HasNodeDefinitions);
+        Assert.IsFalse(viewModel.HasNodeDefinitionCatalogEmptyState);
         Assert.AreEqual("secret", apiClient.LastSettings?.Token);
+    }
+
+    [TestMethod]
+    public async Task RefreshNodeDefinitionsShowsEmptyStateForEmptyCatalog()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        Assert.IsTrue(viewModel.HasNodeDefinitionCatalogEmptyState);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.IsEmpty(viewModel.NodeDefinitions);
+        Assert.IsFalse(viewModel.HasNodeDefinitions);
+        Assert.IsTrue(viewModel.HasNodeDefinitionCatalogEmptyState);
+        Assert.AreEqual("Loaded 0 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
     }
 
     [TestMethod]
@@ -695,6 +716,7 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.NodeDefinitionCatalogErrorMessage);
         Assert.IsTrue(viewModel.HasNodeDefinitionCatalogError);
         Assert.IsFalse(viewModel.HasNodeDefinitions);
+        Assert.IsTrue(viewModel.HasNodeDefinitionCatalogEmptyState);
     }
 
     [TestMethod]
@@ -706,6 +728,22 @@ public sealed class MainWindowViewModelWorkflowTests
 
         Assert.IsFalse(viewModel.CanUseEngineActions);
         Assert.IsFalse(viewModel.RefreshNodeDefinitionsCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because EngineHost is not connected or authenticated.",
+            viewModel.RefreshNodeDefinitionsDisabledReasonText);
+    }
+
+    [TestMethod]
+    public void RefreshNodeDefinitionsDisabledReasonReflectsLoadingState()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        viewModel.IsLoadingNodeDefinitions = true;
+
+        Assert.IsFalse(viewModel.RefreshNodeDefinitionsCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because another operation is in progress.",
+            viewModel.RefreshNodeDefinitionsDisabledReasonText);
     }
 
     [TestMethod]

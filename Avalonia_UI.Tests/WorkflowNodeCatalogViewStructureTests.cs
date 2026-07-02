@@ -19,7 +19,11 @@ public sealed class WorkflowNodeCatalogViewStructureTests
             "WorkflowNodeCatalogView.axaml");
 
         StringAssert.Contains(xaml, "Command=\"{Binding RefreshNodeDefinitionsCommand}\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding RefreshNodeDefinitionsDisabledReasonText}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding NodeDefinitions}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNodeDefinitions}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNodeDefinitionCatalogEmptyState}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeCatalogEmptyStateText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DisplayNameText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding InputPortsText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding OutputPortsText}\"");

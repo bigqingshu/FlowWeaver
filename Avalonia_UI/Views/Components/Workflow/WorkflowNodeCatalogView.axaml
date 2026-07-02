@@ -17,15 +17,19 @@
                              VerticalAlignment="Center"
                              IsIndeterminate="True"
                              IsVisible="{Binding IsLoadingNodeDefinitions}"/>
-                <Button Grid.Column="2"
-                        Content="{Binding RefreshText}"
-                        Command="{Binding RefreshNodeDefinitionsCommand}"
-                        MinWidth="84"/>
+                <Panel Grid.Column="2"
+                       Background="Transparent"
+                       ToolTip.Tip="{Binding RefreshNodeDefinitionsDisabledReasonText}">
+                    <Button Content="{Binding RefreshText}"
+                            Command="{Binding RefreshNodeDefinitionsCommand}"
+                            MinWidth="84"/>
+                </Panel>
             </Grid>
 
             <Grid Grid.Row="1"
                   ColumnDefinitions="1.4*,1*,1*,Auto,Auto"
-                  ColumnSpacing="12">
+                  ColumnSpacing="12"
+                  IsVisible="{Binding HasNodeDefinitions}">
                 <TextBlock Text="{Binding NodeText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Grid.Column="1" Text="{Binding InputsText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Grid.Column="2" Text="{Binding OutputsText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -33,10 +37,24 @@
                 <TextBlock Grid.Column="4" Text="{Binding TimeoutText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </Grid>
 
+            <Border Grid.Row="2"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    MinHeight="120"
+                    IsVisible="{Binding HasNodeDefinitionCatalogEmptyState}">
+                <TextBlock Text="{Binding NodeCatalogEmptyStateText}"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Margin="18"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </Border>
+
             <ListBox Grid.Row="2"
                      ItemsSource="{Binding NodeDefinitions}"
                      BorderBrush="{DynamicResource ControlBorderBrush}"
                      BorderThickness="1"
+                     IsVisible="{Binding HasNodeDefinitions}"
                      MinHeight="120">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"

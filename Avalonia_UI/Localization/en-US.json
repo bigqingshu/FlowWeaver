@@ -63,6 +63,7 @@
   "definition.save": "Save",
   "node_catalog.section": "Node catalog",
   "node_catalog.node": "Node",
+  "node_catalog.empty_state": "No node definitions loaded. Connect to EngineHost and refresh the node catalog.",
   "node_catalog.inputs": "Inputs",
   "node_catalog.outputs": "Outputs",
   "node_catalog.mode": "Mode",

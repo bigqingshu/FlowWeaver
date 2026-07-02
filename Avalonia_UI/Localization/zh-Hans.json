@@ -63,6 +63,7 @@
   "definition.save": "保存",
   "node_catalog.section": "节点目录",
   "node_catalog.node": "节点",
+  "node_catalog.empty_state": "尚未加载节点定义。请连接 EngineHost 后刷新节点目录。",
   "node_catalog.inputs": "输入",
   "node_catalog.outputs": "输出",
   "node_catalog.mode": "模式",

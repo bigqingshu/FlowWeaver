@@ -403,6 +403,26 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task NodeCatalogChromeUsesCurrentLanguage()
+    {
+        var uiSettingsStore = new FakeUiSettingsStore();
+        var viewModel = CreateViewModel(uiSettingsStore);
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        Assert.AreEqual("节点目录", viewModel.NodeCatalogSectionText);
+        Assert.AreEqual("节点", viewModel.NodeText);
+        Assert.AreEqual("输入", viewModel.InputsText);
+        Assert.AreEqual("输出", viewModel.OutputsText);
+        Assert.AreEqual("模式", viewModel.ModeText);
+        Assert.AreEqual("超时", viewModel.TimeoutText);
+        Assert.AreEqual(
+            "尚未加载节点定义。请连接 EngineHost 后刷新节点目录。",
+            viewModel.NodeCatalogEmptyStateText);
+        Assert.AreEqual("尚未加载节点定义。", viewModel.NodeDefinitionCatalogMessage);
+    }
+
+    [TestMethod]
     public async Task ConnectionAndDiagnosticsMessagesUseCurrentLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore();

@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CATALOG-1 只读节点目录接入已完成
-> 当前执行点：Workflow 页已可只读加载后端 node-definitions
+> 文档状态：UI-NODE-CATALOG-2 只读节点目录状态复核已完成
+> 当前执行点：节点目录空态、加载态、错误态和禁用提示已收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4319,6 +4319,74 @@ Avalonia_UI.Tests/WorkflowNodeCatalogViewStructureTests.cs
 
 如果进入真实节点配置：
 先做 NODE-CONFIG-SCHEMA-0，固定后端 config_schema 契约。
+```
+
+### 2.84 UI-NODE-CATALOG-2 只读节点目录状态复核
+
+阶段目标：
+
+```text
+在不进入节点配置编辑的前提下，
+补齐节点目录的空态、加载态、错误态、未连接禁用提示和本地化复核。
+```
+
+完成内容：
+
+```text
+HasNodeDefinitionCatalogEmptyState
+RefreshNodeDefinitionsDisabledReasonText
+NodeCatalogEmptyStateText
+WorkflowNodeCatalogView 空态占位
+WorkflowNodeCatalogView 禁用刷新 tooltip
+node_catalog.empty_state 简体中文 / English 文案
+```
+
+状态边界：
+
+| 状态 | 行为 |
+| --- | --- |
+| 未加载 / 空列表 | 显示空态占位，不显示表头和列表 |
+| 加载中 | 显示 progress，刷新命令禁用，禁用原因为 busy |
+| 加载成功有数据 | 显示表头和节点定义列表 |
+| 加载成功无数据 | 显示空态，占位文案提示连接并刷新 |
+| 加载失败 | 保留空态/已有列表状态，底部显示错误消息 |
+| 未连接或未鉴权 | 刷新命令禁用，tooltip 显示 EngineHost 未连接或未鉴权 |
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+Avalonia_UI.Tests/WorkflowNodeCatalogViewStructureTests.cs
+```
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：174
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未新增节点创建按钮。
+* 未新增节点配置表单。
+* 未新增 JSON Schema renderer。
+* 未新增拖拽画布。
+* 未改变 Workflow 保存、校验、revision conflict 语义。
+* 未修改后端 `/api/v1/node-definitions`。
+* 未进入 `config_schema` 契约设计或实现。
+
+建议下一步：
+
+```text
+进入 NODE-CONFIG-SCHEMA-0。
+
+先只做后端 config_schema 边界分析和契约清单，
+不要直接实现 API 字段或前端表单。
 ```
 
 ---
