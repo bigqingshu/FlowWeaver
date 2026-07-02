@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.4b 发布 Desktop workflow run event 自动 smoke 已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4c 结构化编辑人工 Desktop smoke 清单与后置复核
+> 文档状态：WORKFLOW-EDIT-2.4c 人工 Desktop smoke 清单与后置复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4d 人工 Desktop 点击 smoke 执行记录
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6867,6 +6867,36 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "DesktopPublishWor
 ```text
 WORKFLOW-EDIT-2.4c：
 结构化编辑人工 Desktop smoke 清单与后置复核。
+```
+
+### 2.144 WORKFLOW-EDIT-2.4c 人工 Desktop smoke 清单与后置复核
+
+阶段目标：
+
+```text
+明确自动发布 smoke 已覆盖的正式路径，
+并列出尚未执行的人工 Desktop GUI 点击 smoke 清单。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.4c_人工DesktopSmoke清单与后置复核.md
+```
+
+当前结论：
+
+* `DesktopPublishWorkflowRunEventSmokeTests` 已通过。
+* 自动发布路径证明 Desktop API/WebSocket client 与 EngineHost run lifecycle 可用。
+* 自动 smoke 不等同于人工 GUI 点击。
+* 人工 Desktop 点击 smoke 尚未执行。
+* WORKFLOW-EDIT-2 暂不能宣称完整完成。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.4d：
+人工 Desktop 点击 smoke 执行记录。
 ```
 
 ---
