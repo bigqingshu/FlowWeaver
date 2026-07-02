@@ -18,7 +18,9 @@ public sealed class NodeEditorResolverTests
         Assert.AreEqual(NodeEditorKind.JsonFallback, resolution.Kind);
         Assert.IsTrue(resolution.HasRegisteredEditor);
         Assert.IsTrue(resolution.UsesJsonFallback);
-        Assert.AreEqual("JSON fallback", resolution.StatusText);
+        Assert.AreEqual(
+            NodeEditorResolution.JsonFallbackStatusKey,
+            resolution.StatusKey);
     }
 
     [TestMethod]
@@ -33,7 +35,9 @@ public sealed class NodeEditorResolverTests
         Assert.AreEqual(NodeEditorKind.JsonFallback, resolution.Kind);
         Assert.IsFalse(resolution.HasRegisteredEditor);
         Assert.IsTrue(resolution.UsesJsonFallback);
-        Assert.AreEqual("JSON fallback", resolution.StatusText);
+        Assert.AreEqual(
+            NodeEditorResolution.UnregisteredJsonFallbackStatusKey,
+            resolution.StatusKey);
     }
 
     [TestMethod]
@@ -64,6 +68,8 @@ public sealed class NodeEditorResolverTests
         Assert.AreEqual(NodeEditorKind.BuiltIn, resolution.Kind);
         Assert.IsTrue(resolution.HasRegisteredEditor);
         Assert.IsFalse(resolution.UsesJsonFallback);
-        Assert.AreEqual("Built-in editor", resolution.StatusText);
+        Assert.AreEqual(
+            NodeEditorResolution.BuiltInStatusKey,
+            resolution.StatusKey);
     }
 }

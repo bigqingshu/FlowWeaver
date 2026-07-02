@@ -267,6 +267,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
         Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
         Assert.IsTrue(detail.Nodes[0].UsesJsonFallback);
+        Assert.AreEqual(
+            NodeEditorResolution.JsonFallbackStatusKey,
+            detail.Nodes[0].NodeEditorResolution.StatusKey);
         Assert.AreEqual("JSON fallback", detail.Nodes[0].NodeEditorStatusText);
         Assert.AreEqual("disabled", detail.Nodes[1].EnabledText);
         Assert.AreEqual(
@@ -320,7 +323,10 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(NodeEditorKind.JsonFallback, node.NodeEditorResolution.Kind);
         Assert.IsFalse(node.HasRegisteredNodeEditor);
         Assert.IsTrue(node.UsesJsonFallback);
-        Assert.AreEqual("JSON fallback", node.NodeEditorStatusText);
+        Assert.AreEqual(
+            NodeEditorResolution.UnregisteredJsonFallbackStatusKey,
+            node.NodeEditorResolution.StatusKey);
+        Assert.AreEqual("Not registered, JSON fallback", node.NodeEditorStatusText);
     }
 
     [TestMethod]

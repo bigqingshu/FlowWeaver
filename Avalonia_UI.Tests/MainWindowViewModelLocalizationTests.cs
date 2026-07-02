@@ -394,6 +394,9 @@ public sealed class MainWindowViewModelLocalizationTests
 
         Assert.AreEqual("2 个节点", viewModel.WorkflowDefinitionDetail?.NodeCountText);
         Assert.AreEqual("1 条连接", viewModel.WorkflowDefinitionDetail?.ConnectionCountText);
+        Assert.AreEqual(
+            "JSON 回退编辑器",
+            viewModel.WorkflowDefinitionDetail?.Nodes[0].NodeEditorStatusText);
         Assert.AreEqual("已禁用", viewModel.WorkflowDefinitionDetail?.Nodes[1].EnabledText);
         Assert.AreEqual("第 1 次尝试", viewModel.NodeRuns[0].AttemptText);
         Assert.AreEqual("1 个成员", viewModel.SharedPublications[0].MemberCountText);

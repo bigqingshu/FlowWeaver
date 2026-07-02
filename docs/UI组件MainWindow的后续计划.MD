@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-9 阶段总体验收复核已完成
-> 当前执行点：NodeEditorRegistry / 节点编辑器只读展示主线已收口
+> 文档状态：UI-NODE-EDITOR-L10N-1 节点编辑器状态本地化已完成
+> 当前执行点：NodeEditorRegistry / 节点编辑器只读展示主线已本地化收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4166,7 +4166,7 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 * 没有拖拽画布。
 * 没有节点添加/删除入口。
 * 没有接入 `GET /api/v1/node-definitions` 的动态目录同步。
-* 没有编辑器状态本地化。
+* 编辑器状态文本已完成简体中文 / English 本地化。
 * 没有外部 DLL / `ui-modules` 扫描。
 * 没有改变 Workflow 保存、校验、revision conflict 语义。
 
@@ -4205,6 +4205,60 @@ NodeEditorRegistry 主线已经完成第一层基础：
 
 如果准备进入真实节点配置：
 先做 NODE-CONFIG-SCHEMA-0，不要直接在前端手写表单。
+```
+
+### 2.82 UI-NODE-EDITOR-L10N-1 节点编辑器状态本地化
+
+阶段目标：
+
+```text
+把 NodeEditorStatusText 从模型层硬编码英文文案，
+调整为稳定状态 key + DisplayTextFormatter 本地化输出。
+```
+
+完成内容：
+
+```text
+NodeEditorResolution.StatusText -> NodeEditorResolution.StatusKey
+DisplayTextFormatter.FormatNodeEditorStatus(...)
+Avalonia_UI/Localization/en-US.json 增加 node_editor.status.*
+Avalonia_UI/Localization/zh-Hans.json 增加 node_editor.status.*
+WorkflowDefinitionNodeListItemViewModel.NodeEditorStatusText 使用当前语言格式化
+```
+
+状态 key：
+
+| key | English | 简体中文 |
+| --- | --- | --- |
+| `node_editor.status.builtin` | Built-in editor | 内置编辑器 |
+| `node_editor.status.json_fallback` | JSON fallback | JSON 回退编辑器 |
+| `node_editor.status.unregistered_json_fallback` | Not registered, JSON fallback | 未注册，使用 JSON 回退 |
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/NodeEditorResolverTests.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+边界确认：
+
+* 未修改 `WorkflowSummaryView.axaml` 的绑定结构。
+* 未新增节点编辑按钮。
+* 未新增节点配置表单。
+* 未接入后端 node-definitions API。
+* 未改变 Workflow 保存、校验、revision conflict 语义。
+* 语言切换后，新加载的 Workflow definition 会使用当前语言显示节点编辑器状态。
+
+建议下一步：
+
+```text
+如果继续 UI 只读信息：
+进入 UI-NODE-CATALOG-1，接入后端 /api/v1/node-definitions 的只读节点目录。
+
+如果进入真实节点配置：
+先做 NODE-CONFIG-SCHEMA-0，固定后端 config_schema 契约。
 ```
 
 ---

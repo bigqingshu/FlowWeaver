@@ -6,8 +6,15 @@ public sealed record NodeEditorResolution(
     string DisplayName,
     bool HasRegisteredEditor,
     bool UsesJsonFallback,
-    string StatusText)
+    string StatusKey)
 {
+    public const string BuiltInStatusKey = "node_editor.status.builtin";
+
+    public const string JsonFallbackStatusKey = "node_editor.status.json_fallback";
+
+    public const string UnregisteredJsonFallbackStatusKey =
+        "node_editor.status.unregistered_json_fallback";
+
     public static NodeEditorResolution JsonFallback(
         string nodeType,
         string displayName,
@@ -19,7 +26,9 @@ public sealed record NodeEditorResolution(
             displayName,
             hasRegisteredEditor,
             true,
-            "JSON fallback");
+            hasRegisteredEditor
+                ? JsonFallbackStatusKey
+                : UnregisteredJsonFallbackStatusKey);
     }
 
     public static NodeEditorResolution BuiltIn(NodeEditorDescriptor descriptor)
@@ -30,6 +39,6 @@ public sealed record NodeEditorResolution(
             descriptor.DisplayName,
             true,
             false,
-            "Built-in editor");
+            BuiltInStatusKey);
     }
 }

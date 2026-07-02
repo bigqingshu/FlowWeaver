@@ -42,6 +42,13 @@ public sealed class DisplayTextFormatter
         return Format("format.list_member_count", count);
     }
 
+    public string FormatNodeEditorStatus(string statusKey)
+    {
+        return Text(string.IsNullOrWhiteSpace(statusKey)
+            ? "node_editor.status.unregistered_json_fallback"
+            : statusKey);
+    }
+
     private string Text(string key)
     {
         return _localizationService?.GetString(key) ?? GetFallbackString(key);
@@ -64,6 +71,9 @@ public sealed class DisplayTextFormatter
             "list.disabled" => "disabled",
             "format.list_attempt" => "attempt {0}",
             "format.list_member_count" => "{0} member(s)",
+            "node_editor.status.builtin" => "Built-in editor",
+            "node_editor.status.json_fallback" => "JSON fallback",
+            "node_editor.status.unregistered_json_fallback" => "Not registered, JSON fallback",
             _ => key,
         };
     }

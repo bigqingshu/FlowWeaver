@@ -227,7 +227,8 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
 
     public string EnabledText => DisplayTextFormatter.FormatEnabled(Enabled);
 
-    public string NodeEditorStatusText => NodeEditorResolution.StatusText;
+    public string NodeEditorStatusText =>
+        DisplayTextFormatter.FormatNodeEditorStatus(NodeEditorResolution.StatusKey);
 
     public bool HasRegisteredNodeEditor => NodeEditorResolution.HasRegisteredEditor;
 
