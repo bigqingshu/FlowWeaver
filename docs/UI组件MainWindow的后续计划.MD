@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.5 MainWindow / AppShellPageHost 边界总体验收已补充
-> 当前执行点：完成 Shell 边界验收与 Gemini View 协作说明整理，仍保留当前固定 TabControl 承载
+> 文档状态：UI-COMPONENT-2c.0 Shell 导航区与内容区拆分边界分析已补充
+> 当前执行点：只确认导航/内容拆分边界，不实现 ItemsSource、模板选择器、页面工厂或插件化
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1617,6 +1617,130 @@ UI-COMPONENT-2b 可以作为“内置页面固定承载解耦”阶段收口。
 Shell 导航区与内容区拆分边界分析。
 
 不建议直接进入 ItemsSource、ContentTemplateSelector、页面工厂或外部插件化。
+```
+
+### 2.55 UI-COMPONENT-2c.0 Shell 导航区与内容区拆分边界分析
+
+分析目标：
+
+```text
+先判断是否应该把 Shell 导航区和内容区从当前固定 TabControl 中拆开。
+
+本小步只做边界分析，不改 Avalonia 源码。
+```
+
+当前结构：
+
+```text
+AppShellPageHost
+  TabControl
+    TabItem Header=WorkflowsNavigationItem.HeaderText
+      WorkflowPage
+    TabItem Header=RunsNavigationItem.HeaderText
+      RunMonitorPage
+    TabItem Header=DataNavigationItem.HeaderText
+      DataPage
+    TabItem Header=LogsNavigationItem.HeaderText
+      LogsAuditPage
+    TabItem Header=SettingsNavigationItem.HeaderText
+      SettingsPage
+```
+
+当前 `TabControl` 同时承担两类职责：
+
+* 导航区：显示五个页面入口、处理用户选择、呈现选中态。
+* 内容区：承载五个页面 View、根据当前选中 Tab 展示对应内容。
+
+已经具备的前置条件：
+
+* `ShellNavigationItems` 已能表达五个内置页面入口。
+* `SelectedShellPageKey` 已能表达稳定导航身份。
+* `SelectedShellPageIndex` 已能桥接当前固定 `TabControl.SelectedIndex`。
+* `SelectedShellPageContentKey` 已能表达未来内容承载语义。
+* `AppShellPageHost` 已从 `MainWindow` 中隔离出页面承载职责。
+
+拆分后期望结构：
+
+```text
+AppShellPageHost
+  ShellNavigationRegion
+    固定或清单驱动的导航项
+
+  ShellContentRegion
+    当前选中页面内容
+```
+
+但这只是方向，不代表下一小步直接实现。
+
+拆分收益：
+
+* 导航区可以独立调整视觉、键盘行为和可用状态。
+* 内容区可以单独定义页面承载策略。
+* 后续如果进入页面注册或插件化，不需要继续把所有事情塞进 `TabControl`。
+* `SelectedShellPageContentKey` 可以从语义锚点变成内容区选择依据。
+
+拆分风险：
+
+* 需要重新保证导航选中态与内容显示一致。
+* 需要决定未选中页面是否保持实例、是否重建、是否缓存。
+* 需要处理页面 DataContext 是否仍继承 `MainWindowViewModel`。
+* 需要避免一次性引入 `ItemsSource`、模板选择器、页面工厂和缓存策略。
+* 如果过早拆分，可能把当前稳定的固定五页承载变复杂。
+
+2c.0 结论：
+
+```text
+可以进入“导航区 / 内容区拆分”的前置设计。
+
+但下一小步仍不应直接迁移到 ItemsSource + ContentTemplateSelector。
+更稳路线是先做只读结构方案：
+
+1. 明确 ShellNavigationRegion 的输入和输出。
+2. 明确 ShellContentRegion 的输入和输出。
+3. 明确当前阶段是否继续固定五页。
+4. 明确页面实例生命周期暂时不变。
+```
+
+推荐下一小步：
+
+```text
+UI-COMPONENT-2c.1：
+ShellNavigationRegion / ShellContentRegion 最小结构方案。
+
+只写文档和验收标准，不改 XAML。
+```
+
+2c.1 应回答：
+
+* `ShellNavigationRegion` 是否可以先继续使用固定五个导航项。
+* `ShellContentRegion` 是否可以先继续使用固定五个页面 View。
+* 两个区域之间是否只通过 `SelectedShellPageKey` / `SelectedShellPageContentKey` 通信。
+* 是否需要新增 ViewModel，还是先继续使用 `MainWindowViewModel`。
+* 是否需要 Gemini 参与 View 层拆分，还是先由 Codex 做结构边界。
+
+2c.1 之前明确禁止：
+
+* 不迁移 `TabControl.ItemsSource`。
+* 不引入 `ContentTemplateSelector`。
+* 不引入页面工厂。
+* 不引入页面缓存策略。
+* 不反射创建页面。
+* 不引入外部插件或模块加载。
+* 不改变五个页面顺序。
+
+Gemini 协作判断：
+
+```text
+2c.0 不需要 Gemini 修改 View。
+
+如果后续进入 2c.2 或更后面的实际 XAML 拆分，
+应先给 Gemini 一份明确的 View-only 任务：
+
+1. 只拆 ShellNavigationRegion 和 ShellContentRegion 的 XAML 层级。
+2. 不改变视觉设计。
+3. 不改变五页顺序。
+4. 不引入动态模板或页面创建逻辑。
+5. 保留所有现有绑定语义。
 ```
 
 ---
