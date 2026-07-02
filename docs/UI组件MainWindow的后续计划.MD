@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-4.0 MainWindow 剩余职责与拆分候选分析已补充
-> 当前执行点：复核 MainWindow 剩余职责，优先候选为 Shell Header 组件化，暂不迁移 CombinedShellRegion 或 Shell 样式
+> 文档状态：UI-COMPONENT-4.1 ShellHeaderView 最小抽取前置方案已补充
+> 当前执行点：固化 Shell Header 组件边界和测试守护清单，下一步可最小实现 ShellHeaderView
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2936,6 +2936,99 @@ Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml.cs
 * 不改 `ControlStyles.axaml`。
 * 不改页面承载。
 * 不触碰 `ItemsSource`、模板选择器、页面工厂、页面缓存或插件化。
+
+### 2.66 UI-COMPONENT-4.1 ShellHeaderView 最小抽取前置方案
+
+本小步目标：
+
+```text
+明确 ShellHeaderView 的最小组件边界、文件路径、绑定继承和测试守护。
+
+本小步只写文档，不改 Avalonia 源码。
+```
+
+目标文件：
+
+```text
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml
+Avalonia_UI/Views/Components/Shell/ShellHeaderView.axaml.cs
+```
+
+组件职责：
+
+* 显示应用标题 `AppTitleText`。
+* 显示应用副标题 `AppSubtitleText`。
+* 承载 `ConnectionStatusView`。
+* 保持当前 Header 的两列布局。
+* 保持现有 margin、spacing、font 和 brush 设置。
+
+组件不承担：
+
+* 不承载 `AppShellPageHost`。
+* 不承载 `CombinedShellRegion`。
+* 不声明 `TabControl` 或 `TabItem`。
+* 不声明 Shell 导航样式。
+* 不处理连接命令。
+* 不处理主题、语言或运行状态逻辑。
+* 不新增 ViewModel。
+
+DataContext 策略：
+
+```text
+ShellHeaderView 继续继承 MainWindow 的 DataContext。
+ShellHeaderView.axaml 使用 x:DataType="vm:MainWindowViewModel"。
+ConnectionStatusView 继续继承同一个 DataContext。
+```
+
+推荐 XAML 边界：
+
+```xml
+<UserControl ... x:DataType="vm:MainWindowViewModel">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,24">
+        <StackPanel Spacing="6" VerticalAlignment="Center">
+            <TextBlock Text="{Binding AppTitleText}" .../>
+            <TextBlock Text="{Binding AppSubtitleText}" .../>
+        </StackPanel>
+
+        <components:ConnectionStatusView Grid.Column="1" VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>
+```
+
+`MainWindow.axaml` 目标变化：
+
+```xml
+<Grid RowDefinitions="Auto,*" Margin="24">
+    <shell:ShellHeaderView />
+    <shell:AppShellPageHost Grid.Row="1" />
+</Grid>
+```
+
+测试守护建议：
+
+```text
+Avalonia_UI.Tests/MainWindowShellStructureTests.cs
+```
+
+该测试应覆盖：
+
+* `MainWindow.axaml` 引用 `<shell:ShellHeaderView />`。
+* `MainWindow.axaml` 不再直接绑定 `AppTitleText` / `AppSubtitleText`。
+* `MainWindow.axaml` 不再直接引用 `ConnectionStatusView`。
+* `ShellHeaderView.axaml` 绑定 `AppTitleText`。
+* `ShellHeaderView.axaml` 绑定 `AppSubtitleText`。
+* `ShellHeaderView.axaml` 引用 `ConnectionStatusView`。
+* `ShellHeaderView.axaml` 不引用 `AppShellPageHost`。
+* `ShellHeaderView.axaml` 不声明 `TabControl` / `TabItem`。
+
+4.1 结论：
+
+```text
+可以进入 UI-COMPONENT-4.2：
+最小实现 ShellHeaderView 组件。
+
+实现时只移动 Header XAML，不改变视觉参数、不改绑定语义、不新增 ViewModel。
+```
 
 ---
 
