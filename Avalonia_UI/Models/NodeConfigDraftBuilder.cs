@@ -88,6 +88,7 @@ public static class NodeConfigDraftBuilder
             Required = field.Required,
             CurrentValue = currentValue,
             DefaultValue = field.DefaultValue?.Clone(),
+            EnumValues = field.EnumValues,
             IsEditable = IsEditable(field.Type),
             Warnings = BuildFieldWarnings(field, currentValue).ToArray(),
         };

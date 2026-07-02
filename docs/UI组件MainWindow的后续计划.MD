@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2d.2 Apply 命令接入评估已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2e NodeConfigEditableDraft 纯模型和测试
+> 文档状态：UI-NODE-CONFIG-2e NodeConfigEditableDraft 纯模型和测试已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2f 可编辑草稿转 JsonObject 边界评估
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4933,6 +4933,64 @@ UI-NODE-CONFIG-2e：
 新增 NodeConfigEditableDraft 纯模型和测试，
 只把 NodeConfigDraft 中可编辑字段转换为可输入草稿，
 不接 XAML，不接 ViewModel Apply。
+```
+
+### 2.97 UI-NODE-CONFIG-2e NodeConfigEditableDraft 纯模型和测试
+
+阶段目标：
+
+```text
+把只读 NodeConfigDraft 中可编辑字段转换为可输入草稿模型，
+为后续字段编辑和 Apply 写回提供纯模型边界。
+```
+
+已完成：
+
+* 新增 `NodeConfigEditableDraft`。
+* 新增 `NodeConfigEditableDraftField`。
+* 新增 `NodeConfigEditableDraftBuilder`。
+* `NodeConfigDraftField` 补充 `EnumValues`。
+* `NodeConfigDraftBuilder` 将 schema enum 候选值传入 draft field。
+* 新增 `NodeConfigEditableDraftBuilderTests`。
+
+当前能力：
+
+* 仅从已支持的 `NodeConfigDraft` 构建可编辑草稿。
+* 支持 `string`、`integer`、`number`、`boolean`、`enum` 字段。
+* 字段输入值优先使用当前 config 值，缺失时使用 default。
+* boolean 输入文本固定为 `true` / `false`。
+* enum 字段保留完整候选值。
+* `array`、`object`、`unsupported` 字段继续过滤，不进入可编辑字段集合。
+* 字段级 warning 会保留到对应 editable field。
+* 无可编辑字段时返回 `EDITABLE_DRAFT_NO_EDITABLE_FIELDS`。
+* 不支持的 draft 只透传原 warnings，不生成字段。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不接 MainWindowViewModel。
+* 不新增 Apply 命令。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Save / Validate / revision conflict 行为。
+* 不实现动态表单控件。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigEditableDraftBuilderTests|NodeConfigDraftBuilderTests"
+通过：10，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：198，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2f：
+先评估并实现可编辑草稿到 JsonObject/config JSON 的纯转换模型，
+只处理 string、integer、number、boolean、enum 的输入解析和错误状态，
+仍不接 XAML，不接 MainWindowViewModel Apply。
 ```
 
 ---

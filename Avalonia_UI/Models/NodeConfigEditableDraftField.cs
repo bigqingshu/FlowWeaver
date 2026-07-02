@@ -1,9 +1,8 @@
 using System.Collections.Generic;
-using System.Text.Json;
 
 namespace Avalonia_UI.Models;
 
-public sealed record NodeConfigDraftField
+public sealed record NodeConfigEditableDraftField
 {
     public string Name { get; init; } = string.Empty;
 
@@ -13,15 +12,9 @@ public sealed record NodeConfigDraftField
 
     public bool Required { get; init; }
 
-    public JsonElement? CurrentValue { get; init; }
-
-    public JsonElement? DefaultValue { get; init; }
+    public string InputValue { get; init; } = string.Empty;
 
     public IReadOnlyList<string> EnumValues { get; init; } = [];
-
-    public bool HasCurrentValue => CurrentValue.HasValue;
-
-    public bool IsEditable { get; init; }
 
     public IReadOnlyList<string> Warnings { get; init; } = [];
 }
