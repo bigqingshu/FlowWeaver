@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3.1 样式拆分清单与目标文件命名已固化
-> 当前执行点：只固化样式拆分清单、目标文件命名和后续实现顺序，不改 XAML、不新增样式文件
+> 文档状态：UI-COMPONENT-3.2 首批 ControlStyles 迁移已完成
+> 当前执行点：Button / Button.Primary / Border.Card 已迁入 ControlStyles.axaml，ListBoxItem 与 Shell 样式仍暂留 MainWindow
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2510,6 +2510,69 @@ UI-COMPONENT-3.2：
 新增 ControlStyles.axaml，并只迁移 Button + Button.Primary + Border.Card。
 
 这是第一步真实样式拆分，范围最小，风险低于迁移 ListBoxItem 或 TabItem。
+```
+
+### 2.61 UI-COMPONENT-3.2 首批 ControlStyles 迁移完成记录
+
+3.2 已完成首批真实样式拆分：
+
+```text
+Avalonia_UI/Styles/ControlStyles.axaml
+Avalonia_UI/App.axaml
+Avalonia_UI/Views/MainWindow.axaml
+Avalonia_UI.Tests/StyleStructureTests.cs
+```
+
+已实现内容：
+
+* 新增 `Avalonia_UI/Styles/ControlStyles.axaml`。
+* 使用 `Application.Styles` 中的 `StyleInclude` 引入 `ControlStyles.axaml`。
+* 将以下样式从 `MainWindow.axaml` 迁移到 `ControlStyles.axaml`：
+  * `Button`
+  * `Button:pointerover /template/ ContentPresenter`
+  * `Button:pointerover`
+  * `Button:pressed /template/ ContentPresenter`
+  * `Button:pressed`
+  * `Button.Primary`
+  * `Button.Primary:pointerover /template/ ContentPresenter`
+  * `Button.Primary:pressed /template/ ContentPresenter`
+  * `Border.Card`
+* 新增结构测试，确认 `App.axaml` 引入 `ControlStyles.axaml`。
+* 新增结构测试，确认首批样式不再留在 `MainWindow.axaml`。
+
+仍未迁移内容：
+
+* `ListBoxItem`
+* `ListBoxItem:pointerover`
+* `ListBoxItem:selected`
+* `TabControl`
+* `TabItem`
+* `CombinedShellRegion` 相关 Shell 导航样式
+
+边界确认：
+
+* 未修改 `ColorPalette.axaml`。
+* 未修改视觉参数。
+* 未移动 `CombinedShellRegion`。
+* 未触碰 `ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未引入页面工厂、页面缓存或外部插件化。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：145
+失败：0
+跳过：0
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-3.3：
+继续迁移 ListBoxItem 相关样式到 ControlStyles.axaml。
 ```
 
 ---

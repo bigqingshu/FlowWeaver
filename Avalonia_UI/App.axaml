@@ -19,5 +19,6 @@
 
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://Avalonia_UI/Styles/ControlStyles.axaml"/>
     </Application.Styles>
 </Application>
