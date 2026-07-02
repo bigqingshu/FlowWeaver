@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2c.2 AppShellPageHost 纯 XAML 层级整理前置分析已补充
-> 当前执行点：确认当前固定 TabControl 不适合强行拆成独立导航/内容区域，暂缓真实 XAML 层级拆分
+> 文档状态：UI-COMPONENT-2c.3 CombinedShellRegion 命名与结构守护清单已补充
+> 当前执行点：将当前固定 TabControl 明确为 CombinedShellRegion，固化结构守护和后续变更门槛
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2024,6 +2024,141 @@ B. UI-COMPONENT-3.0：样式 ResourceDictionary 拆分前置分析
 * 文档明确暂不需要 Gemini 执行 View 修改。
 * 文档明确下一步优先做 CombinedShellRegion 命名与结构守护清单。
 * 不修改 Avalonia 源码。
+
+### 2.58 UI-COMPONENT-2c.3 CombinedShellRegion 命名与结构守护清单
+
+本小步目标：
+
+```text
+把当前 AppShellPageHost 内部的固定 TabControl 正式命名为 CombinedShellRegion。
+
+CombinedShellRegion 表示：
+当前阶段导航区和内容区尚未拆开，
+由同一个固定 TabControl 同时承担 ShellNavigationRegion 和 ShellContentRegion 的职责。
+```
+
+命名说明：
+
+| 名称 | 含义 | 当前载体 |
+| --- | --- | --- |
+| `CombinedShellRegion` | 导航和内容合并承载区 | `AppShellPageHost.axaml` 内部固定 `TabControl` |
+| `ShellNavigationRegion` | 未来可独立的导航区 | 当前由 `TabItem.Header` 承担 |
+| `ShellContentRegion` | 未来可独立的内容区 | 当前由 `TabItem.Content` 承担 |
+
+当前结构守护对象：
+
+```xml
+<TabControl TabStripPlacement="Left"
+            SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}">
+    <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
+        <pages:WorkflowPage />
+    </TabItem>
+    ...
+</TabControl>
+```
+
+CombinedShellRegion 当前职责：
+
+* 显示五个内置页面入口。
+* 承载五个内置页面内容。
+* 使用固定 `TabItem.Header` 绑定 Header 文案。
+* 使用固定 `TabItem.Content` 承载页面 View。
+* 通过 `SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}"` 与 ViewModel 同步当前页。
+* 保持页面 DataContext 继承 `MainWindowViewModel`。
+
+CombinedShellRegion 当前不承担：
+
+* 不从 `ShellNavigationItems` 直接生成导航项。
+* 不通过 `ItemsSource` 生成 `TabItem`。
+* 不通过 `ContentTemplate` 或 `ContentTemplateSelector` 创建页面。
+* 不通过页面工厂创建页面。
+* 不缓存或释放页面实例。
+* 不反射创建页面。
+* 不加载外部页面模块。
+
+必须守住的结构项：
+
+* `AppShellPageHost.axaml` 内仍存在一个固定 `TabControl`。
+* `TabControl` 仍设置 `TabStripPlacement="Left"`。
+* `TabControl` 仍绑定 `SelectedShellPageIndex`，且必须是 `Mode=TwoWay`。
+* 五个 `TabItem` 顺序保持为 `Workflows`、`Runs`、`Data`、`Logs`、`Settings`。
+* 五个 Header 绑定保持为现有导航项 HeaderText。
+* 五个页面 View 保持固定声明。
+* `MainWindow.axaml` 不直接恢复五个页面 View。
+* `AppShellPageHost.axaml` 不出现 `ItemsSource`。
+* `AppShellPageHost.axaml` 不出现 `ContentTemplate`。
+
+结构测试清单：
+
+```text
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+```
+
+该测试文件后续应继续守护：
+
+* `MainWindow.axaml` 只引用 `AppShellPageHost`。
+* `MainWindow.axaml` 不直接引用五个页面 View。
+* `AppShellPageHost.axaml` 包含固定 `TabControl`。
+* `AppShellPageHost.axaml` 包含 `SelectedShellPageIndex` 双向绑定。
+* `AppShellPageHost.axaml` 包含五个固定页面 View。
+* `AppShellPageHost.axaml` 不包含 `ItemsSource`。
+* `AppShellPageHost.axaml` 不包含 `ContentTemplate`。
+
+ViewModel 守护清单：
+
+```text
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+该测试文件后续应继续守护：
+
+* `SelectedShellPageKey` 默认值为 `Workflows`。
+* `SelectedShellPageIndex` 默认值为 `0`。
+* key 改变会同步 index。
+* index 改变会同步 key。
+* 语言切换后 key、index、content key 保持一致。
+* 非法 key 和非法 index 被明确拒绝。
+* 属性通知覆盖 key、index 和派生属性。
+
+进入真实拆分前的门槛：
+
+只有同时满足以下条件，才重新评估是否拆开 `ShellNavigationRegion` 和 `ShellContentRegion`：
+
+* 已明确页面实例生命周期策略。
+* 已明确页面是否缓存、何时创建、何时释放。
+* 已明确内容区如何从 `SelectedShellPageContentKey` 映射到页面。
+* 已明确是否接受 `ItemsSource` 或模板选择器。
+* 已明确 Gemini 或 Codex 谁负责 View 层拆分。
+* 已准备对应结构测试和 ViewModel 测试。
+
+仍然禁止：
+
+* 不在本阶段迁移 `TabControl.ItemsSource`。
+* 不在本阶段引入 `ContentTemplateSelector`。
+* 不在本阶段引入页面工厂。
+* 不在本阶段引入页面缓存策略。
+* 不在本阶段反射创建页面。
+* 不在本阶段引入外部插件化。
+
+2c.3 结论：
+
+```text
+UI-COMPONENT-2c 可以作为 Shell 承载边界收口：
+
+当前正式承认 CombinedShellRegion 是阶段内稳定结构，
+ShellNavigationRegion / ShellContentRegion 先作为未来拆分方向保留。
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-3.0：
+样式 ResourceDictionary 拆分前置分析。
+
+原因：
+当前 Shell 承载边界已经收紧，
+继续降低 MainWindow.axaml 体积时，样式拆分比页面动态承载风险更低。
+```
 
 ---
 
