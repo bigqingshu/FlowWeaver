@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-2 BuiltinNodeEditors 只读清单已完成
-> 当前执行点：四个普通内置节点已有 JsonFallback 编辑器注册清单
+> 文档状态：UI-NODE-EDITOR-3 节点编辑器解析边界已完成
+> 当前执行点：前端已有 node_type 到编辑器能力状态的纯模型解析层
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3586,6 +3586,75 @@ NodeDefinitionDto 或 node_type。
 是否只能回退 JSON。
 
 仍不修改 XAML。
+```
+
+### 2.75 UI-NODE-EDITOR-3 节点编辑器解析边界完成记录
+
+本小步只增加编辑器解析模型，不接入 XAML、不改变工作流编辑器。
+
+完成内容：
+
+```text
+Avalonia_UI/Models/NodeEditorResolution.cs
+Avalonia_UI/Models/NodeEditorResolver.cs
+Avalonia_UI.Tests/NodeEditorResolverTests.cs
+```
+
+解析输入：
+
+```text
+node_type
+可选 display_name
+NodeEditorRegistry
+```
+
+解析输出：
+
+```text
+NodeEditorResolution
+  NodeType
+  Kind
+  DisplayName
+  HasRegisteredEditor
+  UsesJsonFallback
+  StatusText
+```
+
+当前规则：
+
+* 已注册 `JsonFallback` 编辑器的节点，返回 `HasRegisteredEditor=true` 且 `UsesJsonFallback=true`。
+* 未注册节点仍可回退 JSON，返回 `HasRegisteredEditor=false` 且 `UsesJsonFallback=true`。
+* 预留 `BuiltIn` 专用编辑器解析，返回 `UsesJsonFallback=false`。
+* 未知节点没有显示名时，以 `node_type` 作为用户可读显示文本。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：161
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未修改 `WorkflowDefinitionDetailViewModel`。
+* 未修改 `WorkflowEditorView`。
+* 未新增节点目录 UI。
+* 未新增专用节点编辑 View。
+* 未实现 JSON Schema 表单。
+* 未接入外部 DLL、模块扫描或动态页面承载。
+
+下一步建议：
+
+```text
+UI-NODE-EDITOR-4：
+做阶段小结与 Gemini 协作边界说明。
+
+如果后续要让 UI 显示节点编辑器状态，
+先给 Gemini 一份只读展示方案，
+不要直接进入节点配置表单或拖拽画布。
 ```
 
 ---
