@@ -142,6 +142,18 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionTargetPort, Mode=TwoWay");
         StringAssert.Contains(
             xaml,
+            "ItemsSource=\"{Binding WorkflowDefinitionDraftStructure.Nodes}\"");
+        StringAssert.Contains(
+            xaml,
+            "SelectedItem=\"{Binding SelectedNewDraftConnectionSourceNode, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "SelectedItem=\"{Binding SelectedNewDraftConnectionTargetNode, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "x:DataType=\"models:WorkflowDefinitionDraftNode\"");
+        StringAssert.Contains(
+            xaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"");
         StringAssert.Contains(
             xaml,

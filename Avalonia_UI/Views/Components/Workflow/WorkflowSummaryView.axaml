@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:Avalonia_UI.Models"
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSummaryView"
              x:DataType="vm:MainWindowViewModel">
@@ -337,8 +338,27 @@
                                    Text="{Binding SourceNodeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Column="3"
-                                 Text="{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <StackPanel Grid.Column="3" Spacing="4">
+                            <ComboBox ItemsSource="{Binding WorkflowDefinitionDraftStructure.Nodes}"
+                                      SelectedItem="{Binding SelectedNewDraftConnectionSourceNode, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="models:WorkflowDefinitionDraftNode"
+                                                  x:DataType="models:WorkflowDefinitionDraftNode">
+                                        <Grid RowDefinitions="Auto,Auto">
+                                            <TextBlock Text="{Binding NodeInstanceId}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding NodeType}"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Text="{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="1"
                                    Text="{Binding SourcePortText}"
@@ -352,9 +372,29 @@
                                    Text="{Binding TargetNodeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="3"
-                                 Text="{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <StackPanel Grid.Row="1"
+                                    Grid.Column="3"
+                                    Spacing="4">
+                            <ComboBox ItemsSource="{Binding WorkflowDefinitionDraftStructure.Nodes}"
+                                      SelectedItem="{Binding SelectedNewDraftConnectionTargetNode, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="models:WorkflowDefinitionDraftNode"
+                                                  x:DataType="models:WorkflowDefinitionDraftNode">
+                                        <Grid RowDefinitions="Auto,Auto">
+                                            <TextBlock Text="{Binding NodeInstanceId}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding NodeType}"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Text="{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="2"
                                    Text="{Binding TargetPortText}"
