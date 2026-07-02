@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2i 最小可编辑输入状态边界评估已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2j 输入字段 ViewModel 状态接入
+> 文档状态：UI-NODE-CONFIG-2j 输入字段 ViewModel 状态接入已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2k 输入字段集合转 Config 适配层
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5169,6 +5169,57 @@ UI-NODE-CONFIG-2j：
 新增 NodeConfigEditableFieldInputViewModel 和输入字段集合状态，
 只接 MainWindowViewModel 内部状态和测试，
 不改 XAML，不接 Apply。
+```
+
+### 2.102 UI-NODE-CONFIG-2j 输入字段 ViewModel 状态接入
+
+阶段目标：
+
+```text
+在只读 editable draft 快照之外，
+新增用户可变输入字段状态。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2j_输入字段ViewModel状态接入.md
+```
+
+已完成：
+
+* 新增 `NodeConfigEditableFieldInputViewModel`。
+* 新增 `SelectedNodeConfigEditableInputFields`。
+* 新增 `HasSelectedNodeConfigEditableInputFields`。
+* 输入字段支持 `InputValue`、`OriginalInputValue`、`HasInputValue`、`IsDirty`。
+* 输入字段可转换回 `NodeConfigEditableDraftField`。
+* `RefreshSelectedNodeConfigDraftState()` 会按当前 editable draft 重建输入字段集合。
+* 补充输入字段和 MainWindowViewModel 测试。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不新增 Apply 命令。
+* 不调用 config builder / patcher。
+* 不写回 `WorkflowDefinitionDraftJson`。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigEditableFieldInputViewModelTests|MainWindowViewModelWorkflowTests"
+通过：40，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：207，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2k：
+新增输入字段集合到 config JSON 的适配层，
+复用 NodeConfigEditableDraftConfigBuilder，
+仍不接 Apply。
 ```
 
 ---

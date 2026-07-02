@@ -328,6 +328,8 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsNull(viewModel.SelectedNodeConfigDraft);
         Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
+        Assert.IsFalse(viewModel.HasSelectedNodeConfigEditableInputFields);
+        Assert.IsEmpty(viewModel.SelectedNodeConfigEditableInputFields);
         Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
     }
 
@@ -790,17 +792,27 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.SelectedNodeConfigDraft.IsSupported);
         Assert.IsNotNull(viewModel.SelectedNodeConfigEditableDraft);
         Assert.HasCount(2, viewModel.SelectedNodeConfigEditableDraft.Fields);
+        Assert.IsTrue(viewModel.HasSelectedNodeConfigEditableInputFields);
+        Assert.HasCount(2, viewModel.SelectedNodeConfigEditableInputFields);
         Assert.AreEqual(
             "amount",
             viewModel.SelectedNodeConfigEditableDraft.Fields
                 .Single(field => field.Name == "field")
                 .InputValue);
+        var fieldInput = viewModel.SelectedNodeConfigEditableInputFields
+            .Single(field => field.Name == "field");
+        Assert.AreEqual("amount", fieldInput.InputValue);
+        Assert.IsFalse(fieldInput.IsDirty);
         CollectionAssert.AreEqual(
             new[] { "GT", "LT" },
             viewModel.SelectedNodeConfigEditableDraft.Fields
                 .Single(field => field.Name == "operator")
                 .EnumValues
                 .ToArray());
+
+        fieldInput.InputValue = "total";
+
+        Assert.IsTrue(fieldInput.IsDirty);
     }
 
     [TestMethod]
@@ -862,6 +874,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "amount",
             viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
+        Assert.AreEqual(
+            "amount",
+            viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue);
 
         viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes[1];
 
@@ -869,6 +884,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "status",
             viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
+        Assert.AreEqual(
+            "status",
+            viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue);
 
         viewModel.WorkflowDefinitionDraftJson =
             """
@@ -895,6 +913,10 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "state",
             viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
+        Assert.AreEqual(
+            "state",
+            viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue);
+        Assert.IsFalse(viewModel.SelectedNodeConfigEditableInputFields.Single().IsDirty);
     }
 
     [TestMethod]

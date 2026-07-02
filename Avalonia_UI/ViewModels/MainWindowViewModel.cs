@@ -376,6 +376,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
         new();
 
+    public ObservableCollection<NodeConfigEditableFieldInputViewModel>
+        SelectedNodeConfigEditableInputFields { get; } = new();
+
     public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
 
     public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEventLogEntries { get; } = new();
@@ -414,6 +417,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
+
+    public bool HasSelectedNodeConfigEditableInputFields =>
+        SelectedNodeConfigEditableInputFields.Count > 0;
 
     public string SelectedNodeConfigDraftSummaryText =>
         SelectedNodeConfigEditableDraftMessage;
@@ -1945,6 +1951,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             SelectedNodeConfigDraft = null;
             SelectedNodeConfigEditableDraft = null;
+            RebuildSelectedNodeConfigEditableInputFields(null);
             SelectedNodeConfigEditableDraftMessage =
                 DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
             OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
@@ -1962,6 +1969,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!draft.IsSupported)
         {
             SelectedNodeConfigEditableDraft = null;
+            RebuildSelectedNodeConfigEditableInputFields(null);
             SelectedNodeConfigEditableDraftMessage =
                 DisplayTextFormatter.FormatSelectedNodeConfigDraftSchemaUnavailable();
             OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
@@ -1970,12 +1978,29 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var editableDraft = NodeConfigEditableDraftBuilder.Build(draft);
         SelectedNodeConfigEditableDraft = editableDraft;
+        RebuildSelectedNodeConfigEditableInputFields(editableDraft);
         SelectedNodeConfigEditableDraftMessage =
             DisplayTextFormatter.FormatSelectedNodeConfigDraftReady(
                 SelectedWorkflowDefinitionNode.NodeInstanceId,
                 draft.Fields.Count(item => item.IsEditable),
                 draft.Fields.Count(item => !item.IsEditable));
         OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+    }
+
+    private void RebuildSelectedNodeConfigEditableInputFields(
+        NodeConfigEditableDraft? editableDraft)
+    {
+        SelectedNodeConfigEditableInputFields.Clear();
+        if (editableDraft is not null)
+        {
+            foreach (var field in editableDraft.Fields)
+            {
+                SelectedNodeConfigEditableInputFields.Add(
+                    new NodeConfigEditableFieldInputViewModel(field));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasSelectedNodeConfigEditableInputFields));
     }
 
     private bool TryParseRuntimeEventLogFilters(
