@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.0 工作流结构化编辑前置边界分析已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.1 WorkflowDefinitionDraftStructure 只读解析模型和测试
+> 文档状态：WORKFLOW-EDIT-1.1 WorkflowDefinitionDraftStructure 只读解析模型已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.2 ViewModel 只读草稿结构状态接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5568,6 +5568,53 @@ WORKFLOW-EDIT-1.1：
 建立 WorkflowDefinitionDraftStructure 只读解析模型和测试，
 只解析当前 WorkflowDefinitionDraftJson 中的 nodes / connections，
 不修改 ViewModel，不修改 XAML，不新增结构化写入命令。
+```
+
+### 2.111 WORKFLOW-EDIT-1.1 WorkflowDefinitionDraftStructure 只读解析模型
+
+阶段目标：
+
+```text
+先从 WorkflowDefinitionDraftJson 中建立只读草稿结构，
+把“用户正在编辑的 draft”与“已加载 workflow detail”区分开。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/Models/WorkflowDefinitionDraftStructure.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftStructureStatus.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftNode.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftConnection.cs
+Avalonia_UI/Models/WorkflowDefinitionDraftStructureBuilder.cs
+Avalonia_UI.Tests/WorkflowDefinitionDraftStructureBuilderTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.1_WorkflowDefinitionDraftStructure只读解析模型.md
+```
+
+当前结论：
+
+* 新增模型只读取 draft JSON，不写回、不 patch、不触发保存。
+* 根结构错误会让结构不可用，单个坏节点/坏连线只记录 warning 并跳过。
+* 已覆盖 JSON invalid、root not object、nodes/connections missing、坏节点/坏连线跳过等测试。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "WorkflowDefinitionDraftStructureBuilderTests"
+通过：6，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：222，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.2：
+接入 ViewModel 只读草稿结构状态，
+从 WorkflowDefinitionDraftJson 派生 draft nodes / draft connections，
+不新增写入命令，不修改 XAML。
 ```
 
 ---
