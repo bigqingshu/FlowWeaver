@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4c.2 选中状态同步最小实现已完成
-> 当前执行点：固定 TabControl 已通过 SelectedIndex 桥接 SelectedShellPageKey，仍未进入动态页面承载
+> 文档状态：UI-COMPONENT-2b.4c.3 选中状态同步稳定性复核已完成
+> 当前执行点：固定 TabControl 已完成 SelectedIndex 桥接和属性通知验收，仍未进入动态页面承载
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1382,6 +1382,59 @@ UI-COMPONENT-2b.4c.3：选中状态同步稳定性复核。
 1. 是否需要补 UI 层 smoke 或截图确认无视觉变化。
 2. 是否需要增加属性变更通知测试。
 3. 是否可以进入“基于 SelectedShellPageContentKey 的固定内容分发”再次评估。
+```
+
+### 2.52 UI-COMPONENT-2b.4c.3 稳定性复核
+
+复核结论：
+
+```text
+SelectedShellPageIndex 桥接已具备进入下一轮评估的最低稳定性。
+
+但现阶段仍不建议立刻让 AppShellPageHost 根据 SelectedShellPageContentKey 做内容分发；
+因为当前固定 TabControl 已经能承载五个固定页面，下一次改动应先单独评估内容分发是否真正降低复杂度。
+```
+
+本小步补充内容：
+
+```text
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+docs/UI组件MainWindow的后续计划.MD
+```
+
+已补测试：
+
+* `SelectedShellPageKey` 变更时，会触发 `SelectedShellPageIndex` 和派生属性通知。
+* `SelectedShellPageIndex` 变更时，会触发 `SelectedShellPageKey` 和派生属性通知。
+
+UI smoke 判断：
+
+```text
+本小步未改 XAML。
+
+2b.4c.2 的 XAML 改动只是固定 TabControl 的 SelectedIndex 绑定；
+当前测试已覆盖绑定字符串、固定页面存在、无 ItemsSource、无 ContentTemplate。
+暂不追加截图 smoke，避免为无视觉变化的小步扩大验证成本。
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：142
+失败：0
+跳过：0
+```
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.4d 前置分析：
+再次评估“是否需要基于 SelectedShellPageContentKey 做固定内容分发”。
+
+默认建议先不实现内容分发，除非能明确减少 AppShellPageHost 对 TabControl 的耦合，
+并且仍然不引入 ItemsSource、ContentTemplateSelector、页面工厂或反射创建。
 ```
 
 ---

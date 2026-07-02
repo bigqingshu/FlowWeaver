@@ -167,6 +167,36 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public void ShellSelectionKeyChangeRaisesIndexAndDerivedNotifications()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+        var changedProperties = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+
+        viewModel.SelectedShellPageKey = ShellPageKey.Data;
+
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageKey));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageIndex));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellNavigationItem));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageContentKey));
+    }
+
+    [TestMethod]
+    public void ShellSelectionIndexChangeRaisesKeyAndDerivedNotifications()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+        var changedProperties = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+
+        viewModel.SelectedShellPageIndex = GetShellPageIndex(viewModel, ShellPageKey.Runs);
+
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageIndex));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageKey));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellNavigationItem));
+        CollectionAssert.Contains(changedProperties, nameof(viewModel.SelectedShellPageContentKey));
+    }
+
+    [TestMethod]
     public void ShellSelectionRejectsUnknownPageKey()
     {
         var viewModel = CreateViewModel(new FakeUiSettingsStore());
