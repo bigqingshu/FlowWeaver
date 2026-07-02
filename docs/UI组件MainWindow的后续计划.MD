@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-8 只读展示复核与本地化策略已完成
-> 当前执行点：WorkflowSummaryView 已只读展示节点编辑器状态，下一步可做阶段收口
+> 文档状态：UI-NODE-EDITOR-9 阶段总体验收复核已完成
+> 当前执行点：NodeEditorRegistry / 节点编辑器只读展示主线已收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4089,6 +4089,122 @@ UI-NODE-EDITOR-9：
 
 汇总 UI-NODE-EDITOR-0 到 UI-NODE-EDITOR-8，
 明确当前已完成能力、测试、未完成能力和下一大方向。
+```
+
+### 2.81 UI-NODE-EDITOR-9 阶段总体验收复核
+
+阶段目标：
+
+```text
+从 Shell 组件化转入节点编辑入口主线，
+先建立前端 NodeEditorRegistry 基础，
+再把节点编辑器状态以只读方式展示到 WorkflowDefinition 节点列表中。
+```
+
+完成矩阵：
+
+| 小阶段 | 内容 | 结果 |
+| --- | --- | --- |
+| UI-NODE-EDITOR-0 | NodeEditorRegistry 边界分析 | 已完成 |
+| UI-NODE-EDITOR-1 | NodeEditorDescriptor / NodeEditorRegistry 最小模型 | 已完成 |
+| UI-NODE-EDITOR-2 | BuiltinNodeEditors 只读清单 | 已完成 |
+| UI-NODE-EDITOR-3 | NodeEditorResolver / NodeEditorResolution 解析层 | 已完成 |
+| UI-NODE-EDITOR-4 | 阶段小结与 Gemini 协作边界 | 已完成 |
+| UI-NODE-EDITOR-5 | ViewModel 只读状态接入前置分析 | 已完成 |
+| UI-NODE-EDITOR-6 | WorkflowDefinition 节点只读状态接入 | 已完成 |
+| UI-NODE-EDITOR-7 | Gemini 只读展示任务说明 | 已完成 |
+| UI-NODE-EDITOR-8 | 只读展示复核与本地化策略 | 已完成 |
+| UI-NODE-EDITOR-9 | 阶段总体验收复核 | 已完成 |
+
+当前已完成能力：
+
+```text
+NodeEditorDescriptor
+NodeEditorRegistry
+BuiltinNodeEditors
+NodeEditorResolver
+NodeEditorResolution
+WorkflowDefinitionNodeListItemViewModel.NodeEditorResolution
+WorkflowDefinitionNodeListItemViewModel.NodeEditorStatusText
+WorkflowSummaryView 节点列表只读展示 NodeEditorStatusText
+```
+
+当前内置节点编辑器清单：
+
+| node_type | editor |
+| --- | --- |
+| `GenerateTestTableNode` | `JsonFallback` |
+| `FilterRowsNode` | `JsonFallback` |
+| `PublishSharedTablesNode` | `JsonFallback` |
+| `ReadSharedTablesNode` | `JsonFallback` |
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/NodeEditorRegistryTests.cs
+Avalonia_UI.Tests/BuiltinNodeEditorsTests.cs
+Avalonia_UI.Tests/NodeEditorResolverTests.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+Avalonia_UI.Tests/WorkflowSummaryViewStructureTests.cs
+```
+
+最终测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：164
+失败：0
+跳过：0
+```
+
+明确未完成能力：
+
+* 没有节点专用编辑器 View。
+* 没有节点配置表单。
+* 没有 JSON Schema renderer。
+* 没有拖拽画布。
+* 没有节点添加/删除入口。
+* 没有接入 `GET /api/v1/node-definitions` 的动态目录同步。
+* 没有编辑器状态本地化。
+* 没有外部 DLL / `ui-modules` 扫描。
+* 没有改变 Workflow 保存、校验、revision conflict 语义。
+
+当前边界结论：
+
+```text
+NodeEditorRegistry 主线已经完成第一层基础：
+前端知道某个 node_type 是否有编辑器能力，
+并能在工作流定义只读视图中展示当前编辑器状态。
+
+但它仍只是只读状态层，
+不是节点配置编辑系统。
+```
+
+后续方向建议：
+
+```text
+方向 A：UI-NODE-EDITOR-L10N-1
+先把 NodeEditorStatusText 从硬编码英文状态调整为本地化 key。
+适合继续打磨只读用户体验。
+
+方向 B：UI-NODE-CATALOG-1
+接入 /api/v1/node-definitions 的只读节点目录页或面板。
+适合开始展示后端可用节点，但仍不做创建/拖拽。
+
+方向 C：NODE-CONFIG-SCHEMA-0
+先回后端固定最小 config_schema 契约。
+适合为未来配置表单打基础。
+```
+
+最稳建议：
+
+```text
+如果继续 UI 小步：
+先做 UI-NODE-EDITOR-L10N-1。
+
+如果准备进入真实节点配置：
+先做 NODE-CONFIG-SCHEMA-0，不要直接在前端手写表单。
 ```
 
 ---
