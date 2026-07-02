@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2p 节点配置表单后置复核已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2q 节点配置阶段总体验收与进入 WORKFLOW-EDIT 前复核
+> 文档状态：UI-NODE-CONFIG-2q 节点配置阶段总体验收与 WORKFLOW-EDIT 前复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.0 工作流结构化编辑前置边界分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5504,6 +5504,37 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 UI-NODE-CONFIG-2q：
 节点配置阶段总体验收与进入 WORKFLOW-EDIT 前复核。
+```
+
+### 2.109 UI-NODE-CONFIG-2q 节点配置阶段总体验收与 WORKFLOW-EDIT 前复核
+
+阶段目标：
+
+```text
+对 UI-NODE-CONFIG-2 主线做完成矩阵复核，
+并明确它和后续 WORKFLOW-EDIT-1/2 的边界。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2q_阶段总体验收与WORKFLOW-EDIT前复核.md
+```
+
+当前结论：
+
+* 节点配置主线已形成 schema → input fields → Apply → `WorkflowDefinitionDraftJson` 的最小闭环。
+* 当前能力只覆盖已有节点实例的 config 编辑。
+* 完整 workflow 结构编辑仍未开始，不能把节点 config Apply 等同于 WORKFLOW-EDIT 完成。
+* 建议进入 WORKFLOW-EDIT，但先只做前置边界分析。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.0：
+工作流结构化编辑前置边界分析，
+先列清 nodes / connections / draft JSON / revision conflict 的边界，
+不直接实现节点增删或连线编辑。
 ```
 
 ---
