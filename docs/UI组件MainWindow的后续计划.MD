@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-5.1 Shell 样式作用域结构守护已完成
-> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，等待 UI-COMPONENT-5 阶段总体验收复核
+> 文档状态：UI-COMPONENT-5 阶段总体验收复核已完成
+> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，ShellStyles 迁移继续后置
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3295,6 +3295,92 @@ UI-COMPONENT-5.2：
 做阶段总体验收复核。
 
 汇总 5.0 到 5.1 的完成矩阵、测试结果、未完成事项和后续方向。
+```
+
+### 2.71 UI-COMPONENT-5 阶段总体验收复核
+
+阶段目标：
+
+```text
+围绕 MainWindow 剩余 Shell 样式职责，
+明确 TabControl / TabItem 样式是否迁移，
+并补充最小结构守护。
+```
+
+完成矩阵：
+
+| 小阶段 | 内容 | 结果 |
+| --- | --- | --- |
+| 5.0 | Shell 样式作用域策略分析 | 已完成 |
+| 5.1 | Shell 样式作用域结构守护测试 | 已完成 |
+| 5.2 | 阶段总体验收复核 | 已完成 |
+
+当前结论：
+
+```text
+MainWindow 仍保留 Window.Styles 中的 CombinedShellRegion TabControl / TabItem 样式。
+
+这是当前最稳方案：
+样式仍是窗口局部作用域，
+不会因为全局 ShellStyles include 影响后续普通 TabControl。
+```
+
+已固化守护：
+
+* `App.axaml` 不引入 `ShellStyles.axaml`。
+* `ControlStyles.axaml` 不持有 `TabControl` / `TabItem` 样式。
+* `AppShellPageHost.axaml` 不持有 `UserControl.Styles`、`StyleInclude` 或 `Selector`。
+* `MainWindow.axaml` 仍在 `Window.Styles` 内持有 Shell Tab 样式。
+* `AppShellPageHost.axaml` 仍使用固定 `TabControl` 和五个固定页面。
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/StyleStructureTests.cs
+Avalonia_UI.Tests/MainWindowShellStructureTests.cs
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：149
+失败：0
+跳过：0
+```
+
+本阶段明确未做：
+
+* 未新增 `ShellStyles.axaml`。
+* 未迁移 `TabControl` / `TabItem` 样式。
+* 未修改 `App.axaml` 样式 include。
+* 未给 `TabControl` / `TabItem` 新增 class。
+* 未修改页面承载结构。
+* 未引入 `ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未引入页面工厂、页面缓存策略或反射创建页面。
+* 未引入外部 DLL、模块扫描、插件安装或热更新。
+
+后续如需继续迁移 Shell 样式，应另起小阶段先做：
+
+```text
+Shell 专属 selector 设计
+→ 最小 XAML class 标识
+→ dotnet test
+→ UI 截图或手工视觉核验
+→ 再决定是否新增 ShellStyles.axaml
+```
+
+UI-COMPONENT-5 结论：
+
+```text
+UI-COMPONENT-5 可以收口。
+
+MainWindow 当前仍保留少量窗口级 Shell 样式，
+这是有意保留的局部作用域边界，不是遗漏迁移。
 ```
 
 ---
