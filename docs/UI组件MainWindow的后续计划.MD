@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-4.2 ShellHeaderView 最小实现已完成
-> 当前执行点：Shell Header 已从 MainWindow 抽为 ShellHeaderView，视觉参数和绑定语义保持不变
+> 文档状态：UI-COMPONENT-4 阶段总体验收复核已完成
+> 当前执行点：MainWindow 已进一步瘦身，ShellHeaderView / AppShellPageHost 分别承载顶部 Header 与页面区域
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3075,6 +3075,103 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 UI-COMPONENT-4.3：
 MainWindow 剩余职责与阶段总体验收复核。
+```
+
+### 2.68 UI-COMPONENT-4 阶段总体验收复核
+
+阶段目标：
+
+```text
+复核 MainWindow 剩余职责，
+并完成下一轮最低风险拆分：
+将 Shell Header 从 MainWindow 中抽离为 ShellHeaderView。
+```
+
+完成矩阵：
+
+| 小阶段 | 内容 | 结果 |
+| --- | --- | --- |
+| 4.0 | MainWindow 剩余职责与拆分候选分析 | 已完成 |
+| 4.1 | ShellHeaderView 最小抽取前置方案 | 已完成 |
+| 4.2 | ShellHeaderView 最小实现与测试 | 已完成 |
+| 4.3 | 阶段总体验收复核 | 已完成 |
+
+当前 `MainWindow.axaml` 职责：
+
+```text
+Window 壳
+Design.DataContext
+CombinedShellRegion 相关 TabControl / TabItem 样式
+Root Grid
+  ShellHeaderView
+  AppShellPageHost
+```
+
+当前 Shell 组件职责：
+
+```text
+ShellHeaderView
+  AppTitleText
+  AppSubtitleText
+  ConnectionStatusView
+
+AppShellPageHost
+  CombinedShellRegion
+  固定 TabControl
+  五个固定页面
+```
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/MainWindowShellStructureTests.cs
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+Avalonia_UI.Tests/StyleStructureTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：148
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未改变 Header 视觉参数。
+* 未新增 Shell Header ViewModel。
+* 未修改 `ConnectionStatusView`。
+* 未移动 `CombinedShellRegion`。
+* 未迁移 TabControl / TabItem 样式。
+* 未迁移 `ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未引入页面工厂。
+* 未引入页面缓存策略。
+* 未反射创建页面。
+* 未引入外部插件化。
+
+UI-COMPONENT-4 结论：
+
+```text
+UI-COMPONENT-4 可以收口。
+
+MainWindow 当前已经只保留窗口壳、Shell 样式守护和两个 Shell 区域入口：
+ShellHeaderView + AppShellPageHost。
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-5.0：
+MainWindow 剩余 Shell 样式作用域策略分析。
+
+重点回答：
+是否继续保留 TabControl / TabItem 样式在 MainWindow，
+还是为 CombinedShellRegion 设计专属 class / ShellStyles.axaml 的局部作用域。
 ```
 
 ---
