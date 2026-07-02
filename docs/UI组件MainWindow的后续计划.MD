@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-7 Gemini 只读展示说明已补充
-> 当前执行点：可交给 Gemini 在 WorkflowSummaryView 中只读展示节点编辑器状态
+> 文档状态：UI-NODE-EDITOR-8 只读展示复核与本地化策略已完成
+> 当前执行点：WorkflowSummaryView 已只读展示节点编辑器状态，下一步可做阶段收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3999,6 +3999,96 @@ Gemini 只负责 View 层只读显示。
 
 Gemini 完成后由 Codex 做：
 UI-NODE-EDITOR-8 只读展示复核与本地化策略分析。
+```
+
+### 2.80 UI-NODE-EDITOR-8 只读展示复核与本地化策略
+
+本小步复核 Gemini 的 View 层改动，并补充只读展示结构守护。
+
+Gemini 实际改动：
+
+```text
+Avalonia_UI/Views/Components/Workflow/WorkflowSummaryView.axaml
+```
+
+改动内容：
+
+* Nodes Card 的节点模板从 3 行调整为 4 行。
+* 新增只读 `TextBlock`，绑定 `NodeEditorStatusText`。
+* 原 `ConfigJson` 下移到第 4 行继续显示。
+* 未新增按钮。
+* 未新增命令。
+* 未新增配置表单。
+
+Codex 补充守护：
+
+```text
+Avalonia_UI.Tests/WorkflowSummaryViewStructureTests.cs
+```
+
+守护内容：
+
+* 节点模板必须包含 `Text="{Binding NodeEditorStatusText}"`。
+* 节点模板必须继续包含 `Text="{Binding ConfigJson}"`。
+* 节点模板保留四行布局。
+* 不引入 `EditNode`、`ConfigureNode`、`OpenNodeEditor`、`SaveNode`。
+* 不引入 `ListNodeDefinitionsAsync`。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：164
+失败：0
+跳过：0
+```
+
+本地化策略：
+
+```text
+当前暂不新增 l10n key。
+
+原因：
+1. NodeEditorStatusText 仍是低风险只读状态文本；
+2. 当前值来自模型层，主要用于确认状态链路；
+3. 还没有正式设计“编辑器状态”用户文案；
+4. 若现在本地化，容易把状态枚举、展示文案和后续专用编辑器语义提前固化。
+```
+
+后续如果要本地化，应另起小步：
+
+```text
+UI-NODE-EDITOR-L10N-1：
+将 NodeEditorResolution.StatusText 改为稳定状态 key。
+
+建议 key：
+node_editor.status.json_fallback
+node_editor.status.builtin
+node_editor.status.unregistered_json_fallback
+
+ViewModel 再通过 DisplayTextFormatter 或 LocalizationService 输出当前语言文本。
+```
+
+边界确认：
+
+* 未新增节点编辑按钮。
+* 未新增配置按钮。
+* 未新增打开编辑器命令。
+* 未新增 JSON Schema renderer。
+* 未新增拖拽画布。
+* 未修改 Validate / Save / revision conflict 流程。
+* 未调用后端 node-definitions API。
+* 未接入外部 DLL 或模块扫描。
+
+建议下一步：
+
+```text
+UI-NODE-EDITOR-9：
+做 NodeEditorRegistry / 只读展示阶段总体验收复核。
+
+汇总 UI-NODE-EDITOR-0 到 UI-NODE-EDITOR-8，
+明确当前已完成能力、测试、未完成能力和下一大方向。
 ```
 
 ---

@@ -100,14 +100,20 @@
                         <DataTemplate DataType="vm:WorkflowDefinitionNodeListItemViewModel"
                                       x:DataType="vm:WorkflowDefinitionNodeListItemViewModel">
                             <Grid ColumnDefinitions="*,Auto"
-                                  RowDefinitions="Auto,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto,Auto"
                                   ColumnSpacing="12"
                                   Margin="8">
                                 <TextBlock Text="{Binding NodeInstanceId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                 <TextBlock Grid.Column="1" Text="{Binding EnabledText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="1" Text="{Binding TypeText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DisplayNameText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ConfigJson}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2"
+                                           Grid.ColumnSpan="2"
+                                           Text="{Binding NodeEditorStatusText}"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding ConfigJson}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
