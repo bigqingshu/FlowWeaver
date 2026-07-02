@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.7d 结构化编辑 View 后置复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.8 WORKFLOW-EDIT-1 阶段总体验收复核
+> 文档状态：WORKFLOW-EDIT-1.8 WORKFLOW-EDIT-1 阶段总体验收复核已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.0 结构化编辑可用性缺口边界分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6314,6 +6314,36 @@ docs/FlowWeaver_WORKFLOW-EDIT-1.7d_结构化编辑View后置复核.md
 ```text
 WORKFLOW-EDIT-1.8：
 WORKFLOW-EDIT-1 阶段总体验收复核。
+```
+
+### 2.129 WORKFLOW-EDIT-1.8 阶段总体验收复核
+
+阶段目标：
+
+```text
+对 WORKFLOW-EDIT-1 从 1.0 到 1.7d 做总体验收，
+确认结构化编辑第一阶段已经完成，
+并明确进入 WORKFLOW-EDIT-2 前的剩余缺口。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.8_阶段总体验收复核.md
+```
+
+当前结论：
+
+* `WorkflowDefinitionDraftJson` 仍是唯一保存源。
+* 只读草稿结构、节点 patcher、connection patcher、ViewModel 命令、View 表单接入已经形成最小闭环。
+* 已复用 dirty、validation invalidation、busy guard、revision conflict 等既有边界。
+* 第一阶段仍不包含用户友好 warning 映射、下拉选择、端口 schema 深校验、自动 ID、图形画布和桌面真实 smoke。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.0：
+结构化编辑可用性缺口边界分析。
 ```
 
 ---
