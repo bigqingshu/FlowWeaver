@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-5 ViewModel 只读状态接入前置分析已补充
-> 当前执行点：节点编辑器状态建议先接入 WorkflowDefinition 节点只读列表
+> 文档状态：UI-NODE-EDITOR-6 ViewModel 只读状态最小接入已完成
+> 当前执行点：WorkflowDefinition 节点只读项已具备编辑器解析状态，尚未展示到 UI
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3877,6 +3877,78 @@ UI-NODE-EDITOR-6：
 2. 未知节点返回 unregistered JSON fallback 状态；
 3. 现有 WorkflowDefinition 解析和本地化测试不回归；
 4. 不修改 XAML。
+```
+
+### 2.78 UI-NODE-EDITOR-6 ViewModel 只读状态最小接入完成记录
+
+本小步只接入 ViewModel 层和测试，不修改 XAML。
+
+完成内容：
+
+```text
+Avalonia_UI/ViewModels/WorkflowDefinitionDetailViewModel.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+```
+
+接入方式：
+
+```text
+WorkflowDefinitionDetailViewModel
+  新增可选 NodeEditorResolver 参数。
+  默认使用 BuiltinNodeEditors.CreateRegistry()。
+  解析 definition.nodes 时为每个节点生成 NodeEditorResolution。
+
+WorkflowDefinitionNodeListItemViewModel
+  新增 NodeEditorResolution。
+  新增 NodeEditorStatusText。
+  新增 HasRegisteredNodeEditor。
+  新增 UsesJsonFallback。
+```
+
+当前行为：
+
+* 已注册内置节点返回 `HasRegisteredNodeEditor=true`。
+* 当前四个普通内置节点仍使用 `JsonFallback`。
+* 未知节点返回 `HasRegisteredNodeEditor=false`。
+* 未知节点仍可回退 JSON。
+* `NodeEditorStatusText` 当前为内部英文状态文本，尚未展示到 UI。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：162
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未修改 `WorkflowSummaryView.axaml`。
+* 未修改 `WorkflowEditorView.axaml`。
+* 未修改 `MainWindow.axaml`。
+* 未调用 `ListNodeDefinitionsAsync`。
+* 未接入异步 node-definitions 刷新。
+* 未新增节点配置表单。
+* 未新增 JSON Schema renderer。
+* 未新增拖拽画布。
+* 未改变 Validate / Save / revision conflict 语义。
+
+下一步建议：
+
+```text
+UI-NODE-EDITOR-7：
+给 Gemini 准备只读 UI 展示说明。
+
+允许：
+在 WorkflowSummaryView 节点列表中增加只读编辑器状态文本。
+
+禁止：
+新增编辑按钮；
+新增配置表单；
+新增拖拽画布；
+改变保存流程。
 ```
 
 ---

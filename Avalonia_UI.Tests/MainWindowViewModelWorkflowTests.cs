@@ -264,6 +264,10 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.HasCount(1, detail.Connections);
         Assert.HasCount(2, detail.Revisions);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
+        Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
+        Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
+        Assert.IsTrue(detail.Nodes[0].UsesJsonFallback);
+        Assert.AreEqual("JSON fallback", detail.Nodes[0].NodeEditorStatusText);
         Assert.AreEqual("disabled", detail.Nodes[1].EnabledText);
         Assert.AreEqual(
             "source.out -> filter.in",
@@ -274,6 +278,49 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
         StringAssert.Contains(viewModel.WorkflowDefinitionDraftJson, "\"schema_version\": \"1.0\"");
         Assert.IsTrue(viewModel.ValidateWorkflowDefinitionDraftCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "custom",
+                  "node_type": "CustomNode",
+                  "node_version": "1.0",
+                  "display_name": "Custom Node",
+                  "config": {"enabled": true}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        var node = viewModel.WorkflowDefinitionDetail?.Nodes[0];
+        Assert.IsNotNull(node);
+        Assert.AreEqual("CustomNode", node.NodeType);
+        Assert.AreEqual("Custom Node", node.NodeEditorResolution.DisplayName);
+        Assert.AreEqual(NodeEditorKind.JsonFallback, node.NodeEditorResolution.Kind);
+        Assert.IsFalse(node.HasRegisteredNodeEditor);
+        Assert.IsTrue(node.UsesJsonFallback);
+        Assert.AreEqual("JSON fallback", node.NodeEditorStatusText);
     }
 
     [TestMethod]

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using Avalonia_UI.Api;
 using Avalonia_UI.Localization;
+using Avalonia_UI.Models;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -13,9 +14,11 @@ public sealed class WorkflowDefinitionDetailViewModel
     public WorkflowDefinitionDetailViewModel(
         WorkflowDefinitionDto workflow,
         IEnumerable<WorkflowRevisionDto> revisions,
-        DisplayTextFormatter? displayTextFormatter = null)
+        DisplayTextFormatter? displayTextFormatter = null,
+        NodeEditorResolver? nodeEditorResolver = null)
     {
         DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
+        nodeEditorResolver ??= new NodeEditorResolver(BuiltinNodeEditors.CreateRegistry());
         WorkflowId = workflow.WorkflowId;
         Name = workflow.Name;
         RevisionId = workflow.RevisionId;
@@ -25,7 +28,7 @@ public sealed class WorkflowDefinitionDetailViewModel
         UpdatedAt = workflow.UpdatedAt;
         RawDefinitionJson = FormatJson(workflow.Definition);
         Nodes = new ObservableCollection<WorkflowDefinitionNodeListItemViewModel>(
-            ReadNodes(workflow.Definition, DisplayTextFormatter));
+            ReadNodes(workflow.Definition, DisplayTextFormatter, nodeEditorResolver));
         Connections = new ObservableCollection<WorkflowDefinitionConnectionListItemViewModel>(
             ReadConnections(workflow.Definition));
         Revisions = new ObservableCollection<WorkflowRevisionListItemViewModel>(
@@ -67,7 +70,8 @@ public sealed class WorkflowDefinitionDetailViewModel
 
     private static IEnumerable<WorkflowDefinitionNodeListItemViewModel> ReadNodes(
         JsonElement definition,
-        DisplayTextFormatter displayTextFormatter)
+        DisplayTextFormatter displayTextFormatter,
+        NodeEditorResolver nodeEditorResolver)
     {
         if (!TryGetArray(definition, "nodes", out var nodes))
         {
@@ -76,16 +80,19 @@ public sealed class WorkflowDefinitionDetailViewModel
 
         foreach (var node in nodes.EnumerateArray())
         {
+            var nodeType = GetString(node, "node_type");
+            var displayName = GetString(node, "display_name");
             yield return new WorkflowDefinitionNodeListItemViewModel(
                 GetString(node, "node_instance_id"),
-                GetString(node, "node_type"),
+                nodeType,
                 GetString(node, "node_version"),
-                GetString(node, "display_name"),
+                displayName,
                 GetBool(node, "enabled", defaultValue: true),
                 TryGetProperty(node, "config", out var config)
                     ? FormatJson(config)
                     : "{}",
-                displayTextFormatter);
+                displayTextFormatter,
+                nodeEditorResolver.Resolve(nodeType, displayName));
         }
     }
 
@@ -180,7 +187,8 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
         string displayName,
         bool enabled,
         string configJson,
-        DisplayTextFormatter? displayTextFormatter = null)
+        DisplayTextFormatter? displayTextFormatter = null,
+        NodeEditorResolution? nodeEditorResolution = null)
     {
         NodeInstanceId = nodeInstanceId;
         NodeType = nodeType;
@@ -189,6 +197,11 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
         Enabled = enabled;
         ConfigJson = configJson;
         DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
+        NodeEditorResolution = nodeEditorResolution
+            ?? NodeEditorResolution.JsonFallback(
+                nodeType,
+                string.IsNullOrWhiteSpace(displayName) ? nodeType : displayName,
+                hasRegisteredEditor: false);
     }
 
     public string NodeInstanceId { get; }
@@ -205,12 +218,20 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
 
     public DisplayTextFormatter DisplayTextFormatter { get; }
 
+    public NodeEditorResolution NodeEditorResolution { get; }
+
     public string TypeText => $"{NodeType}@{NodeVersion}";
 
     public string DisplayNameText =>
         string.IsNullOrWhiteSpace(DisplayName) ? "-" : DisplayName;
 
     public string EnabledText => DisplayTextFormatter.FormatEnabled(Enabled);
+
+    public string NodeEditorStatusText => NodeEditorResolution.StatusText;
+
+    public bool HasRegisteredNodeEditor => NodeEditorResolution.HasRegisteredEditor;
+
+    public bool UsesJsonFallback => NodeEditorResolution.UsesJsonFallback;
 }
 
 public sealed class WorkflowDefinitionConnectionListItemViewModel
