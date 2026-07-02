@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-SCHEMA-0 Avalonia 配置 Schema 解析模型边界清单已完成
-> 当前执行点：下一步可进入 UI-SCHEMA-1 解析模型和 parser 测试，仍不生成动态表单
+> 文档状态：UI-SCHEMA-1 Avalonia 配置 Schema 解析模型与 parser 测试已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-1 只读节点配置摘要，不写回 workflow JSON
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4528,6 +4528,57 @@ UI-SCHEMA-1：
 新增 Avalonia schema 解析模型和 parser 测试，
 只解析 NodeDefinitionDto.ConfigSchema，
 不生成 UI 表单。
+```
+
+### 2.88 UI-SCHEMA-1 Avalonia 配置 Schema 解析模型与 parser 测试
+
+阶段目标：
+
+```text
+在不生成动态表单的前提下，
+让 Avalonia 能把 NodeDefinitionDto.ConfigSchema 解析为稳定 UI 领域模型。
+```
+
+已完成：
+
+* 新增 `NodeConfigFieldType`。
+* 新增 `NodeConfigFieldDescriptor`。
+* 新增 `NodeConfigSchemaDescriptor`。
+* 新增 `NodeConfigSchemaParseResult`。
+* 新增 `NodeConfigSchemaParser`。
+* 新增 `NodeConfigSchemaParserTests`。
+
+parser 当前支持：
+
+* `config_schema_version == "1.0"`。
+* 根 schema `type == "object"`。
+* 字段类型：`string`、`integer`、`number`、`boolean`、`enum`、`array`、`object`。
+* 字段属性：`title`、`required`、`default`、`minimum`、`enum`、`items.type`、`description`。
+* 缺失 schema、缺失版本、未知版本、非 object 根类型的 unsupported 回退。
+* properties 缺失、未知字段类型、非法 enum、非法 items 的 warning 保留。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不展示配置摘要。
+* 不生成动态表单。
+* 不创建 config 草稿对象。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Save / Validate / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigSchemaParserTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-1：
+基于 parser 结果给节点目录或节点定义详情增加只读配置摘要，
+不进入编辑控件、不写回 workflow JSON。
 ```
 
 ---
