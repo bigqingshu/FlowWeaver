@@ -383,6 +383,52 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task NewDraftNodeInputUsesDefaultsAndResetsWhenDefinitionLoads()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeInstanceId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeType);
+        Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeDisplayName);
+        Assert.AreEqual("{}", viewModel.NewDraftNodeConfigJson);
+
+        viewModel.NewDraftNodeInstanceId = "stale";
+        viewModel.NewDraftNodeType = "StaleNode";
+        viewModel.NewDraftNodeVersion = "9.9";
+        viewModel.NewDraftNodeDisplayName = "Stale";
+        viewModel.NewDraftNodeConfigJson = """{"stale":true}""";
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeInstanceId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeType);
+        Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeDisplayName);
+        Assert.AreEqual("{}", viewModel.NewDraftNodeConfigJson);
+        StringAssert.Contains(viewModel.WorkflowDefinitionDraftJson, "\"schema_version\": \"1.0\"");
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
     {
         var definitionJson =

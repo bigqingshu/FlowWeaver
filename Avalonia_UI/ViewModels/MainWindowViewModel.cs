@@ -123,6 +123,21 @@ public partial class MainWindowViewModel : ViewModelBase
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
 
     [ObservableProperty]
+    private string newDraftNodeInstanceId = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftNodeType = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftNodeVersion = "1.0";
+
+    [ObservableProperty]
+    private string newDraftNodeDisplayName = string.Empty;
+
+    [ObservableProperty]
+    private string newDraftNodeConfigJson = "{}";
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -2038,6 +2053,15 @@ public partial class MainWindowViewModel : ViewModelBase
             : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
     }
 
+    private void ResetNewDraftNodeInput()
+    {
+        NewDraftNodeInstanceId = string.Empty;
+        NewDraftNodeType = string.Empty;
+        NewDraftNodeVersion = "1.0";
+        NewDraftNodeDisplayName = string.Empty;
+        NewDraftNodeConfigJson = "{}";
+    }
+
     private void RefreshSelectedNodeConfigDraftState()
     {
         if (WorkflowDefinitionDetail is null ||
@@ -2692,6 +2716,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
+        ResetNewDraftNodeInput();
         OnPropertyChanged(nameof(HasWorkflowDefinition));
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();

@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.6 ViewModel 命令接入前置分析已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6a 节点新增输入状态最小接入
+> 文档状态：WORKFLOW-EDIT-1.6a 节点新增输入状态最小接入已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6b AddNode 命令最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5826,6 +5826,50 @@ WORKFLOW-EDIT-1.6a：
 节点新增输入状态最小接入，
 只新增 ViewModel 属性和测试，
 不调用 patcher，不修改 WorkflowDefinitionDraftJson，不修改 XAML。
+```
+
+### 2.117 WORKFLOW-EDIT-1.6a 节点新增输入状态最小接入
+
+阶段目标：
+
+```text
+先在 ViewModel 中建立节点新增输入状态，
+为 AddNode 命令接入提供可测试输入边界。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+docs/FlowWeaver_WORKFLOW-EDIT-1.6a_节点新增输入状态最小接入.md
+```
+
+当前结论：
+
+* 新增了 `NewDraftNodeInstanceId` / `NewDraftNodeType` / `NewDraftNodeVersion` / `NewDraftNodeDisplayName` / `NewDraftNodeConfigJson`。
+* 默认 version 为 `1.0`，默认 config JSON 为 `{}`。
+* 加载或切换 workflow definition 时会重置输入。
+* 本小步没有调用 patcher，没有修改 draft JSON，没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests"
+通过：44，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：246，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.6b：
+AddNode 命令最小接入，
+成功后只写回 WorkflowDefinitionDraftJson，
+不修改 XAML。
 ```
 
 ---
