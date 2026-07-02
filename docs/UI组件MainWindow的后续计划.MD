@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2h ViewModel 只读 editable draft 状态接入已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2i 最小可编辑输入状态边界评估
+> 文档状态：UI-NODE-CONFIG-2i 最小可编辑输入状态边界评估已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2j 输入字段 ViewModel 状态接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5137,6 +5137,38 @@ UI-NODE-CONFIG-2i：
 先做最小可编辑输入状态边界评估，
 确认用户修改字段值应该如何进入 ViewModel/model，
 再决定是否接 ApplySelectedNodeConfigDraftCommand。
+```
+
+### 2.101 UI-NODE-CONFIG-2i 最小可编辑输入状态边界评估
+
+阶段目标：
+
+```text
+确认 NodeConfigEditableDraft 是否可以直接作为用户输入状态，
+以及 Apply 前还缺少哪一层状态。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2i_最小可编辑输入状态边界评估.md
+```
+
+当前结论：
+
+* `SelectedNodeConfigEditableDraft` 是从 workflow JSON + schema 派生的只读快照。
+* 用户正在编辑但尚未 Apply 的输入值需要单独的可变状态。
+* 不建议 UI 直接双向绑定 `NodeConfigEditableDraftField.InputValue`。
+* 第一版刷新策略应先采用“选中节点、draft JSON、schema 变化即重建输入”的保守策略。
+* Apply 仍应后置，不能跳过输入状态层。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2j：
+新增 NodeConfigEditableFieldInputViewModel 和输入字段集合状态，
+只接 MainWindowViewModel 内部状态和测试，
+不改 XAML，不接 Apply。
 ```
 
 ---
