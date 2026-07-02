@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.4a 桌面 smoke 前置清单已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4b 发布 Desktop workflow run event 自动 smoke
+> 文档状态：WORKFLOW-EDIT-2.4b 发布 Desktop workflow run event 自动 smoke 已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4c 结构化编辑人工 Desktop smoke 清单与后置复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6829,6 +6829,44 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.4a_桌面Smoke前置清单.md
 ```text
 WORKFLOW-EDIT-2.4b：
 发布 Desktop workflow run event 自动 smoke。
+```
+
+### 2.143 WORKFLOW-EDIT-2.4b 发布 Desktop workflow run event 自动 smoke
+
+阶段目标：
+
+```text
+执行发布 Desktop assembly/API client + portable EngineHost 的正式路径自动 smoke，
+确认发布 Desktop client 与 EngineHost 的 API/WebSocket run lifecycle 链路仍可用。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.4b_发布DesktopWorkflowRunEvent自动Smoke.md
+```
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "DesktopPublishWorkflowRunEventSmokeTests"
+通过：1，失败：0，跳过：0
+```
+
+当前结论：
+
+* Desktop 发布产物可生成。
+* portable EngineHost 可独立启动。
+* 发布 Desktop API client 可连接 EngineHost。
+* 发布 Desktop WebSocket client 可收到 `ENGINE_READY`。
+* workflow run lifecycle 可收到 `WORKFLOW_STARTED` / `WORKFLOW_FINISHED`。
+* 本步骤仍不覆盖人工 GUI 点击。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.4c：
+结构化编辑人工 Desktop smoke 清单与后置复核。
 ```
 
 ---
