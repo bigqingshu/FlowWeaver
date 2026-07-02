@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4c.3 选中状态同步稳定性复核已完成
-> 当前执行点：固定 TabControl 已完成 SelectedIndex 桥接和属性通知验收，仍未进入动态页面承载
+> 文档状态：UI-COMPONENT-2b.4d 固定内容分发再评估已完成
+> 当前执行点：暂缓基于 SelectedShellPageContentKey 的固定内容分发，保留当前固定 TabControl 承载
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1435,6 +1435,56 @@ UI-COMPONENT-2b.4d 前置分析：
 
 默认建议先不实现内容分发，除非能明确减少 AppShellPageHost 对 TabControl 的耦合，
 并且仍然不引入 ItemsSource、ContentTemplateSelector、页面工厂或反射创建。
+```
+
+### 2.53 UI-COMPONENT-2b.4d 固定内容分发再评估
+
+评估问题：
+
+```text
+在 SelectedShellPageKey / SelectedShellPageIndex 已经同步后，
+是否应该继续让 AppShellPageHost 根据 SelectedShellPageContentKey 显示固定页面？
+```
+
+当前判断：
+
+```text
+暂不实现。
+```
+
+原因：
+
+* 当前固定 `TabControl` 已同时承担导航和页面承载，且通过 `SelectedShellPageIndex` 与 ViewModel 同步。
+* 如果此时再用 `SelectedShellPageContentKey` 做显隐分发，会让同一个页面选择同时由 `TabControl` 与额外内容分发逻辑维护，复杂度上升。
+* `SelectedShellPageContentKey` 当前更适合作为后续内容承载解耦的语义前置，而不是马上驱动第二套页面显示逻辑。
+* 真正要降低耦合时，更合理的下一阶段应先明确 Shell 导航区与内容区是否拆开，而不是在固定 `TabControl` 内部叠加内容键分发。
+
+保留价值：
+
+* `SelectedShellPageKey` 是当前稳定导航身份。
+* `SelectedShellPageIndex` 是当前固定 `TabControl` 桥接属性。
+* `SelectedShellPageContentKey` 保留为后续内容区解耦、页面注册或模板选择前的语义锚点。
+
+明确不做：
+
+* 不按 `SelectedShellPageContentKey` 增加页面显隐绑定。
+* 不拆分当前 `TabControl` 的 Header 区和 Content 区。
+* 不迁移 `ItemsSource`。
+* 不引入 `ContentTemplateSelector`。
+* 不创建页面工厂。
+* 不反射创建页面。
+* 不进入外部插件化。
+
+后续建议：
+
+```text
+UI-COMPONENT-2b.4 可以在此收口。
+
+下一轮如果继续组件化，建议进入 UI-COMPONENT-2b.5：
+MainWindow / AppShellPageHost 边界总体验收与 Gemini View 协作说明整理。
+
+如果要推进真正内容区解耦，应单独开 UI-COMPONENT-2c，
+先做“Shell 导航区与内容区拆分边界分析”，再决定是否引入内容承载组件。
 ```
 
 ---
