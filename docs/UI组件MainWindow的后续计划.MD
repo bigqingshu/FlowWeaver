@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-5.0 Shell 样式作用域策略分析已补充
-> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，下一步补最小结构守护
+> 文档状态：UI-COMPONENT-5.1 Shell 样式作用域结构守护已完成
+> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，等待 UI-COMPONENT-5 阶段总体验收复核
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3245,6 +3245,56 @@ UI-COMPONENT-5.1：
 只增强测试或前置约束，
 不迁移 ShellStyles.axaml，
 不改变 MainWindow / AppShellPageHost 的视觉结构。
+```
+
+### 2.70 UI-COMPONENT-5.1 Shell 样式作用域结构守护完成记录
+
+本小步采用测试守护路线，不修改 Avalonia 视图结构和视觉参数。
+
+完成内容：
+
+```text
+Avalonia_UI.Tests/StyleStructureTests.cs
+  新增 CombinedShellRegionStylesRemainWindowScoped
+```
+
+新增守护点：
+
+* `App.axaml` 仍不引入 `ShellStyles.axaml`。
+* `AppShellPageHost.axaml` 不持有 `UserControl.Styles`。
+* `AppShellPageHost.axaml` 不持有 `StyleInclude`。
+* `AppShellPageHost.axaml` 不直接持有 `Selector`。
+* `TabControl`、`TabItem`、`TabItem:selected` 选择器仍位于 `MainWindow.Window.Styles` 内。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：149
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未迁移 `ShellStyles.axaml`。
+* 未新增 `ShellStyles.axaml`。
+* 未修改 `App.axaml` 样式 include。
+* 未修改 `MainWindow.axaml`。
+* 未修改 `AppShellPageHost.axaml`。
+* 未改变 TabControl / TabItem 视觉。
+* 未引入 `ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未引入页面工厂、页面缓存、反射创建或外部插件化。
+
+下一步建议：
+
+```text
+UI-COMPONENT-5.2：
+做阶段总体验收复核。
+
+汇总 5.0 到 5.1 的完成矩阵、测试结果、未完成事项和后续方向。
 ```
 
 ---

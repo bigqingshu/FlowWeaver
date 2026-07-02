@@ -87,10 +87,44 @@ public sealed class StyleStructureTests
             "Selector=\"TabItem:selected /template/ Border#PART_SelectedPipe\"");
     }
 
+    [TestMethod]
+    public void CombinedShellRegionStylesRemainWindowScoped()
+    {
+        var appXaml = ReadSourceFile("Avalonia_UI", "App.axaml");
+        var mainWindowXaml = ReadSourceFile("Avalonia_UI", "Views", "MainWindow.axaml");
+        var appShellPageHostXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Shell",
+            "AppShellPageHost.axaml");
+
+        Assert.IsFalse(appXaml.Contains("ShellStyles.axaml", StringComparison.Ordinal));
+        Assert.IsFalse(appShellPageHostXaml.Contains("<UserControl.Styles>", StringComparison.Ordinal));
+        Assert.IsFalse(appShellPageHostXaml.Contains("StyleInclude", StringComparison.Ordinal));
+        Assert.IsFalse(appShellPageHostXaml.Contains("Selector=\"", StringComparison.Ordinal));
+        AssertSelectorInsideWindowStyles(mainWindowXaml, "Selector=\"TabControl\"");
+        AssertSelectorInsideWindowStyles(mainWindowXaml, "Selector=\"TabItem\"");
+        AssertSelectorInsideWindowStyles(mainWindowXaml, "Selector=\"TabItem:selected\"");
+    }
+
     private static string ReadSourceFile(params string[] pathParts)
     {
         var repoRoot = GetRepoRoot();
         return File.ReadAllText(Path.Combine(pathParts.Prepend(repoRoot).ToArray()));
+    }
+
+    private static void AssertSelectorInsideWindowStyles(string xaml, string selector)
+    {
+        var stylesStart = xaml.IndexOf("<Window.Styles>", StringComparison.Ordinal);
+        var stylesEnd = xaml.IndexOf("</Window.Styles>", StringComparison.Ordinal);
+        var selectorIndex = xaml.IndexOf(selector, StringComparison.Ordinal);
+
+        Assert.IsGreaterThanOrEqualTo(0, stylesStart, "MainWindow should keep a local Window.Styles block.");
+        Assert.IsGreaterThan(stylesStart, stylesEnd, "MainWindow should close the local Window.Styles block.");
+        Assert.IsTrue(
+            selectorIndex > stylesStart && selectorIndex < stylesEnd,
+            $"{selector} should remain inside MainWindow.Window.Styles until a scoped Shell style is introduced.");
     }
 
     private static string GetRepoRoot()
