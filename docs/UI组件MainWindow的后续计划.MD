@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-4 阶段小结与协作边界已完成
-> 当前执行点：节点编辑入口已有纯模型基础，后续可设计只读状态展示
+> 文档状态：UI-NODE-EDITOR-5 ViewModel 只读状态接入前置分析已补充
+> 当前执行点：节点编辑器状态建议先接入 WorkflowDefinition 节点只读列表
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3742,6 +3742,141 @@ WorkflowDefinitionNodeListItemViewModel 是否可以增加 NodeEditorResolution 
 
 下一步可以进入只读 UI 状态展示，
 但仍不建议直接进入配置表单、Schema renderer 或拖拽式工作流编辑。
+```
+
+### 2.77 UI-NODE-EDITOR-5 ViewModel 只读状态接入前置分析
+
+本小步只做接入方案分析，不修改 Avalonia 代码。
+
+当前 UI 事实：
+
+```text
+WorkflowDefinitionDetailViewModel
+  从 WorkflowDefinitionDto.definition.nodes 解析节点。
+  生成 WorkflowDefinitionNodeListItemViewModel 列表。
+
+WorkflowDefinitionNodeListItemViewModel
+  当前字段：
+    NodeInstanceId
+    NodeType
+    NodeVersion
+    DisplayName
+    Enabled
+    ConfigJson
+    TypeText
+    DisplayNameText
+    EnabledText
+
+WorkflowSummaryView.axaml
+  当前只读展示节点列表。
+  已展示 node_instance_id、enabled、type、display_name、config json。
+```
+
+当前编辑器模型事实：
+
+```text
+BuiltinNodeEditors.CreateRegistry()
+  当前注册四个普通内置节点。
+
+NodeEditorResolver
+  输入 node_type 和可选 display_name。
+  输出 NodeEditorResolution。
+
+NodeEditorResolution
+  可表达：
+    是否有注册编辑器；
+    是否 JSON fallback；
+    是否 BuiltIn 专用编辑器；
+    状态文本。
+```
+
+候选接入点对比：
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| A | `WorkflowDefinitionNodeListItemViewModel` 增加 `NodeEditorResolution` / 派生字段 | 最贴近节点只读列表；不碰主窗口全局状态；适合测试 | 需要向 `WorkflowDefinitionDetailViewModel` 传入 resolver | 推荐 |
+| B | `MainWindowViewModel` 维护全局 `NodeEditorResolver` 并在 UI 绑定时查询 | 集中管理 | 容易把节点编辑状态塞回巨型 ViewModel | 暂不采用 |
+| C | `WorkflowSummaryView.axaml` 直接根据 `NodeType` 展示文案 | 实现快 | XAML 写死业务规则，不利于后续专用编辑器 | 不采用 |
+| D | 先接入 `GET /api/v1/node-definitions` 再生成编辑器状态 | 可结合后端可见性 | 需要处理异步加载、旧请求覆盖和缺失目录，范围变大 | 后置 |
+
+推荐最小实现边界：
+
+```text
+UI-NODE-EDITOR-6：
+只改 ViewModel 层和测试。
+
+WorkflowDefinitionDetailViewModel
+  新增可选 NodeEditorResolver 参数。
+  默认使用 BuiltinNodeEditors.CreateRegistry() 创建 resolver。
+
+WorkflowDefinitionNodeListItemViewModel
+  新增 NodeEditorResolution 属性。
+  新增只读派生字段：
+    NodeEditorStatusText
+    UsesJsonFallback
+    HasRegisteredNodeEditor
+
+WorkflowSummaryView.axaml
+  暂不修改。
+```
+
+本地化判断：
+
+```text
+UI-NODE-EDITOR-6 不做本地化。
+
+原因：
+1. 该小步不展示到 UI；
+2. NodeEditorResolution.StatusText 当前只是内部只读状态；
+3. 等 Gemini 做只读展示方案时，再统一增加 l10n key。
+```
+
+关于 `BuiltinNodeEditors.CreateRegistry()` 注入：
+
+```text
+不建议直接注入 MainWindowViewModel 构造函数。
+
+第一步更稳：
+WorkflowDefinitionDetailViewModel 构造函数增加可选 NodeEditorResolver。
+生产路径不传时使用 BuiltinNodeEditors.CreateRegistry()。
+测试路径可传自定义 resolver。
+```
+
+关于异步 `node-definitions` 旧请求覆盖：
+
+```text
+UI-NODE-EDITOR-6 暂不接入 node-definitions 异步刷新。
+
+原因：
+当前只读编辑器能力来自本地 BuiltinNodeEditors，
+不依赖网络请求，
+因此不会新增旧请求覆盖工作流草稿的问题。
+
+等进入节点目录 UI 或后端动态目录同步时，
+再沿用 workflowDefinitionLoadVersion / loadVersion 机制处理竞态。
+```
+
+明确不做：
+
+* 不修改 `WorkflowSummaryView.axaml`。
+* 不新增节点编辑器状态可见 UI。
+* 不修改 `MainWindowViewModel` 构造注入。
+* 不调用 `ListNodeDefinitionsAsync`。
+* 不生成配置表单。
+* 不改变 Validate / Save / revision conflict 流程。
+* 不改变 `WorkflowDefinitionDraftJson`。
+
+建议下一步：
+
+```text
+UI-NODE-EDITOR-6：
+按上述边界做 ViewModel 只读状态最小接入。
+
+测试重点：
+1. 已注册内置节点返回 JSON fallback registered 状态；
+2. 未知节点返回 unregistered JSON fallback 状态；
+3. 现有 WorkflowDefinition 解析和本地化测试不回归；
+4. 不修改 XAML。
 ```
 
 ---
