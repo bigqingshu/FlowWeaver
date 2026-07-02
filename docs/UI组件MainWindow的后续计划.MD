@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2j 输入字段 ViewModel 状态接入已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2k 输入字段集合转 Config 适配层
+> 文档状态：UI-NODE-CONFIG-2k 输入字段集合转 Config 适配层已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2l ApplySelectedNodeConfigDraftCommand 最小接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5220,6 +5220,55 @@ UI-NODE-CONFIG-2k：
 新增输入字段集合到 config JSON 的适配层，
 复用 NodeConfigEditableDraftConfigBuilder，
 仍不接 Apply。
+```
+
+### 2.103 UI-NODE-CONFIG-2k 输入字段集合转 Config 适配层
+
+阶段目标：
+
+```text
+把 SelectedNodeConfigEditableInputFields 转换为 config JSON，
+为 Apply 命令提供最后一个纯本地输入。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2k_输入字段集合转Config适配层.md
+```
+
+已完成：
+
+* 新增 `NodeConfigEditableFieldInputConfigBuilder`。
+* 输入字段集合可转换为 `NodeConfigEditableDraft`。
+* 复用 `NodeConfigEditableDraftConfigBuilder` 返回统一 config build result。
+* 补充 `NodeConfigEditableFieldInputConfigBuilderTests`。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不新增 Apply 命令。
+* 不调用 `NodeConfigDraftJsonPatcher`。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不做字段错误回填到 UI。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigEditableFieldInputConfigBuilderTests|NodeConfigEditableFieldInputViewModelTests|NodeConfigEditableDraftConfigBuilderTests"
+通过：11，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：210，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2l：
+ApplySelectedNodeConfigDraftCommand 最小接入，
+只把输入字段集合生成的 config JSON 写回 WorkflowDefinitionDraftJson，
+不改 XAML。
 ```
 
 ---
