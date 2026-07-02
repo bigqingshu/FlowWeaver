@@ -18,6 +18,8 @@ public sealed class ShellNavigationItemViewModel : ViewModelBase
 
     public ShellPageKey Key => Descriptor.Key;
 
+    public ShellPageContentKey ContentKey => Descriptor.ContentKey;
+
     public int SortOrder => Descriptor.SortOrder;
 
     public string HeaderPropertyName => Descriptor.HeaderPropertyName;

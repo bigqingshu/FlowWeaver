@@ -73,6 +73,9 @@ public sealed class MainWindowViewModelLocalizationTests
             BuiltinShellPages.All.Select(page => page.Key).ToArray(),
             viewModel.ShellNavigationItems.Select(item => item.Key).ToArray());
         CollectionAssert.AreEqual(
+            BuiltinShellPages.All.Select(page => page.ContentKey).ToArray(),
+            viewModel.ShellNavigationItems.Select(item => item.ContentKey).ToArray());
+        CollectionAssert.AreEqual(
             BuiltinShellPages.All.Select(page => page.SortOrder).ToArray(),
             viewModel.ShellNavigationItems.Select(item => item.SortOrder).ToArray());
         CollectionAssert.AreEqual(

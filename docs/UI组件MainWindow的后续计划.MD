@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.3b AppShellPageHost 稳定性复核
-> 当前执行点：为 MainWindow 与 AppShellPageHost 的职责分布补充结构测试，仍未迁移 ItemsSource 或页面实例创建
+> 文档状态：UI-COMPONENT-2b.4a ShellPageContentKey 前置模型已落地
+> 当前执行点：已新增 ShellPageContentKey 并接入 ShellPageDescriptor / ShellNavigationItemViewModel，仍未改页面承载、不迁移 ItemsSource、不引入模板选择器
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -888,6 +888,143 @@ Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
 
 ```text
 UI-COMPONENT-2b.4：是否继续做 ItemsSource 前置模型，先分析，不直接改页面承载。
+```
+
+### 2.35 UI-COMPONENT-2b.4 ItemsSource 前置模型分析
+
+2b.4 的问题不是“马上把 `TabControl.ItemsSource` 接上”，而是：
+
+```text
+在真正迁移 ItemsSource 之前，是否需要先补一个显式页面内容模型？
+```
+
+当前结论：
+
+```text
+需要，但仍不直接迁移 ItemsSource。
+```
+
+原因是当前 `ShellNavigationItemViewModel` 已有：
+
+```text
+Key
+HeaderText
+SortOrder
+ViewTypeName
+IsVisible
+IsEnabled
+```
+
+这些字段足够表达导航项，但还不足以稳定表达“选中导航项后显示哪个页面内容”。如果直接让 XAML 根据 `ViewTypeName` 反射创建页面，会把页面创建策略、错误处理和 DataContext 继承都推到模板里，风险仍然偏高。
+
+### 2.36 前置模型候选
+
+建议在进入真实 `ItemsSource` 前，先考虑显式模型：
+
+```text
+ShellPageContentKey
+- Workflows
+- Runs
+- Data
+- Logs
+- Settings
+```
+
+并让 `ShellNavigationItemViewModel` 派生出：
+
+```text
+ContentKey
+```
+
+这样后续 `AppShellPageHost` 可以基于稳定枚举切换页面内容，而不是基于 `ViewTypeName` 字符串反射。
+
+### 2.37 方案对比
+
+| 方案 | 做法 | 优点 | 风险 | 结论 |
+| --- | --- | --- | --- | --- |
+| 继续用 `ViewTypeName` | XAML 或 Host 根据类型名创建 View | 字段已存在 | 依赖反射和字符串，错误更晚暴露 | 暂不推荐 |
+| 新增 `ShellPageContentKey` | 用枚举表示页面内容槽位 | 明确、可测试、无反射 | 需要多一个模型字段 | 推荐 |
+| 直接页面实例 | 导航项持有 `UserControl` | 实现直观 | 破坏 MVVM 和生命周期边界 | 禁止 |
+| 页面级 ViewModel | 先拆五个页面 ViewModel | 长期干净 | 范围过大 | 后置 |
+
+推荐先做 `ShellPageContentKey`，然后再让 Host 根据枚举显式切换固定页面。
+
+### 2.38 建议拆分顺序
+
+2b.4 后续建议继续小步拆：
+
+```text
+UI-COMPONENT-2b.4a
+新增 ShellPageContentKey，并让 ShellNavigationItemViewModel 暴露 ContentKey；补测试，不改 XAML。
+
+UI-COMPONENT-2b.4b
+新增 SelectedShellNavigationItem 或 SelectedShellPageKey 前置状态；补测试，不改页面承载。
+
+UI-COMPONENT-2b.4c
+再评估 AppShellPageHost 是否根据 SelectedShellPageKey 显示固定页面。
+
+UI-COMPONENT-2b.4d
+最后才评估 TabControl.ItemsSource。
+```
+
+其中 2b.4a 和 2b.4b 都仍是模型/ViewModel 前置，不改变用户界面。
+
+### 2.39 2b.4 明确不做
+
+本小步不做：
+
+```text
+不改 AppShellPageHost.axaml
+不改 MainWindow.axaml
+不迁移 TabControl.ItemsSource
+不新增 ContentTemplate 或模板选择器
+不新增页面工厂
+不使用反射创建页面
+不拆分五个页面的业务 ViewModel
+```
+
+### 2.40 2b.4 结论
+
+结论：
+
+```text
+可以继续推进，但下一步只做 UI-COMPONENT-2b.4a：ShellPageContentKey 前置模型。
+```
+
+该小步完成后，后续动态页面承载才有稳定的内容键，不需要依赖 `ViewTypeName` 字符串或页面反射。
+
+### 2.41 UI-COMPONENT-2b.4a 完成记录
+
+2b.4a 已完成前置模型落地：
+
+```text
+Avalonia_UI/Models/ShellPageContentKey.cs
+Avalonia_UI/Models/ShellPageDescriptor.cs
+Avalonia_UI/Models/BuiltinShellPages.cs
+Avalonia_UI/ViewModels/ShellNavigationItemViewModel.cs
+Avalonia_UI.Tests/BuiltinShellPagesTests.cs
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+```
+
+已实现内容：
+
+* 新增 `ShellPageContentKey`。
+* `ShellPageDescriptor` 增加必填 `ContentKey`。
+* `BuiltinShellPages` 为五个内置页面显式绑定内容键。
+* `ShellNavigationItemViewModel` 暴露 `ContentKey`。
+* 测试锁定内置页面清单和导航项投影的 `ContentKey` 映射。
+
+仍未做：
+
+* 未改 `MainWindow.axaml`。
+* 未改 `AppShellPageHost.axaml`。
+* 未迁移 `TabControl.ItemsSource`。
+* 未新增 `ContentTemplate`、模板选择器、页面工厂或反射创建。
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.4b：SelectedShellNavigationItem / SelectedShellPageKey 前置状态分析，先只分析。
 ```
 
 ---

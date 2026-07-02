@@ -28,6 +28,17 @@ public sealed class BuiltinShellPagesTests
         CollectionAssert.AreEqual(
             new[] { 10, 20, 30, 40, 50 },
             pages.Select(page => page.SortOrder).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                ShellPageContentKey.Workflows,
+                ShellPageContentKey.Runs,
+                ShellPageContentKey.Data,
+                ShellPageContentKey.Logs,
+                ShellPageContentKey.Settings,
+            },
+            pages.Select(page => page.ContentKey).ToArray());
     }
 
     [TestMethod]
