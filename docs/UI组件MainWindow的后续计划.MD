@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2b NodeConfigDraft 纯模型和 builder 测试已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2c 选中节点 config draft 只读摘要
+> 文档状态：UI-NODE-CONFIG-2c 选中节点 config draft 只读摘要已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d Apply 写回边界前置分析或最小实现
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4757,6 +4757,50 @@ UI-NODE-CONFIG-2c：
 基于 SelectedWorkflowDefinitionNode 和 NodeConfigDraftBuilder，
 展示选中节点 config draft 只读摘要，
 不生成编辑控件，不写回 JSON。
+```
+
+### 2.93 UI-NODE-CONFIG-2c 选中节点 config draft 只读摘要
+
+阶段目标：
+
+```text
+把 SelectedWorkflowDefinitionNode、已加载 node definition schema
+和当前 WorkflowDefinitionDraftJson 组合为只读配置草稿摘要，
+但不生成编辑控件，也不写回 JSON。
+```
+
+已完成：
+
+* `NodeDefinitionListItemViewModel` 暴露 `ConfigSchemaDescriptor`。
+* `MainWindowViewModel` 新增 `SelectedNodeConfigDraftSummaryText` 计算属性。
+* `MainWindowViewModel` 根据选中节点的 `node_type/node_version` 查找已加载节点定义 schema。
+* `SelectedNodeConfigDraftSummaryText` 使用 `NodeConfigDraftBuilder` 只读生成摘要。
+* `WorkflowSummaryView` 在节点卡片底部展示选中节点配置草稿摘要。
+* 中英文资源补齐选中节点配置草稿摘要文本。
+* 测试覆盖 schema 未加载回退、schema 加载后字段数量摘要、XAML 只读绑定。
+
+本阶段明确未做：
+
+* 不生成字段编辑控件。
+* 不创建持久化 config draft 状态。
+* 不新增 Apply 命令。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Validate / Save / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests|WorkflowSummaryViewStructureTests|NodeConfigDraftBuilderTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-2d：
+先分析 Apply 写回 WorkflowDefinitionDraftJson 的最小边界，
+确认如何保持 dirty、validation invalidation 和 revision conflict 语义，
+再决定是否实现最小 Apply。
 ```
 
 ---

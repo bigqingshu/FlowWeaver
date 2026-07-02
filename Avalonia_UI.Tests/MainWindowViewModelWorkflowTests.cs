@@ -722,6 +722,67 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task SelectedNodeConfigDraftSummaryUsesLoadedNodeSchema()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount", "operator": "GT"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "field": {"type": "string", "required": true},
+                                "operator": {"type": "enum", "enum": ["GT", "LT"]},
+                                "columns": {"type": "array", "items": {"type": "string"}}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(
+            "Selected node config schema unavailable.",
+            viewModel.SelectedNodeConfigDraftSummaryText);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(
+            "filter: 2 editable config field(s), 1 JSON fallback field(s)",
+            viewModel.SelectedNodeConfigDraftSummaryText);
+    }
+
+    [TestMethod]
     public async Task RefreshNodeDefinitionsShowsEmptyStateForEmptyCatalog()
     {
         var apiClient = new FakeApiClient
@@ -1158,7 +1219,8 @@ public sealed class MainWindowViewModelWorkflowTests
         string nodeType,
         string displayName,
         string? inputPort = null,
-        string? outputPort = null)
+        string? outputPort = null,
+        string? schemaJson = null)
     {
         return new NodeDefinitionDto
         {
@@ -1175,6 +1237,10 @@ public sealed class MainWindowViewModelWorkflowTests
             DefaultTimeoutSeconds = 60,
             RetrySafe = false,
             UiVisibility = "visible",
+            ConfigSchemaVersion = schemaJson is null ? string.Empty : "1.0",
+            ConfigSchema = schemaJson is null
+                ? null
+                : JsonDocument.Parse(schemaJson).RootElement.Clone(),
         };
     }
 

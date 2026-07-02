@@ -66,6 +66,8 @@
   "node_catalog.empty_state": "尚未加载节点定义。请连接 EngineHost 后刷新节点目录。",
   "node_catalog.config_schema_unavailable": "配置 Schema 不可用",
   "node_catalog.no_config_fields": "无配置字段",
+  "node_config_draft.no_node_selected": "选择节点以查看配置草稿。",
+  "node_config_draft.schema_unavailable": "所选节点配置 Schema 不可用。",
   "node_catalog.inputs": "输入",
   "node_catalog.outputs": "输出",
   "node_catalog.mode": "模式",
@@ -203,5 +205,6 @@
   "format.list_connection_count": "{0} 条连接",
   "format.list_attempt": "第 {0} 次尝试",
   "format.list_member_count": "{0} 个成员",
-  "format.config_fields": "{0} 个配置字段：{1}"
+  "format.config_fields": "{0} 个配置字段：{1}",
+  "format.node_config_draft_ready": "{0}：{1} 个可编辑配置字段，{2} 个 JSON 回退字段"
 }

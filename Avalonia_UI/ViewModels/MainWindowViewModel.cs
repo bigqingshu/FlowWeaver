@@ -405,6 +405,35 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
 
+    public string SelectedNodeConfigDraftSummaryText
+    {
+        get
+        {
+            if (SelectedWorkflowDefinitionNode is null)
+            {
+                return DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
+            }
+
+            var schema = FindNodeDefinition(SelectedWorkflowDefinitionNode)
+                ?.ConfigSchemaDescriptor;
+            var draft = NodeConfigDraftBuilder.Build(
+                WorkflowDefinitionDraftJson,
+                SelectedWorkflowDefinitionNode.NodeInstanceId,
+                schema);
+            if (!draft.IsSupported)
+            {
+                return DisplayTextFormatter.FormatSelectedNodeConfigDraftSchemaUnavailable();
+            }
+
+            var editableCount = draft.Fields.Count(item => item.IsEditable);
+            var fallbackCount = draft.Fields.Count(item => !item.IsEditable);
+            return DisplayTextFormatter.FormatSelectedNodeConfigDraftReady(
+                SelectedWorkflowDefinitionNode.NodeInstanceId,
+                editableCount,
+                fallbackCount);
+        }
+    }
+
     public string? RefreshNodeDefinitionsDisabledReasonText
     {
         get
@@ -1021,6 +1050,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 OnPropertyChanged(nameof(HasNodeDefinitions));
                 OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+                OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
                 NodeDefinitionCatalogMessage =
                     F("format.loaded_node_definitions", NodeDefinitions.Count);
                 return;
@@ -1030,6 +1060,7 @@ public partial class MainWindowViewModel : ViewModelBase
             NodeDefinitionCatalogErrorMessage = DescribeError(response);
             OnPropertyChanged(nameof(HasNodeDefinitions));
             OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+            OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
         }
         finally
         {
@@ -1912,6 +1943,17 @@ public partial class MainWindowViewModel : ViewModelBase
             : string.Join(Environment.NewLine, issueLines);
     }
 
+    private NodeDefinitionListItemViewModel? FindNodeDefinition(
+        WorkflowDefinitionNodeListItemViewModel node)
+    {
+        return NodeDefinitions.FirstOrDefault(definition =>
+            string.Equals(definition.NodeType, node.NodeType, StringComparison.Ordinal)
+            && string.Equals(
+                definition.NodeVersion,
+                node.NodeVersion,
+                StringComparison.Ordinal));
+    }
+
     private bool TryParseRuntimeEventLogFilters(
         out long? afterSequenceNumber,
         out int limit,
@@ -2504,7 +2546,14 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinition));
+        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedWorkflowDefinitionNodeChanged(
+        WorkflowDefinitionNodeListItemViewModel? value)
+    {
+        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
@@ -2527,6 +2576,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
+        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
 
         IsWorkflowDefinitionDraftDirty = value != originalWorkflowDefinitionJson;
 

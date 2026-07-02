@@ -64,6 +64,28 @@ public sealed class DisplayTextFormatter
         return Format("format.config_fields", count, fieldNames);
     }
 
+    public string FormatSelectedNodeConfigDraftMissingSelection()
+    {
+        return Text("node_config_draft.no_node_selected");
+    }
+
+    public string FormatSelectedNodeConfigDraftSchemaUnavailable()
+    {
+        return Text("node_config_draft.schema_unavailable");
+    }
+
+    public string FormatSelectedNodeConfigDraftReady(
+        string nodeInstanceId,
+        int editableCount,
+        int fallbackCount)
+    {
+        return Format(
+            "format.node_config_draft_ready",
+            nodeInstanceId,
+            editableCount,
+            fallbackCount);
+    }
+
     private string Text(string key)
     {
         return _localizationService?.GetString(key) ?? GetFallbackString(key);
@@ -92,6 +114,10 @@ public sealed class DisplayTextFormatter
             "node_catalog.config_schema_unavailable" => "Config schema unavailable",
             "node_catalog.no_config_fields" => "No config fields",
             "format.config_fields" => "{0} config field(s): {1}",
+            "node_config_draft.no_node_selected" => "Select a node to inspect config draft.",
+            "node_config_draft.schema_unavailable" => "Selected node config schema unavailable.",
+            "format.node_config_draft_ready" =>
+                "{0}: {1} editable config field(s), {2} JSON fallback field(s)",
             _ => key,
         };
     }

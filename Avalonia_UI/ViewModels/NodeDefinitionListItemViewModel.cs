@@ -46,6 +46,8 @@ public sealed class NodeDefinitionListItemViewModel
 
     public NodeConfigSchemaParseResult ConfigSchema { get; }
 
+    public NodeConfigSchemaDescriptor? ConfigSchemaDescriptor => ConfigSchema.Schema;
+
     public DisplayTextFormatter DisplayTextFormatter { get; }
 
     public string TypeText => $"{NodeType}@{NodeVersion}";
