@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-L10N-1 节点编辑器状态本地化已完成
-> 当前执行点：NodeEditorRegistry / 节点编辑器只读展示主线已本地化收口
+> 文档状态：UI-NODE-CATALOG-1 只读节点目录接入已完成
+> 当前执行点：Workflow 页已可只读加载后端 node-definitions
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4247,7 +4247,7 @@ Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
 * 未修改 `WorkflowSummaryView.axaml` 的绑定结构。
 * 未新增节点编辑按钮。
 * 未新增节点配置表单。
-* 未接入后端 node-definitions API。
+* 本阶段未接入后端 node-definitions API；后续已由 UI-NODE-CATALOG-1 接入只读目录。
 * 未改变 Workflow 保存、校验、revision conflict 语义。
 * 语言切换后，新加载的 Workflow definition 会使用当前语言显示节点编辑器状态。
 
@@ -4256,6 +4256,66 @@ Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
 ```text
 如果继续 UI 只读信息：
 进入 UI-NODE-CATALOG-1，接入后端 /api/v1/node-definitions 的只读节点目录。
+
+如果进入真实节点配置：
+先做 NODE-CONFIG-SCHEMA-0，固定后端 config_schema 契约。
+```
+
+### 2.83 UI-NODE-CATALOG-1 只读节点目录接入
+
+阶段目标：
+
+```text
+在 Avalonia Workflow 页接入后端 /api/v1/node-definitions，
+展示普通 UI 可见节点的只读目录。
+```
+
+完成内容：
+
+```text
+NodeDefinitionListItemViewModel
+MainWindowViewModel.NodeDefinitions
+MainWindowViewModel.RefreshNodeDefinitionsCommand
+WorkflowNodeCatalogView
+WorkflowPage 右侧 Draft JSON 下方接入节点目录卡片
+node_catalog.* 简体中文 / English 文案
+```
+
+只读展示字段：
+
+| 字段 | 来源 | 用途 |
+| --- | --- | --- |
+| `display_name` | `NodeDefinitionDto` | 节点目录主标题 |
+| `node_type` / `node_version` | `NodeDefinitionDto` | 稳定节点类型标识 |
+| `input_ports` | `NodeDefinitionDto` | 输入端口摘要，必填端口以 `*` 标记 |
+| `output_ports` | `NodeDefinitionDto` | 输出端口摘要 |
+| `execution_mode` | `NodeDefinitionDto` | 执行模式只读展示 |
+| `default_timeout_seconds` | `NodeDefinitionDto` | 默认超时只读展示 |
+
+边界确认：
+
+* 不新增节点创建按钮。
+* 不新增节点删除按钮。
+* 不新增节点配置表单。
+* 不新增 JSON Schema renderer。
+* 不新增拖拽画布。
+* 不改变 Workflow 保存、校验、revision conflict 语义。
+* 不在前端扫描测试节点或外部模块。
+* Fault / Delay 测试节点仍由后端 `GET /api/v1/node-definitions` 过滤。
+
+测试覆盖：
+
+```text
+Avalonia_UI.Tests/NodeDefinitionListItemViewModelTests.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+Avalonia_UI.Tests/WorkflowNodeCatalogViewStructureTests.cs
+```
+
+建议下一步：
+
+```text
+如果继续 UI 只读体验：
+做 UI-NODE-CATALOG-2，补节点目录空态、错误态和视觉微调复核。
 
 如果进入真实节点配置：
 先做 NODE-CONFIG-SCHEMA-0，固定后端 config_schema 契约。

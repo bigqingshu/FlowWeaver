@@ -30,6 +30,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private CancellationTokenSource? _runtimeEventStreamCancellation;
     private Task? _runtimeEventStreamTask;
     private int nodeRunsLoadVersion;
+    private int nodeDefinitionsLoadVersion;
     private int tableRefsLoadVersion;
     private int sharedPublicationsLoadVersion;
     private int sharedPublicationVersionsLoadVersion;
@@ -93,6 +94,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? workflowDefinitionErrorMessage;
+
+    [ObservableProperty]
+    private bool isLoadingNodeDefinitions;
+
+    [ObservableProperty]
+    private string nodeDefinitionCatalogMessage = "No node definitions loaded.";
+
+    [ObservableProperty]
+    private string? nodeDefinitionCatalogErrorMessage;
 
     [ObservableProperty]
     private string workflowDefinitionDraftJson = string.Empty;
@@ -350,6 +360,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<NodeRunListItemViewModel> NodeRuns { get; } = new();
 
+    public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
+        new();
+
     public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
 
     public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEventLogEntries { get; } = new();
@@ -380,6 +393,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasWorkflowDefinitionError =>
         !string.IsNullOrWhiteSpace(WorkflowDefinitionErrorMessage);
+
+    public bool HasNodeDefinitionCatalogError =>
+        !string.IsNullOrWhiteSpace(NodeDefinitionCatalogErrorMessage);
+
+    public bool HasNodeDefinitions => NodeDefinitions.Count > 0;
 
     public bool IsWorkflowDefinitionDraftBusy =>
         IsValidatingWorkflowDefinitionDraft || IsSavingWorkflowDefinitionDraft;
@@ -507,6 +525,18 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ConnectionsSectionText => T("definition.connections");
 
+    public string NodeCatalogSectionText => T("node_catalog.section");
+
+    public string NodeText => T("node_catalog.node");
+
+    public string InputsText => T("node_catalog.inputs");
+
+    public string OutputsText => T("node_catalog.outputs");
+
+    public string ModeText => T("node_catalog.mode");
+
+    public string TimeoutText => T("node_catalog.timeout");
+
     public string DraftJsonSectionText => T("definition.draft_json");
 
     public string ValidateText => T("definition.validate");
@@ -613,6 +643,11 @@ public partial class MainWindowViewModel : ViewModelBase
         return CanUseEngineActions
             && SelectedWorkflow is not null
             && !IsLoadingWorkflowDefinition;
+    }
+
+    private bool CanRefreshNodeDefinitions()
+    {
+        return CanUseEngineActions && !IsLoadingNodeDefinitions;
     }
 
     private bool CanValidateWorkflowDefinitionDraft()
@@ -918,6 +953,55 @@ public partial class MainWindowViewModel : ViewModelBase
             if (requestVersion == workflowDefinitionLoadVersion)
             {
                 IsLoadingWorkflowDefinition = false;
+            }
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshNodeDefinitions))]
+    private async Task RefreshNodeDefinitionsAsync()
+    {
+        var requestVersion = ++nodeDefinitionsLoadVersion;
+        IsLoadingNodeDefinitions = true;
+        NodeDefinitionCatalogMessage = T("node_catalog.loading");
+        NodeDefinitionCatalogErrorMessage = null;
+
+        try
+        {
+            var response = await _apiClient.ListNodeDefinitionsAsync(
+                BuildSettings(),
+                _shutdown.Token);
+
+            if (requestVersion != nodeDefinitionsLoadVersion)
+            {
+                return;
+            }
+
+            if (response.Ok && response.Data is not null)
+            {
+                NodeDefinitions.Clear();
+                foreach (var definition in response.Data
+                    .OrderBy(definition => definition.DisplayName)
+                    .ThenBy(definition => definition.NodeType)
+                    .ThenBy(definition => definition.NodeVersion))
+                {
+                    NodeDefinitions.Add(new NodeDefinitionListItemViewModel(definition));
+                }
+
+                OnPropertyChanged(nameof(HasNodeDefinitions));
+                NodeDefinitionCatalogMessage =
+                    F("format.loaded_node_definitions", NodeDefinitions.Count);
+                return;
+            }
+
+            NodeDefinitionCatalogMessage = T("node_catalog.refresh_failed");
+            NodeDefinitionCatalogErrorMessage = DescribeError(response);
+            OnPropertyChanged(nameof(HasNodeDefinitions));
+        }
+        finally
+        {
+            if (requestVersion == nodeDefinitionsLoadVersion)
+            {
+                IsLoadingNodeDefinitions = false;
             }
         }
     }
@@ -2051,6 +2135,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ["workflow.default_name"] = T("workflow.default_name"),
             ["status.no_workflows_loaded"] = T("status.no_workflows_loaded"),
             ["status.select_workflow_definition"] = T("status.select_workflow_definition"),
+            ["status.no_node_definitions_loaded"] = T("status.no_node_definitions_loaded"),
             ["status.load_definition_to_edit"] = T("status.load_definition_to_edit"),
             ["status.no_runs_loaded"] = T("status.no_runs_loaded"),
             ["status.select_run_node_status"] = T("status.select_run_node_status"),
@@ -2094,6 +2179,14 @@ public partial class MainWindowViewModel : ViewModelBase
             "status.select_workflow_definition"))
         {
             WorkflowDefinitionMessage = T("status.select_workflow_definition");
+        }
+
+        if (ShouldRefreshDefault(
+            NodeDefinitionCatalogMessage,
+            previousDefaults,
+            "status.no_node_definitions_loaded"))
+        {
+            NodeDefinitionCatalogMessage = T("status.no_node_definitions_loaded");
         }
 
         if (ShouldRefreshDefault(
@@ -2207,6 +2300,12 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(UpdatedLabelText));
         OnPropertyChanged(nameof(NodesSectionText));
         OnPropertyChanged(nameof(ConnectionsSectionText));
+        OnPropertyChanged(nameof(NodeCatalogSectionText));
+        OnPropertyChanged(nameof(NodeText));
+        OnPropertyChanged(nameof(InputsText));
+        OnPropertyChanged(nameof(OutputsText));
+        OnPropertyChanged(nameof(ModeText));
+        OnPropertyChanged(nameof(TimeoutText));
         OnPropertyChanged(nameof(DraftJsonSectionText));
         OnPropertyChanged(nameof(ValidateText));
         OnPropertyChanged(nameof(SaveText));
@@ -2374,6 +2473,16 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionError));
+    }
+
+    partial void OnIsLoadingNodeDefinitionsChanged(bool value)
+    {
+        RefreshNodeDefinitionsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNodeDefinitionCatalogErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasNodeDefinitionCatalogError));
     }
 
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
@@ -2609,6 +2718,7 @@ public partial class MainWindowViewModel : ViewModelBase
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
+        RefreshNodeDefinitionsCommand.NotifyCanExecuteChanged();
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();

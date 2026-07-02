@@ -7,6 +7,9 @@
     <Grid ColumnDefinitions="340, 1.3*, 1*" ColumnSpacing="16" Margin="12">
         <workflow:WorkflowListView Grid.Column="0" />
         <workflow:WorkflowSummaryView Grid.Column="1" />
-        <workflow:WorkflowEditorView Grid.Column="2" />
+        <Grid Grid.Column="2" RowDefinitions="*,260" RowSpacing="16">
+            <workflow:WorkflowEditorView />
+            <workflow:WorkflowNodeCatalogView Grid.Row="1" />
+        </Grid>
     </Grid>
 </UserControl>

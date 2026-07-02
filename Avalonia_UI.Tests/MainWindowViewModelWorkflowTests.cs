@@ -649,6 +649,66 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task RefreshNodeDefinitionsLoadsReadOnlyCatalog()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("FilterRowsNode", "Filter Rows", inputPort: "in"),
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table", outputPort: "out"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.HasCount(2, viewModel.NodeDefinitions);
+        Assert.AreEqual("FilterRowsNode", viewModel.NodeDefinitions[0].NodeType);
+        Assert.AreEqual("in*", viewModel.NodeDefinitions[0].InputPortsText);
+        Assert.AreEqual("GenerateTestTableNode", viewModel.NodeDefinitions[1].NodeType);
+        Assert.AreEqual("out", viewModel.NodeDefinitions[1].OutputPortsText);
+        Assert.AreEqual("Loaded 2 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
+        Assert.IsFalse(viewModel.HasNodeDefinitionCatalogError);
+        Assert.IsTrue(viewModel.HasNodeDefinitions);
+        Assert.AreEqual("secret", apiClient.LastSettings?.Token);
+    }
+
+    [TestMethod]
+    public async Task RefreshNodeDefinitionsShowsErrorEnvelope()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Failure(
+                "NODE_DEFINITIONS_UNAVAILABLE",
+                "Node registry unavailable."),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.IsEmpty(viewModel.NodeDefinitions);
+        Assert.AreEqual("Node definition refresh failed.", viewModel.NodeDefinitionCatalogMessage);
+        Assert.AreEqual(
+            "NODE_DEFINITIONS_UNAVAILABLE: Node registry unavailable.",
+            viewModel.NodeDefinitionCatalogErrorMessage);
+        Assert.IsTrue(viewModel.HasNodeDefinitionCatalogError);
+        Assert.IsFalse(viewModel.HasNodeDefinitions);
+    }
+
+    [TestMethod]
+    public void RefreshNodeDefinitionsIsDisabledWithoutToken()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        viewModel.Token = string.Empty;
+
+        Assert.IsFalse(viewModel.CanUseEngineActions);
+        Assert.IsFalse(viewModel.RefreshNodeDefinitionsCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public void LoadSelectedWorkflowDefinitionIsDisabledWithoutSelection()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
@@ -1011,8 +1071,35 @@ public sealed class MainWindowViewModelWorkflowTests
         };
     }
 
+    private static NodeDefinitionDto NodeDefinition(
+        string nodeType,
+        string displayName,
+        string? inputPort = null,
+        string? outputPort = null)
+    {
+        return new NodeDefinitionDto
+        {
+            NodeType = nodeType,
+            NodeVersion = "1.0",
+            DisplayName = displayName,
+            InputPorts = inputPort is null
+                ? []
+                : [new NodePortDefinitionDto { Name = inputPort, Required = true }],
+            OutputPorts = outputPort is null
+                ? []
+                : [new NodePortDefinitionDto { Name = outputPort, Required = false }],
+            ExecutionMode = "PROCESS_POOL",
+            DefaultTimeoutSeconds = 60,
+            RetrySafe = false,
+            UiVisibility = "visible",
+        };
+    }
+
     private sealed class FakeApiClient : IEngineHostApiClient
     {
+        public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; set; } =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
+
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
 
@@ -1091,7 +1178,8 @@ public sealed class MainWindowViewModelWorkflowTests
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            return Task.FromResult(NodeDefinitionsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
