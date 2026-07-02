@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.3e connection 输入体验后置复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4 桌面真实 smoke 与结构化编辑后置复核
+> 文档状态：WORKFLOW-EDIT-2.4a 桌面 smoke 前置清单已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.4b 发布 Desktop workflow run event 自动 smoke
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6799,6 +6799,36 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 WORKFLOW-EDIT-2.4：
 桌面真实 smoke 与结构化编辑后置复核。
+```
+
+### 2.142 WORKFLOW-EDIT-2.4a 桌面 smoke 前置清单
+
+阶段目标：
+
+```text
+明确 WORKFLOW-EDIT-2 进入真实路径 smoke 时，
+哪些验证可以自动执行，
+哪些仍需要后续人工 Desktop 点击复核。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.4a_桌面Smoke前置清单.md
+```
+
+当前结论：
+
+* 自动 smoke 优先使用发布 Desktop assembly/API client + 独立 EngineHost 的正式路径。
+* 不直接用 `dotnet run` 启动完整 GUI，以免挂住执行流或影响用户桌面。
+* 最贴近本阶段的自动用例是 `DesktopPublishWorkflowRunEventSmokeTests`。
+* 人工 GUI smoke 仍保留为后续复核项。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.4b：
+发布 Desktop workflow run event 自动 smoke。
 ```
 
 ---
