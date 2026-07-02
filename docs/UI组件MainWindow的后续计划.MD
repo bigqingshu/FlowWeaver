@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-3 节点编辑器解析边界已完成
-> 当前执行点：前端已有 node_type 到编辑器能力状态的纯模型解析层
+> 文档状态：UI-NODE-EDITOR-4 阶段小结与协作边界已完成
+> 当前执行点：节点编辑入口已有纯模型基础，后续可设计只读状态展示
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3655,6 +3655,93 @@ UI-NODE-EDITOR-4：
 如果后续要让 UI 显示节点编辑器状态，
 先给 Gemini 一份只读展示方案，
 不要直接进入节点配置表单或拖拽画布。
+```
+
+### 2.76 UI-NODE-EDITOR-4 阶段小结与 Gemini 协作边界
+
+本小步只做阶段复核和协作边界说明，不新增代码。
+
+完成矩阵：
+
+| 小阶段 | 内容 | 结果 |
+| --- | --- | --- |
+| UI-NODE-EDITOR-0 | NodeEditorRegistry 边界分析 | 已完成 |
+| UI-NODE-EDITOR-1 | NodeEditorDescriptor / NodeEditorRegistry 最小模型 | 已完成 |
+| UI-NODE-EDITOR-2 | BuiltinNodeEditors 只读清单 | 已完成 |
+| UI-NODE-EDITOR-3 | NodeEditorResolver / NodeEditorResolution 解析层 | 已完成 |
+| UI-NODE-EDITOR-4 | 阶段小结与协作边界 | 已完成 |
+
+当前代码能力：
+
+```text
+前端可以在纯模型层完成：
+node_type
+→ NodeEditorRegistry
+→ NodeEditorResolution
+→ 判断是否有内置编辑器、是否回退 JSON、显示什么状态文本
+```
+
+当前仍不具备：
+
+* 节点列表中展示编辑器状态。
+* 点击节点后打开专用编辑器。
+* JSON Schema 配置表单。
+* 拖拽画布。
+* 外部 DLL 模块加载。
+* 节点配置保存的细粒度 UI。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：161
+失败：0
+跳过：0
+```
+
+如果交给 Gemini 做下一步 UI，只允许做只读展示设计：
+
+```text
+允许：
+在 WorkflowDefinition 的节点列表中显示只读编辑器状态。
+例如：
+Editor: JSON fallback
+Editor: Built-in editor
+Editor: Not registered, JSON fallback
+
+允许：
+复用现有 WorkflowDefinitionDetailViewModel 的节点只读列表。
+
+禁止：
+新增节点配置表单。
+新增拖拽画布。
+改变 WorkflowDefinitionDraftJson 保存流程。
+改变 Validate / Save / revision conflict 语义。
+接入外部 DLL 或模块扫描。
+把 node-definitions 变成创建节点按钮协议。
+```
+
+建议下一步：
+
+```text
+UI-NODE-EDITOR-5：
+先做 ViewModel 只读状态接入前置分析。
+
+重点确认：
+WorkflowDefinitionNodeListItemViewModel 是否可以增加 NodeEditorResolution 派生字段；
+是否需要本地化 StatusText；
+是否需要把 BuiltinNodeEditors.CreateRegistry 注入 MainWindowViewModel；
+如何避免异步 node-definitions 旧请求覆盖工作流草稿。
+```
+
+当前阶段结论：
+
+```text
+节点编辑入口主线已经完成纯模型基础。
+
+下一步可以进入只读 UI 状态展示，
+但仍不建议直接进入配置表单、Schema renderer 或拖拽式工作流编辑。
 ```
 
 ---
