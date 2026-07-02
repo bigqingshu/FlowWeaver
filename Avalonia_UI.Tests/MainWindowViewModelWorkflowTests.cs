@@ -264,6 +264,17 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.HasCount(2, detail.Nodes);
         Assert.HasCount(1, detail.Connections);
         Assert.HasCount(2, detail.Revisions);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionDraftStructure);
+        Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.IsNotNull(viewModel.WorkflowDefinitionDraftStructure);
+        Assert.AreEqual(
+            "source",
+            viewModel.WorkflowDefinitionDraftStructure.Nodes[0].NodeInstanceId);
+        Assert.AreEqual(
+            "c1",
+            viewModel.WorkflowDefinitionDraftStructure.Connections[0].ConnectionId);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructureWarnings);
         Assert.AreSame(detail.Nodes[0], viewModel.SelectedWorkflowDefinitionNode);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
@@ -331,6 +342,44 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasSelectedNodeConfigEditableInputFields);
         Assert.IsEmpty(viewModel.SelectedNodeConfigEditableInputFields);
         Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsNull(viewModel.WorkflowDefinitionDraftStructure);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructure);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
+    }
+
+    [TestMethod]
+    public void WorkflowDefinitionDraftJsonChangesRefreshDraftStructureState()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"}
+              ],
+              "connections": []
+            }
+            """;
+
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionDraftStructure);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.IsNotNull(viewModel.WorkflowDefinitionDraftStructure);
+        Assert.AreEqual(
+            WorkflowDefinitionDraftStructureStatus.Supported,
+            viewModel.WorkflowDefinitionDraftStructure.Status);
+
+        viewModel.WorkflowDefinitionDraftJson = """{"nodes":[]}""";
+
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructure);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionDraftStructureWarnings);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.AreEqual(
+            WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
+            viewModel.WorkflowDefinitionDraftStructure?.Status);
     }
 
     [TestMethod]

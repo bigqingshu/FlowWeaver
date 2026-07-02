@@ -120,6 +120,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private string workflowDefinitionDraftJson = string.Empty;
 
     [ObservableProperty]
+    private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -449,6 +452,18 @@ public partial class MainWindowViewModel : ViewModelBase
         !string.IsNullOrWhiteSpace(WorkflowDefinitionValidationErrorMessage);
 
     public bool HasWorkflowDefinitionDraft => !string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson);
+
+    public bool HasWorkflowDefinitionDraftStructure =>
+        WorkflowDefinitionDraftStructure?.IsSupported == true;
+
+    public int WorkflowDefinitionDraftNodeCount =>
+        WorkflowDefinitionDraftStructure?.NodeCount ?? 0;
+
+    public int WorkflowDefinitionDraftConnectionCount =>
+        WorkflowDefinitionDraftStructure?.ConnectionCount ?? 0;
+
+    public bool HasWorkflowDefinitionDraftStructureWarnings =>
+        WorkflowDefinitionDraftStructure?.Warnings.Count > 0;
 
     public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
 
@@ -2015,6 +2030,14 @@ public partial class MainWindowViewModel : ViewModelBase
                 StringComparison.Ordinal));
     }
 
+    private void RefreshWorkflowDefinitionDraftStructureState()
+    {
+        WorkflowDefinitionDraftStructure = string.IsNullOrWhiteSpace(
+            WorkflowDefinitionDraftJson)
+            ? null
+            : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
+    }
+
     private void RefreshSelectedNodeConfigDraftState()
     {
         if (WorkflowDefinitionDetail is null ||
@@ -2702,6 +2725,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
+        RefreshWorkflowDefinitionDraftStructureState();
         RefreshSelectedNodeConfigDraftState();
 
         IsWorkflowDefinitionDraftDirty = value != originalWorkflowDefinitionJson;
@@ -2717,6 +2741,15 @@ public partial class MainWindowViewModel : ViewModelBase
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnWorkflowDefinitionDraftStructureChanged(
+        WorkflowDefinitionDraftStructure? value)
+    {
+        OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructure));
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCount));
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCount));
+        OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructureWarnings));
     }
 
     partial void OnIsWorkflowDefinitionDraftDirtyChanged(bool value)
