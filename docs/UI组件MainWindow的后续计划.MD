@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-6 ViewModel 只读状态最小接入已完成
-> 当前执行点：WorkflowDefinition 节点只读项已具备编辑器解析状态，尚未展示到 UI
+> 文档状态：UI-NODE-EDITOR-7 Gemini 只读展示说明已补充
+> 当前执行点：可交给 Gemini 在 WorkflowSummaryView 中只读展示节点编辑器状态
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3949,6 +3949,56 @@ UI-NODE-EDITOR-7：
 新增配置表单；
 新增拖拽画布；
 改变保存流程。
+```
+
+### 2.79 UI-NODE-EDITOR-7 Gemini 只读展示说明完成记录
+
+本小步只补充 Gemini 协作任务说明，不修改 Avalonia XAML。
+
+新增文档：
+
+```text
+docs/FlowWeaver_UI_NODE_EDITOR_7_Gemini只读展示任务说明.md
+```
+
+说明范围：
+
+* 目标 View 为 `Avalonia_UI/Views/Components/Workflow/WorkflowSummaryView.axaml`。
+* 目标列表为 WorkflowDefinition 的 Nodes Card。
+* 允许只读展示 `NodeEditorStatusText`。
+* 推荐展示文案为 `Editor: {NodeEditorStatusText}`。
+* 推荐仅增加一行只读 `TextBlock`。
+* `ConfigJson` 仍保留显示。
+
+明确禁止：
+
+* 不新增编辑按钮。
+* 不新增配置按钮。
+* 不新增打开编辑器命令。
+* 不新增节点配置表单。
+* 不新增 JSON Schema renderer。
+* 不新增拖拽画布。
+* 不调用 `ListNodeDefinitionsAsync`。
+* 不修改保存、校验和 revision conflict 流程。
+
+交给 Gemini 前的状态：
+
+```text
+Codex 已完成 ViewModel 只读状态字段：
+NodeEditorStatusText
+HasRegisteredNodeEditor
+UsesJsonFallback
+
+Gemini 只负责 View 层只读显示。
+```
+
+建议下一步：
+
+```text
+让 Gemini 按 docs/FlowWeaver_UI_NODE_EDITOR_7_Gemini只读展示任务说明.md 执行。
+
+Gemini 完成后由 Codex 做：
+UI-NODE-EDITOR-8 只读展示复核与本地化策略分析。
 ```
 
 ---
