@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.6a 节点新增输入状态最小接入已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6b AddNode 命令最小接入
+> 文档状态：WORKFLOW-EDIT-1.6b AddNode 命令最小接入已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.6c DeleteNode 命令前置状态
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5870,6 +5870,52 @@ WORKFLOW-EDIT-1.6b：
 AddNode 命令最小接入，
 成功后只写回 WorkflowDefinitionDraftJson，
 不修改 XAML。
+```
+
+### 2.118 WORKFLOW-EDIT-1.6b AddNode 命令最小接入
+
+阶段目标：
+
+```text
+将节点新增纯 patcher 接入 MainWindowViewModel 命令，
+成功后只写回 WorkflowDefinitionDraftJson。
+```
+
+完成文件：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
+Avalonia_UI/Localization/en-US.json
+Avalonia_UI/Localization/zh-Hans.json
+docs/FlowWeaver_WORKFLOW-EDIT-1.6b_AddNode命令最小接入.md
+```
+
+当前结论：
+
+* 新增 `AddWorkflowDefinitionDraftNodeCommand`。
+* 命令成功后写回 draft JSON，并复用 dirty / validation invalidation / draft structure 刷新。
+* 命令失败不清空用户输入。
+* revision conflict、busy、未加载 definition、输入为空时命令不可用。
+* 本小步没有修改 XAML。
+* 完整 Avalonia 测试通过。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests"
+通过：47，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：249，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.6c：
+DeleteNode 命令前置状态，
+先新增 draft node 选择/输入状态，不调用 delete patcher，不修改 XAML。
 ```
 
 ---

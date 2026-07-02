@@ -429,6 +429,129 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task AddWorkflowDefinitionDraftNodeCommandAddsNodeToDraft()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftNodeInstanceId = "source";
+        viewModel.NewDraftNodeType = "GenerateTestTableNode";
+        viewModel.NewDraftNodeVersion = "1.0";
+        viewModel.NewDraftNodeDisplayName = "Generate rows";
+        viewModel.NewDraftNodeConfigJson = """{"rows":3}""";
+
+        Assert.IsTrue(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var node = draft.RootElement.GetProperty("nodes")[0];
+        Assert.AreEqual("source", node.GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("GenerateTestTableNode", node.GetProperty("node_type").GetString());
+        Assert.AreEqual("Generate rows", node.GetProperty("display_name").GetString());
+        Assert.AreEqual(3, node.GetProperty("config").GetProperty("rows").GetInt32());
+        Assert.AreEqual("Node added to draft. Validate before saving.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeInstanceId);
+        Assert.AreEqual(string.Empty, viewModel.NewDraftNodeType);
+        Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
+        Assert.AreEqual("{}", viewModel.NewDraftNodeConfigJson);
+    }
+
+    [TestMethod]
+    public async Task AddWorkflowDefinitionDraftNodeCommandRejectsInvalidConfigJson()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        var originalDraft = viewModel.WorkflowDefinitionDraftJson;
+        viewModel.NewDraftNodeInstanceId = "source";
+        viewModel.NewDraftNodeType = "GenerateTestTableNode";
+        viewModel.NewDraftNodeVersion = "1.0";
+        viewModel.NewDraftNodeConfigJson = "{";
+
+        Assert.IsTrue(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.AreEqual("Node add failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "Node config JSON is invalid.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task AddWorkflowDefinitionDraftNodeCommandShowsDuplicateNodeError()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftNodeInstanceId = "source";
+        viewModel.NewDraftNodeType = "FilterRowsNode";
+        viewModel.NewDraftNodeVersion = "1.0";
+        viewModel.NewDraftNodeConfigJson = "{}";
+
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.AreEqual("Node add failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("NODE_ALREADY_EXISTS", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
     public async Task LoadSelectedWorkflowDefinitionMarksUnknownNodesAsUnregisteredJsonFallback()
     {
         var definitionJson =
@@ -670,9 +793,14 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("""{"nodes":[],"connections":[]}""", viewModel.WorkflowDefinitionDraftJson);
 
         viewModel.WorkflowDefinitionDraftJson = """{"nodes":[],"connections":[],"metadata":{"note":"keep draft"}}""";
+        viewModel.NewDraftNodeInstanceId = "source";
+        viewModel.NewDraftNodeType = "GenerateTestTableNode";
+        viewModel.NewDraftNodeVersion = "1.0";
+        viewModel.NewDraftNodeConfigJson = "{}";
 
         Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
         Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
     }
 
     [TestMethod]
