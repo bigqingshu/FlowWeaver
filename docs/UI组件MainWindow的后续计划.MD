@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.0 结构化编辑可用性缺口边界分析已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.1 用户友好 warning / error 映射
+> 文档状态：WORKFLOW-EDIT-2.1 用户友好 warning / error 映射已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.2 node type 与 node instance id 输入体验收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6375,6 +6375,49 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.0_结构化编辑可用性缺口边界分析.md
 ```text
 WORKFLOW-EDIT-2.1：
 用户友好 warning / error 映射。
+```
+
+### 2.131 WORKFLOW-EDIT-2.1 用户友好 warning / error 映射
+
+阶段目标：
+
+```text
+将结构化编辑命令失败时展示的内部 warning code，
+转换为用户可读文案。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.1_用户友好WarningError映射.md
+```
+
+当前结论：
+
+* patcher 返回码保持不变。
+* ViewModel 展示层新增 warning code 到本地化文案映射。
+* AddNode、DeleteNode、AddConnection、DeleteConnection 失败分支已接入映射。
+* 未知 warning code 继续回退原始 code。
+* 中英文本地化资源已补齐。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests|JsonLocalizationServiceTests"
+通过：61，失败：0，跳过：0
+
+dotnet build Avalonia_UI\Avalonia_UI.sln --no-restore
+成功，警告：0，错误：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：258，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.2：
+node type 与 node instance id 输入体验收口。
 ```
 
 ---

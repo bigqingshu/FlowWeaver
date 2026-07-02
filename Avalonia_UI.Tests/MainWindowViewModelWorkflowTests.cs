@@ -546,7 +546,9 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
 
         Assert.AreEqual("Node add failed.", viewModel.WorkflowDefinitionValidationMessage);
-        Assert.AreEqual("NODE_ALREADY_EXISTS", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(
+            "A node with this instance ID already exists.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
     }
@@ -684,7 +686,9 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
 
         Assert.AreEqual("Node delete failed.", viewModel.WorkflowDefinitionValidationMessage);
-        Assert.AreEqual("NODE_HAS_CONNECTIONS", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(
+            "Delete related connections before deleting this node.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
         Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
@@ -846,8 +850,55 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.AddWorkflowDefinitionDraftConnectionCommand.Execute(null);
 
         Assert.AreEqual("Connection add failed.", viewModel.WorkflowDefinitionValidationMessage);
-        Assert.AreEqual("TARGET_NODE_NOT_FOUND", viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(
+            "Target node was not found in the draft.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
+        Assert.AreEqual("source_to_filter", viewModel.NewDraftConnectionId);
+    }
+
+    [TestMethod]
+    public async Task AddWorkflowDefinitionDraftConnectionCommandShowsDuplicateConnectionError()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.NewDraftConnectionId = "source_to_filter";
+        viewModel.NewDraftConnectionSourceNodeId = "source";
+        viewModel.NewDraftConnectionSourcePort = "out";
+        viewModel.NewDraftConnectionTargetNodeId = "filter";
+        viewModel.NewDraftConnectionTargetPort = "in";
+
+        viewModel.AddWorkflowDefinitionDraftConnectionCommand.Execute(null);
+
+        Assert.AreEqual("Connection add failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "A connection with this ID already exists.",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
         Assert.AreEqual("source_to_filter", viewModel.NewDraftConnectionId);
     }
 

@@ -18,6 +18,9 @@ public sealed class JsonLocalizationServiceTests
 
         Assert.AreEqual("en-US", service.CurrentLanguageCode);
         Assert.AreEqual("Base URL", service.GetString("connection.base_url"));
+        Assert.AreEqual(
+            "A node with this instance ID already exists.",
+            service.GetString("definition.warning.node_already_exists"));
         Assert.AreEqual("missing.key", service.GetString("missing.key"));
     }
 
@@ -31,6 +34,9 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual("zh-Hans", service.CurrentLanguageCode);
         Assert.AreEqual("服务地址", service.GetString("connection.base_url"));
         Assert.AreEqual("简体中文", service.GetString("language.zh-Hans"));
+        Assert.AreEqual(
+            "请先删除相关连接，再删除该节点。",
+            service.GetString("definition.warning.node_has_connections"));
     }
 
     [TestMethod]
