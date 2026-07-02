@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-1 NodeEditorRegistry 最小模型已完成
-> 当前执行点：节点编辑入口已有纯模型守护，下一步可进入 BuiltinNodeEditors 清单
+> 文档状态：UI-NODE-EDITOR-2 BuiltinNodeEditors 只读清单已完成
+> 当前执行点：四个普通内置节点已有 JsonFallback 编辑器注册清单
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3521,6 +3521,71 @@ UI-NODE-EDITOR-2：
 
 先为当前四个可见内置节点注册 JsonFallback 编辑器，
 并用测试确认 Fault / Delay 测试节点不进入普通内置编辑器清单。
+```
+
+### 2.74 UI-NODE-EDITOR-2 BuiltinNodeEditors 只读清单完成记录
+
+本小步只增加前端内置节点编辑器清单，不接入界面。
+
+完成内容：
+
+```text
+Avalonia_UI/Models/BuiltinNodeEditors.cs
+Avalonia_UI.Tests/BuiltinNodeEditorsTests.cs
+```
+
+当前注册清单：
+
+| node_type | display_name | editor kind |
+| --- | --- | --- |
+| `GenerateTestTableNode` | `Generate Test Table` | `JsonFallback` |
+| `FilterRowsNode` | `Filter Rows` | `JsonFallback` |
+| `PublishSharedTablesNode` | `Publish Shared Tables` | `JsonFallback` |
+| `ReadSharedTablesNode` | `Read Shared Tables` | `JsonFallback` |
+
+测试节点规则：
+
+```text
+DelayTestNode 不进入 BuiltinNodeEditors。
+FaultTestNode 不进入 BuiltinNodeEditors。
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：157
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 只读清单只用于前端编辑器能力注册。
+* 未接入节点目录 UI。
+* 未接入工作流编辑器。
+* 未生成配置表单。
+* 未新增专用节点编辑 View。
+* 未暴露后端 `implementation_path`。
+* 未引入外部 DLL 或模块扫描。
+
+下一步建议：
+
+```text
+UI-NODE-EDITOR-3：
+增加节点编辑器解析服务或派生模型。
+
+输入：
+NodeDefinitionDto 或 node_type。
+
+输出：
+是否有内置编辑器；
+当前编辑器类型；
+用户可读编辑器状态；
+是否只能回退 JSON。
+
+仍不修改 XAML。
 ```
 
 ---
