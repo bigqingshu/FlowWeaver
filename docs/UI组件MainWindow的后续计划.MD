@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-5 阶段总体验收复核已完成
-> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，ShellStyles 迁移继续后置
+> 文档状态：UI-NODE-EDITOR-0 NodeEditorRegistry 边界分析已补充
+> 当前执行点：进入节点编辑入口主线，先固化内置专用编辑器注册边界
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3381,6 +3381,94 @@ UI-COMPONENT-5 可以收口。
 
 MainWindow 当前仍保留少量窗口级 Shell 样式，
 这是有意保留的局部作用域边界，不是遗漏迁移。
+```
+
+### 2.72 UI-NODE-EDITOR-0 NodeEditorRegistry 边界分析
+
+本小步开始从 Shell 组件化转入节点编辑入口主线，只做边界分析，不修改 Avalonia 代码。
+
+当前代码事实：
+
+```text
+后端：
+GET /api/v1/node-definitions 已存在。
+NodeDefinitionView 返回 node_type、node_version、display_name、ports、execution_mode、timeout、retry_safe、ui_visibility。
+Fault / Delay 测试节点不会出现在普通 node-definitions 返回中。
+当前 API 明确不返回 implementation_path。
+当前 API 明确不返回 config_schema。
+
+桌面端：
+EngineHostApiClient 已有 ListNodeDefinitionsAsync。
+NodeDefinitionDto 已有 ui_visibility、ports、retry_safe 等只读字段。
+WorkflowEditorView 当前仍是 JSON 草稿编辑器。
+Avalonia_UI 还没有 NodeEditorRegistry / NodeEditorDescriptor / 节点专用编辑器承载层。
+```
+
+因此，`NodeEditorRegistry` 在当前阶段的定位不是后端节点目录，也不是 Schema 动态表单：
+
+```text
+NodeDefinition API
+  负责告诉 UI 后端有哪些可用节点类型和只读元数据。
+
+NodeEditorRegistry
+  负责告诉 UI 某个 node_type 是否有内置专用编辑器。
+
+JSON Draft Editor
+  仍作为所有节点和工作流定义的兜底编辑入口。
+
+JSON Schema Form
+  后置到配置 Schema 明确返回后再做。
+```
+
+建议的最小职责：
+
+| 对象 | 第一版职责 | 暂不负责 |
+| --- | --- | --- |
+| `NodeEditorDescriptor` | 描述一个内置编辑器支持的 `node_type`、显示名称、回退能力 | 创建外部程序集、动态加载 View |
+| `NodeEditorRegistry` | 注册和查询内置编辑器描述 | 扫描 DLL、生命周期管理、热更新 |
+| `WorkflowEditorView` | 继续保留 JSON 草稿编辑与校验保存 | 直接生成节点配置表单 |
+| `NodeDefinitionDto` | 提供后端节点目录只读事实 | 暴露内部 dataclass 或 implementation_path |
+
+最小可执行顺序建议：
+
+```text
+UI-NODE-EDITOR-1：
+新增 NodeEditorDescriptor / NodeEditorRegistry 模型和单元测试。
+只支持内存内置注册，不接入 XAML。
+
+UI-NODE-EDITOR-2：
+增加 BuiltinNodeEditors 只读清单。
+先覆盖现有可见内置节点，编辑器类型统一为 JsonFallback。
+
+UI-NODE-EDITOR-3：
+在 ViewModel 层增加“当前选中节点可用编辑器状态”的派生模型。
+不改变 WorkflowEditorView 视觉。
+
+UI-NODE-EDITOR-4：
+再决定是否给 Gemini 一份 UI 方案，
+展示节点目录和编辑器可用状态，
+但仍不做拖拽画布和 Schema 表单。
+```
+
+明确禁止提前实现：
+
+* 不新增外部 DLL 加载。
+* 不新增 `AssemblyLoadContext`。
+* 不新增 `ui-modules` 扫描。
+* 不实现 JSON Schema 动态表单。
+* 不把后端 `NodeDefinitionSpec` dataclass 直接暴露给 UI。
+* 不把 `implementation_path` 暴露给桌面端。
+* 不实现拖拽画布。
+* 不改变 Workflow 保存和 revision 冲突语义。
+
+当前阶段建议：
+
+```text
+进入 UI-NODE-EDITOR-1。
+
+先做纯模型和测试：
+NodeEditorDescriptor / NodeEditorRegistry。
+提交后再决定是否进入 BuiltinNodeEditors 清单。
 ```
 
 ---
