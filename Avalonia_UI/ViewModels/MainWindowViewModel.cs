@@ -35,6 +35,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int sharedPublicationVersionsLoadVersion;
     private int runtimeEventLogLoadVersion;
     private int auditEventLogLoadVersion;
+    private bool isSynchronizingShellSelection;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -240,6 +241,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private ShellPageKey selectedShellPageKey = ShellPageKey.Workflows;
+
+    [ObservableProperty]
+    private int selectedShellPageIndex;
 
     public bool CanUseEngineActions =>
         ConnectionStatus == ConnectionStatus.Connected
@@ -1940,6 +1944,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     ResolveShellPageHeaderText(descriptor)));
         }
 
+        SynchronizeSelectedShellPageIndex(SelectedShellPageKey);
         NotifyShellNavigationItemsChanged();
     }
 
@@ -1949,9 +1954,65 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? throw new InvalidOperationException($"Shell navigation item '{key}' was not found.");
     }
 
+    private int GetShellNavigationItemIndex(ShellPageKey key)
+    {
+        for (var index = 0; index < ShellNavigationItems.Count; index++)
+        {
+            if (ShellNavigationItems[index].Key == key)
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException($"Shell navigation item '{key}' was not found.");
+    }
+
     private static bool IsKnownShellPageKey(ShellPageKey key)
     {
         return BuiltinShellPages.All.Any(page => page.Key == key);
+    }
+
+    private bool IsKnownShellPageIndex(int index)
+    {
+        return index >= 0 && index < ShellNavigationItems.Count;
+    }
+
+    private void SynchronizeSelectedShellPageIndex(ShellPageKey key)
+    {
+        var index = GetShellNavigationItemIndex(key);
+        if (SelectedShellPageIndex == index)
+        {
+            return;
+        }
+
+        isSynchronizingShellSelection = true;
+        try
+        {
+            SelectedShellPageIndex = index;
+        }
+        finally
+        {
+            isSynchronizingShellSelection = false;
+        }
+    }
+
+    private void SynchronizeSelectedShellPageKey(int index)
+    {
+        var key = ShellNavigationItems[index].Key;
+        if (SelectedShellPageKey == key)
+        {
+            return;
+        }
+
+        isSynchronizingShellSelection = true;
+        try
+        {
+            SelectedShellPageKey = key;
+        }
+        finally
+        {
+            isSynchronizingShellSelection = false;
+        }
     }
 
     private void NotifyShellNavigationItemsChanged()
@@ -1964,6 +2025,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(SettingsNavigationItem));
         OnPropertyChanged(nameof(SelectedShellNavigationItem));
         OnPropertyChanged(nameof(SelectedShellPageContentKey));
+        OnPropertyChanged(nameof(SelectedShellPageIndex));
     }
 
     private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
@@ -2184,8 +2246,29 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnSelectedShellPageKeyChanged(ShellPageKey value)
     {
+        if (!isSynchronizingShellSelection)
+        {
+            SynchronizeSelectedShellPageIndex(value);
+        }
+
         OnPropertyChanged(nameof(SelectedShellNavigationItem));
         OnPropertyChanged(nameof(SelectedShellPageContentKey));
+    }
+
+    partial void OnSelectedShellPageIndexChanging(int value)
+    {
+        if (!IsKnownShellPageIndex(value))
+        {
+            throw new InvalidOperationException($"Unknown shell page index '{value}'.");
+        }
+    }
+
+    partial void OnSelectedShellPageIndexChanged(int value)
+    {
+        if (!isSynchronizingShellSelection)
+        {
+            SynchronizeSelectedShellPageKey(value);
+        }
     }
 
     partial void OnTokenChanged(string value)

@@ -4,7 +4,8 @@
              xmlns:pages="using:Avalonia_UI.Views.Pages"
              x:Class="Avalonia_UI.Views.Components.Shell.AppShellPageHost"
              x:DataType="vm:MainWindowViewModel">
-    <TabControl TabStripPlacement="Left">
+    <TabControl TabStripPlacement="Left"
+                SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}">
         <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
             <pages:WorkflowPage />
         </TabItem>

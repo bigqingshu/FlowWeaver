@@ -117,6 +117,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual(
             ShellPageContentKey.Workflows,
             viewModel.SelectedShellPageContentKey);
+        Assert.AreEqual(0, viewModel.SelectedShellPageIndex);
     }
 
     [TestMethod]
@@ -127,13 +128,42 @@ public sealed class MainWindowViewModelLocalizationTests
 
         Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellNavigationItem.Key);
         Assert.AreEqual(ShellPageContentKey.Logs, viewModel.SelectedShellPageContentKey);
+        Assert.AreEqual(GetShellPageIndex(viewModel, ShellPageKey.Logs), viewModel.SelectedShellPageIndex);
 
         await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
 
         Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
         Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellNavigationItem.Key);
         Assert.AreEqual(ShellPageContentKey.Logs, viewModel.SelectedShellPageContentKey);
+        Assert.AreEqual(GetShellPageIndex(viewModel, ShellPageKey.Logs), viewModel.SelectedShellPageIndex);
         Assert.AreEqual("日志", viewModel.SelectedShellNavigationItem.HeaderText);
+    }
+
+    [TestMethod]
+    public void ShellSelectionIndexUpdatesSelectedPageKey()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+        var logsIndex = GetShellPageIndex(viewModel, ShellPageKey.Logs);
+
+        viewModel.SelectedShellPageIndex = logsIndex;
+
+        Assert.AreEqual(logsIndex, viewModel.SelectedShellPageIndex);
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellNavigationItem.Key);
+        Assert.AreEqual(ShellPageContentKey.Logs, viewModel.SelectedShellPageContentKey);
+    }
+
+    [TestMethod]
+    public void ShellSelectionKeyUpdatesSelectedPageIndex()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+        var settingsIndex = GetShellPageIndex(viewModel, ShellPageKey.Settings);
+
+        viewModel.SelectedShellPageKey = ShellPageKey.Settings;
+
+        Assert.AreEqual(settingsIndex, viewModel.SelectedShellPageIndex);
+        Assert.AreEqual(ShellPageKey.Settings, viewModel.SelectedShellNavigationItem.Key);
+        Assert.AreEqual(ShellPageContentKey.Settings, viewModel.SelectedShellPageContentKey);
     }
 
     [TestMethod]
@@ -151,6 +181,25 @@ public sealed class MainWindowViewModelLocalizationTests
         }
 
         Assert.AreEqual(ShellPageKey.Workflows, viewModel.SelectedShellPageKey);
+    }
+
+    [TestMethod]
+    public void ShellSelectionRejectsUnknownPageIndex()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        try
+        {
+            viewModel.SelectedShellPageIndex = viewModel.ShellNavigationItems.Count;
+            Assert.Fail("Expected an InvalidOperationException.");
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        Assert.AreEqual(0, viewModel.SelectedShellPageIndex);
+        Assert.AreEqual(ShellPageKey.Workflows, viewModel.SelectedShellPageKey);
+        Assert.AreEqual(ShellPageContentKey.Workflows, viewModel.SelectedShellPageContentKey);
     }
 
     [TestMethod]
@@ -431,6 +480,19 @@ public sealed class MainWindowViewModelLocalizationTests
             Token = "secret",
             ConnectionStatus = ConnectionStatus.Connected,
         };
+    }
+
+    private static int GetShellPageIndex(MainWindowViewModel viewModel, ShellPageKey key)
+    {
+        for (var index = 0; index < viewModel.ShellNavigationItems.Count; index++)
+        {
+            if (viewModel.ShellNavigationItems[index].Key == key)
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException($"Shell page key '{key}' was not found.");
     }
 
     private static string CreateLocalizationDirectory()

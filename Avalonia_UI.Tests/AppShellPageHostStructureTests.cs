@@ -31,7 +31,8 @@ public sealed class AppShellPageHostStructureTests
             "Shell",
             "AppShellPageHost.axaml");
 
-        StringAssert.Contains(xaml, "<TabControl TabStripPlacement=\"Left\">");
+        StringAssert.Contains(xaml, "<TabControl TabStripPlacement=\"Left\"");
+        StringAssert.Contains(xaml, "SelectedIndex=\"{Binding SelectedShellPageIndex, Mode=TwoWay}\"");
         StringAssert.Contains(xaml, "Header=\"{Binding WorkflowsNavigationItem.HeaderText}\"");
         StringAssert.Contains(xaml, "Header=\"{Binding RunsNavigationItem.HeaderText}\"");
         StringAssert.Contains(xaml, "Header=\"{Binding DataNavigationItem.HeaderText}\"");

@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2b.4c.1 选中状态同步前置方案已补充
-> 当前执行点：建议先用固定 TabControl 的 SelectedIndex 桥接 SelectedShellPageKey，暂不进入动态页面承载
+> 文档状态：UI-COMPONENT-2b.4c.2 选中状态同步最小实现已完成
+> 当前执行点：固定 TabControl 已通过 SelectedIndex 桥接 SelectedShellPageKey，仍未进入动态页面承载
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1323,6 +1323,65 @@ Gemini 协作判断：
 ```text
 下一步建议做 UI-COMPONENT-2b.4c.2：
 实现 SelectedShellPageIndex 与固定 TabControl.SelectedIndex 的最小同步。
+```
+
+### 2.51 UI-COMPONENT-2b.4c.2 完成记录
+
+2b.4c.2 已完成最小同步实现：
+
+```text
+Avalonia_UI/ViewModels/MainWindowViewModel.cs
+Avalonia_UI/Views/Components/Shell/AppShellPageHost.axaml
+Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs
+Avalonia_UI.Tests/AppShellPageHostStructureTests.cs
+```
+
+已实现内容：
+
+* 新增 `SelectedShellPageIndex`，作为固定 `TabControl.SelectedIndex` 的桥接属性。
+* `SelectedShellPageKey` 变更时，同步更新 `SelectedShellPageIndex`。
+* `SelectedShellPageIndex` 变更时，同步更新 `SelectedShellPageKey`。
+* 非法 `SelectedShellPageIndex` 会被明确拒绝，原选中状态保持不变。
+* `AppShellPageHost.axaml` 只在现有固定 `TabControl` 上新增 `SelectedIndex="{Binding SelectedShellPageIndex, Mode=TwoWay}"`。
+* 测试继续确认 `AppShellPageHost.axaml` 不包含 `ItemsSource` 或 `ContentTemplate`。
+
+未实现内容：
+
+* 未迁移 `TabControl.ItemsSource`。
+* 未引入 `ContentTemplateSelector`。
+* 未创建页面工厂。
+* 未反射创建页面。
+* 未引入外部插件化或动态模块加载。
+* 未让 `AppShellPageHost` 根据 `SelectedShellPageContentKey` 做内容分发。
+
+界面显示影响：
+
+```text
+理论无视觉变化。
+
+用户仍看到原来的左侧 TabControl 和五个固定页面；
+变化只是在用户切换页面后，ViewModel 能同步知道当前页。
+```
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：140
+失败：0
+跳过：0
+```
+
+下一小步建议：
+
+```text
+UI-COMPONENT-2b.4c.3：选中状态同步稳定性复核。
+
+重点复核：
+1. 是否需要补 UI 层 smoke 或截图确认无视觉变化。
+2. 是否需要增加属性变更通知测试。
+3. 是否可以进入“基于 SelectedShellPageContentKey 的固定内容分发”再次评估。
 ```
 
 ---
