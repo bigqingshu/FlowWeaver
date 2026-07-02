@@ -920,6 +920,191 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task ApplySelectedNodeConfigDraftPatchesWorkflowDefinitionDraftJson()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "field": {"type": "string", "required": true}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue = "total";
+
+        Assert.IsTrue(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
+
+        viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
+
+        using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(
+            "total",
+            document.RootElement
+                .GetProperty("nodes")[0]
+                .GetProperty("config")
+                .GetProperty("field")
+                .GetString());
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(
+            "Node config applied to draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task ApplySelectedNodeConfigDraftRejectsInvalidFieldInput()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"limit": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "limit": {"type": "integer", "required": true}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        var originalDraftJson = viewModel.WorkflowDefinitionDraftJson;
+        viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue = "abc";
+
+        viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
+
+        Assert.AreEqual(originalDraftJson, viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(
+            "Node config apply failed.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "limit: EDITABLE_CONFIG_FIELD_INTEGER_INVALID");
+    }
+
+    [TestMethod]
+    public async Task ApplySelectedNodeConfigDraftIsDisabledDuringRevisionConflict()
+    {
+        var definitionJson =
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount"}
+                }
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "field": {"type": "string"}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
+
+        viewModel.HasWorkflowDefinitionRevisionConflict = true;
+
+        Assert.IsFalse(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task RefreshNodeDefinitionsShowsEmptyStateForEmptyCatalog()
     {
         var apiClient = new FakeApiClient

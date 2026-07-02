@@ -130,6 +130,8 @@
   "definition.save_failed": "Workflow draft save failed.",
   "definition.revision_conflict": "Revision conflict: the workflow has been modified by another session.",
   "definition.validation_invalidated": "Draft modified, please re-validate.",
+  "definition.node_config_applied": "Node config applied to draft. Validate before saving.",
+  "definition.node_config_apply_failed": "Node config apply failed.",
   "definition.load_before_editing": "Load definition before editing draft JSON.",
   "node_catalog.loading": "Loading node definitions...",
   "node_catalog.refresh_failed": "Node definition refresh failed.",

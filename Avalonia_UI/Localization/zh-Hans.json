@@ -130,6 +130,8 @@
   "definition.save_failed": "工作流草稿保存失败。",
   "definition.revision_conflict": "版本冲突：该工作流已被其他会话修改。",
   "definition.validation_invalidated": "草稿已修改，请重新校验。",
+  "definition.node_config_applied": "节点配置已应用到草稿。保存前请重新校验。",
+  "definition.node_config_apply_failed": "节点配置应用失败。",
   "definition.load_before_editing": "编辑草稿 JSON 前请先加载定义。",
   "node_catalog.loading": "正在加载节点定义...",
   "node_catalog.refresh_failed": "节点定义刷新失败。",

@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2k 输入字段集合转 Config 适配层已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2l ApplySelectedNodeConfigDraftCommand 最小接入
+> 文档状态：UI-NODE-CONFIG-2l ApplySelectedNodeConfigDraftCommand 最小接入已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2m 节点配置表单 View 协作说明
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5269,6 +5269,58 @@ UI-NODE-CONFIG-2l：
 ApplySelectedNodeConfigDraftCommand 最小接入，
 只把输入字段集合生成的 config JSON 写回 WorkflowDefinitionDraftJson，
 不改 XAML。
+```
+
+### 2.104 UI-NODE-CONFIG-2l ApplySelectedNodeConfigDraftCommand 最小接入
+
+阶段目标：
+
+```text
+在 MainWindowViewModel 内接入 Apply 命令，
+只把当前输入字段集合生成的 config JSON 写回 WorkflowDefinitionDraftJson。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2l_Apply命令最小接入.md
+```
+
+已完成：
+
+* 新增 `ApplySelectedNodeConfigDraftCommand`。
+* 新增 `CanApplySelectedNodeConfigDraft`。
+* Apply 成功时调用 input config builder 和 `NodeConfigDraftJsonPatcher`。
+* Apply 成功后只设置 `WorkflowDefinitionDraftJson`，沿用现有 dirty / validation 链路。
+* Apply 失败时保留原 JSON，并显示字段错误。
+* revision conflict 状态下 Apply 不可用。
+* 补充中英文最小本地化键。
+* 补充 ViewModel 测试。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不新增可见按钮。
+* 不做动态字段表单。
+* 不调用后端 Validate / Save。
+* 不清空 revision conflict。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests"
+通过：42，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：213，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2m：
+整理节点配置字段表单和 Apply 按钮的 XAML 接入说明，
+明确给 Gemini 的绑定对象、Command、控件类型和不可改边界。
 ```
 
 ---
