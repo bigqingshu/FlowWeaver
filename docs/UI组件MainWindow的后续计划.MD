@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2c 选中节点 config draft 只读摘要已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d Apply 写回边界前置分析或最小实现
+> 文档状态：UI-NODE-CONFIG-2d Apply 写回边界与验收清单已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d.1 NodeConfigDraftJsonPatcher 纯模型和测试
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4801,6 +4801,47 @@ UI-NODE-CONFIG-2d：
 先分析 Apply 写回 WorkflowDefinitionDraftJson 的最小边界，
 确认如何保持 dirty、validation invalidation 和 revision conflict 语义，
 再决定是否实现最小 Apply。
+```
+
+### 2.94 UI-NODE-CONFIG-2d Apply 写回边界与验收清单
+
+阶段目标：
+
+```text
+在实现任何 Apply 写回前，
+先确认写回算法、dirty / validation / revision conflict 继承语义和验收清单。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2d_Apply写回边界与验收清单.md
+```
+
+当前结论：
+
+* Apply 的唯一职责是把当前选中节点的 config 草稿写回 `WorkflowDefinitionDraftJson`。
+* Apply 不调用后端、不调用 Validate、不调用 Save、不刷新 workflow detail。
+* Apply 必须通过设置 `WorkflowDefinitionDraftJson = updatedJson` 触发现有 dirty 和 validation invalidation 逻辑。
+* revision conflict 状态下第一版 Apply 应拒绝或保持不可用，不能清空 conflict 标记。
+* 第一版 patcher 应拒绝无效 JSON、找不到节点、`node.config` 非 object 等不安全情况。
+* 最小实现应先做纯 `NodeConfigDraftJsonPatcher`，不直接接按钮。
+
+本阶段明确未做：
+
+* 不改 Avalonia 代码。
+* 不新增 Apply 命令。
+* 不实现动态表单。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改后端 API。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2d.1：
+新增 NodeConfigDraftJsonPatcher 纯模型和测试，
+只验证 JSON patch 算法，
+不接 MainWindowViewModel，不加 Apply 按钮。
 ```
 
 ---
