@@ -22,7 +22,7 @@ public sealed class StyleStructureTests
     }
 
     [TestMethod]
-    public void ControlStylesOwnButtonAndCardStyles()
+    public void ControlStylesOwnMigratedControlStyles()
     {
         var xaml = ReadSourceFile("Avalonia_UI", "Styles", "ControlStyles.axaml");
 
@@ -33,6 +33,9 @@ public sealed class StyleStructureTests
         StringAssert.Contains(xaml, "Selector=\"Button.Primary\"");
         StringAssert.Contains(xaml, "Selector=\"Button.Primary:pointerover /template/ ContentPresenter\"");
         StringAssert.Contains(xaml, "Selector=\"Button.Primary:pressed /template/ ContentPresenter\"");
+        StringAssert.Contains(xaml, "Selector=\"ListBoxItem\"");
+        StringAssert.Contains(xaml, "Selector=\"ListBoxItem:pointerover\"");
+        StringAssert.Contains(xaml, "Selector=\"ListBoxItem:selected\"");
         StringAssert.Contains(xaml, "Selector=\"Border.Card\"");
     }
 
@@ -43,8 +46,10 @@ public sealed class StyleStructureTests
 
         Assert.IsFalse(xaml.Contains("Selector=\"Button\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("Selector=\"Button.Primary\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("Selector=\"ListBoxItem\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("Selector=\"ListBoxItem:pointerover\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("Selector=\"ListBoxItem:selected\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("Selector=\"Border.Card\"", StringComparison.Ordinal));
-        StringAssert.Contains(xaml, "Selector=\"ListBoxItem\"");
         StringAssert.Contains(xaml, "Selector=\"TabControl\"");
         StringAssert.Contains(xaml, "Selector=\"TabItem\"");
     }

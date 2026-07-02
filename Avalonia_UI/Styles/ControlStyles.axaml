@@ -47,6 +47,26 @@
         <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForegroundBrush}"/>
     </Style>
 
+    <!-- ListBoxItem Animations -->
+    <Style Selector="ListBoxItem">
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Margin" Value="4,4"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ListBoxItem:pointerover">
+        <Setter Property="RenderTransform" Value="translateX(2px)"/>
+        <Setter Property="Background" Value="{DynamicResource ControlBackgroundHoverBrush}"/>
+    </Style>
+    <Style Selector="ListBoxItem:selected">
+        <Setter Property="Background" Value="{DynamicResource ControlBackgroundPressedBrush}"/>
+    </Style>
+
     <!-- Card Borders with light shadows -->
     <Style Selector="Border.Card">
         <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>

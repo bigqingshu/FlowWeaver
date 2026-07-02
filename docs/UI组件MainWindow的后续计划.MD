@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3.2 首批 ControlStyles 迁移已完成
-> 当前执行点：Button / Button.Primary / Border.Card 已迁入 ControlStyles.axaml，ListBoxItem 与 Shell 样式仍暂留 MainWindow
+> 文档状态：UI-COMPONENT-3.3 ListBoxItem 样式迁移已完成
+> 当前执行点：Button / Button.Primary / ListBoxItem / Border.Card 已迁入 ControlStyles.axaml，Shell 样式仍暂留 MainWindow
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2573,6 +2573,71 @@ dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
 ```text
 UI-COMPONENT-3.3：
 继续迁移 ListBoxItem 相关样式到 ControlStyles.axaml。
+```
+
+### 2.62 UI-COMPONENT-3.3 ListBoxItem 样式迁移完成记录
+
+3.3 已完成第二批控件样式迁移：
+
+```text
+Avalonia_UI/Styles/ControlStyles.axaml
+Avalonia_UI/Views/MainWindow.axaml
+Avalonia_UI.Tests/StyleStructureTests.cs
+docs/UI组件MainWindow的后续计划.MD
+```
+
+已实现内容：
+
+* 将以下样式从 `MainWindow.axaml` 迁移到 `ControlStyles.axaml`：
+  * `ListBoxItem`
+  * `ListBoxItem:pointerover`
+  * `ListBoxItem:selected`
+* 更新结构测试，确认 `ControlStyles.axaml` 拥有 `ListBoxItem` 相关样式。
+* 更新结构测试，确认 `MainWindow.axaml` 不再拥有 `ListBoxItem` 基础样式。
+
+当前 `ControlStyles.axaml` 已包含：
+
+* `Button`
+* `Button.Primary`
+* `ListBoxItem`
+* `Border.Card`
+
+仍未迁移内容：
+
+* `TabControl`
+* `TabControl[TabStripPlacement=Left] /template/ ContentPresenter#PART_SelectedContentHost`
+* `TabControl[TabStripPlacement=Left] /template/ ItemsPresenter#PART_ItemsPresenter`
+* `TabItem`
+* `TabItem > TextBlock`
+* `TabItem:pointerover`
+* `TabItem:selected`
+* `TabItem:selected /template/ Border#PART_SelectedPipe`
+
+边界确认：
+
+* 未修改 `App.axaml`。
+* 未修改 `ColorPalette.axaml`。
+* 未移动 `CombinedShellRegion`。
+* 未改页面 XAML。
+* 未触碰 `ItemsSource`、模板选择器、页面工厂、页面缓存或插件化。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：145
+失败：0
+跳过：0
+```
+
+下一步建议：
+
+```text
+UI-COMPONENT-3.4：
+评估 TabControl / TabItem / CombinedShellRegion 相关 Shell 样式是否迁移。
+
+建议先分析，不直接迁移。
 ```
 
 ---
