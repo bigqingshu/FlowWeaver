@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-4 阶段总体验收复核已完成
-> 当前执行点：MainWindow 已进一步瘦身，ShellHeaderView / AppShellPageHost 分别承载顶部 Header 与页面区域
+> 文档状态：UI-COMPONENT-5.0 Shell 样式作用域策略分析已补充
+> 当前执行点：MainWindow 保留窗口级 Shell 样式守护，下一步补最小结构守护
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3172,6 +3172,79 @@ MainWindow 剩余 Shell 样式作用域策略分析。
 重点回答：
 是否继续保留 TabControl / TabItem 样式在 MainWindow，
 还是为 CombinedShellRegion 设计专属 class / ShellStyles.axaml 的局部作用域。
+```
+
+### 2.69 UI-COMPONENT-5.0 Shell 样式作用域策略分析
+
+本小步只做策略分析和边界固化，不修改 Avalonia 代码。
+
+当前事实：
+
+```text
+MainWindow.axaml
+  Window.Styles
+    TabControl
+    TabControl[TabStripPlacement=Left] template styles
+    TabItem
+    TabItem pointerover / selected template styles
+
+AppShellPageHost.axaml
+  固定 TabControl
+  五个固定 TabItem
+  五个固定页面
+```
+
+这说明 `MainWindow.axaml` 当前仍持有 Shell 导航外观，但它的作用域是窗口局部的，不会自动影响后续其他窗口或其他普通 `TabControl`。
+
+可选方案对比：
+
+| 方案 | 做法 | 收益 | 风险 | 当前结论 |
+| --- | --- | --- | --- | --- |
+| A | 继续保留在 `MainWindow.Window.Styles` | 作用域最小，行为已被现有测试覆盖 | MainWindow 仍保留少量 Shell 样式职责 | 当前采用 |
+| B | 迁入全局 `ShellStyles.axaml` 并由 `App.axaml` 引入 | MainWindow 更薄 | 未加选择器作用域时，`TabControl` / `TabItem` 会影响全应用 | 暂不采用 |
+| C | 先设计 CombinedShellRegion 专属 class / 局部选择器，再决定迁移 | 为后续 ShellStyles 做准备 | 需要先验证 Avalonia selector 和视觉无回归 | 后续小步评估 |
+| D | 直接迁入 `AppShellPageHost.UserControl.Styles` | 样式靠近承载组件 | 容易让页面承载和样式策略同时变化 | 暂不采用 |
+
+最稳结论：
+
+```text
+UI-COMPONENT-5 阶段不直接迁移 ShellStyles.axaml。
+
+当前先保留 MainWindow.Window.Styles，
+并用测试明确：
+1. Shell Tab 样式没有进入全局 App.axaml；
+2. Shell Tab 样式没有进入 ControlStyles.axaml；
+3. AppShellPageHost 仍只负责固定页面承载；
+4. 不引入 ItemsSource / ContentTemplateSelector / 页面工厂。
+```
+
+后续如果要把 Shell 样式迁出 MainWindow，必须先满足：
+
+```text
+TabControl 有明确 Shell 专属标识；
+TabItem 有明确 Shell 专属标识或可靠祖先选择器；
+迁移后的 selector 不影响普通 TabControl；
+迁移前后 dotnet test 通过；
+迁移前后需要做 UI 截图或手工视觉核验；
+不得顺手改页面承载方式。
+```
+
+本小步完成内容：
+
+* 明确不把 `TabControl` / `TabItem` 样式直接放入全局 `ShellStyles.axaml`。
+* 明确保留 `MainWindow.Window.Styles` 是当前最小风险方案。
+* 明确后续如果迁移，必须先做 Shell 专属 selector 设计。
+* 明确 UI-COMPONENT-5.1 优先补结构守护，不改变视觉。
+
+下一步建议：
+
+```text
+UI-COMPONENT-5.1：
+补充 Shell 样式作用域结构守护。
+
+只增强测试或前置约束，
+不迁移 ShellStyles.axaml，
+不改变 MainWindow / AppShellPageHost 的视觉结构。
 ```
 
 ---
