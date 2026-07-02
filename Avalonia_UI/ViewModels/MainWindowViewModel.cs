@@ -93,6 +93,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private WorkflowDefinitionNodeListItemViewModel? selectedWorkflowDefinitionNode;
 
     [ObservableProperty]
+    private NodeConfigDraft? selectedNodeConfigDraft;
+
+    [ObservableProperty]
+    private NodeConfigEditableDraft? selectedNodeConfigEditableDraft;
+
+    [ObservableProperty]
+    private string selectedNodeConfigEditableDraftMessage = string.Empty;
+
+    [ObservableProperty]
     private string workflowDefinitionMessage = "Select a workflow to load definition.";
 
     [ObservableProperty]
@@ -327,6 +336,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
         RefreshShellNavigationItems();
+        RefreshSelectedNodeConfigDraftState();
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
@@ -405,34 +415,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
 
-    public string SelectedNodeConfigDraftSummaryText
-    {
-        get
-        {
-            if (SelectedWorkflowDefinitionNode is null)
-            {
-                return DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
-            }
-
-            var schema = FindNodeDefinition(SelectedWorkflowDefinitionNode)
-                ?.ConfigSchemaDescriptor;
-            var draft = NodeConfigDraftBuilder.Build(
-                WorkflowDefinitionDraftJson,
-                SelectedWorkflowDefinitionNode.NodeInstanceId,
-                schema);
-            if (!draft.IsSupported)
-            {
-                return DisplayTextFormatter.FormatSelectedNodeConfigDraftSchemaUnavailable();
-            }
-
-            var editableCount = draft.Fields.Count(item => item.IsEditable);
-            var fallbackCount = draft.Fields.Count(item => !item.IsEditable);
-            return DisplayTextFormatter.FormatSelectedNodeConfigDraftReady(
-                SelectedWorkflowDefinitionNode.NodeInstanceId,
-                editableCount,
-                fallbackCount);
-        }
-    }
+    public string SelectedNodeConfigDraftSummaryText =>
+        SelectedNodeConfigEditableDraftMessage;
 
     public string? RefreshNodeDefinitionsDisabledReasonText
     {
@@ -1050,7 +1034,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 OnPropertyChanged(nameof(HasNodeDefinitions));
                 OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-                OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+                RefreshSelectedNodeConfigDraftState();
                 NodeDefinitionCatalogMessage =
                     F("format.loaded_node_definitions", NodeDefinitions.Count);
                 return;
@@ -1060,7 +1044,7 @@ public partial class MainWindowViewModel : ViewModelBase
             NodeDefinitionCatalogErrorMessage = DescribeError(response);
             OnPropertyChanged(nameof(HasNodeDefinitions));
             OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-            OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+            RefreshSelectedNodeConfigDraftState();
         }
         finally
         {
@@ -1954,6 +1938,46 @@ public partial class MainWindowViewModel : ViewModelBase
                 StringComparison.Ordinal));
     }
 
+    private void RefreshSelectedNodeConfigDraftState()
+    {
+        if (WorkflowDefinitionDetail is null ||
+            SelectedWorkflowDefinitionNode is null)
+        {
+            SelectedNodeConfigDraft = null;
+            SelectedNodeConfigEditableDraft = null;
+            SelectedNodeConfigEditableDraftMessage =
+                DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
+            OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+            return;
+        }
+
+        var schema = FindNodeDefinition(SelectedWorkflowDefinitionNode)
+            ?.ConfigSchemaDescriptor;
+        var draft = NodeConfigDraftBuilder.Build(
+            WorkflowDefinitionDraftJson,
+            SelectedWorkflowDefinitionNode.NodeInstanceId,
+            schema);
+
+        SelectedNodeConfigDraft = draft;
+        if (!draft.IsSupported)
+        {
+            SelectedNodeConfigEditableDraft = null;
+            SelectedNodeConfigEditableDraftMessage =
+                DisplayTextFormatter.FormatSelectedNodeConfigDraftSchemaUnavailable();
+            OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+            return;
+        }
+
+        var editableDraft = NodeConfigEditableDraftBuilder.Build(draft);
+        SelectedNodeConfigEditableDraft = editableDraft;
+        SelectedNodeConfigEditableDraftMessage =
+            DisplayTextFormatter.FormatSelectedNodeConfigDraftReady(
+                SelectedWorkflowDefinitionNode.NodeInstanceId,
+                draft.Fields.Count(item => item.IsEditable),
+                draft.Fields.Count(item => !item.IsEditable));
+        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+    }
+
     private bool TryParseRuntimeEventLogFilters(
         out long? afterSequenceNumber,
         out int limit,
@@ -2404,6 +2428,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShareNameWatermarkText));
         OnPropertyChanged(nameof(VersionsText));
         RefreshShellNavigationItems();
+        RefreshSelectedNodeConfigDraftState();
     }
 
     partial void OnConnectionStatusChanged(ConnectionStatus value)
@@ -2546,14 +2571,14 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinition));
-        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+        RefreshSelectedNodeConfigDraftState();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedWorkflowDefinitionNodeChanged(
         WorkflowDefinitionNodeListItemViewModel? value)
     {
-        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+        RefreshSelectedNodeConfigDraftState();
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
@@ -2576,7 +2601,7 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
-        OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
+        RefreshSelectedNodeConfigDraftState();
 
         IsWorkflowDefinitionDraftDirty = value != originalWorkflowDefinitionJson;
 

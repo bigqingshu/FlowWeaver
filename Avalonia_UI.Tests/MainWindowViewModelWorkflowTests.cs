@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -325,6 +326,8 @@ public sealed class MainWindowViewModelWorkflowTests
 
         Assert.IsNull(viewModel.WorkflowDefinitionDetail);
         Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.IsNull(viewModel.SelectedNodeConfigDraft);
+        Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
         Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
     }
 
@@ -774,12 +777,124 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Selected node config schema unavailable.",
             viewModel.SelectedNodeConfigDraftSummaryText);
+        Assert.IsNotNull(viewModel.SelectedNodeConfigDraft);
+        Assert.IsFalse(viewModel.SelectedNodeConfigDraft.IsSupported);
+        Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
 
         await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
 
         Assert.AreEqual(
             "filter: 2 editable config field(s), 1 JSON fallback field(s)",
             viewModel.SelectedNodeConfigDraftSummaryText);
+        Assert.IsNotNull(viewModel.SelectedNodeConfigDraft);
+        Assert.IsTrue(viewModel.SelectedNodeConfigDraft.IsSupported);
+        Assert.IsNotNull(viewModel.SelectedNodeConfigEditableDraft);
+        Assert.HasCount(2, viewModel.SelectedNodeConfigEditableDraft.Fields);
+        Assert.AreEqual(
+            "amount",
+            viewModel.SelectedNodeConfigEditableDraft.Fields
+                .Single(field => field.Name == "field")
+                .InputValue);
+        CollectionAssert.AreEqual(
+            new[] { "GT", "LT" },
+            viewModel.SelectedNodeConfigEditableDraft.Fields
+                .Single(field => field.Name == "operator")
+                .EnumValues
+                .ToArray());
+    }
+
+    [TestMethod]
+    public async Task SelectedNodeConfigEditableDraftRefreshesWhenSelectionOrDraftJsonChanges()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter-a",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount"}
+                },
+                {
+                  "node_instance_id": "filter-b",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "status"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "field": {"type": "string", "required": true}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("filter-a", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.AreEqual(
+            "amount",
+            viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
+
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes[1];
+
+        Assert.AreEqual("filter-b", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.AreEqual(
+            "status",
+            viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter-a",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount"}
+                },
+                {
+                  "node_instance_id": "filter-b",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "state"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+
+        Assert.AreEqual(
+            "state",
+            viewModel.SelectedNodeConfigEditableDraft?.Fields.Single().InputValue);
     }
 
     [TestMethod]

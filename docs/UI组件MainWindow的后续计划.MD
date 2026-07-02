@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2g MainWindowViewModel 接入边界评估已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2h ViewModel 只读 editable draft 状态接入
+> 文档状态：UI-NODE-CONFIG-2h ViewModel 只读 editable draft 状态接入已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2i 最小可编辑输入状态边界评估
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5085,6 +5085,58 @@ UI-NODE-CONFIG-2h：
 在 MainWindowViewModel 内接入只读 SelectedNodeConfigDraft /
 SelectedNodeConfigEditableDraft 状态和测试，
 仍不接 Apply，不改 XAML。
+```
+
+### 2.100 UI-NODE-CONFIG-2h ViewModel 只读 EditableDraft 状态接入
+
+阶段目标：
+
+```text
+将节点配置 draft / editable draft 作为 MainWindowViewModel 只读状态暴露，
+为后续字段编辑和 Apply 接入提供稳定状态来源。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2h_ViewModel只读EditableDraft状态接入.md
+```
+
+已完成：
+
+* 新增 `SelectedNodeConfigDraft`。
+* 新增 `SelectedNodeConfigEditableDraft`。
+* 新增 `SelectedNodeConfigEditableDraftMessage`。
+* 新增 `RefreshSelectedNodeConfigDraftState()`。
+* `SelectedNodeConfigDraftSummaryText` 改为读取统一 message，保持原显示语义。
+* 在 workflow detail、selected node、draft JSON、node definitions、语言切换等入口刷新状态。
+* 补充 ViewModel 测试。
+
+本阶段明确未做：
+
+* 不改 XAML。
+* 不新增 Apply 命令。
+* 不调用 config builder / patcher。
+* 不写回 `WorkflowDefinitionDraftJson`。
+* 不改变 Validate / Save / revision conflict 行为。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "MainWindowViewModelWorkflowTests"
+通过：39，失败：0，跳过：0
+
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+通过：206，失败：0，跳过：0
+```
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2i：
+先做最小可编辑输入状态边界评估，
+确认用户修改字段值应该如何进入 ViewModel/model，
+再决定是否接 ApplySelectedNodeConfigDraftCommand。
 ```
 
 ---
