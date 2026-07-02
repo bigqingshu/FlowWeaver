@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.4d Headless GUI 自动 smoke 已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.5 结构化编辑阶段小结与后续边界分析
+> 文档状态：WORKFLOW-EDIT-2.5 结构化编辑阶段小结已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.6 结构化编辑目标完成审计与人工 Desktop smoke 决策
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6932,6 +6932,40 @@ docs/FlowWeaver_WORKFLOW-EDIT-2.4d_HeadlessGUI自动Smoke.md
 ```text
 WORKFLOW-EDIT-2.5：
 结构化编辑阶段小结与后续边界分析。
+```
+
+---
+
+### 2.146 WORKFLOW-EDIT-2.5 结构化编辑阶段小结与后续边界分析
+
+阶段目标：
+
+```text
+对 WORKFLOW-EDIT-2 做阶段小结，
+明确当前结构化编辑已完成的自动验收边界、
+仍未覆盖的人工 Desktop smoke、
+以及后续是否应继续扩展到 port/schema/画布能力。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.5_结构化编辑阶段小结与后续边界分析.md
+```
+
+当前结论：
+
+* WORKFLOW-EDIT-2 已完成 warning/error 可读化、node 输入体验、connection 输入体验、发布路径 smoke、Headless GUI smoke。
+* 当前支持表单式新增/删除 node 和 connection，仍以 `WorkflowDefinitionDraftJson` 作为保存接口唯一输入。
+* source / target port 仍为手动输入。
+* port 下拉、端口类型兼容、自动连接推荐、画布、拖拽连线继续不属于当前收口范围。
+* 人工 Desktop 点击 smoke 尚未被 Headless smoke 完全替代，更适合作为发布前或用户试用前验收清单。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.6：
+结构化编辑目标完成审计与人工 Desktop smoke 决策。
 ```
 
 ---
