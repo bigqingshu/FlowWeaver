@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-EDITOR-0 NodeEditorRegistry 边界分析已补充
-> 当前执行点：进入节点编辑入口主线，先固化内置专用编辑器注册边界
+> 文档状态：UI-NODE-EDITOR-1 NodeEditorRegistry 最小模型已完成
+> 当前执行点：节点编辑入口已有纯模型守护，下一步可进入 BuiltinNodeEditors 清单
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -3469,6 +3469,58 @@ UI-NODE-EDITOR-4：
 先做纯模型和测试：
 NodeEditorDescriptor / NodeEditorRegistry。
 提交后再决定是否进入 BuiltinNodeEditors 清单。
+```
+
+### 2.73 UI-NODE-EDITOR-1 NodeEditorRegistry 最小模型完成记录
+
+本小步只实现纯模型和单元测试，不接入 XAML、不改变界面。
+
+完成内容：
+
+```text
+Avalonia_UI/Models/NodeEditorKind.cs
+Avalonia_UI/Models/NodeEditorDescriptor.cs
+Avalonia_UI/Models/NodeEditorRegistry.cs
+Avalonia_UI.Tests/NodeEditorRegistryTests.cs
+```
+
+模型边界：
+
+* `NodeEditorKind.JsonFallback` 表示当前只能回退 JSON 草稿编辑。
+* `NodeEditorKind.BuiltIn` 预留内置专用编辑器类型。
+* `NodeEditorDescriptor` 只描述前端编辑器能力，不复制后端 `NodeDefinitionSpec`。
+* `NodeEditorRegistry` 只支持内存注册、稳定排序列表和按 `node_type` 查询。
+* 重复 `node_type` 注册会直接拒绝。
+* 空 `node_type` / 空显示名会直接拒绝。
+* `BuiltIn` 编辑器必须声明 `ViewTypeName`。
+
+测试结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+
+通过：154
+失败：0
+跳过：0
+```
+
+边界确认：
+
+* 未接入 `WorkflowEditorView`。
+* 未修改 `MainWindowViewModel`。
+* 未新增节点配置表单。
+* 未新增 JSON Schema 渲染器。
+* 未接入 `GET /api/v1/node-definitions` 的 UI 展示。
+* 未实现外部 DLL、模块扫描、页面工厂或热更新。
+
+下一步建议：
+
+```text
+UI-NODE-EDITOR-2：
+增加 BuiltinNodeEditors 只读清单。
+
+先为当前四个可见内置节点注册 JsonFallback 编辑器，
+并用测试确认 Fault / Delay 测试节点不进入普通内置编辑器清单。
 ```
 
 ---
