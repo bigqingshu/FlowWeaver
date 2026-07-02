@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2f 可编辑草稿转 Config 纯模型已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2g MainWindowViewModel 接入边界评估
+> 文档状态：UI-NODE-CONFIG-2g MainWindowViewModel 接入边界评估已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2h ViewModel 只读 editable draft 状态接入
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -5053,6 +5053,38 @@ UI-NODE-CONFIG-2g：
 先分析 MainWindowViewModel 接入边界，
 确认 SelectedNodeConfigEditableDraft、选中节点切换、草稿 JSON 变化、
 schema 变化和后续 Apply 命令的最小状态来源。
+```
+
+### 2.99 UI-NODE-CONFIG-2g MainWindowViewModel 接入边界评估
+
+阶段目标：
+
+```text
+在改 ViewModel 之前，
+确认节点配置 editable draft 状态应如何接入 MainWindowViewModel。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_UI-NODE-CONFIG-2g_MainWindowViewModel接入边界评估.md
+```
+
+当前结论：
+
+* `SelectedNodeConfigDraftSummaryText` 当前是即时计算摘要，没有保存 draft 状态。
+* 下一步应先接 `SelectedNodeConfigDraft` / `SelectedNodeConfigEditableDraft` 只读状态。
+* 刷新触发点应复用 `WorkflowDefinitionDetail`、`SelectedWorkflowDefinitionNode`、`WorkflowDefinitionDraftJson` 和 node definitions 刷新完成后的现有通知。
+* 2h 不接 XAML，不新增 Apply 命令，不写回 `WorkflowDefinitionDraftJson`。
+* revision conflict 状态不能被刷新 editable draft 状态清空。
+
+建议下一步：
+
+```text
+UI-NODE-CONFIG-2h：
+在 MainWindowViewModel 内接入只读 SelectedNodeConfigDraft /
+SelectedNodeConfigEditableDraft 状态和测试，
+仍不接 Apply，不改 XAML。
 ```
 
 ---
