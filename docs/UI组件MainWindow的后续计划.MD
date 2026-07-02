@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.8 WORKFLOW-EDIT-1 阶段总体验收复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.0 结构化编辑可用性缺口边界分析
+> 文档状态：WORKFLOW-EDIT-2.0 结构化编辑可用性缺口边界分析已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-2.1 用户友好 warning / error 映射
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6344,6 +6344,37 @@ docs/FlowWeaver_WORKFLOW-EDIT-1.8_阶段总体验收复核.md
 ```text
 WORKFLOW-EDIT-2.0：
 结构化编辑可用性缺口边界分析。
+```
+
+### 2.130 WORKFLOW-EDIT-2.0 结构化编辑可用性缺口边界分析
+
+阶段目标：
+
+```text
+在进入 WORKFLOW-EDIT-2 代码前，
+明确哪些可用性缺口可以先由 UI 侧收口，
+哪些必须等待后端 schema/API 契约。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-2.0_结构化编辑可用性缺口边界分析.md
+```
+
+当前结论：
+
+* WORKFLOW-EDIT-2 不应直接扩大为图形化编辑器。
+* 可以先做用户友好 warning / error 映射。
+* node type 选择可以基于已有节点定义只读数据逐步增强。
+* source / target 选择可以基于当前 draft nodes 逐步增强。
+* port 下拉和端口深校验需要等待更明确的 schema 契约。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-2.1：
+用户友好 warning / error 映射。
 ```
 
 ---
