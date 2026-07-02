@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-2c.0 Shell 导航区与内容区拆分边界分析已补充
-> 当前执行点：只确认导航/内容拆分边界，不实现 ItemsSource、模板选择器、页面工厂或插件化
+> 文档状态：UI-COMPONENT-2c.1 ShellNavigationRegion / ShellContentRegion 最小结构方案已补充
+> 当前执行点：只固化导航区和内容区的输入输出方案，不改 XAML、不引入动态页面承载
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -1741,6 +1741,189 @@ Gemini 协作判断：
 3. 不改变五页顺序。
 4. 不引入动态模板或页面创建逻辑。
 5. 保留所有现有绑定语义。
+```
+
+### 2.56 UI-COMPONENT-2c.1 ShellNavigationRegion / ShellContentRegion 最小结构方案
+
+方案目标：
+
+```text
+定义 ShellNavigationRegion 和 ShellContentRegion 的最小职责、输入、输出和验收标准。
+
+本小步只写结构方案，不改 XAML，不新增控件，不新增 ViewModel。
+```
+
+最小结构建议：
+
+```text
+AppShellPageHost
+  ShellNavigationRegion
+    负责显示导航项和发起选择变化
+
+  ShellContentRegion
+    负责显示当前选中页面内容
+```
+
+当前阶段仍保持：
+
+* 五个页面固定。
+* 页面顺序固定。
+* 页面实例仍由 XAML 静态声明。
+* DataContext 仍继承 `MainWindowViewModel`。
+* 选中状态仍以 `SelectedShellPageKey` 为稳定身份。
+* 当前固定 `TabControl` 桥接仍由 `SelectedShellPageIndex` 承担。
+
+#### ShellNavigationRegion
+
+职责：
+
+* 显示五个内置页面入口。
+* 呈现当前选中态。
+* 将用户选择同步回 Shell 选中状态。
+* 保留 Header 本地化绑定。
+
+输入：
+
+```text
+ShellNavigationItems
+WorkflowsNavigationItem.HeaderText
+RunsNavigationItem.HeaderText
+DataNavigationItem.HeaderText
+LogsNavigationItem.HeaderText
+SettingsNavigationItem.HeaderText
+SelectedShellPageKey
+SelectedShellPageIndex
+```
+
+输出：
+
+```text
+SelectedShellPageKey
+SelectedShellPageIndex
+```
+
+当前 2c 阶段约束：
+
+* 可以继续用固定五个导航项。
+* 可以继续用 `SelectedShellPageIndex` 桥接固定顺序。
+* 暂不要求 `ShellNavigationItems` 直接驱动 `ItemsSource`。
+* 暂不新增 `ShellNavigationRegionViewModel`。
+
+#### ShellContentRegion
+
+职责：
+
+* 显示当前选中页面对应的内容。
+* 保持五个现有页面的 DataContext 不变。
+* 不承担导航 Header 渲染职责。
+* 不承担页面实例创建策略。
+
+输入：
+
+```text
+SelectedShellPageKey
+SelectedShellPageContentKey
+SelectedShellPageIndex
+```
+
+输出：
+
+```text
+无直接输出。
+
+页面内部仍通过 MainWindowViewModel 的现有命令、集合和状态执行交互。
+```
+
+当前 2c 阶段约束：
+
+* 可以继续固定声明五个页面 View。
+* 暂不根据 `SelectedShellPageContentKey` 新增显隐分发。
+* 暂不新增页面缓存策略。
+* 暂不新增页面工厂。
+* 暂不反射创建页面。
+* 暂不引入外部页面注册。
+
+#### 两个区域之间的通信
+
+推荐通信边界：
+
+```text
+ShellNavigationRegion
+  -> 修改 SelectedShellPageKey 或 SelectedShellPageIndex
+
+MainWindowViewModel
+  -> 保持 SelectedShellPageKey / SelectedShellPageIndex / SelectedShellPageContentKey 一致
+
+ShellContentRegion
+  -> 读取当前选中状态并显示对应固定页面
+```
+
+当前阶段不要让两个区域互相直接引用对方控件。
+
+#### 是否新增 ViewModel
+
+2c.1 结论：
+
+```text
+暂不新增 ViewModel。
+```
+
+原因：
+
+* 当前 Shell 状态已经集中在 `MainWindowViewModel`。
+* 新增区域 ViewModel 会立刻牵动 DataContext 切换和页面内部绑定继承。
+* 当前更需要先稳定 View 层区域边界，而不是拆状态所有权。
+
+后续只有在满足以下条件时，才重新评估区域 ViewModel：
+
+* `MainWindowViewModel` 的 Shell 状态继续明显膨胀。
+* 导航区出现独立命令、过滤、分组或权限状态。
+* 内容区出现页面缓存、页面生命周期或动态注册策略。
+
+#### 是否需要 Gemini
+
+2c.1 结论：
+
+```text
+本小步不需要 Gemini 修改 View。
+
+如果进入 2c.2 的实际 XAML 拆分，可以给 Gemini 一份 View-only 任务。
+```
+
+Gemini 后续可执行的最小 View-only 任务：
+
+```text
+在 AppShellPageHost.axaml 内进行纯 XAML 层级拆分：
+
+1. 把导航相关 XAML 标注/整理为 ShellNavigationRegion。
+2. 把页面内容相关 XAML 标注/整理为 ShellContentRegion。
+3. 保留固定 TabControl 或等价固定结构。
+4. 不改变视觉效果。
+5. 不改变五个页面顺序。
+6. 不改变 Header 绑定。
+7. 不删除 SelectedShellPageIndex 双向绑定。
+8. 不引入 ItemsSource、模板选择器、页面工厂或反射创建。
+```
+
+#### 2c.1 验收标准
+
+* 文档明确 `ShellNavigationRegion` 的职责、输入和输出。
+* 文档明确 `ShellContentRegion` 的职责、输入和输出。
+* 文档明确两个区域之间只通过 ViewModel 状态通信，不互相引用控件。
+* 文档明确当前阶段继续固定五页、固定顺序、固定页面声明。
+* 文档明确暂不新增 ViewModel。
+* 文档明确 Gemini 后续只能做 View-only 层级整理。
+* 不修改 Avalonia 源码。
+
+#### 2c.1 后续建议
+
+```text
+UI-COMPONENT-2c.2 前置分析：
+是否可以在不改变视觉和不引入动态承载的前提下，
+对 AppShellPageHost.axaml 做一次纯 XAML 层级整理。
+
+如果答案为可以，再给 Gemini 或 Codex 一个极小 View-only 任务；
+如果答案为不可以，则继续保持当前固定 TabControl 结构，转向样式 ResourceDictionary 拆分或状态所有权复核。
 ```
 
 ---
