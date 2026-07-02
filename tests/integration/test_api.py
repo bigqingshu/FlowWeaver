@@ -330,7 +330,45 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
     assert all("implementation_path" not in definition for definition in definitions)
-    assert all("config_schema" not in definition for definition in definitions)
+    assert all(
+        definition["config_schema_version"] == "1.0"
+        for definition in definitions
+    )
+    assert all(
+        definition["config_schema"]["type"] == "object"
+        for definition in definitions
+    )
+
+    generate_properties = by_type["GenerateTestTableNode"]["config_schema"][
+        "properties"
+    ]
+    assert generate_properties["rows"] == {
+        "type": "integer",
+        "title": "Rows",
+        "required": True,
+        "default": 3,
+        "minimum": 0,
+    }
+    assert generate_properties["seed"]["default"] == 0
+    assert generate_properties["columns"]["items"] == {"type": "string"}
+
+    filter_properties = by_type["FilterRowsNode"]["config_schema"]["properties"]
+    assert filter_properties["operator"] == {
+        "type": "enum",
+        "title": "Operator",
+        "required": True,
+        "enum": ["EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"],
+    }
+
+    publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
+        "properties"
+    ]
+    assert publish_properties["export_names"]["items"] == {"type": "string"}
+    assert publish_properties["retention_seconds"]["minimum"] == 1
+
+    read_properties = by_type["ReadSharedTablesNode"]["config_schema"]["properties"]
+    assert read_properties["version_policy"]["enum"] == ["LATEST", "EXACT_VERSION"]
+    assert read_properties["exact_version"]["minimum"] == 1
 
 
 def test_node_definitions_api_rejects_missing_token(tmp_path: Path) -> None:

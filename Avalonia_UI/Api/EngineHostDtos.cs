@@ -48,6 +48,12 @@ public sealed record NodeDefinitionDto
 
     [JsonPropertyName("ui_visibility")]
     public string UiVisibility { get; init; } = string.Empty;
+
+    [JsonPropertyName("config_schema_version")]
+    public string ConfigSchemaVersion { get; init; } = string.Empty;
+
+    [JsonPropertyName("config_schema")]
+    public JsonElement? ConfigSchema { get; init; }
 }
 
 public sealed record WorkflowDefinitionDto

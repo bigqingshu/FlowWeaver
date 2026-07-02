@@ -71,6 +71,8 @@ class NodeDefinitionView(StrictModel):
     default_timeout_seconds: int
     retry_safe: bool
     ui_visibility: str = "visible"
+    config_schema_version: str
+    config_schema: dict[str, Any] | None = None
 
 
 class WorkflowDetailView(WorkflowDefinitionData):

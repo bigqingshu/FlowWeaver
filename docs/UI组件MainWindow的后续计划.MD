@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：NODE-CONFIG-SCHEMA-0 后端配置 Schema 边界清单已完成
-> 当前执行点：下一步可进入 NODE-CONFIG-SCHEMA-1 最小 API 字段实现
+> 文档状态：NODE-CONFIG-SCHEMA-1 后端配置 Schema 最小 API 字段已完成
+> 当前执行点：下一步可进入 UI-SCHEMA-0，只做 Avalonia schema 解析模型与渲染边界分析
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4438,6 +4438,54 @@ docs/FlowWeaver_NODE-CONFIG-SCHEMA-0_后端配置Schema边界清单.md
 NODE-CONFIG-SCHEMA-1：
 增加后端 config_schema_version / config_schema 最小 API 字段，
 并补后端 API 测试与 Avalonia DTO 反序列化测试。
+```
+
+### 2.86 NODE-CONFIG-SCHEMA-1 后端配置 Schema 最小 API 字段
+
+阶段目标：
+
+```text
+在不进入 UI 动态表单和 workflow config 校验的前提下，
+让节点定义只读 API 返回后端声明的最小 config_schema 契约。
+```
+
+已完成：
+
+* `NodeDefinitionSpec` 新增 `config_schema_version` 与 `config_schema`。
+* 新增内部 `NodeConfigSchemaSpec` / `NodeConfigFieldSpec`，由 API 显式投影为普通 JSON 对象。
+* `GET /api/v1/node-definitions` 返回 `config_schema_version` 和 `config_schema`。
+* 四个普通内置节点补齐第一版配置字段事实：
+  * `GenerateTestTableNode`：`rows`、`seed`、`columns`
+  * `FilterRowsNode`：`field`、`operator`、`value`
+  * `PublishSharedTablesNode`：`share_name`、`export_names`、`retention_seconds`
+  * `ReadSharedTablesNode`：`share_name`、`version_policy`、`exact_version`、`selected_members`
+* Avalonia `NodeDefinitionDto` 增加 `ConfigSchemaVersion` 和 `ConfigSchema`，只做 DTO 承接。
+* 后端 API 测试覆盖 schema 关键事实、Fault / Delay 仍不暴露、`implementation_path` 仍不泄露。
+* Avalonia API client 测试覆盖新字段反序列化。
+
+本阶段明确未做：
+
+* 不实现 Avalonia 动态表单。
+* 不实现 workflow definition config 静态校验。
+* 不改变 Workflow Save / Validate / revision conflict 流程。
+* 不改变节点运行时 config 校验行为。
+* 不把 Fault / Delay 测试节点暴露给普通 UI。
+
+验证结果：
+
+```text
+.\python312\python.exe -m ruff check src\flowweaver\nodes\registry.py src\flowweaver\nodes\default_registry.py src\flowweaver\api\api_models.py src\flowweaver\api\routes_node_definitions.py tests\integration\test_api.py
+.\python312\python.exe -m pytest -q tests\integration\test_api.py -k "node_definitions"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "EngineHostApiClientTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-SCHEMA-0：
+只做 Avalonia schema 解析模型与渲染边界分析，
+不要直接生成节点配置表单。
 ```
 
 ---

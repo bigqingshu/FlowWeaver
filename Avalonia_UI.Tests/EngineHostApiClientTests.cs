@@ -58,7 +58,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":[{"node_type":"GenerateTestTableNode","node_version":"1.0","display_name":"Generate Test Table","input_ports":[],"output_ports":[{"name":"out","required":false}],"execution_mode":"PROCESS_POOL","default_timeout_seconds":60,"retry_safe":false,"ui_visibility":"visible"}],"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":[{"node_type":"GenerateTestTableNode","node_version":"1.0","display_name":"Generate Test Table","input_ports":[],"output_ports":[{"name":"out","required":false}],"execution_mode":"PROCESS_POOL","default_timeout_seconds":60,"retry_safe":false,"ui_visibility":"visible","config_schema_version":"1.0","config_schema":{"type":"object","properties":{"rows":{"type":"integer","title":"Rows","required":true,"default":3,"minimum":0}}}}],"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
@@ -73,6 +73,14 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual("GenerateTestTableNode", result.Data?[0].NodeType);
         Assert.AreEqual("out", result.Data?[0].OutputPorts[0].Name);
         Assert.AreEqual("visible", result.Data?[0].UiVisibility);
+        Assert.AreEqual("1.0", result.Data?[0].ConfigSchemaVersion);
+        Assert.IsTrue(result.Data?[0].ConfigSchema.HasValue);
+        var rowsSchema = result.Data![0]
+            .ConfigSchema!.Value
+            .GetProperty("properties")
+            .GetProperty("rows");
+        Assert.AreEqual("integer", rowsSchema.GetProperty("type").GetString());
+        Assert.IsTrue(rowsSchema.GetProperty("required").GetBoolean());
     }
 
     [TestMethod]

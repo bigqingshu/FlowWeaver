@@ -52,6 +52,12 @@ def _to_node_definition_view(definition: NodeDefinitionSpec) -> NodeDefinitionVi
         default_timeout_seconds=definition.default_timeout_seconds,
         retry_safe=definition.retry_safe,
         ui_visibility="visible",
+        config_schema_version=definition.config_schema_version,
+        config_schema=(
+            definition.config_schema.to_schema()
+            if definition.config_schema is not None
+            else None
+        ),
     )
 
 
