@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-COMPONENT-3.0 样式 ResourceDictionary 拆分前置分析已补充
-> 当前执行点：只分析 MainWindow.Window.Styles 的拆分边界，不改 XAML、不新增样式文件、不改变视觉效果
+> 文档状态：UI-COMPONENT-3.1 样式拆分清单与目标文件命名已固化
+> 当前执行点：只固化样式拆分清单、目标文件命名和后续实现顺序，不改 XAML、不新增样式文件
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -2308,6 +2308,208 @@ Gemini 仅在需要视觉重设计或样式参数调整时参与。
 UI-COMPONENT-3.1：样式拆分清单与目标文件命名固化。
 
 仍然只写文档和验收标准，不改 XAML。
+```
+
+### 2.60 UI-COMPONENT-3.1 样式拆分清单与目标文件命名固化
+
+本小步目标：
+
+```text
+固化样式拆分清单、目标文件命名和后续最小实现顺序。
+
+本小步仍只写文档，不改 MainWindow.axaml，不新增样式文件，不修改 App.axaml。
+```
+
+术语说明：
+
+```text
+颜色和 Brush：
+继续使用 ResourceDictionary / ResourceInclude。
+
+控件 Style：
+后续实现时优先使用 Avalonia Styles / StyleInclude。
+
+阶段名称中的 ResourceDictionary 拆分，表示“样式资源从 MainWindow.axaml 中拆出”的大方向；
+具体实现形式以后续 Avalonia 可编译、可测试的 StyleInclude 方案为准。
+```
+
+现有文件职责：
+
+| 文件 | 当前职责 | 3.1 结论 |
+| --- | --- | --- |
+| `Avalonia_UI/Styles/ColorPalette.axaml` | Light / Dark Brush 资源 | 保持不动 |
+| `Avalonia_UI/App.axaml` | 引入 `ColorPalette.axaml` 和 `FluentTheme` | 3.1 不改 |
+| `Avalonia_UI/Views/MainWindow.axaml` | 窗口布局 + `Window.Styles` 控件样式 | 后续逐步迁出控件样式 |
+
+目标文件命名：
+
+| 目标文件 | 用途 | 阶段 | 状态 |
+| --- | --- | --- | --- |
+| `Avalonia_UI/Styles/ControlStyles.axaml` | 通用控件样式：Button、ListBoxItem、Border.Card | 3.2 / 3.3 | 后续新增 |
+| `Avalonia_UI/Styles/ShellStyles.axaml` | Shell 导航样式：TabControl、TabItem、CombinedShellRegion 相关样式 | 3.4 或更后 | 暂缓 |
+
+短期不采用的文件命名：
+
+| 文件 | 暂不采用原因 |
+| --- | --- |
+| `ButtonStyles.axaml` | 第一轮文件过细，增加 include 维护成本 |
+| `ListStyles.axaml` | 可先并入 `ControlStyles.axaml` |
+| `CardStyles.axaml` | 可先并入 `ControlStyles.axaml` |
+| `ShellNavigationStyles.axaml` | 后续如 Shell 样式继续膨胀，再考虑从 `ShellStyles.axaml` 细分 |
+
+#### 3.2 首批迁移清单
+
+目标：
+
+```text
+新增 Avalonia_UI/Styles/ControlStyles.axaml，
+迁移低风险通用样式：
+Button + Button.Primary + Border.Card。
+```
+
+首批迁移选择器：
+
+```text
+Button
+Button:pointerover /template/ ContentPresenter
+Button:pointerover
+Button:pressed /template/ ContentPresenter
+Button:pressed
+Button.Primary
+Button.Primary:pointerover /template/ ContentPresenter
+Button.Primary:pressed /template/ ContentPresenter
+Border.Card
+```
+
+首批暂不迁移：
+
+```text
+ListBoxItem
+TabControl
+TabItem
+```
+
+原因：
+
+* `Button` 和 `Border.Card` 是通用控件视觉，迁移后容易通过全量测试验证。
+* `ListBoxItem` 影响大量列表页面，作为第二批更稳。
+* `TabControl` / `TabItem` 与 `CombinedShellRegion` 强相关，必须等通用样式迁移稳定后再评估。
+
+3.2 后续实现验收：
+
+* `ControlStyles.axaml` 新增后能被应用加载。
+* `MainWindow.axaml` 中首批迁移的样式不再重复存在。
+* `Button.Primary` 仍能使用。
+* `Border.Card` 仍能使用。
+* `ColorPalette.axaml` 不被修改。
+* `dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore` 通过。
+
+#### 3.3 第二批迁移清单
+
+目标：
+
+```text
+继续迁移 ListBoxItem 相关样式到 ControlStyles.axaml。
+```
+
+第二批迁移选择器：
+
+```text
+ListBoxItem
+ListBoxItem:pointerover
+ListBoxItem:selected
+```
+
+3.3 后续实现验收：
+
+* 工作流、运行、日志、数据页列表仍能渲染。
+* `ListBoxItem` hover 和 selected 状态样式仍存在。
+* 不改变列表数据绑定。
+* 不修改页面 XAML。
+* `dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore` 通过。
+
+#### 3.4 Shell 样式暂缓清单
+
+目标：
+
+```text
+只在 3.2 / 3.3 稳定后，再评估是否新增 ShellStyles.axaml。
+```
+
+暂缓选择器：
+
+```text
+TabControl
+TabControl[TabStripPlacement=Left] /template/ ContentPresenter#PART_SelectedContentHost
+TabControl[TabStripPlacement=Left] /template/ ItemsPresenter#PART_ItemsPresenter
+TabItem
+TabItem > TextBlock
+TabItem:pointerover /template/ Border#PART_LayoutRoot
+TabItem:pointerover /template/ ContentPresenter
+TabItem:pointerover
+TabItem:selected /template/ ContentPresenter
+TabItem:selected
+TabItem:selected /template/ Border#PART_SelectedPipe
+```
+
+暂缓原因：
+
+* 这些样式直接影响 `CombinedShellRegion` 的左侧导航。
+* 包含 FluentTheme 模板部件选择器，迁移风险高于普通控件样式。
+* 迁移后需要额外做视觉复核，而不只是编译和单元测试。
+
+3.4 前置门槛：
+
+* 3.2 / 3.3 已通过。
+* `AppShellPageHostStructureTests` 仍通过。
+* 明确是否需要截图或手工视觉复核。
+* 明确 Gemini 是否需要参与视觉确认。
+
+#### App.axaml 后续引入策略
+
+后续实现时建议：
+
+```xml
+<Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Avalonia_UI/Styles/ControlStyles.axaml"/>
+</Application.Styles>
+```
+
+如果后续新增 `ShellStyles.axaml`：
+
+```xml
+<Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Avalonia_UI/Styles/ControlStyles.axaml"/>
+    <StyleInclude Source="avares://Avalonia_UI/Styles/ShellStyles.axaml"/>
+</Application.Styles>
+```
+
+注意：
+
+* `ColorPalette.axaml` 继续在 `Application.Resources` 中通过 `ResourceInclude` 引入。
+* 控件 Style 后续在 `Application.Styles` 中通过 `StyleInclude` 引入。
+* 不把 Brush 资源和 Style 样式混进同一个文件。
+
+#### 3.1 验收标准
+
+* 文档明确目标文件命名。
+* 文档明确 3.2 首批迁移范围。
+* 文档明确 3.3 第二批迁移范围。
+* 文档明确 3.4 Shell 样式暂缓原因。
+* 文档明确 `ResourceInclude` 与 `StyleInclude` 的职责区别。
+* 不修改 Avalonia 源码。
+* 不新增样式文件。
+* 不改变视觉效果。
+
+#### 3.1 后续建议
+
+```text
+UI-COMPONENT-3.2：
+新增 ControlStyles.axaml，并只迁移 Button + Button.Primary + Border.Card。
+
+这是第一步真实样式拆分，范围最小，风险低于迁移 ListBoxItem 或 TabItem。
 ```
 
 ---
