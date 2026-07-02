@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-1.6g 结构化编辑命令后置复核已完成
-> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7 结构化编辑 View 协作说明
+> 文档状态：WORKFLOW-EDIT-1.7 结构化编辑 View 协作说明已完成
+> 当前执行点：下一步可进入 WORKFLOW-EDIT-1.7a 结构化编辑 View 辅助文本属性
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -6132,6 +6132,38 @@ docs/FlowWeaver_WORKFLOW-EDIT-1.6g_结构化编辑命令后置复核.md
 WORKFLOW-EDIT-1.7：
 结构化编辑 View 协作说明，
 只写 Gemini 可执行说明，不直接改 XAML。
+```
+
+### 2.124 WORKFLOW-EDIT-1.7 结构化编辑 View 协作说明
+
+阶段目标：
+
+```text
+整理结构化编辑命令进入 View 前的 Gemini 协作边界，
+并确认是否存在必须由 Codex 先补齐的 ViewModel/L10N 前置项。
+```
+
+完成文档：
+
+```text
+docs/FlowWeaver_WORKFLOW-EDIT-1.7_结构化编辑View协作说明.md
+```
+
+当前结论：
+
+* ViewModel 已提供节点/连接增删命令和输入状态。
+* 但新增表单区缺少本地化显示文本属性。
+* 不建议 Gemini 直接写死英文或中文文本。
+* 下一步建议先由 Codex 做 `WORKFLOW-EDIT-1.7a`，补结构化编辑 View 辅助文本属性。
+* 1.7a 完成后，再让 Gemini 只改 `WorkflowSummaryView.axaml`。
+
+建议下一步：
+
+```text
+WORKFLOW-EDIT-1.7a：
+结构化编辑 View 辅助文本属性，
+只补 Localization 和 MainWindowViewModel 文本属性，
+不修改 XAML。
 ```
 
 ---
