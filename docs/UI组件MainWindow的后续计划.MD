@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：UI-NODE-CONFIG-2d Apply 写回边界与验收清单已完成
-> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d.1 NodeConfigDraftJsonPatcher 纯模型和测试
+> 文档状态：UI-NODE-CONFIG-2d.1 NodeConfigDraftJsonPatcher 纯模型和测试已完成
+> 当前执行点：下一步可进入 UI-NODE-CONFIG-2d.2 ApplySelectedNodeConfigDraftCommand 最小接入评估
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 
@@ -4842,6 +4842,58 @@ UI-NODE-CONFIG-2d.1：
 新增 NodeConfigDraftJsonPatcher 纯模型和测试，
 只验证 JSON patch 算法，
 不接 MainWindowViewModel，不加 Apply 按钮。
+```
+
+### 2.95 UI-NODE-CONFIG-2d.1 NodeConfigDraftJsonPatcher 纯模型和测试
+
+阶段目标：
+
+```text
+先实现 workflow draft JSON 的纯 patch 算法，
+验证选中节点 config 替换/新增和错误状态，
+不接 MainWindowViewModel，不加 Apply 按钮。
+```
+
+已完成：
+
+* 新增 `NodeConfigDraftApplyStatus`。
+* 新增 `NodeConfigDraftApplyResult`。
+* 新增 `NodeConfigDraftJsonPatcher`。
+* 新增 `NodeConfigDraftJsonPatcherTests`。
+
+patcher 当前能力：
+
+* 替换选中节点已有 object config。
+* 缺失 config 时新增 object config。
+* 保留其它节点、connections 和 workflow 根字段。
+* JSON 无效时返回 `JsonInvalid`。
+* 缺失 `nodes[]` 时返回 `NodesMissing`。
+* 找不到节点时返回 `NodeNotFound`。
+* 现有 `node.config` 非 object 时返回 `NodeConfigNotObject`。
+* 新 config 非 object 时返回 `ConfigUnsupported`。
+
+本阶段明确未做：
+
+* 不接 ViewModel。
+* 不新增 Apply 命令。
+* 不新增按钮或表单。
+* 不修改 `WorkflowDefinitionDraftJson`。
+* 不调用 Validate / Save / 后端 API。
+
+验证结果：
+
+```text
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore --filter "NodeConfigDraftJsonPatcherTests"
+dotnet test Avalonia_UI\Avalonia_UI.sln --no-restore
+```
+
+下一步建议：
+
+```text
+UI-NODE-CONFIG-2d.2：
+先评估并最小接入 ApplySelectedNodeConfigDraftCommand，
+只把当前 config draft 写回 WorkflowDefinitionDraftJson，
+不做动态字段编辑控件。
 ```
 
 ---
