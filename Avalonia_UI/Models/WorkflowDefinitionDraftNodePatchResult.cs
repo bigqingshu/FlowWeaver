@@ -13,5 +13,8 @@ public sealed record WorkflowDefinitionDraftNodePatchResult
     public IReadOnlyList<WorkflowDefinitionDraftConnection> RemovedConnections { get; init; } =
         [];
 
+    public IReadOnlyList<WorkflowDefinitionDraftConnection> AddedConnections { get; init; } =
+        [];
+
     public bool Succeeded => Status == WorkflowDefinitionDraftNodePatchStatus.Succeeded;
 }

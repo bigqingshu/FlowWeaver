@@ -41,6 +41,15 @@ public sealed class JsonLocalizationServiceTests
             "在草稿中未找到选中的插入位置节点。",
             service.GetString("definition.warning.insert_after_node_not_found"));
         Assert.AreEqual(
+            "节点已添加到草稿，并已更新线性连接。保存前请重新校验。",
+            service.GetString("definition.node_added_with_connections"));
+        Assert.AreEqual(
+            "已更新连接：\n移除：\n- old\n新增：\n- new",
+            service.Format(
+                "definition.node_add_rewired_connections",
+                "- old",
+                "- new"));
+        Assert.AreEqual(
             "节点及相关连接已从草稿删除。保存前请重新校验。",
             service.GetString("definition.node_deleted_with_connections"));
         Assert.AreEqual(

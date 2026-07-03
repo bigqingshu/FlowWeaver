@@ -181,6 +181,8 @@
   "definition.node_config_applied": "节点配置已应用到草稿。保存前请重新校验。",
   "definition.node_config_apply_failed": "节点配置应用失败。",
   "definition.node_added": "节点已添加到草稿。保存前请重新校验。",
+  "definition.node_added_with_connections": "节点已添加到草稿，并已更新线性连接。保存前请重新校验。",
+  "definition.node_add_rewired_connections": "已更新连接：\n移除：\n{0}\n新增：\n{1}",
   "definition.node_add_failed": "节点新增失败。",
   "definition.node_add_config_json_invalid": "节点配置 JSON 无效。",
   "definition.node_deleted": "节点已从草稿删除。保存前请重新校验。",

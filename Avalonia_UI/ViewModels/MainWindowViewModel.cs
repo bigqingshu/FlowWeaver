@@ -1345,6 +1345,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftNode))]
     private void AddWorkflowDefinitionDraftNode()
     {
+        var autoWirePorts = TryGetAutoWirePorts();
         JsonElement config;
         try
         {
@@ -1366,7 +1367,9 @@ public partial class MainWindowViewModel : ViewModelBase
             NewDraftNodeVersion,
             NewDraftNodeDisplayName,
             config,
-            SelectedWorkflowDefinitionNode?.NodeInstanceId);
+            SelectedWorkflowDefinitionNode?.NodeInstanceId,
+            autoWirePorts.InputPort,
+            autoWirePorts.OutputPort);
         if (!patchResult.Succeeded)
         {
             WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
@@ -1377,8 +1380,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
         SelectWorkflowDefinitionDraftNode(NewDraftNodeInstanceId);
-        WorkflowDefinitionValidationMessage = T("definition.node_added");
-        WorkflowDefinitionValidationErrorMessage = null;
+        WorkflowDefinitionValidationMessage =
+            patchResult.AddedConnections.Count > 0
+                ? T("definition.node_added_with_connections")
+                : T("definition.node_added");
+        WorkflowDefinitionValidationErrorMessage =
+            FormatAutoWiredConnectionsMessage(
+                patchResult.RemovedConnections,
+                patchResult.AddedConnections);
         ResetNewDraftNodeInput();
     }
 
@@ -2715,6 +2724,32 @@ public partial class MainWindowViewModel : ViewModelBase
                 removedConnections.Select(FormatRelatedConnectionSummary)));
     }
 
+    private string? FormatAutoWiredConnectionsMessage(
+        IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections,
+        IReadOnlyList<WorkflowDefinitionDraftConnection> addedConnections)
+    {
+        if (removedConnections.Count == 0 && addedConnections.Count == 0)
+        {
+            return null;
+        }
+
+        var removedText = removedConnections.Count == 0
+            ? "-"
+            : string.Join(
+                Environment.NewLine,
+                removedConnections.Select(FormatRelatedConnectionSummary));
+        var addedText = addedConnections.Count == 0
+            ? "-"
+            : string.Join(
+                Environment.NewLine,
+                addedConnections.Select(FormatRelatedConnectionSummary));
+
+        return F(
+            "definition.node_add_rewired_connections",
+            removedText,
+            addedText);
+    }
+
     private static string FormatRelatedConnectionSummary(
         WorkflowDefinitionDraftConnection connection)
     {
@@ -2764,6 +2799,19 @@ public partial class MainWindowViewModel : ViewModelBase
                 NodeConfigDefaultBuilder.BuildJson(definition.ConfigSchemaDescriptor);
             NewDraftNodeConfigJson = lastSuggestedNewDraftNodeConfigJson;
         }
+    }
+
+    private (string? InputPort, string? OutputPort) TryGetAutoWirePorts()
+    {
+        var definition = SelectedNewDraftNodeDefinition;
+        if (definition is null ||
+            definition.InputPorts.Length != 1 ||
+            definition.OutputPorts.Length != 1)
+        {
+            return (null, null);
+        }
+
+        return (definition.InputPorts[0].Name, definition.OutputPorts[0].Name);
     }
 
     private bool ShouldApplySuggestedNewDraftNodeInstanceId()

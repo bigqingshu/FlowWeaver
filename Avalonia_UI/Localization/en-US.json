@@ -181,6 +181,8 @@
   "definition.node_config_applied": "Node config applied to draft. Validate before saving.",
   "definition.node_config_apply_failed": "Node config apply failed.",
   "definition.node_added": "Node added to draft. Validate before saving.",
+  "definition.node_added_with_connections": "Node added to draft and linear connections were updated. Validate before saving.",
+  "definition.node_add_rewired_connections": "Rewired connections:\nRemoved:\n{0}\nAdded:\n{1}",
   "definition.node_add_failed": "Node add failed.",
   "definition.node_add_config_json_invalid": "Node config JSON is invalid.",
   "definition.node_deleted": "Node deleted from draft. Validate before saving.",

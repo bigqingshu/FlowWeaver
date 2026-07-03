@@ -19,7 +19,9 @@ public static class WorkflowDefinitionDraftNodePatcher
         string nodeVersion,
         string? displayName,
         JsonElement config,
-        string? insertAfterNodeInstanceId = null)
+        string? insertAfterNodeInstanceId = null,
+        string? autoWireInputPort = null,
+        string? autoWireOutputPort = null)
     {
         if (string.IsNullOrWhiteSpace(nodeInstanceId))
         {
@@ -75,7 +77,7 @@ public static class WorkflowDefinitionDraftNodePatcher
                 "WORKFLOW_DRAFT_NODES_MISSING");
         }
 
-        if (rootObject["connections"] is not JsonArray)
+        if (rootObject["connections"] is not JsonArray connections)
         {
             return Failed(
                 WorkflowDefinitionDraftNodePatchStatus.ConnectionsMissing,
@@ -110,6 +112,8 @@ public static class WorkflowDefinitionDraftNodePatcher
         }
 
         var insertIndex = nodes.Count;
+        JsonObject? downstreamConnection = null;
+        var downstreamConnectionIndex = -1;
         if (!string.IsNullOrWhiteSpace(insertAfterNodeInstanceId))
         {
             var anchorIndex = FindNodeIndex(nodes, insertAfterNodeInstanceId);
@@ -121,12 +125,67 @@ public static class WorkflowDefinitionDraftNodePatcher
             }
 
             insertIndex = anchorIndex + 1;
+            if (!string.IsNullOrWhiteSpace(autoWireInputPort) &&
+                !string.IsNullOrWhiteSpace(autoWireOutputPort))
+            {
+                var downstreamConnections = FindOutgoingConnectionIndexes(
+                    connections,
+                    insertAfterNodeInstanceId);
+                if (downstreamConnections.Count == 1 &&
+                    connections[downstreamConnections[0]] is JsonObject foundConnection)
+                {
+                    downstreamConnection = foundConnection;
+                    downstreamConnectionIndex = downstreamConnections[0];
+                }
+            }
         }
 
         nodes.Insert(insertIndex, newNode);
+        var addedConnections = new List<WorkflowDefinitionDraftConnection>();
+        var removedConnections = new List<WorkflowDefinitionDraftConnection>();
+        if (downstreamConnection is not null &&
+            !string.IsNullOrWhiteSpace(autoWireInputPort) &&
+            !string.IsNullOrWhiteSpace(autoWireOutputPort))
+        {
+            var removedConnection = ReadConnection(downstreamConnection);
+            removedConnections.Add(removedConnection);
+            connections.RemoveAt(downstreamConnectionIndex);
+
+            var anchorToNew = new WorkflowDefinitionDraftConnection
+            {
+                ConnectionId = BuildUniqueConnectionId(
+                    connections,
+                    removedConnection.SourceNodeId,
+                    nodeInstanceId),
+                SourceNodeId = removedConnection.SourceNodeId,
+                SourcePort = removedConnection.SourcePort,
+                TargetNodeId = nodeInstanceId,
+                TargetPort = autoWireInputPort,
+            };
+            var newToDownstream = new WorkflowDefinitionDraftConnection
+            {
+                ConnectionId = BuildUniqueConnectionId(
+                    connections,
+                    nodeInstanceId,
+                    removedConnection.TargetNodeId,
+                    [anchorToNew.ConnectionId]),
+                SourceNodeId = nodeInstanceId,
+                SourcePort = autoWireOutputPort,
+                TargetNodeId = removedConnection.TargetNodeId,
+                TargetPort = removedConnection.TargetPort,
+            };
+
+            connections.Add(CreateConnectionObject(anchorToNew));
+            connections.Add(CreateConnectionObject(newToDownstream));
+            addedConnections.Add(anchorToNew);
+            addedConnections.Add(newToDownstream);
+        }
+
         return new WorkflowDefinitionDraftNodePatchResult
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            RemovedConnections = removedConnections,
+            AddedConnections = addedConnections,
             UpdatedWorkflowDefinitionDraftJson =
                 rootObject.ToJsonString(IndentedJsonOptions),
         };
@@ -166,6 +225,127 @@ public static class WorkflowDefinitionDraftNodePatcher
         }
 
         return -1;
+    }
+
+    private static List<int> FindOutgoingConnectionIndexes(
+        JsonArray connections,
+        string sourceNodeId)
+    {
+        var result = new List<int>();
+        for (var index = 0; index < connections.Count; index++)
+        {
+            if (connections[index] is JsonObject connectionObject &&
+                string.Equals(
+                    GetStringValue(connectionObject, "source_node_id"),
+                    sourceNodeId,
+                    StringComparison.Ordinal))
+            {
+                result.Add(index);
+            }
+        }
+
+        return result;
+    }
+
+    private static WorkflowDefinitionDraftConnection ReadConnection(
+        JsonObject connectionObject)
+    {
+        return new WorkflowDefinitionDraftConnection
+        {
+            ConnectionId = GetStringValue(connectionObject, "connection_id") ?? string.Empty,
+            SourceNodeId = GetStringValue(connectionObject, "source_node_id") ?? string.Empty,
+            SourcePort = GetStringValue(connectionObject, "source_port") ?? string.Empty,
+            TargetNodeId = GetStringValue(connectionObject, "target_node_id") ?? string.Empty,
+            TargetPort = GetStringValue(connectionObject, "target_port") ?? string.Empty,
+        };
+    }
+
+    private static JsonObject CreateConnectionObject(
+        WorkflowDefinitionDraftConnection connection)
+    {
+        return new JsonObject
+        {
+            ["connection_id"] = connection.ConnectionId,
+            ["source_node_id"] = connection.SourceNodeId,
+            ["source_port"] = connection.SourcePort,
+            ["target_node_id"] = connection.TargetNodeId,
+            ["target_port"] = connection.TargetPort,
+        };
+    }
+
+    private static string BuildUniqueConnectionId(
+        JsonArray connections,
+        string sourceNodeId,
+        string targetNodeId,
+        IReadOnlyCollection<string>? reservedIds = null)
+    {
+        var existingIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var connection in connections)
+        {
+            if (connection is JsonObject connectionObject)
+            {
+                var connectionId = GetStringValue(connectionObject, "connection_id");
+                if (!string.IsNullOrWhiteSpace(connectionId))
+                {
+                    existingIds.Add(connectionId);
+                }
+            }
+        }
+
+        if (reservedIds is not null)
+        {
+            foreach (var reservedId in reservedIds)
+            {
+                existingIds.Add(reservedId);
+            }
+        }
+
+        var baseId =
+            $"{BuildSnakeCaseIdentifier(sourceNodeId, "source")}_to_{BuildSnakeCaseIdentifier(targetNodeId, "target")}";
+        var candidate = baseId;
+        var suffix = 2;
+        while (existingIds.Contains(candidate))
+        {
+            candidate = $"{baseId}_{suffix}";
+            suffix++;
+        }
+
+        return candidate;
+    }
+
+    private static string BuildSnakeCaseIdentifier(string source, string fallback)
+    {
+        var builder = new System.Text.StringBuilder();
+        for (var index = 0; index < source.Length; index++)
+        {
+            var current = source[index];
+            if (char.IsLetterOrDigit(current))
+            {
+                var previous = index > 0 ? source[index - 1] : '\0';
+                var next = index + 1 < source.Length ? source[index + 1] : '\0';
+                var shouldSeparate =
+                    char.IsUpper(current)
+                    && builder.Length > 0
+                    && builder[^1] != '_'
+                    && (char.IsLower(previous)
+                        || char.IsDigit(previous)
+                        || char.IsLower(next));
+
+                if (shouldSeparate)
+                {
+                    builder.Append('_');
+                }
+
+                builder.Append(char.ToLowerInvariant(current));
+            }
+            else if (builder.Length > 0 && builder[^1] != '_')
+            {
+                builder.Append('_');
+            }
+        }
+
+        var value = builder.ToString().Trim('_');
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
     public static WorkflowDefinitionDraftNodePatchResult DeleteNode(
@@ -232,19 +412,6 @@ public static class WorkflowDefinitionDraftNodePatcher
             RemovedConnections = removedConnections,
             UpdatedWorkflowDefinitionDraftJson =
                 readResult.Root.ToJsonString(IndentedJsonOptions),
-        };
-    }
-
-    private static WorkflowDefinitionDraftConnection ReadConnection(
-        JsonObject connectionObject)
-    {
-        return new WorkflowDefinitionDraftConnection
-        {
-            ConnectionId = GetStringValue(connectionObject, "connection_id") ?? string.Empty,
-            SourceNodeId = GetStringValue(connectionObject, "source_node_id") ?? string.Empty,
-            SourcePort = GetStringValue(connectionObject, "source_port") ?? string.Empty,
-            TargetNodeId = GetStringValue(connectionObject, "target_node_id") ?? string.Empty,
-            TargetPort = GetStringValue(connectionObject, "target_port") ?? string.Empty,
         };
     }
 

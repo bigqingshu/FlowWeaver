@@ -96,6 +96,93 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void AddNodeAutoWiresSingleDownstreamConnectionWhenPortsAreProvided()
+    {
+        using var config = JsonDocument.Parse("""{"field":"amount"}""");
+
+        var result = WorkflowDefinitionDraftNodePatcher.AddNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_sink", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """,
+            "filter",
+            "FilterRowsNode",
+            "1.0",
+            null,
+            config.RootElement,
+            "source",
+            "in",
+            "out");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.HasCount(1, result.RemovedConnections);
+        Assert.AreEqual("source_to_sink", result.RemovedConnections[0].ConnectionId);
+        Assert.HasCount(2, result.AddedConnections);
+        Assert.AreEqual("source_to_filter", result.AddedConnections[0].ConnectionId);
+        Assert.AreEqual("source", result.AddedConnections[0].SourceNodeId);
+        Assert.AreEqual("out", result.AddedConnections[0].SourcePort);
+        Assert.AreEqual("filter", result.AddedConnections[0].TargetNodeId);
+        Assert.AreEqual("in", result.AddedConnections[0].TargetPort);
+        Assert.AreEqual("filter_to_sink", result.AddedConnections[1].ConnectionId);
+        Assert.AreEqual("filter", result.AddedConnections[1].SourceNodeId);
+        Assert.AreEqual("out", result.AddedConnections[1].SourcePort);
+        Assert.AreEqual("sink", result.AddedConnections[1].TargetNodeId);
+        Assert.AreEqual("in", result.AddedConnections[1].TargetPort);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var connections = updated.RootElement.GetProperty("connections");
+        Assert.AreEqual(2, connections.GetArrayLength());
+        Assert.AreEqual("source_to_filter", connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("filter", connections[0].GetProperty("target_node_id").GetString());
+        Assert.AreEqual("filter_to_sink", connections[1].GetProperty("connection_id").GetString());
+        Assert.AreEqual("filter", connections[1].GetProperty("source_node_id").GetString());
+    }
+
+    [TestMethod]
+    public void AddNodeDoesNotAutoWireWhenAnchorHasMultipleDownstreamConnections()
+    {
+        using var config = JsonDocument.Parse("""{}""");
+
+        var result = WorkflowDefinitionDraftNodePatcher.AddNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "left"},
+                {"node_instance_id": "right"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_left", "source_node_id": "source", "source_port": "out", "target_node_id": "left", "target_port": "in"},
+                {"connection_id": "source_to_right", "source_node_id": "source", "source_port": "out", "target_node_id": "right", "target_port": "in"}
+              ]
+            }
+            """,
+            "filter",
+            "FilterRowsNode",
+            "1.0",
+            null,
+            config.RootElement,
+            "source",
+            "in",
+            "out");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.IsEmpty(result.RemovedConnections);
+        Assert.IsEmpty(result.AddedConnections);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        Assert.AreEqual(4, updated.RootElement.GetProperty("nodes").GetArrayLength());
+        Assert.AreEqual(2, updated.RootElement.GetProperty("connections").GetArrayLength());
+    }
+
+    [TestMethod]
     public void AddNodeRejectsMissingInsertionAnchor()
     {
         using var config = JsonDocument.Parse("""{}""");
