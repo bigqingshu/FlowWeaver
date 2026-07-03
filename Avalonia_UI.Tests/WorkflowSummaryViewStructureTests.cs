@@ -100,7 +100,10 @@ public sealed class WorkflowSummaryViewStructureTests
             "Workflow",
             "WorkflowSummaryView.axaml");
 
-        StringAssert.Contains(xaml, "Text=\"{Binding StructuredEditSectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding AddNodeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DeleteNodeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding AddConnectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DeleteConnectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeInstanceIdText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeTypeText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeVersionText}\"");
@@ -162,6 +165,26 @@ public sealed class WorkflowSummaryViewStructureTests
             xaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftConnectionCommand}\"");
         Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void MiddleColumnLayoutKeepsStructuredEditAreasCompactAndScrollable()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "<ScrollViewer VerticalScrollBarVisibility=\"Auto\"");
+        StringAssert.Contains(xaml, "<StackPanel Spacing=\"10\">");
+        StringAssert.Contains(xaml, "MaxHeight=\"160\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"140\"");
+        Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,*\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,Auto,Auto,Auto\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,Auto\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("MinHeight=\"100\"", StringComparison.Ordinal));
     }
 
     private static string ReadSourceFile(params string[] pathParts)

@@ -1,7 +1,7 @@
 # FlowWeaver Avalonia 组件管理与可扩展界面实施方案
 
-> 文档状态：WORKFLOW-EDIT-2.8 推送后状态同步已完成
-> 当前执行点：节点配置与结构化编辑主线已推送完成，人工 Desktop smoke 保留为发布前手动验收项
+> 文档状态：WORKFLOW-EDIT-3.0 中间列布局收口已完成
+> 当前执行点：节点配置与结构化编辑主线已推送完成，WorkflowSummaryView 中间列“节点/连接”显示边界已完成最小收口
 > 适用范围：`Avalonia_UI/Views/MainWindow.axaml`、现有五个页面、Shell 区域契约、后续组件注册方向
 > 不适用范围：外部 DLL 加载、模块安装/更新、代码签名、自动更新、后台服务、系统托盘、self-contained Desktop
 

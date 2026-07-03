@@ -4,10 +4,12 @@
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSummaryView"
              x:DataType="vm:MainWindowViewModel">
-    <Grid RowDefinitions="Auto,*,*" RowSpacing="10">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="10">
         <!-- Details & Revisions Card -->
         <Border Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding WorkflowDefinitionSectionText}"
                                FontSize="16"
@@ -52,7 +54,7 @@
                          ItemsSource="{Binding WorkflowDefinitionDetail.Revisions}"
                          BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
-                         MinHeight="100">
+                         MaxHeight="140">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:WorkflowRevisionListItemViewModel"
                                       x:DataType="vm:WorkflowRevisionListItemViewModel">
@@ -78,8 +80,8 @@
         </Border>
 
         <!-- Nodes Card -->
-        <Border Grid.Row="1" Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,*,Auto,Auto,Auto" RowSpacing="10">
+        <Border Classes="Card" Padding="14">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding NodesSectionText}"
                                FontSize="16"
@@ -97,7 +99,7 @@
                          SelectedItem="{Binding SelectedWorkflowDefinitionNode}"
                          BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
-                         MinHeight="100">
+                         MaxHeight="160">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:WorkflowDefinitionNodeListItemViewModel"
                                       x:DataType="vm:WorkflowDefinitionNodeListItemViewModel">
@@ -191,7 +193,7 @@
                 <StackPanel Grid.Row="4"
                             Spacing="8"
                             IsVisible="{Binding HasWorkflowDefinition}">
-                    <TextBlock Text="{Binding StructuredEditSectionText}"
+                    <TextBlock Text="{Binding AddNodeText}"
                                FontSize="14"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
@@ -204,6 +206,7 @@
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Column="1"
+                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         <TextBlock Grid.Column="2"
                                    Text="{Binding NodeTypeText}"
@@ -270,6 +273,11 @@
                                 MinWidth="104"/>
                     </Grid>
 
+                    <TextBlock Text="{Binding DeleteNodeText}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
                     <Grid ColumnDefinitions="120,*,Auto"
                           ColumnSpacing="10">
                         <TextBlock Text="{Binding NodeInstanceIdText}"
@@ -287,8 +295,8 @@
         </Border>
 
         <!-- Connections Card -->
-        <Border Grid.Row="2" Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+        <Border Classes="Card" Padding="14">
+            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding ConnectionsSectionText}"
                                FontSize="16"
@@ -305,7 +313,7 @@
                          ItemsSource="{Binding WorkflowDefinitionDetail.Connections}"
                          BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1"
-                         MinHeight="100">
+                         MaxHeight="140">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:WorkflowDefinitionConnectionListItemViewModel"
                                       x:DataType="vm:WorkflowDefinitionConnectionListItemViewModel">
@@ -320,7 +328,7 @@
                 <StackPanel Grid.Row="2"
                             Spacing="8"
                             IsVisible="{Binding HasWorkflowDefinition}">
-                    <TextBlock Text="{Binding StructuredEditSectionText}"
+                    <TextBlock Text="{Binding AddConnectionText}"
                                FontSize="14"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
@@ -333,6 +341,7 @@
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Column="1"
+                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftConnectionId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         <TextBlock Grid.Column="2"
                                    Text="{Binding SourceNodeText}"
@@ -366,6 +375,7 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Row="1"
                                  Grid.Column="1"
+                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftConnectionSourcePort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         <TextBlock Grid.Row="1"
                                    Grid.Column="2"
@@ -402,6 +412,7 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Row="2"
                                  Grid.Column="1"
+                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftConnectionTargetPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         <Button Grid.Row="2"
                                 Grid.Column="3"
@@ -410,6 +421,11 @@
                                 HorizontalAlignment="Right"
                                 MinWidth="128"/>
                     </Grid>
+
+                    <TextBlock Text="{Binding DeleteConnectionText}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
 
                     <Grid ColumnDefinitions="120,*,Auto"
                           ColumnSpacing="10">
@@ -426,5 +442,6 @@
                 </StackPanel>
             </Grid>
         </Border>
-    </Grid>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>
