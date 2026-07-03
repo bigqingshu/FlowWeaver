@@ -645,6 +645,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DeleteNodeText => T("definition.delete_node");
 
+    public string NodeActionsSectionText => T("definition.node_actions");
+
     public string NodeInstanceIdText => T("definition.node_instance_id");
 
     public string NodeTypeText => T("definition.node_type");
@@ -690,8 +692,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public string TimeoutText => T("node_catalog.timeout");
 
     public string DraftJsonSectionText => T("definition.draft_json");
-
-    public string AdvancedDraftJsonText => T("definition.advanced_draft_json");
 
     public string ShowAdvancedDraftJsonText => IsWorkflowDraftJsonAdvancedVisible
         ? T("definition.hide_draft_json")
@@ -998,6 +998,7 @@ public partial class MainWindowViewModel : ViewModelBase
             StatusMessage = LocalizeHealthStatusMessage(result);
             ErrorMessage = null;
             await SaveConnectionSettingsAsync(settings);
+            await RefreshNodeDefinitionsAfterHealthyConnectionAsync();
             return;
         }
 
@@ -1232,6 +1233,16 @@ public partial class MainWindowViewModel : ViewModelBase
                 IsLoadingNodeDefinitions = false;
             }
         }
+    }
+
+    private async Task RefreshNodeDefinitionsAfterHealthyConnectionAsync()
+    {
+        if (HasNodeDefinitions || !CanRefreshNodeDefinitions())
+        {
+            return;
+        }
+
+        await RefreshNodeDefinitionsAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -3076,6 +3087,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(StructuredEditSectionText));
         OnPropertyChanged(nameof(AddNodeText));
         OnPropertyChanged(nameof(DeleteNodeText));
+        OnPropertyChanged(nameof(NodeActionsSectionText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
@@ -3098,7 +3110,6 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(TimeoutText));
         OnPropertyChanged(nameof(DraftJsonSectionText));
-        OnPropertyChanged(nameof(AdvancedDraftJsonText));
         OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
         OnPropertyChanged(nameof(ValidateText));
         OnPropertyChanged(nameof(SaveText));

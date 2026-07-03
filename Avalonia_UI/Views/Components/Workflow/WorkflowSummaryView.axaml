@@ -179,7 +179,7 @@
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
 
                     <Grid ColumnDefinitions="120,*"
-                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="10"
                           RowSpacing="6">
                         <TextBlock Text="{Binding NodeInstanceIdText}"
@@ -195,24 +195,33 @@
                         <StackPanel Grid.Row="1"
                                     Grid.Column="1"
                                     Spacing="4">
-                            <ComboBox ItemsSource="{Binding NodeDefinitions}"
-                                      SelectedItem="{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"
-                                                  x:DataType="vm:NodeDefinitionListItemViewModel">
-                                        <Grid RowDefinitions="Auto,Auto">
-                                            <TextBlock Text="{Binding DisplayNameText}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                            <TextBlock Grid.Row="1"
-                                                       Text="{Binding TypeText}"
-                                                       FontSize="11"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <ComboBox ItemsSource="{Binding NodeDefinitions}"
+                                          SelectedItem="{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"
+                                                      x:DataType="vm:NodeDefinitionListItemViewModel">
+                                            <Grid RowDefinitions="Auto,Auto">
+                                                <TextBlock Text="{Binding DisplayNameText}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                                <TextBlock Grid.Row="1"
+                                                           Text="{Binding TypeText}"
+                                                           FontSize="11"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Panel Grid.Column="1"
+                                       Background="Transparent"
+                                       ToolTip.Tip="{Binding RefreshNodeDefinitionsDisabledReasonText}">
+                                    <Button Content="{Binding RefreshText}"
+                                            Command="{Binding RefreshNodeDefinitionsCommand}"
+                                            MinWidth="84"/>
+                                </Panel>
+                            </Grid>
                             <TextBox Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
 
@@ -245,13 +254,6 @@
                                  FontFamily="Consolas"
                                  FontSize="12"
                                   Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-
-                        <Button Grid.Row="5"
-                                Grid.Column="1"
-                                Content="{Binding AddNodeText}"
-                                Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
-                                HorizontalAlignment="Right"
-                                MinWidth="104"/>
                     </Grid>
 
                     <TextBlock Text="{Binding DeleteNodeText}"
@@ -259,32 +261,36 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-                    <Grid ColumnDefinitions="120,*,Auto"
+                    <Grid ColumnDefinitions="120,*"
                           ColumnSpacing="10">
                         <TextBlock Text="{Binding NodeInstanceIdText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Column="1"
                                  Text="{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <Button Grid.Column="2"
-                                Content="{Binding DeleteNodeText}"
-                                Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
-                                MinWidth="104"/>
                     </Grid>
 
-                    <Grid ColumnDefinitions="*,Auto"
-                          ColumnSpacing="10"
-                          Margin="0,4,0,0">
-                        <TextBlock Text="{Binding AdvancedDraftJsonText}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
-                        <primitives:ToggleButton Grid.Column="1"
-                                                 Content="{Binding ShowAdvancedDraftJsonText}"
+                    <TextBlock Text="{Binding NodeActionsSectionText}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <WrapPanel Orientation="Horizontal"
+                               HorizontalAlignment="Right">
+                        <Button Content="{Binding AddNodeText}"
+                                Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
+                                MinWidth="104"
+                                Margin="0,0,8,8"/>
+                        <Button Content="{Binding DeleteNodeText}"
+                                Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
+                                MinWidth="104"
+                                Margin="0,0,8,8"/>
+                        <primitives:ToggleButton Content="{Binding ShowAdvancedDraftJsonText}"
                                                  IsChecked="{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}"
-                                                 MinWidth="128"/>
-                    </Grid>
+                                                 MinWidth="128"
+                                                 Margin="0,0,0,8"/>
+                    </WrapPanel>
+
                 </StackPanel>
             </Grid>
         </Border>

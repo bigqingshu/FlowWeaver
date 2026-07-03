@@ -38,6 +38,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("结构化编辑", viewModel.StructuredEditSectionText);
         Assert.AreEqual("新增节点", viewModel.AddNodeText);
         Assert.AreEqual("删除节点", viewModel.DeleteNodeText);
+        Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual("节点实例 ID", viewModel.NodeInstanceIdText);
         Assert.AreEqual("配置 JSON", viewModel.ConfigJsonText);
         Assert.AreEqual("显示连接", viewModel.ShowConnectionsText);
@@ -45,7 +46,6 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("删除连接", viewModel.DeleteConnectionText);
         Assert.AreEqual("源节点", viewModel.SourceNodeText);
         Assert.AreEqual("目标端口", viewModel.TargetPortText);
-        Assert.AreEqual("高级草稿 JSON", viewModel.AdvancedDraftJsonText);
         Assert.AreEqual("显示草稿 JSON", viewModel.ShowAdvancedDraftJsonText);
         Assert.AreEqual("工作流运行", viewModel.WorkflowRunFilterText);
         Assert.AreEqual("共享名称", viewModel.ShareNameWatermarkText);
@@ -73,6 +73,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("审计事件", viewModel.AuditEventsSectionText);
         Assert.AreEqual("节点类型", viewModel.NodeTypeText);
         Assert.AreEqual("节点版本", viewModel.NodeVersionText);
+        Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual("显示名称", viewModel.DisplayNameText);
         Assert.AreEqual("连接 ID", viewModel.ConnectionIdText);
         Assert.AreEqual("源端口", viewModel.SourcePortText);
@@ -752,6 +753,9 @@ public sealed class MainWindowViewModelLocalizationTests
         public ApiResponseEnvelope<List<NodeRunDto>> NodeRunsResponse { get; init; } =
             ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>());
 
+        public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; init; } =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
+
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; init; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
 
@@ -772,7 +776,7 @@ public sealed class MainWindowViewModelLocalizationTests
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(NodeDefinitionsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(

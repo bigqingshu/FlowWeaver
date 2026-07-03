@@ -87,6 +87,46 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public async Task CheckConnectionLoadsNodeDefinitionsWhenHealthyAndCatalogIsEmpty()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+            NodeDefinitionsResponse =
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>
+                    {
+                        new()
+                        {
+                            NodeType = "GenerateTestTableNode",
+                            NodeVersion = "1.0",
+                            DisplayName = "Generate Test Table",
+                            OutputPorts =
+                            [
+                                new NodePortDefinitionDto
+                                {
+                                    Name = "out",
+                                    Required = true,
+                                },
+                            ],
+                        },
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.BaseUrl = "http://127.0.0.1:8012/";
+        viewModel.Token = "secret";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(ConnectionStatus.Connected, viewModel.ConnectionStatus);
+        Assert.AreEqual(1, apiClient.ListNodeDefinitionsCallCount);
+        Assert.HasCount(1, viewModel.NodeDefinitions);
+        Assert.AreEqual("GenerateTestTableNode", viewModel.NodeDefinitions[0].NodeType);
+        Assert.AreEqual("Loaded 1 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
+    }
+
+    [TestMethod]
     public async Task CheckConnectionDoesNotSaveWhenHealthFails()
     {
         var apiClient = new FakeApiClient
@@ -246,7 +286,12 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
 
+        public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; set; } =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
+
         public EngineHostConnectionSettings? LastSettings { get; private set; }
+
+        public int ListNodeDefinitionsCallCount { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -260,7 +305,9 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            ListNodeDefinitionsCallCount++;
+            LastSettings = settings;
+            return Task.FromResult(NodeDefinitionsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
