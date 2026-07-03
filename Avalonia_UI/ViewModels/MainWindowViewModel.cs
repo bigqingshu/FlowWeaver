@@ -2417,10 +2417,14 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedNodeConfigEditableInputFields.Clear();
         if (editableDraft is not null)
         {
+            var nodeType = SelectedWorkflowDefinitionNode?.NodeType ?? string.Empty;
             foreach (var field in editableDraft.Fields)
             {
                 SelectedNodeConfigEditableInputFields.Add(
-                    new NodeConfigEditableFieldInputViewModel(field));
+                    new NodeConfigEditableFieldInputViewModel(
+                        field,
+                        nodeType,
+                        DisplayTextFormatter));
             }
         }
 
@@ -3093,6 +3097,11 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShareText));
         OnPropertyChanged(nameof(ShareNameWatermarkText));
         OnPropertyChanged(nameof(VersionsText));
+        foreach (var nodeDefinition in NodeDefinitions)
+        {
+            nodeDefinition.RefreshLocalizedText();
+        }
+
         RefreshShellNavigationItems();
         RefreshSelectedNodeConfigDraftState();
     }

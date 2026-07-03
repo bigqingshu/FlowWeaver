@@ -1,7 +1,9 @@
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace Avalonia_UI.Tests;
 
@@ -68,5 +70,69 @@ public sealed class NodeDefinitionListItemViewModelTests
         Assert.AreEqual("-", item.InputPortsText);
         Assert.AreEqual("-", item.OutputPortsText);
         Assert.AreEqual("Config schema unavailable", item.ConfigSchemaSummaryText);
+    }
+
+    [TestMethod]
+    public async Task LocalizesBuiltInNodeDisplayNameAndConfigSchemaSummary()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var formatter = new DisplayTextFormatter(localizationService);
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "GenerateTestTableNode",
+                NodeVersion = "1.0",
+                DisplayName = "Generate Test Table",
+                InputPorts = [],
+                OutputPorts = [],
+                ConfigSchemaVersion = "1.0",
+                ConfigSchema = JsonDocument.Parse(
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "rows": {"type": "integer", "title": "Rows"},
+                        "seed": {"type": "integer", "title": "Seed"}
+                      }
+                    }
+                    """).RootElement.Clone(),
+            },
+            formatter);
+
+        Assert.AreEqual("生成测试表", item.DisplayNameText);
+        Assert.AreEqual("GenerateTestTableNode@1.0", item.TypeText);
+        Assert.AreEqual("2 个配置字段：行数, 随机种子", item.ConfigSchemaSummaryText);
+    }
+
+    [TestMethod]
+    public async Task LocalizedDisplayFallsBackToBackendTextForUnknownNodeDefinition()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var formatter = new DisplayTextFormatter(localizationService);
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "CustomPluginNode",
+                NodeVersion = "1.0",
+                DisplayName = "Custom Plugin",
+                InputPorts = [],
+                OutputPorts = [],
+                ConfigSchemaVersion = "1.0",
+                ConfigSchema = JsonDocument.Parse(
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "custom": {"type": "string", "title": "Custom Field"}
+                      }
+                    }
+                    """).RootElement.Clone(),
+            },
+            formatter);
+
+        Assert.AreEqual("Custom Plugin", item.DisplayNameText);
+        Assert.AreEqual("1 个配置字段：Custom Field", item.ConfigSchemaSummaryText);
     }
 }

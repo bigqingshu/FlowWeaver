@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -10,8 +11,13 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     private static readonly IReadOnlyList<string> BooleanInputValues =
         ["true", "false"];
 
-    public NodeConfigEditableFieldInputViewModel(NodeConfigEditableDraftField field)
+    public NodeConfigEditableFieldInputViewModel(
+        NodeConfigEditableDraftField field,
+        string nodeType = "",
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
+        NodeType = nodeType;
         Name = field.Name;
         Type = field.Type;
         Title = field.Title;
@@ -23,6 +29,10 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
         EnumValues = field.EnumValues;
         Warnings = field.Warnings;
     }
+
+    public DisplayTextFormatter DisplayTextFormatter { get; }
+
+    public string NodeType { get; }
 
     public string Name { get; }
 
@@ -41,9 +51,10 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     public IReadOnlyList<string> Warnings { get; }
 
     public string DisplayLabel =>
-        string.IsNullOrWhiteSpace(Title) ? Name : Title;
+        DisplayTextFormatter.FormatNodeConfigFieldTitle(NodeType, Name, Title);
 
-    public string TypeText => Type.ToString();
+    public string TypeText =>
+        DisplayTextFormatter.FormatNodeConfigFieldType(Type.ToString());
 
     public string RequiredText => Required ? "*" : string.Empty;
 
@@ -96,5 +107,11 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     partial void OnHasInputValueChanged(bool value)
     {
         OnPropertyChanged(nameof(IsDirty));
+    }
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(DisplayLabel));
+        OnPropertyChanged(nameof(TypeText));
     }
 }

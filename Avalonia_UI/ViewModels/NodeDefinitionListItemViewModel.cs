@@ -5,7 +5,7 @@ using Avalonia_UI.Models;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class NodeDefinitionListItemViewModel
+public sealed class NodeDefinitionListItemViewModel : ViewModelBase
 {
     public NodeDefinitionListItemViewModel(
         NodeDefinitionDto definition,
@@ -53,7 +53,9 @@ public sealed class NodeDefinitionListItemViewModel
     public string TypeText => $"{NodeType}@{NodeVersion}";
 
     public string DisplayNameText =>
-        string.IsNullOrWhiteSpace(DisplayName) ? NodeType : DisplayName;
+        DisplayTextFormatter.FormatNodeDefinitionDisplayName(
+            NodeType,
+            string.IsNullOrWhiteSpace(DisplayName) ? NodeType : DisplayName);
 
     public string InputPortsText => FormatPorts(InputPorts);
 
@@ -76,9 +78,21 @@ public sealed class NodeDefinitionListItemViewModel
                 return DisplayTextFormatter.FormatNoConfigFields();
             }
 
-            var fieldNames = string.Join(", ", fields.Select(descriptor => descriptor.Name));
+            var fieldNames = string.Join(
+                ", ",
+                fields.Select(descriptor =>
+                    DisplayTextFormatter.FormatNodeConfigFieldTitle(
+                        NodeType,
+                        descriptor.Name,
+                        descriptor.Title)));
             return DisplayTextFormatter.FormatConfigFields(fields.Count, fieldNames);
         }
+    }
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(DisplayNameText));
+        OnPropertyChanged(nameof(ConfigSchemaSummaryText));
     }
 
     private static string FormatPorts(NodePortDefinitionDto[] ports)

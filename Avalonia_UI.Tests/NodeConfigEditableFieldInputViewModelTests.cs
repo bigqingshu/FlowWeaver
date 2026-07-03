@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Threading.Tasks;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -88,5 +90,53 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         CollectionAssert.AreEqual(
             new[] { "true", "false" },
             booleanInput.BooleanValues.ToArray());
+    }
+
+    [TestMethod]
+    public async Task LocalizesBuiltInFieldTitleAndTypeText()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "rows",
+                Type = NodeConfigFieldType.Integer,
+                Title = "Rows",
+                Required = true,
+                InputValue = "3",
+                HasInputValue = true,
+            },
+            "GenerateTestTableNode",
+            new DisplayTextFormatter(localizationService));
+
+        Assert.AreEqual("行数", input.DisplayLabel);
+        Assert.AreEqual("整数", input.TypeText);
+        Assert.AreEqual("*", input.RequiredText);
+
+        var draftField = input.ToEditableDraftField();
+        Assert.AreEqual("Rows", draftField.Title);
+        Assert.AreEqual("rows", draftField.Name);
+    }
+
+    [TestMethod]
+    public async Task LocalizedFieldTitleFallsBackToSchemaTitleForUnknownField()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "custom",
+                Type = NodeConfigFieldType.String,
+                Title = "Custom Field",
+                InputValue = "abc",
+                HasInputValue = true,
+            },
+            "CustomPluginNode",
+            new DisplayTextFormatter(localizationService));
+
+        Assert.AreEqual("Custom Field", input.DisplayLabel);
+        Assert.AreEqual("文本", input.TypeText);
     }
 }
