@@ -150,8 +150,6 @@ public sealed class WorkflowSummaryViewStructureTests
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding AddConnectionText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding DeleteConnectionText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeInstanceIdText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeTypeText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeVersionText}\"");
@@ -185,38 +183,43 @@ public sealed class WorkflowSummaryViewStructureTests
                 "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay",
                 StringComparison.Ordinal));
 
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding ConnectionIdText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourceNodeText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourcePortText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetNodeText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetPortText}\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionId, Mode=TwoWay");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionSourcePort, Mode=TwoWay");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionTargetPort, Mode=TwoWay");
         StringAssert.Contains(
             summaryXaml,
-            "ItemsSource=\"{Binding WorkflowDefinitionDraftStructure.Nodes}\"");
+            "Text=\"{Binding WorkflowDefinitionDraftConnectionCountText}\"");
         StringAssert.Contains(
             summaryXaml,
-            "SelectedItem=\"{Binding SelectedNewDraftConnectionSourceNode, Mode=TwoWay}\"");
+            "ItemsSource=\"{Binding WorkflowDefinitionDraftStructure.Connections}\"");
         StringAssert.Contains(
             summaryXaml,
-            "SelectedItem=\"{Binding SelectedNewDraftConnectionTargetNode, Mode=TwoWay}\"");
+            "x:DataType=\"models:WorkflowDefinitionDraftConnection\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding ConnectionId}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourceNodeId}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourcePort}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetNodeId}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetPort}\"");
+        Assert.IsFalse(
+            summaryXaml.Contains("Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("Command=\"{Binding DeleteWorkflowDefinitionDraftConnectionCommand}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("Text=\"{Binding NewDraftConnectionId, Mode=TwoWay", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("NewDraftConnectionSourceNodeId", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("NewDraftConnectionSourcePort", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("NewDraftConnectionTargetNodeId", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("NewDraftConnectionTargetPort", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("SelectedNewDraftConnectionSourceNode", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("SelectedNewDraftConnectionTargetNode", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("SelectedWorkflowDefinitionDraftConnectionId", StringComparison.Ordinal));
         StringAssert.Contains(
             summaryXaml,
-            "x:DataType=\"models:WorkflowDefinitionDraftNode\"");
-        StringAssert.Contains(summaryXaml, "Text=\"{Binding NodeTypeDisplayName}\"");
-        StringAssert.Contains(
-            summaryXaml,
-            "Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"");
-        StringAssert.Contains(
-            summaryXaml,
-            "Text=\"{Binding SelectedWorkflowDefinitionDraftConnectionId, Mode=TwoWay");
-        StringAssert.Contains(
-            summaryXaml,
-            "Command=\"{Binding DeleteWorkflowDefinitionDraftConnectionCommand}\"");
+            "Content=\"{Binding ShowConnectionsText}\"");
         Assert.IsFalse(summaryXaml.Contains("Converter=", StringComparison.Ordinal));
         Assert.IsFalse(addNodeXaml.Contains("Converter=", StringComparison.Ordinal));
     }

@@ -55,20 +55,20 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
                         .ToArray();
 
                     Assert.IsGreaterThanOrEqualTo(
-                        3,
+                        1,
                         comboBoxes.Length,
-                        "WorkflowSummaryView should materialize structured edit ComboBox controls.");
+                        "WorkflowSummaryView should materialize the add-node ComboBox control.");
                     Assert.IsTrue(
                         comboBoxes.Any(combo =>
                             ReferenceEquals(combo.ItemsSource, viewModel.NodeDefinitions)
                             && CountItems(combo.ItemsSource) == 1),
                         "The new node type ComboBox should bind to NodeDefinitions.");
                     Assert.AreEqual(
-                        2,
+                        0,
                         comboBoxes.Count(combo =>
                             !ReferenceEquals(combo.ItemsSource, viewModel.NodeDefinitions)
                             && CountItems(combo.ItemsSource) == 2),
-                        "The source and target node ComboBoxes should bind to the draft node list.");
+                        "The read-only connection section should not materialize source or target node ComboBoxes.");
                 }
                 finally
                 {

@@ -524,6 +524,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public int WorkflowDefinitionDraftConnectionCount =>
         WorkflowDefinitionDraftStructure?.ConnectionCount ?? 0;
 
+    public string WorkflowDefinitionDraftConnectionCountText =>
+        DisplayTextFormatter.FormatConnectionCount(WorkflowDefinitionDraftConnectionCount);
+
     public bool HasWorkflowDefinitionDraftStructureWarnings =>
         WorkflowDefinitionDraftStructure?.Warnings.Count > 0;
 
@@ -3592,6 +3595,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCount));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCount));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCountText));
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructureWarnings));
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
     }
