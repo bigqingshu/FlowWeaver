@@ -278,6 +278,8 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.WorkflowDefinitionDraftStructure.Connections[0].ConnectionId);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructureWarnings);
         Assert.AreSame(viewModel.WorkflowDefinitionDraftNodes[0], viewModel.SelectedWorkflowDefinitionNode);
+        Assert.IsTrue(viewModel.HasSelectedWorkflowDefinitionNode);
+        Assert.IsFalse(viewModel.HasNoSelectedWorkflowDefinitionNode);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
         Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
@@ -341,6 +343,8 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsNull(viewModel.SelectedNodeConfigDraft);
         Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
+        Assert.IsFalse(viewModel.HasSelectedWorkflowDefinitionNode);
+        Assert.IsTrue(viewModel.HasNoSelectedWorkflowDefinitionNode);
         Assert.IsFalse(viewModel.HasSelectedNodeConfigEditableInputFields);
         Assert.IsEmpty(viewModel.SelectedNodeConfigEditableInputFields);
         Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);

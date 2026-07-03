@@ -480,6 +480,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
 
+    public bool HasSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is not null;
+
+    public bool HasNoSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is null;
+
     public bool HasSelectedNodeConfigEditableInputFields =>
         SelectedNodeConfigEditableInputFields.Count > 0;
 
@@ -663,6 +667,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public string MoveNodeDownText => T("definition.move_node_down");
 
     public string NodeActionsSectionText => T("definition.node_actions");
+
+    public string DataPreviewSectionText => T("definition.data_preview");
+
+    public string DataPreviewEmptyText => T("definition.data_preview_empty");
+
+    public string DataPreviewPendingText => T("definition.data_preview_pending");
 
     public string NodeInstanceIdText => T("definition.node_instance_id");
 
@@ -3337,6 +3347,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(MoveNodeUpText));
         OnPropertyChanged(nameof(MoveNodeDownText));
         OnPropertyChanged(nameof(NodeActionsSectionText));
+        OnPropertyChanged(nameof(DataPreviewSectionText));
+        OnPropertyChanged(nameof(DataPreviewEmptyText));
+        OnPropertyChanged(nameof(DataPreviewPendingText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
@@ -3541,6 +3554,8 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowDefinitionNodeChanged(
         WorkflowDefinitionNodeListItemViewModel? value)
     {
+        OnPropertyChanged(nameof(HasSelectedWorkflowDefinitionNode));
+        OnPropertyChanged(nameof(HasNoSelectedWorkflowDefinitionNode));
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();

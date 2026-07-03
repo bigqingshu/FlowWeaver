@@ -331,6 +331,29 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowNodeListViewHostsReadOnlyDataPreview()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowNodeListView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewSectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewPendingText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewEmptyText}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNoSelectedWorkflowDefinitionNode}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasSelectedWorkflowDefinitionNode}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeInstanceId}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.TypeText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.DisplayNameText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.ConfigJson}\"");
+        StringAssert.Contains(xaml, "MinHeight=\"128\"");
+        Assert.IsFalse(xaml.Contains("DataPreviewSectionText}\" Command=", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void ConnectionsSectionIsCollapsedBehindToggleByDefault()
     {
         var xaml = ReadSourceFile(
