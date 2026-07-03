@@ -40,10 +40,13 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("删除节点", viewModel.DeleteNodeText);
         Assert.AreEqual("节点实例 ID", viewModel.NodeInstanceIdText);
         Assert.AreEqual("配置 JSON", viewModel.ConfigJsonText);
+        Assert.AreEqual("显示连接", viewModel.ShowConnectionsText);
         Assert.AreEqual("新增连接", viewModel.AddConnectionText);
         Assert.AreEqual("删除连接", viewModel.DeleteConnectionText);
         Assert.AreEqual("源节点", viewModel.SourceNodeText);
         Assert.AreEqual("目标端口", viewModel.TargetPortText);
+        Assert.AreEqual("高级草稿 JSON", viewModel.AdvancedDraftJsonText);
+        Assert.AreEqual("显示草稿 JSON", viewModel.ShowAdvancedDraftJsonText);
         Assert.AreEqual("工作流运行", viewModel.WorkflowRunFilterText);
         Assert.AreEqual("共享名称", viewModel.ShareNameWatermarkText);
         Assert.AreEqual("未连接。", viewModel.StatusMessage);
@@ -74,6 +77,12 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("连接 ID", viewModel.ConnectionIdText);
         Assert.AreEqual("源端口", viewModel.SourcePortText);
         Assert.AreEqual("目标节点", viewModel.TargetNodeText);
+        Assert.AreEqual("显示连接", viewModel.ShowConnectionsText);
+        viewModel.IsWorkflowConnectionsAdvancedVisible = true;
+        Assert.AreEqual("收起连接", viewModel.ShowConnectionsText);
+        Assert.AreEqual("显示草稿 JSON", viewModel.ShowAdvancedDraftJsonText);
+        viewModel.IsWorkflowDraftJsonAdvancedVisible = true;
+        Assert.AreEqual("收起草稿 JSON", viewModel.ShowAdvancedDraftJsonText);
         Assert.AreEqual("版本", viewModel.VersionsText);
         Assert.AreEqual(1, uiSettingsStore.SaveCount);
         Assert.AreEqual("zh-Hans", uiSettingsStore.SavedSettings?.LanguageCode);

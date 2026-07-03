@@ -2,14 +2,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="using:Avalonia_UI.Models"
              xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:workflow="using:Avalonia_UI.Views.Components.Workflow"
+             xmlns:primitives="using:Avalonia.Controls.Primitives"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSummaryView"
              x:DataType="vm:MainWindowViewModel">
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="10">
-        <!-- Details & Revisions Card -->
+        <!-- Details Card -->
         <Border Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
+            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding WorkflowDefinitionSectionText}"
                                FontSize="16"
@@ -50,29 +52,7 @@
                     <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding WorkflowDefinitionDetail.UpdatedAtText}" Foreground="{DynamicResource TextPrimaryBrush}"/>
                 </Grid>
 
-                <ListBox Grid.Row="2"
-                         ItemsSource="{Binding WorkflowDefinitionDetail.Revisions}"
-                         BorderBrush="{DynamicResource ControlBorderBrush}"
-                         BorderThickness="1"
-                         MaxHeight="140">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="vm:WorkflowRevisionListItemViewModel"
-                                      x:DataType="vm:WorkflowRevisionListItemViewModel">
-                            <Grid ColumnDefinitions="*,Auto"
-                                  RowDefinitions="Auto,Auto,Auto"
-                                  ColumnSpacing="12"
-                                  Margin="8">
-                                <TextBlock Text="{Binding RevisionId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                <TextBlock Grid.Row="1" Text="{Binding DefinitionHash}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CreatedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                <TextBlock Grid.Row="2" Text="{Binding CreatedByText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <StackPanel Grid.Row="3" Spacing="4">
+                <StackPanel Grid.Row="2" Spacing="4">
                     <TextBlock Text="{Binding WorkflowDefinitionMessage}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TextBlock Text="{Binding WorkflowDefinitionErrorMessage}" TextWrapping="Wrap" Foreground="{DynamicResource TextErrorBrush}" IsVisible="{Binding HasWorkflowDefinitionError}"/>
                 </StackPanel>
@@ -291,14 +271,30 @@
                                 Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
                                 MinWidth="104"/>
                     </Grid>
+
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="10"
+                          Margin="0,4,0,0">
+                        <TextBlock Text="{Binding AdvancedDraftJsonText}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <primitives:ToggleButton Grid.Column="1"
+                                                 Content="{Binding ShowAdvancedDraftJsonText}"
+                                                 IsChecked="{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}"
+                                                 MinWidth="128"/>
+                    </Grid>
                 </StackPanel>
             </Grid>
         </Border>
 
+        <workflow:WorkflowEditorView IsVisible="{Binding IsWorkflowDraftJsonAdvancedVisible}"/>
+
         <!-- Connections Card -->
         <Border Classes="Card" Padding="14">
-            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                     <TextBlock Text="{Binding ConnectionsSectionText}"
                                FontSize="16"
                                FontWeight="SemiBold"
@@ -308,27 +304,32 @@
                                Text="{Binding WorkflowDefinitionDetail.ConnectionCountText}"
                                VerticalAlignment="Center"
                                Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <primitives:ToggleButton Grid.Column="2"
+                                             Content="{Binding ShowConnectionsText}"
+                                             IsChecked="{Binding IsWorkflowConnectionsAdvancedVisible, Mode=TwoWay}"
+                                             MinWidth="112"/>
                 </Grid>
 
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding WorkflowDefinitionDetail.Connections}"
-                         BorderBrush="{DynamicResource ControlBorderBrush}"
-                         BorderThickness="1"
-                         MaxHeight="140">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="vm:WorkflowDefinitionConnectionListItemViewModel"
-                                      x:DataType="vm:WorkflowDefinitionConnectionListItemViewModel">
-                            <Grid RowDefinitions="Auto,Auto" Margin="8" RowSpacing="4">
-                                <TextBlock Text="{Binding EdgeText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                <TextBlock Grid.Row="1" Text="{Binding ConnectionId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <StackPanel Grid.Row="2"
+                <StackPanel Grid.Row="1"
                             Spacing="8"
-                            IsVisible="{Binding HasWorkflowDefinition}">
+                            IsVisible="{Binding IsWorkflowConnectionsAdvancedVisible}">
+                    <ListBox ItemsSource="{Binding WorkflowDefinitionDetail.Connections}"
+                             BorderBrush="{DynamicResource ControlBorderBrush}"
+                             BorderThickness="1"
+                             MaxHeight="140">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowDefinitionConnectionListItemViewModel"
+                                          x:DataType="vm:WorkflowDefinitionConnectionListItemViewModel">
+                                <Grid RowDefinitions="Auto,Auto" Margin="8" RowSpacing="4">
+                                    <TextBlock Text="{Binding EdgeText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <TextBlock Grid.Row="1" Text="{Binding ConnectionId}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Spacing="8"
+                                IsVisible="{Binding HasWorkflowDefinition}">
                     <TextBlock Text="{Binding AddConnectionText}"
                                FontSize="14"
                                FontWeight="SemiBold"
@@ -440,6 +441,7 @@
                                 Command="{Binding DeleteWorkflowDefinitionDraftConnectionCommand}"
                                 MinWidth="128"/>
                     </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

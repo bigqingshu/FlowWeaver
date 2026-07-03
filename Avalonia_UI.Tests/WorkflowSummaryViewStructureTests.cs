@@ -169,6 +169,90 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowDefinitionCardOmitsRevisionHistoryList()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDetail.RevisionId}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDetail.DefinitionHash}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDetail.UpdatedAtText}\"");
+        Assert.IsFalse(xaml.Contains("WorkflowDefinitionDetail.Revisions", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("WorkflowRevisionListItemViewModel", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("SelectedRevision", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void WorkflowPageKeepsDefinitionWorkspaceInTwoColumns()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Pages",
+            "WorkflowPage.axaml");
+
+        StringAssert.Contains(xaml, "ColumnDefinitions=\"340,*\"");
+        StringAssert.Contains(xaml, "<workflow:WorkflowListView Grid.Column=\"0\" />");
+        StringAssert.Contains(xaml, "<workflow:WorkflowSummaryView Grid.Column=\"1\" />");
+        Assert.IsFalse(xaml.Contains("<workflow:WorkflowEditorView", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("<workflow:WorkflowNodeCatalogView", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void AdvancedDraftJsonIsToggledFromNodeActionArea()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding AdvancedDraftJsonText}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding ShowAdvancedDraftJsonText}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsChecked=\"{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"");
+
+        var advancedToggleIndex = xaml.IndexOf(
+            "Content=\"{Binding ShowAdvancedDraftJsonText}\"",
+            StringComparison.Ordinal);
+        var editorIndex = xaml.IndexOf(
+            "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"",
+            StringComparison.Ordinal);
+        Assert.IsTrue(
+            advancedToggleIndex >= 0 && editorIndex > advancedToggleIndex,
+            "The draft JSON editor should remain behind the node action area's advanced toggle.");
+    }
+
+    [TestMethod]
+    public void ConnectionsSectionIsCollapsedBehindToggleByDefault()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "Content=\"{Binding ShowConnectionsText}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsChecked=\"{Binding IsWorkflowConnectionsAdvancedVisible, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsVisible=\"{Binding IsWorkflowConnectionsAdvancedVisible}\"");
+        Assert.IsFalse(xaml.Contains("IsWorkflowConnectionsAdvancedVisible = true", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void MiddleColumnLayoutKeepsStructuredEditAreasCompactAndScrollable()
     {
         var xaml = ReadSourceFile(

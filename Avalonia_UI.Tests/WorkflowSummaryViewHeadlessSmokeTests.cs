@@ -31,6 +31,7 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
             () =>
             {
                 var viewModel = CreateViewModel();
+                viewModel.IsWorkflowConnectionsAdvancedVisible = true;
                 var view = new WorkflowSummaryView
                 {
                     DataContext = viewModel,

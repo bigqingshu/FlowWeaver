@@ -169,6 +169,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private string selectedWorkflowDefinitionDraftConnectionId = string.Empty;
 
     [ObservableProperty]
+    private bool isWorkflowDraftJsonAdvancedVisible;
+
+    [ObservableProperty]
+    private bool isWorkflowConnectionsAdvancedVisible;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -651,6 +657,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ConnectionsSectionText => T("definition.connections");
 
+    public string ShowConnectionsText => IsWorkflowConnectionsAdvancedVisible
+        ? T("definition.hide_connections")
+        : T("definition.show_connections");
+
     public string AddConnectionText => T("definition.add_connection");
 
     public string DeleteConnectionText => T("definition.delete_connection");
@@ -680,6 +690,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public string TimeoutText => T("node_catalog.timeout");
 
     public string DraftJsonSectionText => T("definition.draft_json");
+
+    public string AdvancedDraftJsonText => T("definition.advanced_draft_json");
+
+    public string ShowAdvancedDraftJsonText => IsWorkflowDraftJsonAdvancedVisible
+        ? T("definition.hide_draft_json")
+        : T("definition.show_draft_json");
 
     public string ValidateText => T("definition.validate");
 
@@ -3066,6 +3082,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DisplayNameText));
         OnPropertyChanged(nameof(ConfigJsonText));
         OnPropertyChanged(nameof(ConnectionsSectionText));
+        OnPropertyChanged(nameof(ShowConnectionsText));
         OnPropertyChanged(nameof(AddConnectionText));
         OnPropertyChanged(nameof(DeleteConnectionText));
         OnPropertyChanged(nameof(ConnectionIdText));
@@ -3081,6 +3098,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(TimeoutText));
         OnPropertyChanged(nameof(DraftJsonSectionText));
+        OnPropertyChanged(nameof(AdvancedDraftJsonText));
+        OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
         OnPropertyChanged(nameof(ValidateText));
         OnPropertyChanged(nameof(SaveText));
         OnPropertyChanged(nameof(WorkflowRunFilterText));
@@ -3441,6 +3460,16 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSelectedWorkflowDefinitionDraftConnectionIdChanged(string value)
     {
         DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsWorkflowDraftJsonAdvancedVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
+    }
+
+    partial void OnIsWorkflowConnectionsAdvancedVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowConnectionsText));
     }
 
     partial void OnIsLoadingRunsChanged(bool value)
