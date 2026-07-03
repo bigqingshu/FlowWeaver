@@ -361,7 +361,7 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextPrimaryBrush}"/>
                                             <TextBlock Grid.Row="1"
-                                                       Text="{Binding NodeType}"
+                                                       Text="{Binding NodeTypeDisplayName}"
                                                        FontSize="11"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -397,7 +397,7 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextPrimaryBrush}"/>
                                             <TextBlock Grid.Row="1"
-                                                       Text="{Binding NodeType}"
+                                                       Text="{Binding NodeTypeDisplayName}"
                                                        FontSize="11"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextSecondaryBrush}"/>

@@ -155,6 +155,7 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             xaml,
             "x:DataType=\"models:WorkflowDefinitionDraftNode\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeTypeDisplayName}\"");
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"");

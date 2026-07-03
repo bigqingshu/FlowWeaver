@@ -1,12 +1,16 @@
 using System.Collections.Generic;
 using System.Text.Json;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.Models;
 
 public static class WorkflowDefinitionDraftStructureBuilder
 {
-    public static WorkflowDefinitionDraftStructure Build(string workflowDefinitionDraftJson)
+    public static WorkflowDefinitionDraftStructure Build(
+        string workflowDefinitionDraftJson,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        var formatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         JsonDocument document;
         try
         {
@@ -47,7 +51,7 @@ public static class WorkflowDefinitionDraftStructureBuilder
             return new WorkflowDefinitionDraftStructure
             {
                 Status = WorkflowDefinitionDraftStructureStatus.Supported,
-                Nodes = ReadNodes(nodes, warnings),
+                Nodes = ReadNodes(nodes, warnings, formatter),
                 Connections = ReadConnections(connections, warnings),
                 Warnings = warnings,
             };
@@ -67,7 +71,8 @@ public static class WorkflowDefinitionDraftStructureBuilder
 
     private static IReadOnlyList<WorkflowDefinitionDraftNode> ReadNodes(
         JsonElement nodes,
-        List<string> warnings)
+        List<string> warnings,
+        DisplayTextFormatter displayTextFormatter)
     {
         var result = new List<WorkflowDefinitionDraftNode>();
         foreach (var node in nodes.EnumerateArray())
@@ -84,10 +89,15 @@ public static class WorkflowDefinitionDraftStructureBuilder
                 continue;
             }
 
+            var nodeType = GetStringOrEmpty(node, "node_type");
             result.Add(new WorkflowDefinitionDraftNode
             {
                 NodeInstanceId = nodeInstanceId,
-                NodeType = GetStringOrEmpty(node, "node_type"),
+                NodeType = nodeType,
+                NodeTypeDisplayName =
+                    displayTextFormatter.FormatNodeDefinitionDisplayName(
+                        nodeType,
+                        nodeType),
                 NodeVersion = GetStringOrEmpty(node, "node_version"),
                 DisplayName = GetStringOrEmpty(node, "display_name"),
                 Enabled = GetBoolOrDefault(node, "enabled", defaultValue: true),

@@ -6,6 +6,8 @@ public sealed record WorkflowDefinitionDraftNode
 
     public string NodeType { get; init; } = string.Empty;
 
+    public string NodeTypeDisplayName { get; init; } = string.Empty;
+
     public string NodeVersion { get; init; } = string.Empty;
 
     public string DisplayName { get; init; } = string.Empty;

@@ -2262,7 +2262,9 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowDefinitionDraftStructure = string.IsNullOrWhiteSpace(
             WorkflowDefinitionDraftJson)
             ? null
-            : WorkflowDefinitionDraftStructureBuilder.Build(WorkflowDefinitionDraftJson);
+            : WorkflowDefinitionDraftStructureBuilder.Build(
+                WorkflowDefinitionDraftJson,
+                DisplayTextFormatter);
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
         ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
         ClearSelectedNewDraftConnectionNodesIfMissing();
@@ -2337,26 +2339,26 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ClearSelectedNewDraftConnectionNodesIfMissing()
     {
-        if (SelectedNewDraftConnectionSourceNode is not null &&
-            !DraftNodeExists(SelectedNewDraftConnectionSourceNode.NodeInstanceId))
+        if (SelectedNewDraftConnectionSourceNode is not null)
         {
-            SelectedNewDraftConnectionSourceNode = null;
+            SelectedNewDraftConnectionSourceNode = FindDraftNode(
+                SelectedNewDraftConnectionSourceNode.NodeInstanceId);
         }
 
-        if (SelectedNewDraftConnectionTargetNode is not null &&
-            !DraftNodeExists(SelectedNewDraftConnectionTargetNode.NodeInstanceId))
+        if (SelectedNewDraftConnectionTargetNode is not null)
         {
-            SelectedNewDraftConnectionTargetNode = null;
+            SelectedNewDraftConnectionTargetNode = FindDraftNode(
+                SelectedNewDraftConnectionTargetNode.NodeInstanceId);
         }
     }
 
-    private bool DraftNodeExists(string nodeInstanceId)
+    private WorkflowDefinitionDraftNode? FindDraftNode(string nodeInstanceId)
     {
-        return WorkflowDefinitionDraftStructure?.Nodes.Any(node =>
+        return WorkflowDefinitionDraftStructure?.Nodes.FirstOrDefault(node =>
             string.Equals(
                 node.NodeInstanceId,
                 nodeInstanceId,
-                StringComparison.Ordinal)) == true;
+                StringComparison.Ordinal));
     }
 
     private void ResetWorkflowDefinitionStructuredEditInput()
@@ -3103,6 +3105,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         RefreshShellNavigationItems();
+        RefreshWorkflowDefinitionDraftStructureState();
         RefreshSelectedNodeConfigDraftState();
     }
 
