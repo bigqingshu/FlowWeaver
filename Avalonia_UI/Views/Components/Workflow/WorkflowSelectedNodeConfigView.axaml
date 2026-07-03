@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSelectedNodeConfigView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding NodeConfigSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="{Binding ApplyNodeConfigText}"
+                        Command="{Binding ApplySelectedNodeConfigDraftCommand}"
+                        MinWidth="104"/>
+            </Grid>
+
+            <TextBlock Grid.Row="1"
+                       Text="{Binding SelectedNodeConfigDraftSummaryText}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+            <ItemsControl Grid.Row="2"
+                          ItemsSource="{Binding SelectedNodeConfigEditableInputFields}"
+                          IsVisible="{Binding HasSelectedNodeConfigEditableInputFields}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:NodeConfigEditableFieldInputViewModel"
+                                  x:DataType="vm:NodeConfigEditableFieldInputViewModel">
+                        <Grid ColumnDefinitions="140,*"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="10"
+                              RowSpacing="4"
+                              Margin="0,2">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding DisplayLabel}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="{Binding RequiredText}"
+                                               Foreground="{DynamicResource TextErrorBrush}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding TypeText}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding InputValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     IsVisible="{Binding IsTextInput}"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding EnumValues}"
+                                      SelectedItem="{Binding InputValue, Mode=TwoWay}"
+                                      IsVisible="{Binding IsEnumInput}"/>
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding BooleanValues}"
+                                      SelectedItem="{Binding InputValue, Mode=TwoWay}"
+                                      IsVisible="{Binding IsBooleanInput}"/>
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Text="{Binding WarningText}"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       IsVisible="{Binding HasWarnings}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+    </Border>
+</UserControl>

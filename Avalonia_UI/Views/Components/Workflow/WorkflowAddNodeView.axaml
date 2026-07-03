@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowAddNodeView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding AddNodeText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="{Binding AddNodeText}"
+                        Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
+                        MinWidth="104"/>
+            </Grid>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="120,*"
+                  RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                  ColumnSpacing="10"
+                  RowSpacing="6"
+                  IsVisible="{Binding HasWorkflowDefinition}">
+                <TextBlock Text="{Binding NodeInstanceIdText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding NewDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <TextBlock Grid.Row="1"
+                           Text="{Binding NodeTypeText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <StackPanel Grid.Row="1"
+                            Grid.Column="1"
+                            Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <ComboBox ItemsSource="{Binding NodeDefinitions}"
+                                  SelectedItem="{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"
+                                              x:DataType="vm:NodeDefinitionListItemViewModel">
+                                    <Grid RowDefinitions="Auto,Auto">
+                                        <TextBlock Text="{Binding DisplayNameText}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding TypeText}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Panel Grid.Column="1"
+                               Background="Transparent"
+                               ToolTip.Tip="{Binding RefreshNodeDefinitionsDisabledReasonText}">
+                            <Button Content="{Binding RefreshText}"
+                                    Command="{Binding RefreshNodeDefinitionsCommand}"
+                                    MinWidth="84"/>
+                        </Panel>
+                    </Grid>
+                    <TextBox Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+
+                <TextBlock Grid.Row="2"
+                           Text="{Binding NodeVersionText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Grid.Row="2"
+                         Grid.Column="1"
+                         Text="{Binding NewDraftNodeVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <TextBlock Grid.Row="3"
+                           Text="{Binding DisplayNameText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Grid.Row="3"
+                         Grid.Column="1"
+                         Text="{Binding NewDraftNodeDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <TextBlock Grid.Row="4"
+                           Text="{Binding ConfigJsonText}"
+                           VerticalAlignment="Top"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Grid.Row="4"
+                         Grid.Column="1"
+                         MinHeight="56"
+                         MaxHeight="96"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         FontFamily="Consolas"
+                         FontSize="12"
+                         Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

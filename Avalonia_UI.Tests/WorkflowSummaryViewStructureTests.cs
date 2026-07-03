@@ -33,21 +33,28 @@ public sealed class WorkflowSummaryViewStructureTests
     [TestMethod]
     public void WorkflowSummaryViewDoesNotOwnNodeSelectionList()
     {
-        var xaml = ReadSourceFile(
+        var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
             "Components",
             "Workflow",
             "WorkflowSummaryView.axaml");
+        var configXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSelectedNodeConfigView.axaml");
 
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedNodeConfigDraftSummaryText}\"");
+        StringAssert.Contains(summaryXaml, "<workflow:WorkflowSelectedNodeConfigView />");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedNodeConfigDraftSummaryText}\"");
         StringAssert.Contains(
-            xaml,
+            configXaml,
             "ItemsSource=\"{Binding SelectedNodeConfigEditableInputFields}\"");
         Assert.IsFalse(
-            xaml.Contains("ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"", StringComparison.Ordinal));
+            summaryXaml.Contains("ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"", StringComparison.Ordinal));
         Assert.IsFalse(
-            xaml.Contains("SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"", StringComparison.Ordinal));
+            summaryXaml.Contains("SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -75,7 +82,7 @@ public sealed class WorkflowSummaryViewStructureTests
             "Views",
             "Components",
             "Workflow",
-            "WorkflowSummaryView.axaml");
+            "WorkflowSelectedNodeConfigView.axaml");
 
         StringAssert.Contains(
             xaml,
@@ -98,7 +105,7 @@ public sealed class WorkflowSummaryViewStructureTests
             "Views",
             "Components",
             "Workflow",
-            "WorkflowSummaryView.axaml");
+            "WorkflowSelectedNodeConfigView.axaml");
 
         StringAssert.Contains(
             xaml,
@@ -117,12 +124,18 @@ public sealed class WorkflowSummaryViewStructureTests
     [TestMethod]
     public void StructuredEditFormsBindToDraftInputsAndCommands()
     {
-        var xaml = ReadSourceFile(
+        var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
             "Components",
             "Workflow",
             "WorkflowSummaryView.axaml");
+        var addNodeXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowAddNodeView.axaml");
         var nodeListXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
@@ -130,79 +143,82 @@ public sealed class WorkflowSummaryViewStructureTests
             "Workflow",
             "WorkflowNodeListView.axaml");
 
-        StringAssert.Contains(xaml, "Text=\"{Binding AddNodeText}\"");
-        StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding AddConnectionText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding DeleteConnectionText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NodeInstanceIdText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NodeTypeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NodeVersionText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding DisplayNameText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding ConfigJsonText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeInstanceId, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeType, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeVersion, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeDisplayName, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "<workflow:WorkflowAddNodeView />");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding AddNodeText}\"");
+        StringAssert.Contains(addNodeXaml, "Content=\"{Binding AddNodeText}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
+            "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
+        StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding AddConnectionText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding DeleteConnectionText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeInstanceIdText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeTypeText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeVersionText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding DisplayNameText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding ConfigJsonText}\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeInstanceId, Mode=TwoWay");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeType, Mode=TwoWay");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeVersion, Mode=TwoWay");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeDisplayName, Mode=TwoWay");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay");
+        StringAssert.Contains(
+            addNodeXaml,
             "ItemsSource=\"{Binding NodeDefinitions}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
             "SelectedItem=\"{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
             "ToolTip.Tip=\"{Binding RefreshNodeDefinitionsDisabledReasonText}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
             "Command=\"{Binding RefreshNodeDefinitionsCommand}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
             "x:DataType=\"vm:NodeDefinitionListItemViewModel\"");
-        StringAssert.Contains(
-            nodeListXaml,
-            "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(
             nodeListXaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
         Assert.IsFalse(
-            xaml.Contains(
+            addNodeXaml.Contains(
                 "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay",
                 StringComparison.Ordinal));
 
-        StringAssert.Contains(xaml, "Text=\"{Binding ConnectionIdText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SourceNodeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SourcePortText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding TargetNodeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding TargetPortText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionId, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionSourcePort, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay");
-        StringAssert.Contains(xaml, "Text=\"{Binding NewDraftConnectionTargetPort, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding ConnectionIdText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourceNodeText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding SourcePortText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetNodeText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding TargetPortText}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionId, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionSourcePort, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NewDraftConnectionTargetPort, Mode=TwoWay");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "ItemsSource=\"{Binding WorkflowDefinitionDraftStructure.Nodes}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "SelectedItem=\"{Binding SelectedNewDraftConnectionSourceNode, Mode=TwoWay}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "SelectedItem=\"{Binding SelectedNewDraftConnectionTargetNode, Mode=TwoWay}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "x:DataType=\"models:WorkflowDefinitionDraftNode\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NodeTypeDisplayName}\"");
+        StringAssert.Contains(summaryXaml, "Text=\"{Binding NodeTypeDisplayName}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftConnectionCommand}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "Text=\"{Binding SelectedWorkflowDefinitionDraftConnectionId, Mode=TwoWay");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftConnectionCommand}\"");
-        Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
+        Assert.IsFalse(summaryXaml.Contains("Converter=", StringComparison.Ordinal));
+        Assert.IsFalse(addNodeXaml.Contains("Converter=", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -249,6 +265,12 @@ public sealed class WorkflowSummaryViewStructureTests
             "Components",
             "Workflow",
             "WorkflowNodeListView.axaml");
+        var addNodeXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowAddNodeView.axaml");
         var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
@@ -258,9 +280,8 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
         StringAssert.Contains(xaml, "<WrapPanel Orientation=\"Horizontal\"");
-        StringAssert.Contains(xaml, "Content=\"{Binding AddNodeText}\"");
         StringAssert.Contains(
-            xaml,
+            addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding DeleteNodeText}\"");
         StringAssert.Contains(
@@ -277,6 +298,8 @@ public sealed class WorkflowSummaryViewStructureTests
             summaryXaml.Contains("Text=\"{Binding NodeActionsSectionText}\"", StringComparison.Ordinal));
         Assert.IsFalse(
             summaryXaml.Contains("Content=\"{Binding ShowAdvancedDraftJsonText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            xaml.Contains("Content=\"{Binding AddNodeText}\"", StringComparison.Ordinal));
 
         var actionGroupIndex = xaml.IndexOf(
             "Text=\"{Binding NodeActionsSectionText}\"",
@@ -333,6 +356,33 @@ public sealed class WorkflowSummaryViewStructureTests
         Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,Auto,Auto,Auto\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,Auto\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("MinHeight=\"100\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void WorkflowSummaryViewHostsAddNodeAboveSelectedNodeConfig()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        var addNodeIndex = xaml.IndexOf("<workflow:WorkflowAddNodeView />", StringComparison.Ordinal);
+        var configIndex = xaml.IndexOf("<workflow:WorkflowSelectedNodeConfigView />", StringComparison.Ordinal);
+
+        Assert.AreNotEqual(
+            -1,
+            addNodeIndex,
+            "The middle column should host the dedicated add-node area.");
+        Assert.AreNotEqual(
+            -1,
+            configIndex,
+            "The middle column should host the dedicated selected-node config area.");
+        Assert.IsLessThan(
+            configIndex,
+            addNodeIndex,
+            "The add-node area should stay above the selected-node config area.");
     }
 
     private static string ReadSourceFile(params string[] pathParts)
