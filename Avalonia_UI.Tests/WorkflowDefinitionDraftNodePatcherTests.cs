@@ -405,6 +405,64 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void MoveNodeReordersNodesAndPreservesConnections()
+    {
+        var moveUp = WorkflowDefinitionDraftNodePatcher.MoveNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "target_node_id": "filter"}
+              ]
+            }
+            """,
+            "filter",
+            -1);
+
+        Assert.IsTrue(moveUp.Succeeded);
+        using var movedUp = JsonDocument.Parse(moveUp.UpdatedWorkflowDefinitionDraftJson);
+        var movedUpNodes = movedUp.RootElement.GetProperty("nodes");
+        Assert.AreEqual("filter", movedUpNodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("source", movedUpNodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", movedUpNodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual(
+            "source_to_filter",
+            movedUp.RootElement
+                .GetProperty("connections")[0]
+                .GetProperty("connection_id")
+                .GetString());
+
+        var moveDown = WorkflowDefinitionDraftNodePatcher.MoveNode(
+            moveUp.UpdatedWorkflowDefinitionDraftJson,
+            "filter",
+            1);
+
+        Assert.IsTrue(moveDown.Succeeded);
+        using var movedDown = JsonDocument.Parse(moveDown.UpdatedWorkflowDefinitionDraftJson);
+        var movedDownNodes = movedDown.RootElement.GetProperty("nodes");
+        Assert.AreEqual("source", movedDownNodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("filter", movedDownNodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", movedDownNodes[2].GetProperty("node_instance_id").GetString());
+    }
+
+    [TestMethod]
+    public void MoveNodeRejectsOutOfRangeMove()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.MoveNode(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            "source",
+            -1);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeMoveOutOfRange, result.Status);
+        Assert.AreEqual("NODE_MOVE_OUT_OF_RANGE", result.Warning);
+    }
+
+    [TestMethod]
     public void DeleteNodeRemovesConnectedNodeAndRelatedConnections()
     {
         var result = WorkflowDefinitionDraftNodePatcher.DeleteNode(

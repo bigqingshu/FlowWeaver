@@ -54,6 +54,14 @@
 
                 <WrapPanel Orientation="Horizontal"
                            HorizontalAlignment="Right">
+                    <Button Content="{Binding MoveNodeUpText}"
+                            Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeUpCommand}"
+                            MinWidth="84"
+                            Margin="0,0,8,8"/>
+                    <Button Content="{Binding MoveNodeDownText}"
+                            Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeDownCommand}"
+                            MinWidth="84"
+                            Margin="0,0,8,8"/>
                     <Button Content="{Binding DeleteNodeText}"
                             Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
                             MinWidth="104"

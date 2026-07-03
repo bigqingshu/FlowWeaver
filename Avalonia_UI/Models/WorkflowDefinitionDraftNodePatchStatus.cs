@@ -13,5 +13,6 @@ public enum WorkflowDefinitionDraftNodePatchStatus
     NodeAlreadyExists,
     NodeNotFound,
     InsertAfterNodeNotFound,
+    NodeMoveOutOfRange,
     ConfigUnsupported,
 }

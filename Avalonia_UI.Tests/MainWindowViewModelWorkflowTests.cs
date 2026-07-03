@@ -972,6 +972,71 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task MoveWorkflowDefinitionDraftNodeCommandsReorderSelectedNode()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "filter");
+
+        Assert.IsTrue(viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.MoveSelectedWorkflowDefinitionDraftNodeDownCommand.CanExecute(null));
+
+        viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpCommand.Execute(null);
+
+        Assert.AreEqual("Node moved in draft. Validate before saving.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual("filter", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.IsFalse(viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.MoveSelectedWorkflowDefinitionDraftNodeDownCommand.CanExecute(null));
+
+        viewModel.MoveSelectedWorkflowDefinitionDraftNodeDownCommand.Execute(null);
+
+        Assert.AreEqual("source", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
+        Assert.AreEqual("filter", viewModel.WorkflowDefinitionDraftNodes[1].NodeInstanceId);
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual("source", draft.RootElement.GetProperty("nodes")[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("filter", draft.RootElement.GetProperty("nodes")[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+        Assert.AreEqual(
+            "source_to_filter",
+            draft.RootElement
+                .GetProperty("connections")[0]
+                .GetProperty("connection_id")
+                .GetString());
+    }
+
+    [TestMethod]
     public async Task DeleteWorkflowDefinitionDraftNodeCommandDeletesConnectedNodeAndRelatedConnections()
     {
         var definitionJson =

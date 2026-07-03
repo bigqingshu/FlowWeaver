@@ -415,6 +415,59 @@ public static class WorkflowDefinitionDraftNodePatcher
         };
     }
 
+    public static WorkflowDefinitionDraftNodePatchResult MoveNode(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId,
+        int offset)
+    {
+        if (string.IsNullOrWhiteSpace(nodeInstanceId))
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        if (offset == 0)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeMoveOutOfRange,
+                "NODE_MOVE_OUT_OF_RANGE");
+        }
+
+        var readResult = ReadMutableDraft(workflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            return Failed(readResult.Status, readResult.Warning);
+        }
+
+        var sourceIndex = FindNodeIndex(readResult.Nodes, nodeInstanceId);
+        if (sourceIndex < 0)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeNotFound,
+                "NODE_NOT_FOUND");
+        }
+
+        var targetIndex = sourceIndex + offset;
+        if (targetIndex < 0 || targetIndex >= readResult.Nodes.Count)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeMoveOutOfRange,
+                "NODE_MOVE_OUT_OF_RANGE");
+        }
+
+        var node = readResult.Nodes[sourceIndex];
+        readResult.Nodes.RemoveAt(sourceIndex);
+        readResult.Nodes.Insert(targetIndex, node);
+
+        return new WorkflowDefinitionDraftNodePatchResult
+        {
+            Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            UpdatedWorkflowDefinitionDraftJson =
+                readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
     private static MutableWorkflowDraftReadResult ReadMutableDraft(
         string workflowDefinitionDraftJson)
     {
