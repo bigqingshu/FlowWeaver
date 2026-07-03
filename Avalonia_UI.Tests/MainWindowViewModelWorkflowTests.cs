@@ -452,7 +452,19 @@ public sealed class MainWindowViewModelWorkflowTests
             NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
                 new List<NodeDefinitionDto>
                 {
-                    NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                    NodeDefinition(
+                        "GenerateTestTableNode",
+                        "Generate Test Table",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "rows": {"type": "integer", "required": true, "default": 3},
+                                "seed": {"type": "integer", "default": 0}
+                              }
+                            }
+                            """),
                 }),
         };
         var viewModel = CreateViewModel(apiClient);
@@ -467,6 +479,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
         Assert.AreEqual("Generate Test Table", viewModel.NewDraftNodeDisplayName);
         Assert.AreEqual("generate_test_table", viewModel.NewDraftNodeInstanceId);
+        using var config = JsonDocument.Parse(viewModel.NewDraftNodeConfigJson);
+        Assert.AreEqual(3, config.RootElement.GetProperty("rows").GetInt32());
+        Assert.AreEqual(0, config.RootElement.GetProperty("seed").GetInt32());
     }
 
     [TestMethod]
@@ -545,6 +560,54 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("FilterRowsNode", viewModel.NewDraftNodeType);
         Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
         Assert.AreEqual("custom_filter", viewModel.NewDraftNodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task SelectingNewDraftNodeDefinitionDoesNotOverwriteManualConfigJson()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "GenerateTestTableNode",
+                        "Generate Test Table",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "rows": {"type": "integer", "required": true, "default": 3}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.NewDraftNodeConfigJson = """{"custom":true}""";
+
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single();
+
+        Assert.AreEqual("""{"custom":true}""", viewModel.NewDraftNodeConfigJson);
     }
 
     [TestMethod]

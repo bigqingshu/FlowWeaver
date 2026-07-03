@@ -195,6 +195,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string originalWorkflowDefinitionJson = string.Empty;
     private string lastSuggestedNewDraftNodeInstanceId = string.Empty;
+    private string lastSuggestedNewDraftNodeConfigJson = "{}";
     private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
@@ -2349,6 +2350,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void ResetNewDraftNodeInput()
     {
         lastSuggestedNewDraftNodeInstanceId = string.Empty;
+        lastSuggestedNewDraftNodeConfigJson = "{}";
         SelectedNewDraftNodeDefinition = null;
         NewDraftNodeInstanceId = string.Empty;
         NewDraftNodeType = string.Empty;
@@ -2701,6 +2703,13 @@ public partial class MainWindowViewModel : ViewModelBase
                 BuildUniqueNewDraftNodeInstanceId(definition.NodeType);
             NewDraftNodeInstanceId = lastSuggestedNewDraftNodeInstanceId;
         }
+
+        if (ShouldApplySuggestedNewDraftNodeConfigJson())
+        {
+            lastSuggestedNewDraftNodeConfigJson =
+                NodeConfigDefaultBuilder.BuildJson(definition.ConfigSchemaDescriptor);
+            NewDraftNodeConfigJson = lastSuggestedNewDraftNodeConfigJson;
+        }
     }
 
     private bool ShouldApplySuggestedNewDraftNodeInstanceId()
@@ -2709,6 +2718,16 @@ public partial class MainWindowViewModel : ViewModelBase
             || string.Equals(
                 NewDraftNodeInstanceId,
                 lastSuggestedNewDraftNodeInstanceId,
+                StringComparison.Ordinal);
+    }
+
+    private bool ShouldApplySuggestedNewDraftNodeConfigJson()
+    {
+        return string.IsNullOrWhiteSpace(NewDraftNodeConfigJson)
+            || string.Equals(NewDraftNodeConfigJson.Trim(), "{}", StringComparison.Ordinal)
+            || string.Equals(
+                NewDraftNodeConfigJson,
+                lastSuggestedNewDraftNodeConfigJson,
                 StringComparison.Ordinal);
     }
 
