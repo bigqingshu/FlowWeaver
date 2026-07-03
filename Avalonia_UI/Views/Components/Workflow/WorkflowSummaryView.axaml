@@ -198,21 +198,23 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-                    <Grid ColumnDefinitions="120,*,120,*"
-                          RowDefinitions="Auto,Auto,Auto,Auto"
+                    <Grid ColumnDefinitions="120,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="10"
                           RowSpacing="6">
                         <TextBlock Text="{Binding NodeInstanceIdText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Column="1"
-                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock Grid.Column="2"
+
+                        <TextBlock Grid.Row="1"
                                    Text="{Binding NodeTypeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <StackPanel Grid.Column="3" Spacing="4">
+                        <StackPanel Grid.Row="1"
+                                    Grid.Column="1"
+                                    Spacing="4">
                             <ComboBox ItemsSource="{Binding NodeDefinitions}"
                                       SelectedItem="{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
@@ -234,39 +236,38 @@
                             <TextBox Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1"
+                        <TextBlock Grid.Row="2"
                                    Text="{Binding NodeVersionText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="1"
-                                 Text="{Binding NewDraftNodeVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="2"
+                        <TextBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  Text="{Binding NewDraftNodeVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="3"
                                    Text="{Binding DisplayNameText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="3"
-                                 Text="{Binding NewDraftNodeDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBox Grid.Row="3"
+                                  Grid.Column="1"
+                                  Text="{Binding NewDraftNodeDisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="4"
                                    Text="{Binding ConfigJsonText}"
                                    VerticalAlignment="Top"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="2"
-                                 Grid.Column="1"
-                                 Grid.ColumnSpan="3"
-                                 MinHeight="56"
-                                 MaxHeight="96"
-                                 AcceptsReturn="True"
+                        <TextBox Grid.Row="4"
+                                  Grid.Column="1"
+                                  MinHeight="56"
+                                  MaxHeight="96"
+                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  FontFamily="Consolas"
                                  FontSize="12"
-                                 Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                  Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <Button Grid.Row="3"
-                                Grid.Column="3"
+                        <Button Grid.Row="5"
+                                Grid.Column="1"
                                 Content="{Binding AddNodeText}"
                                 Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
                                 HorizontalAlignment="Right"
