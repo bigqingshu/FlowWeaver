@@ -635,6 +635,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string NodesSectionText => T("definition.nodes");
 
+    public string WorkflowNodesSectionText => T("definition.workflow_nodes");
+
     public string NodeConfigSectionText => T("definition.node_config");
 
     public string ApplyNodeConfigText => T("definition.apply_node_config");
@@ -3082,6 +3084,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HashLabelText));
         OnPropertyChanged(nameof(UpdatedLabelText));
         OnPropertyChanged(nameof(NodesSectionText));
+        OnPropertyChanged(nameof(WorkflowNodesSectionText));
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(StructuredEditSectionText));

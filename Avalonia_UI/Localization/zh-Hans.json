@@ -57,6 +57,7 @@
   "definition.hash": "哈希",
   "definition.updated": "更新时间",
   "definition.nodes": "节点",
+  "definition.workflow_nodes": "工作流节点",
   "definition.node_config": "节点配置",
   "definition.apply_node_config": "应用配置",
   "definition.structured_edit": "结构化编辑",

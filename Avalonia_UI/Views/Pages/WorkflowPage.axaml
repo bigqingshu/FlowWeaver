@@ -4,8 +4,9 @@
              xmlns:workflow="using:Avalonia_UI.Views.Components.Workflow"
              x:Class="Avalonia_UI.Views.Pages.WorkflowPage"
              x:DataType="vm:MainWindowViewModel">
-    <Grid ColumnDefinitions="340,*" ColumnSpacing="16" Margin="12">
+    <Grid ColumnDefinitions="340,*,340" ColumnSpacing="16" Margin="12">
         <workflow:WorkflowListView Grid.Column="0" />
         <workflow:WorkflowSummaryView Grid.Column="1" />
+        <workflow:WorkflowNodeListView Grid.Column="2" />
     </Grid>
 </UserControl>

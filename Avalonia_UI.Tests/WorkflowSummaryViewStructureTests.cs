@@ -16,14 +16,36 @@ public sealed class WorkflowSummaryViewStructureTests
             "Views",
             "Components",
             "Workflow",
-            "WorkflowSummaryView.axaml");
+            "WorkflowNodeListView.axaml");
 
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowNodesSectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDetail.NodeCountText}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"");
+        StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeEditorStatusText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding ConfigJson}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedNodeConfigDraftSummaryText}\"");
-        StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto,Auto,Auto\"");
         Assert.IsFalse(xaml.Contains("NodeEditorStatusText}\" Command=", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void WorkflowSummaryViewDoesNotOwnNodeSelectionList()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedNodeConfigDraftSummaryText}\"");
+        StringAssert.Contains(
+            xaml,
+            "ItemsSource=\"{Binding SelectedNodeConfigEditableInputFields}\"");
+        Assert.IsFalse(
+            xaml.Contains("ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            xaml.Contains("SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -193,7 +215,7 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
-    public void WorkflowPageKeepsDefinitionWorkspaceInTwoColumns()
+    public void WorkflowPageKeepsDefinitionWorkspaceWithDedicatedNodeListColumn()
     {
         var xaml = ReadSourceFile(
             "Avalonia_UI",
@@ -201,9 +223,10 @@ public sealed class WorkflowSummaryViewStructureTests
             "Pages",
             "WorkflowPage.axaml");
 
-        StringAssert.Contains(xaml, "ColumnDefinitions=\"340,*\"");
+        StringAssert.Contains(xaml, "ColumnDefinitions=\"340,*,340\"");
         StringAssert.Contains(xaml, "<workflow:WorkflowListView Grid.Column=\"0\" />");
         StringAssert.Contains(xaml, "<workflow:WorkflowSummaryView Grid.Column=\"1\" />");
+        StringAssert.Contains(xaml, "<workflow:WorkflowNodeListView Grid.Column=\"2\" />");
         Assert.IsFalse(xaml.Contains("<workflow:WorkflowEditorView", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("<workflow:WorkflowNodeCatalogView", StringComparison.Ordinal));
     }
@@ -286,7 +309,6 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "<ScrollViewer VerticalScrollBarVisibility=\"Auto\"");
         StringAssert.Contains(xaml, "<StackPanel Spacing=\"10\">");
-        StringAssert.Contains(xaml, "MaxHeight=\"160\"");
         StringAssert.Contains(xaml, "MaxHeight=\"140\"");
         Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,*\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("RowDefinitions=\"Auto,*,Auto,Auto,Auto\"", StringComparison.Ordinal));
