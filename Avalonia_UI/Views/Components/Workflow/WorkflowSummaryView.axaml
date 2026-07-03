@@ -333,21 +333,23 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
 
-                    <Grid ColumnDefinitions="120,*,120,*"
-                          RowDefinitions="Auto,Auto,Auto"
+                    <Grid ColumnDefinitions="120,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="10"
                           RowSpacing="6">
                         <TextBlock Text="{Binding ConnectionIdText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBox Grid.Column="1"
-                                 VerticalAlignment="Top"
                                  Text="{Binding NewDraftConnectionId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock Grid.Column="2"
+
+                        <TextBlock Grid.Row="1"
                                    Text="{Binding SourceNodeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <StackPanel Grid.Column="3" Spacing="4">
+                        <StackPanel Grid.Row="1"
+                                    Grid.Column="1"
+                                    Spacing="4">
                             <ComboBox ItemsSource="{Binding WorkflowDefinitionDraftStructure.Nodes}"
                                       SelectedItem="{Binding SelectedNewDraftConnectionSourceNode, Mode=TwoWay}">
                                 <ComboBox.ItemTemplate>
@@ -369,21 +371,20 @@
                             <TextBox Text="{Binding NewDraftConnectionSourceNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1"
+                        <TextBlock Grid.Row="2"
                                    Text="{Binding SourcePortText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="1"
-                                 VerticalAlignment="Top"
-                                 Text="{Binding NewDraftConnectionSourcePort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="2"
+                        <TextBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  Text="{Binding NewDraftConnectionSourcePort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="3"
                                    Text="{Binding TargetNodeText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <StackPanel Grid.Row="1"
-                                    Grid.Column="3"
+                        <StackPanel Grid.Row="3"
+                                    Grid.Column="1"
                                     Spacing="4">
                             <ComboBox ItemsSource="{Binding WorkflowDefinitionDraftStructure.Nodes}"
                                       SelectedItem="{Binding SelectedNewDraftConnectionTargetNode, Mode=TwoWay}">
@@ -406,16 +407,15 @@
                             <TextBox Text="{Binding NewDraftConnectionTargetNodeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="4"
                                    Text="{Binding TargetPortText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="2"
-                                 Grid.Column="1"
-                                 VerticalAlignment="Top"
-                                 Text="{Binding NewDraftConnectionTargetPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        <Button Grid.Row="2"
-                                Grid.Column="3"
+                        <TextBox Grid.Row="4"
+                                  Grid.Column="1"
+                                  Text="{Binding NewDraftConnectionTargetPort, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Row="5"
+                                Grid.Column="1"
                                 Content="{Binding AddConnectionText}"
                                 Command="{Binding AddWorkflowDefinitionDraftConnectionCommand}"
                                 HorizontalAlignment="Right"
