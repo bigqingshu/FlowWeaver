@@ -56,10 +56,12 @@ public sealed class WorkflowDefinitionDraftStructureBuilderTests
         Assert.AreEqual("Source", source.DisplayName);
         Assert.IsTrue(source.Enabled);
         Assert.IsTrue(source.HasConfig);
+        StringAssert.Contains(source.ConfigJson, "\"rows\": 3");
 
         var filter = structure.Nodes.Single(item => item.NodeInstanceId == "filter");
         Assert.IsFalse(filter.Enabled);
         Assert.IsFalse(filter.HasConfig);
+        Assert.AreEqual("{}", filter.ConfigJson);
 
         var connection = structure.Connections.Single();
         Assert.AreEqual("c1", connection.ConnectionId);
@@ -110,12 +112,24 @@ public sealed class WorkflowDefinitionDraftStructureBuilderTests
     public void BuildReturnsConnectionsMissingWhenConnectionsArrayIsMissing()
     {
         var structure = WorkflowDefinitionDraftStructureBuilder.Build(
-            """{"nodes":[]}""");
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0"
+                }
+              ]
+            }
+            """);
 
         Assert.IsFalse(structure.IsSupported);
         Assert.AreEqual(
             WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
             structure.Status);
+        Assert.AreEqual(1, structure.NodeCount);
+        Assert.AreEqual("source", structure.Nodes[0].NodeInstanceId);
         CollectionAssert.Contains(
             structure.Warnings.ToArray(),
             "WORKFLOW_DRAFT_CONNECTIONS_MISSING");

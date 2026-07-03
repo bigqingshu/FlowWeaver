@@ -26,6 +26,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IConnectionSettingsStore _connectionSettingsStore;
     private readonly IUiSettingsStore _uiSettingsStore;
     private readonly ILocalizationService _localizationService;
+    private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
     private readonly CancellationTokenSource _shutdown = new();
     private CancellationTokenSource? _runtimeEventStreamCancellation;
@@ -433,6 +434,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
         new();
 
+    public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
+        WorkflowDefinitionDraftNodes { get; } = new();
+
     public ObservableCollection<NodeConfigEditableFieldInputViewModel>
         SelectedNodeConfigEditableInputFields { get; } = new();
 
@@ -512,6 +516,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public int WorkflowDefinitionDraftNodeCount =>
         WorkflowDefinitionDraftStructure?.NodeCount ?? 0;
+
+    public string WorkflowDefinitionDraftNodeCountText =>
+        DisplayTextFormatter.FormatNodeCount(WorkflowDefinitionDraftNodes.Count);
 
     public int WorkflowDefinitionDraftConnectionCount =>
         WorkflowDefinitionDraftStructure?.ConnectionCount ?? 0;
@@ -2300,9 +2307,43 @@ public partial class MainWindowViewModel : ViewModelBase
             : WorkflowDefinitionDraftStructureBuilder.Build(
                 WorkflowDefinitionDraftJson,
                 DisplayTextFormatter);
+        RefreshWorkflowDefinitionDraftNodes();
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
         ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
         ClearSelectedNewDraftConnectionNodesIfMissing();
+    }
+
+    private void RefreshWorkflowDefinitionDraftNodes()
+    {
+        var selectedNodeId = SelectedWorkflowDefinitionNode?.NodeInstanceId;
+        var hadSelectedNode = !string.IsNullOrWhiteSpace(selectedNodeId);
+        WorkflowDefinitionDraftNodes.Clear();
+
+        if (WorkflowDefinitionDraftStructure is not null)
+        {
+            foreach (var node in WorkflowDefinitionDraftStructure.Nodes)
+            {
+                WorkflowDefinitionDraftNodes.Add(
+                    new WorkflowDefinitionNodeListItemViewModel(
+                        node.NodeInstanceId,
+                        node.NodeType,
+                        node.NodeVersion,
+                        node.DisplayName,
+                        node.Enabled,
+                        node.ConfigJson,
+                        DisplayTextFormatter,
+                        _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName)));
+            }
+        }
+
+        SelectedWorkflowDefinitionNode = WorkflowDefinitionDraftNodes.FirstOrDefault(node =>
+            string.Equals(node.NodeInstanceId, selectedNodeId, StringComparison.Ordinal));
+        if (SelectedWorkflowDefinitionNode is null && !hadSelectedNode)
+        {
+            SelectedWorkflowDefinitionNode = WorkflowDefinitionDraftNodes.FirstOrDefault();
+        }
+
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
     }
 
     private void ResetNewDraftNodeInput()
@@ -3091,6 +3132,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(UpdatedLabelText));
         OnPropertyChanged(nameof(NodesSectionText));
         OnPropertyChanged(nameof(WorkflowNodesSectionText));
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(StructuredEditSectionText));
@@ -3354,6 +3396,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructure));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCount));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCount));
+        OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructureWarnings));
     }
 

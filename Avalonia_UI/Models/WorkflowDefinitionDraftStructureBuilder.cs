@@ -40,18 +40,24 @@ public static class WorkflowDefinitionDraftStructureBuilder
                     "WORKFLOW_DRAFT_NODES_MISSING");
             }
 
+            var warnings = new List<string>();
+            var draftNodes = ReadNodes(nodes, warnings, formatter);
+
             if (!TryGetArray(root, "connections", out var connections))
             {
-                return Unsupported(
-                    WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
-                    "WORKFLOW_DRAFT_CONNECTIONS_MISSING");
+                warnings.Add("WORKFLOW_DRAFT_CONNECTIONS_MISSING");
+                return new WorkflowDefinitionDraftStructure
+                {
+                    Status = WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
+                    Nodes = draftNodes,
+                    Warnings = warnings,
+                };
             }
 
-            var warnings = new List<string>();
             return new WorkflowDefinitionDraftStructure
             {
                 Status = WorkflowDefinitionDraftStructureStatus.Supported,
-                Nodes = ReadNodes(nodes, warnings, formatter),
+                Nodes = draftNodes,
                 Connections = ReadConnections(connections, warnings),
                 Warnings = warnings,
             };
@@ -101,6 +107,9 @@ public static class WorkflowDefinitionDraftStructureBuilder
                 NodeVersion = GetStringOrEmpty(node, "node_version"),
                 DisplayName = GetStringOrEmpty(node, "display_name"),
                 Enabled = GetBoolOrDefault(node, "enabled", defaultValue: true),
+                ConfigJson = TryGetProperty(node, "config", out var config)
+                    ? FormatJson(config)
+                    : "{}",
                 HasConfig = HasObject(node, "config"),
             });
         }
@@ -194,5 +203,27 @@ public static class WorkflowDefinitionDraftStructureBuilder
     {
         return element.TryGetProperty(propertyName, out var property) &&
             property.ValueKind == JsonValueKind.Object;
+    }
+
+    private static bool TryGetProperty(
+        JsonElement element,
+        string propertyName,
+        out JsonElement property)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out property))
+        {
+            return true;
+        }
+
+        property = default;
+        return false;
+    }
+
+    private static string FormatJson(JsonElement element)
+    {
+        return JsonSerializer.Serialize(
+            element,
+            new JsonSerializerOptions { WriteIndented = true });
     }
 }

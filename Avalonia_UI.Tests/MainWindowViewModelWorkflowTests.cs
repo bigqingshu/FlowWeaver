@@ -266,6 +266,8 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.HasCount(2, detail.Revisions);
         Assert.IsTrue(viewModel.HasWorkflowDefinitionDraftStructure);
         Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual("2 node(s)", viewModel.WorkflowDefinitionDraftNodeCountText);
+        Assert.HasCount(2, viewModel.WorkflowDefinitionDraftNodes);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
         Assert.IsNotNull(viewModel.WorkflowDefinitionDraftStructure);
         Assert.AreEqual(
@@ -275,7 +277,7 @@ public sealed class MainWindowViewModelWorkflowTests
             "c1",
             viewModel.WorkflowDefinitionDraftStructure.Connections[0].ConnectionId);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructureWarnings);
-        Assert.AreSame(detail.Nodes[0], viewModel.SelectedWorkflowDefinitionNode);
+        Assert.AreSame(viewModel.WorkflowDefinitionDraftNodes[0], viewModel.SelectedWorkflowDefinitionNode);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
         Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
@@ -589,6 +591,10 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.AreEqual("1 node(s)", viewModel.WorkflowDefinitionDraftNodeCountText);
+        Assert.HasCount(1, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.AreEqual("source", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
+        Assert.AreSame(viewModel.WorkflowDefinitionDraftNodes[0], viewModel.SelectedWorkflowDefinitionNode);
         Assert.AreEqual(string.Empty, viewModel.NewDraftNodeInstanceId);
         Assert.AreEqual(string.Empty, viewModel.NewDraftNodeType);
         Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
@@ -751,7 +757,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
 
         viewModel.SelectedWorkflowDefinitionNode =
-            viewModel.WorkflowDefinitionDetail?.Nodes.Single(node =>
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
                 node.NodeInstanceId == "orphan");
 
         Assert.IsTrue(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
@@ -770,6 +776,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
+        Assert.HasCount(1, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.AreEqual("source", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
+        Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
     }
 
@@ -803,7 +812,7 @@ public sealed class MainWindowViewModelWorkflowTests
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
         viewModel.SelectedWorkflowDefinitionNode =
-            viewModel.WorkflowDefinitionDetail?.Nodes.Single(node =>
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
                 node.NodeInstanceId == "filter");
 
         viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);

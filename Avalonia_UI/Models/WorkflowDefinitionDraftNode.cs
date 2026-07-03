@@ -14,5 +14,7 @@ public sealed record WorkflowDefinitionDraftNode
 
     public bool Enabled { get; init; } = true;
 
+    public string ConfigJson { get; init; } = "{}";
+
     public bool HasConfig { get; init; }
 }

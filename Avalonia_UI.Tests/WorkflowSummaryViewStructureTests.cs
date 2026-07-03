@@ -19,11 +19,13 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowNodeListView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowNodesSectionText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDetail.NodeCountText}\"");
-        StringAssert.Contains(xaml, "ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDraftNodeCountText}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding WorkflowDefinitionDraftNodes}\"");
         StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeEditorStatusText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding ConfigJson}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionValidationMessage}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionValidationErrorMessage}\"");
         StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto,Auto,Auto\"");
         Assert.IsFalse(xaml.Contains("NodeEditorStatusText}\" Command=", StringComparison.Ordinal));
     }
