@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -174,9 +175,10 @@ public static class WorkflowDefinitionDraftNodePatcher
                 "NODE_NOT_FOUND");
         }
 
-        foreach (var connection in readResult.Connections)
+        var removedConnections = new List<WorkflowDefinitionDraftConnection>();
+        for (var index = readResult.Connections.Count - 1; index >= 0; index--)
         {
-            if (connection is JsonObject connectionObject &&
+            if (readResult.Connections[index] is JsonObject connectionObject &&
                 (string.Equals(
                     GetStringValue(connectionObject, "source_node_id"),
                     nodeInstanceId,
@@ -186,9 +188,8 @@ public static class WorkflowDefinitionDraftNodePatcher
                     nodeInstanceId,
                     StringComparison.Ordinal)))
             {
-                return Failed(
-                    WorkflowDefinitionDraftNodePatchStatus.NodeHasConnections,
-                    "NODE_HAS_CONNECTIONS");
+                removedConnections.Insert(0, ReadConnection(connectionObject));
+                readResult.Connections.RemoveAt(index);
             }
         }
 
@@ -196,8 +197,22 @@ public static class WorkflowDefinitionDraftNodePatcher
         return new WorkflowDefinitionDraftNodePatchResult
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            RemovedConnections = removedConnections,
             UpdatedWorkflowDefinitionDraftJson =
                 readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
+    private static WorkflowDefinitionDraftConnection ReadConnection(
+        JsonObject connectionObject)
+    {
+        return new WorkflowDefinitionDraftConnection
+        {
+            ConnectionId = GetStringValue(connectionObject, "connection_id") ?? string.Empty,
+            SourceNodeId = GetStringValue(connectionObject, "source_node_id") ?? string.Empty,
+            SourcePort = GetStringValue(connectionObject, "source_port") ?? string.Empty,
+            TargetNodeId = GetStringValue(connectionObject, "target_node_id") ?? string.Empty,
+            TargetPort = GetStringValue(connectionObject, "target_port") ?? string.Empty,
         };
     }
 

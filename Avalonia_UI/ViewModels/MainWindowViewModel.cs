@@ -1400,8 +1400,12 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        WorkflowDefinitionValidationMessage = T("definition.node_deleted");
-        WorkflowDefinitionValidationErrorMessage = null;
+        WorkflowDefinitionValidationMessage =
+            patchResult.RemovedConnections.Count > 0
+                ? T("definition.node_deleted_with_connections")
+                : T("definition.node_deleted");
+        WorkflowDefinitionValidationErrorMessage =
+            FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
     }
 
     [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftConnection))]
@@ -2682,6 +2686,44 @@ public partial class MainWindowViewModel : ViewModelBase
             "TARGET_PORT_REQUIRED" => T("definition.warning.target_port_required"),
             _ => warning,
         };
+    }
+
+    private string? FormatRemovedConnectionsMessage(
+        IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections)
+    {
+        if (removedConnections.Count == 0)
+        {
+            return null;
+        }
+
+        return F(
+            "definition.node_delete_removed_connections",
+            string.Join(
+                Environment.NewLine,
+                removedConnections.Select(FormatRelatedConnectionSummary)));
+    }
+
+    private static string FormatRelatedConnectionSummary(
+        WorkflowDefinitionDraftConnection connection)
+    {
+        var connectionId = string.IsNullOrWhiteSpace(connection.ConnectionId)
+            ? "?"
+            : connection.ConnectionId;
+
+        return
+            $"- {connectionId}: {FormatConnectionEndpoint(connection.SourceNodeId, connection.SourcePort)} -> {FormatConnectionEndpoint(connection.TargetNodeId, connection.TargetPort)}";
+    }
+
+    private static string FormatConnectionEndpoint(string nodeId, string port)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId))
+        {
+            return string.IsNullOrWhiteSpace(port) ? "?" : port;
+        }
+
+        return string.IsNullOrWhiteSpace(port)
+            ? nodeId
+            : $"{nodeId}.{port}";
     }
 
     private void ApplySelectedNewDraftNodeDefinition(

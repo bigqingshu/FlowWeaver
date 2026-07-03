@@ -12,6 +12,5 @@ public enum WorkflowDefinitionDraftNodePatchStatus
     NodeVersionRequired,
     NodeAlreadyExists,
     NodeNotFound,
-    NodeHasConnections,
     ConfigUnsupported,
 }

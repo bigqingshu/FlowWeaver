@@ -184,6 +184,8 @@
   "definition.node_add_failed": "Node add failed.",
   "definition.node_add_config_json_invalid": "Node config JSON is invalid.",
   "definition.node_deleted": "Node deleted from draft. Validate before saving.",
+  "definition.node_deleted_with_connections": "Node deleted from draft with related connections. Validate before saving.",
+  "definition.node_delete_removed_connections": "Removed related connections:\n{0}",
   "definition.node_delete_failed": "Node delete failed.",
   "definition.connection_added": "Connection added to draft. Validate before saving.",
   "definition.connection_add_failed": "Connection add failed.",

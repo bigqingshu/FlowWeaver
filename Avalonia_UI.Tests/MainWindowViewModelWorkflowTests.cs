@@ -846,7 +846,7 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
-    public async Task DeleteWorkflowDefinitionDraftNodeCommandRejectsConnectedNode()
+    public async Task DeleteWorkflowDefinitionDraftNodeCommandDeletesConnectedNodeAndRelatedConnections()
     {
         var definitionJson =
             """
@@ -854,10 +854,13 @@ public sealed class MainWindowViewModelWorkflowTests
               "schema_version": "1.0",
               "nodes": [
                 {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"},
-                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0"}
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0"},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0"}
               ],
               "connections": [
-                {"connection_id": "c1", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"}
+                {"connection_id": "c1", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "c2", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
               ]
             }
             """;
@@ -880,13 +883,38 @@ public sealed class MainWindowViewModelWorkflowTests
 
         viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
 
-        Assert.AreEqual("Node delete failed.", viewModel.WorkflowDefinitionValidationMessage);
         Assert.AreEqual(
-            "Delete related connections before deleting this node.",
-            viewModel.WorkflowDefinitionValidationErrorMessage);
+            "Node deleted from draft with related connections. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        var errorMessage = viewModel.WorkflowDefinitionValidationErrorMessage ?? string.Empty;
+        StringAssert.Contains(
+            errorMessage,
+            "Removed related connections:",
+            "Delete should explain which related connections were removed.");
+        StringAssert.Contains(
+            errorMessage,
+            "c1: source.out -> filter.in",
+            "Delete should show the removed upstream connection endpoints.");
+        StringAssert.Contains(
+            errorMessage,
+            "c2: filter.out -> sink.in",
+            "Delete should show the removed downstream connection endpoints.");
         Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
-        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
-        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.HasCount(2, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.IsFalse(viewModel.WorkflowDefinitionDraftNodes.Any(node =>
+            node.NodeInstanceId == "filter"));
+        Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(2, draft.RootElement.GetProperty("nodes").GetArrayLength());
+        Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+        Assert.AreEqual(
+            "keep",
+            draft.RootElement
+                .GetProperty("connections")[0]
+                .GetProperty("connection_id")
+                .GetString());
     }
 
     [TestMethod]

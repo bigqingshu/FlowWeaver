@@ -258,25 +258,43 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
-    public void DeleteNodeRejectsConnectedNode()
+    public void DeleteNodeRemovesConnectedNodeAndRelatedConnections()
     {
         var result = WorkflowDefinitionDraftNodePatcher.DeleteNode(
             """
             {
               "nodes": [
                 {"node_instance_id": "source"},
-                {"node_instance_id": "filter"}
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "sink"}
               ],
               "connections": [
-                {"connection_id": "c1", "source_node_id": "source", "target_node_id": "filter"}
+                {"connection_id": "c1", "source_node_id": "source", "source_port": "rows", "target_node_id": "filter", "target_port": "rows"},
+                {"connection_id": "c2", "source_node_id": "filter", "source_port": "rows", "target_node_id": "sink", "target_port": "rows"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "rows", "target_node_id": "sink", "target_port": "rows"}
               ]
             }
             """,
             "filter");
 
-        Assert.IsFalse(result.Succeeded);
-        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeHasConnections, result.Status);
-        Assert.AreEqual("NODE_HAS_CONNECTIONS", result.Warning);
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.Succeeded, result.Status);
+        Assert.IsNull(result.Warning);
+        Assert.HasCount(2, result.RemovedConnections);
+        Assert.AreEqual("c1", result.RemovedConnections[0].ConnectionId);
+        Assert.AreEqual("source", result.RemovedConnections[0].SourceNodeId);
+        Assert.AreEqual("rows", result.RemovedConnections[0].SourcePort);
+        Assert.AreEqual("filter", result.RemovedConnections[0].TargetNodeId);
+        Assert.AreEqual("rows", result.RemovedConnections[0].TargetPort);
+        Assert.AreEqual("c2", result.RemovedConnections[1].ConnectionId);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var root = updated.RootElement;
+        Assert.AreEqual(2, root.GetProperty("nodes").GetArrayLength());
+        Assert.AreEqual(1, root.GetProperty("connections").GetArrayLength());
+        Assert.AreEqual(
+            "keep",
+            root.GetProperty("connections")[0].GetProperty("connection_id").GetString());
     }
 
     [TestMethod]

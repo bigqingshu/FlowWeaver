@@ -37,6 +37,14 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual(
             "请先删除相关连接，再删除该节点。",
             service.GetString("definition.warning.node_has_connections"));
+        Assert.AreEqual(
+            "节点及相关连接已从草稿删除。保存前请重新校验。",
+            service.GetString("definition.node_deleted_with_connections"));
+        Assert.AreEqual(
+            "已同步移除相关连接：\n- c1: source.out -> filter.in",
+            service.Format(
+                "definition.node_delete_removed_connections",
+                "- c1: source.out -> filter.in"));
     }
 
     [TestMethod]
