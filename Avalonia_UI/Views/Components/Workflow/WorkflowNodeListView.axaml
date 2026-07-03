@@ -1,10 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:primitives="using:Avalonia.Controls.Primitives"
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowNodeListView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
-        <Grid RowDefinitions="Auto,*" RowSpacing="10">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding WorkflowNodesSectionText}"
                            FontSize="16"
@@ -44,6 +45,29 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <StackPanel Grid.Row="2" Spacing="8">
+                <TextBlock Text="{Binding NodeActionsSectionText}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                <WrapPanel Orientation="Horizontal"
+                           HorizontalAlignment="Right">
+                    <Button Content="{Binding AddNodeText}"
+                            Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
+                            MinWidth="104"
+                            Margin="0,0,8,8"/>
+                    <Button Content="{Binding DeleteNodeText}"
+                            Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
+                            MinWidth="104"
+                            Margin="0,0,8,8"/>
+                    <primitives:ToggleButton Content="{Binding ShowAdvancedDraftJsonText}"
+                                             IsChecked="{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}"
+                                             MinWidth="128"
+                                             Margin="0,0,0,8"/>
+                </WrapPanel>
+            </StackPanel>
         </Grid>
     </Border>
 </UserControl>

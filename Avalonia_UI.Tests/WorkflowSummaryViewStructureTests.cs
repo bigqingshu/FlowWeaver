@@ -121,6 +121,12 @@ public sealed class WorkflowSummaryViewStructureTests
             "Components",
             "Workflow",
             "WorkflowSummaryView.axaml");
+        var nodeListXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowNodeListView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding AddNodeText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteNodeText}\"");
@@ -152,13 +158,13 @@ public sealed class WorkflowSummaryViewStructureTests
             xaml,
             "x:DataType=\"vm:NodeDefinitionListItemViewModel\"");
         StringAssert.Contains(
-            xaml,
+            nodeListXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(
             xaml,
             "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay");
         StringAssert.Contains(
-            xaml,
+            nodeListXaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
 
         StringAssert.Contains(xaml, "Text=\"{Binding ConnectionIdText}\"");
@@ -239,6 +245,12 @@ public sealed class WorkflowSummaryViewStructureTests
             "Views",
             "Components",
             "Workflow",
+            "WorkflowNodeListView.axaml");
+        var summaryXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
             "WorkflowSummaryView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
@@ -256,8 +268,12 @@ public sealed class WorkflowSummaryViewStructureTests
             xaml,
             "IsChecked=\"{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}\"");
         StringAssert.Contains(
-            xaml,
+            summaryXaml,
             "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"");
+        Assert.IsFalse(
+            summaryXaml.Contains("Text=\"{Binding NodeActionsSectionText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            summaryXaml.Contains("Content=\"{Binding ShowAdvancedDraftJsonText}\"", StringComparison.Ordinal));
 
         var actionGroupIndex = xaml.IndexOf(
             "Text=\"{Binding NodeActionsSectionText}\"",
@@ -265,16 +281,16 @@ public sealed class WorkflowSummaryViewStructureTests
         var advancedToggleIndex = xaml.IndexOf(
             "Content=\"{Binding ShowAdvancedDraftJsonText}\"",
             StringComparison.Ordinal);
-        var editorIndex = xaml.IndexOf(
+        var editorIndex = summaryXaml.IndexOf(
             "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"",
             StringComparison.Ordinal);
         Assert.IsTrue(
             actionGroupIndex >= 0 && advancedToggleIndex > actionGroupIndex,
             "The draft JSON toggle should live inside the node action group.");
-        Assert.IsGreaterThan(
-            advancedToggleIndex,
+        Assert.IsGreaterThanOrEqualTo(
+            0,
             editorIndex,
-            "The draft JSON editor should remain behind the node action group's advanced toggle.");
+            "The draft JSON editor should remain controlled by the node action group's advanced toggle.");
     }
 
     [TestMethod]
