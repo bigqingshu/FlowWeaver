@@ -1365,7 +1365,8 @@ public partial class MainWindowViewModel : ViewModelBase
             NewDraftNodeType,
             NewDraftNodeVersion,
             NewDraftNodeDisplayName,
-            config);
+            config,
+            SelectedWorkflowDefinitionNode?.NodeInstanceId);
         if (!patchResult.Succeeded)
         {
             WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
@@ -1375,6 +1376,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        SelectWorkflowDefinitionDraftNode(NewDraftNodeInstanceId);
         WorkflowDefinitionValidationMessage = T("definition.node_added");
         WorkflowDefinitionValidationErrorMessage = null;
         ResetNewDraftNodeInput();
@@ -2351,6 +2353,15 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
     }
 
+    private void SelectWorkflowDefinitionDraftNode(string nodeInstanceId)
+    {
+        SelectedWorkflowDefinitionNode = WorkflowDefinitionDraftNodes.FirstOrDefault(node =>
+            string.Equals(
+                node.NodeInstanceId,
+                nodeInstanceId,
+                StringComparison.Ordinal));
+    }
+
     private void ResetNewDraftNodeInput()
     {
         lastSuggestedNewDraftNodeInstanceId = string.Empty;
@@ -2674,6 +2685,7 @@ public partial class MainWindowViewModel : ViewModelBase
             "CONFIG_UNSUPPORTED" => T("definition.warning.node_config_unsupported"),
             "NODE_ALREADY_EXISTS" => T("definition.warning.node_already_exists"),
             "NODE_NOT_FOUND" => T("definition.warning.node_not_found"),
+            "INSERT_AFTER_NODE_NOT_FOUND" => T("definition.warning.insert_after_node_not_found"),
             "NODE_HAS_CONNECTIONS" => T("definition.warning.node_has_connections"),
             "CONNECTION_ID_REQUIRED" => T("definition.warning.connection_id_required"),
             "CONNECTION_ALREADY_EXISTS" => T("definition.warning.connection_already_exists"),

@@ -12,5 +12,6 @@ public enum WorkflowDefinitionDraftNodePatchStatus
     NodeVersionRequired,
     NodeAlreadyExists,
     NodeNotFound,
+    InsertAfterNodeNotFound,
     ConfigUnsupported,
 }

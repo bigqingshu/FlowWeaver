@@ -201,6 +201,7 @@
   "definition.warning.node_config_unsupported": "节点配置必须是 JSON 对象。",
   "definition.warning.node_already_exists": "该节点实例 ID 已存在。",
   "definition.warning.node_not_found": "在草稿中未找到所选节点。",
+  "definition.warning.insert_after_node_not_found": "在草稿中未找到选中的插入位置节点。",
   "definition.warning.node_has_connections": "请先删除相关连接，再删除该节点。",
   "definition.warning.connection_id_required": "需要填写连接 ID。",
   "definition.warning.connection_already_exists": "该连接 ID 已存在。",

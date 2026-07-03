@@ -38,6 +38,9 @@ public sealed class JsonLocalizationServiceTests
             "请先删除相关连接，再删除该节点。",
             service.GetString("definition.warning.node_has_connections"));
         Assert.AreEqual(
+            "在草稿中未找到选中的插入位置节点。",
+            service.GetString("definition.warning.insert_after_node_not_found"));
+        Assert.AreEqual(
             "节点及相关连接已从草稿删除。保存前请重新校验。",
             service.GetString("definition.node_deleted_with_connections"));
         Assert.AreEqual(

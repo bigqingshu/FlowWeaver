@@ -18,7 +18,8 @@ public static class WorkflowDefinitionDraftNodePatcher
         string nodeType,
         string nodeVersion,
         string? displayName,
-        JsonElement config)
+        JsonElement config,
+        string? insertAfterNodeInstanceId = null)
     {
         if (string.IsNullOrWhiteSpace(nodeInstanceId))
         {
@@ -108,7 +109,21 @@ public static class WorkflowDefinitionDraftNodePatcher
             newNode["display_name"] = displayName;
         }
 
-        nodes.Add(newNode);
+        var insertIndex = nodes.Count;
+        if (!string.IsNullOrWhiteSpace(insertAfterNodeInstanceId))
+        {
+            var anchorIndex = FindNodeIndex(nodes, insertAfterNodeInstanceId);
+            if (anchorIndex < 0)
+            {
+                return Failed(
+                    WorkflowDefinitionDraftNodePatchStatus.InsertAfterNodeNotFound,
+                    "INSERT_AFTER_NODE_NOT_FOUND");
+            }
+
+            insertIndex = anchorIndex + 1;
+        }
+
+        nodes.Insert(insertIndex, newNode);
         return new WorkflowDefinitionDraftNodePatchResult
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
@@ -134,6 +149,23 @@ public static class WorkflowDefinitionDraftNodePatcher
             jsonValue.TryGetValue<string>(out var value)
                 ? value
                 : null;
+    }
+
+    private static int FindNodeIndex(JsonArray nodes, string nodeInstanceId)
+    {
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            if (nodes[index] is JsonObject nodeObject &&
+                string.Equals(
+                    GetStringValue(nodeObject, "node_instance_id"),
+                    nodeInstanceId,
+                    StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     public static WorkflowDefinitionDraftNodePatchResult DeleteNode(

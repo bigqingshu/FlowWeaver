@@ -201,6 +201,7 @@
   "definition.warning.node_config_unsupported": "Node config must be a JSON object.",
   "definition.warning.node_already_exists": "A node with this instance ID already exists.",
   "definition.warning.node_not_found": "Selected node was not found in the draft.",
+  "definition.warning.insert_after_node_not_found": "Selected insertion node was not found in the draft.",
   "definition.warning.node_has_connections": "Delete related connections before deleting this node.",
   "definition.warning.connection_id_required": "Connection ID is required.",
   "definition.warning.connection_already_exists": "A connection with this ID already exists.",

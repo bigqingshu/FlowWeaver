@@ -57,6 +57,66 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void AddNodeInsertsAfterAnchorNodeWhenRequested()
+    {
+        using var config = JsonDocument.Parse("""{"value":1}""");
+
+        var result = WorkflowDefinitionDraftNodePatcher.AddNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "keep", "source_node_id": "source", "target_node_id": "sink"}
+              ]
+            }
+            """,
+            "filter",
+            "FilterRowsNode",
+            "1.0",
+            null,
+            config.RootElement,
+            "source");
+
+        Assert.IsTrue(result.Succeeded);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var nodes = updated.RootElement.GetProperty("nodes");
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("filter", nodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual(
+            "keep",
+            updated.RootElement
+                .GetProperty("connections")[0]
+                .GetProperty("connection_id")
+                .GetString());
+    }
+
+    [TestMethod]
+    public void AddNodeRejectsMissingInsertionAnchor()
+    {
+        using var config = JsonDocument.Parse("""{}""");
+
+        var result = WorkflowDefinitionDraftNodePatcher.AddNode(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            "filter",
+            "FilterRowsNode",
+            "1.0",
+            null,
+            config.RootElement,
+            "missing");
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(
+            WorkflowDefinitionDraftNodePatchStatus.InsertAfterNodeNotFound,
+            result.Status);
+        Assert.AreEqual("INSERT_AFTER_NODE_NOT_FOUND", result.Warning);
+    }
+
+    [TestMethod]
     public void AddNodeOmitsBlankDisplayName()
     {
         using var config = JsonDocument.Parse("""{}""");
