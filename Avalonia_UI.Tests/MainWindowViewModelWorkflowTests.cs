@@ -746,9 +746,13 @@ public sealed class MainWindowViewModelWorkflowTests
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
 
+        viewModel.SelectedWorkflowDefinitionNode = null;
+
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
 
-        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "orphan";
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDetail?.Nodes.Single(node =>
+                node.NodeInstanceId == "orphan");
 
         Assert.IsTrue(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
 
@@ -766,7 +770,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
-        Assert.AreEqual(string.Empty, viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+        Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -798,7 +802,9 @@ public sealed class MainWindowViewModelWorkflowTests
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
-        viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId = "filter";
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDetail?.Nodes.Single(node =>
+                node.NodeInstanceId == "filter");
 
         viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
 
@@ -807,7 +813,7 @@ public sealed class MainWindowViewModelWorkflowTests
             "Delete related connections before deleting this node.",
             viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
-        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionDraftNodeInstanceId);
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
         Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
     }
 

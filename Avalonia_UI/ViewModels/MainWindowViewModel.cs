@@ -843,10 +843,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         return CanUseEngineActions
             && WorkflowDefinitionDetail is not null
+            && SelectedWorkflowDefinitionNode is not null
             && HasWorkflowDefinitionDraft
             && !IsWorkflowDefinitionDraftBusy
             && !HasWorkflowDefinitionRevisionConflict
-            && !string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftNodeInstanceId);
+            && FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is not null;
     }
 
     private bool CanAddWorkflowDefinitionDraftConnection()
@@ -1374,9 +1375,14 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanDeleteWorkflowDefinitionDraftNode))]
     private void DeleteWorkflowDefinitionDraftNode()
     {
+        if (SelectedWorkflowDefinitionNode is null)
+        {
+            return;
+        }
+
         var patchResult = WorkflowDefinitionDraftNodePatcher.DeleteNode(
             WorkflowDefinitionDraftJson,
-            SelectedWorkflowDefinitionDraftNodeInstanceId);
+            SelectedWorkflowDefinitionNode.NodeInstanceId);
         if (!patchResult.Succeeded)
         {
             WorkflowDefinitionValidationMessage = T("definition.node_delete_failed");
@@ -3297,6 +3303,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
+        DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)

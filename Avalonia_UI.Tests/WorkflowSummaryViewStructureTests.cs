@@ -129,7 +129,7 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowNodeListView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding AddNodeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding DeleteNodeText}\"");
+        StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding AddConnectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteConnectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeInstanceIdText}\"");
@@ -161,11 +161,12 @@ public sealed class WorkflowSummaryViewStructureTests
             nodeListXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(
-            xaml,
-            "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay");
-        StringAssert.Contains(
             nodeListXaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
+        Assert.IsFalse(
+            xaml.Contains(
+                "Text=\"{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay",
+                StringComparison.Ordinal));
 
         StringAssert.Contains(xaml, "Text=\"{Binding ConnectionIdText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding SourceNodeText}\"");

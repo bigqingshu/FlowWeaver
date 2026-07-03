@@ -227,20 +227,6 @@
                                   Text="{Binding NewDraftNodeConfigJson, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     </Grid>
 
-                    <TextBlock Text="{Binding DeleteNodeText}"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimaryBrush}"/>
-
-                    <Grid ColumnDefinitions="120,*"
-                          ColumnSpacing="10">
-                        <TextBlock Text="{Binding NodeInstanceIdText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Column="1"
-                                 Text="{Binding SelectedWorkflowDefinitionDraftNodeInstanceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                    </Grid>
-
                 </StackPanel>
             </Grid>
         </Border>
