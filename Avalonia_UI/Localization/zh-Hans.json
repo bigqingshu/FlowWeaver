@@ -49,7 +49,7 @@
   "action.disabled.run_not_running": "该运行当前未处于执行中状态，无法取消。",
   "node_runs.section": "节点运行",
   "definition.section": "工作流定义",
-  "definition.details": "详情",
+  "definition.details": "刷新详情",
   "definition.name": "名称",
   "definition.version": "版本",
   "definition.revision": "修订",

@@ -1347,6 +1347,10 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         await RefreshWorkflowsAsync();
+        if (CanLoadSelectedWorkflowDefinition())
+        {
+            await LoadSelectedWorkflowDefinitionAsync();
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -3783,6 +3787,13 @@ public partial class MainWindowViewModel : ViewModelBase
             ? T("status.load_definition_to_edit")
             : T("definition.load_before_editing");
         WorkflowDefinitionValidationErrorMessage = null;
+        if (value is not null
+            && Workflows.Contains(value)
+            && !IsLoadingWorkflows
+            && CanLoadSelectedWorkflowDefinition())
+        {
+            LoadSelectedWorkflowDefinitionCommand.Execute(null);
+        }
     }
 
     partial void OnWorkflowErrorMessageChanged(string? value)

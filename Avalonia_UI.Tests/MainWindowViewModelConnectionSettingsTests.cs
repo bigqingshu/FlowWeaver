@@ -139,6 +139,12 @@ public sealed class MainWindowViewModelConnectionSettingsTests
                     {
                         Workflow("workflow-1", "Daily report"),
                     }),
+            WorkflowDetailResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                    Workflow("workflow-1", "Daily report")),
+            WorkflowRevisionsResponse =
+                ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                    new List<WorkflowRevisionDto>()),
         };
         var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
         viewModel.BaseUrl = "http://127.0.0.1:8012/";
@@ -151,6 +157,8 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.HasCount(1, viewModel.Workflows);
         Assert.AreEqual("workflow-1", viewModel.SelectedWorkflow?.WorkflowId);
         Assert.AreEqual("Loaded 1 workflow(s).", viewModel.WorkflowMessage);
+        Assert.IsTrue(viewModel.HasWorkflowDefinition);
+        Assert.AreEqual("workflow-1", apiClient.LastWorkflowDetailId);
     }
 
     [TestMethod]
@@ -316,11 +324,23 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
 
+        public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "NOT_CONFIGURED",
+                "No workflow detail response configured.");
+
+        public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
+            ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
+
         public EngineHostConnectionSettings? LastSettings { get; private set; }
 
         public int ListNodeDefinitionsCallCount { get; private set; }
 
         public int ListWorkflowsCallCount { get; private set; }
+
+        public string? LastWorkflowDetailId { get; private set; }
+
+        public string? LastWorkflowRevisionsWorkflowId { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -381,7 +401,9 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            LastWorkflowDetailId = workflowId;
+            return Task.FromResult(WorkflowDetailResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
@@ -389,7 +411,9 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             string workflowId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            LastWorkflowRevisionsWorkflowId = workflowId;
+            return Task.FromResult(WorkflowRevisionsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRevisionDto>> GetWorkflowRevisionAsync(

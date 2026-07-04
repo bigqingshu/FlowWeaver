@@ -301,7 +301,54 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
-    public async Task ChangingWorkflowClearsSelectedWorkflowDefinitionNode()
+    public async Task SelectingWorkflowFromLoadedListLoadsDefinitionAutomatically()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    Workflow("wf-1", "Daily Load", 1),
+                    Workflow("wf-2", "Report", 2),
+                }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-2", "Report", 2, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflow = viewModel.Workflows[1];
+
+        var autoLoadTask = viewModel.LoadSelectedWorkflowDefinitionCommand.ExecutionTask;
+        Assert.IsNotNull(autoLoadTask);
+        await autoLoadTask;
+
+        Assert.AreEqual("wf-2", apiClient.LastWorkflowDetailId);
+        Assert.AreEqual("wf-2", viewModel.WorkflowDefinitionDetail?.WorkflowId);
+        Assert.AreEqual("Report", viewModel.WorkflowDefinitionDetail?.Name);
+        Assert.IsTrue(viewModel.HasWorkflowDefinition);
+        Assert.AreEqual("Loaded Report v2.", viewModel.WorkflowDefinitionMessage);
+    }
+
+    [TestMethod]
+    public async Task ChangingWorkflowClearsPreviousNodeSelectionAndLoadsNewDefinition()
     {
         var definitionJson =
             """
@@ -337,9 +384,19 @@ public sealed class MainWindowViewModelWorkflowTests
 
         Assert.IsNotNull(viewModel.SelectedWorkflowDefinitionNode);
 
+        apiClient.WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+            Workflow(
+                "wf-2",
+                "Other Flow",
+                1,
+                """{"schema_version":"1.0","nodes":[],"connections":[]}"""));
         viewModel.SelectedWorkflow = viewModel.Workflows[1];
 
-        Assert.IsNull(viewModel.WorkflowDefinitionDetail);
+        var autoLoadTask = viewModel.LoadSelectedWorkflowDefinitionCommand.ExecutionTask;
+        Assert.IsNotNull(autoLoadTask);
+        await autoLoadTask;
+
+        Assert.AreEqual("wf-2", viewModel.WorkflowDefinitionDetail?.WorkflowId);
         Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsNull(viewModel.SelectedNodeConfigDraft);
         Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
@@ -347,9 +404,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.HasNoSelectedWorkflowDefinitionNode);
         Assert.IsFalse(viewModel.HasSelectedNodeConfigEditableInputFields);
         Assert.IsEmpty(viewModel.SelectedNodeConfigEditableInputFields);
-        Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
-        Assert.IsNull(viewModel.WorkflowDefinitionDraftStructure);
-        Assert.IsFalse(viewModel.HasWorkflowDefinitionDraftStructure);
+        StringAssert.Contains(viewModel.WorkflowDefinitionDraftJson, "\"nodes\": []");
+        Assert.IsNotNull(viewModel.WorkflowDefinitionDraftStructure);
+        Assert.IsTrue(viewModel.HasWorkflowDefinitionDraftStructure);
         Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual(0, viewModel.WorkflowDefinitionDraftConnectionCount);
     }

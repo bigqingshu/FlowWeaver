@@ -49,7 +49,7 @@
   "action.disabled.run_not_running": "Action is disabled because the run is not currently running.",
   "node_runs.section": "Node runs",
   "definition.section": "Workflow definition",
-  "definition.details": "Details",
+  "definition.details": "Refresh details",
   "definition.name": "Name",
   "definition.version": "Version",
   "definition.revision": "Revision",
