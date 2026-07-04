@@ -2624,6 +2624,88 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task StartSelectedWorkflowSelectsLastReadableOutputNodeAfterTerminalRun()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                },
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {}
+                },
+                {
+                  "node_instance_id": "publish",
+                  "node_type": "PublishSharedTablesNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-1", "wf-1", "PENDING")),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "SUCCEEDED") }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-generate", "run-1", "generate", "SUCCEEDED", 1, "done"),
+                    NodeRun("node-run-filter", "run-1", "filter", "SUCCEEDED", 1, "done"),
+                    NodeRun("node-run-publish", "run-1", "publish", "SUCCEEDED", 1, "done"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-generate", "run-1", "node-run-generate"),
+                    TableRef("table-filter", "run-1", "node-run-filter"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-filter",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":4,"amount":40}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        Assert.AreEqual("generate", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+
+        await viewModel.StartSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.AreEqual("table-filter", apiClient.LastTableRowsTableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "4", "40" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
     public async Task PreviewSelectedWorkflowNodeStartsPreviewRunAndLoadsDataPreview()
     {
         const string definitionJson =
