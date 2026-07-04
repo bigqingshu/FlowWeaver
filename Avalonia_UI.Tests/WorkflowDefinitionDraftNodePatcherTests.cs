@@ -429,12 +429,16 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
         Assert.AreEqual("filter", movedUpNodes[0].GetProperty("node_instance_id").GetString());
         Assert.AreEqual("source", movedUpNodes[1].GetProperty("node_instance_id").GetString());
         Assert.AreEqual("sink", movedUpNodes[2].GetProperty("node_instance_id").GetString());
+        var movedUpConnection = movedUp.RootElement.GetProperty("connections")[0];
         Assert.AreEqual(
             "source_to_filter",
-            movedUp.RootElement
-                .GetProperty("connections")[0]
-                .GetProperty("connection_id")
-                .GetString());
+            movedUpConnection.GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "source",
+            movedUpConnection.GetProperty("source_node_id").GetString());
+        Assert.AreEqual(
+            "filter",
+            movedUpConnection.GetProperty("target_node_id").GetString());
 
         var moveDown = WorkflowDefinitionDraftNodePatcher.MoveNode(
             moveUp.UpdatedWorkflowDefinitionDraftJson,
@@ -447,6 +451,17 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
         Assert.AreEqual("source", movedDownNodes[0].GetProperty("node_instance_id").GetString());
         Assert.AreEqual("filter", movedDownNodes[1].GetProperty("node_instance_id").GetString());
         Assert.AreEqual("sink", movedDownNodes[2].GetProperty("node_instance_id").GetString());
+
+        var movedDownConnection = movedDown.RootElement.GetProperty("connections")[0];
+        Assert.AreEqual(
+            "source_to_filter",
+            movedDownConnection.GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "source",
+            movedDownConnection.GetProperty("source_node_id").GetString());
+        Assert.AreEqual(
+            "filter",
+            movedDownConnection.GetProperty("target_node_id").GetString());
     }
 
     [TestMethod]

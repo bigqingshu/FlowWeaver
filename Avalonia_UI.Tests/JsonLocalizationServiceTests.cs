@@ -43,10 +43,10 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual(
             "节点已添加到草稿，并已更新线性连接。保存前请重新校验。",
             service.GetString("definition.node_added_with_connections"));
-        Assert.AreEqual("上移", service.GetString("definition.move_node_up"));
-        Assert.AreEqual("下移", service.GetString("definition.move_node_down"));
+        Assert.AreEqual("列表上移", service.GetString("definition.move_node_up"));
+        Assert.AreEqual("列表下移", service.GetString("definition.move_node_down"));
         Assert.AreEqual(
-            "节点已在草稿中移动。保存前请重新校验。",
+            "节点列表顺序已更新，连接未改变。保存前请重新校验。",
             service.GetString("definition.node_moved"));
         Assert.AreEqual("复制节点", service.GetString("definition.copy_node"));
         Assert.AreEqual("删除已选", service.GetString("definition.delete_selected_nodes"));

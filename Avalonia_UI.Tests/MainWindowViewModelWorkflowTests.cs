@@ -1331,7 +1331,9 @@ public sealed class MainWindowViewModelWorkflowTests
 
         viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpCommand.Execute(null);
 
-        Assert.AreEqual("Node moved in draft. Validate before saving.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "Node list order updated; connections are unchanged. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual("filter", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
@@ -1349,12 +1351,14 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("source", draft.RootElement.GetProperty("nodes")[0].GetProperty("node_instance_id").GetString());
         Assert.AreEqual("filter", draft.RootElement.GetProperty("nodes")[1].GetProperty("node_instance_id").GetString());
         Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+        var connection = draft.RootElement.GetProperty("connections")[0];
         Assert.AreEqual(
             "source_to_filter",
-            draft.RootElement
-                .GetProperty("connections")[0]
-                .GetProperty("connection_id")
-                .GetString());
+            connection.GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connection.GetProperty("source_node_id").GetString());
+        Assert.AreEqual("out", connection.GetProperty("source_port").GetString());
+        Assert.AreEqual("filter", connection.GetProperty("target_node_id").GetString());
+        Assert.AreEqual("in", connection.GetProperty("target_port").GetString());
     }
 
     [TestMethod]
