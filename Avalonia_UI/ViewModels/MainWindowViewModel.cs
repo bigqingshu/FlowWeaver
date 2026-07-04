@@ -20,6 +20,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int MaxRuntimeEvents = 50;
     private const int DataPreviewRowLimit = 50;
     private const int DataPreviewRunRefreshAttemptCount = 8;
+    private const int WorkflowRunTerminalRefreshAttemptCount = 40;
 
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
@@ -1709,7 +1710,11 @@ public partial class MainWindowViewModel : ViewModelBase
                     response.Data.WorkflowRunId,
                     response.Data.Status);
             IsStartingWorkflow = false;
-            await RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(response.Data.WorkflowRunId);
+            await TrackWorkflowRunUntilTerminalAsync(response.Data.WorkflowRunId);
+            if (CanRefreshSelectedWorkflowNodeDataPreview())
+            {
+                await RefreshSelectedWorkflowNodeDataPreviewAsync();
+            }
 
             return;
         }
@@ -2163,6 +2168,23 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             if (attempt + 1 < DataPreviewRunRefreshAttemptCount)
+            {
+                await _dataPreviewRunRefreshDelay(_shutdown.Token);
+            }
+        }
+    }
+
+    private async Task TrackWorkflowRunUntilTerminalAsync(string workflowRunId)
+    {
+        for (var attempt = 0; attempt < WorkflowRunTerminalRefreshAttemptCount; attempt++)
+        {
+            await LoadRunsAsync(workflowRunId);
+            if (SelectedRun is not null && IsTerminalRunStatus(SelectedRun.Status))
+            {
+                return;
+            }
+
+            if (attempt + 1 < WorkflowRunTerminalRefreshAttemptCount)
             {
                 await _dataPreviewRunRefreshDelay(_shutdown.Token);
             }
