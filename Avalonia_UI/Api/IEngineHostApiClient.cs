@@ -61,6 +61,16 @@ public interface IEngineHostApiClient
         string workflowId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string runMode,
+        string? targetNodeInstanceId = null,
+        CancellationToken cancellationToken = default)
+    {
+        return StartWorkflowRunAsync(settings, workflowId, cancellationToken);
+    }
+
     Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsAsync(
         EngineHostConnectionSettings settings,
         string? workflowId = null,

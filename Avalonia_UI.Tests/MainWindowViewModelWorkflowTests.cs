@@ -2549,6 +2549,78 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task PreviewSelectedWorkflowNodeStartsPreviewRunAndLoadsDataPreview()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-preview", "wf-1", "SUCCEEDED") with
+                {
+                    RunMode = "preview_to_node",
+                    TargetNodeInstanceId = "generate",
+                }),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-preview", "wf-1", "SUCCEEDED") }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-1") }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+
+        await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.StartedWorkflowId);
+        Assert.AreEqual("preview_to_node", apiClient.StartedWorkflowRunMode);
+        Assert.AreEqual("generate", apiClient.StartedTargetNodeInstanceId);
+        Assert.AreEqual("run-preview", viewModel.SelectedRun?.WorkflowRunId);
+        Assert.AreEqual("run-preview", apiClient.LastNodeRunWorkflowRunId);
+        Assert.AreEqual("run-preview", apiClient.LastTableRefWorkflowRunId);
+        Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
+        Assert.AreEqual("run-preview", viewModel.LastStartedRunId);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
     public void StartSelectedWorkflowIsDisabledWithoutSelection()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
@@ -2984,6 +3056,10 @@ public sealed class MainWindowViewModelWorkflowTests
 
         public string? StartedWorkflowId { get; private set; }
 
+        public string? StartedWorkflowRunMode { get; private set; }
+
+        public string? StartedTargetNodeInstanceId { get; private set; }
+
         public string? LastRunWorkflowId { get; private set; }
 
         public string? LastNodeRunWorkflowRunId { get; private set; }
@@ -3092,6 +3168,22 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             LastSettings = settings;
             StartedWorkflowId = workflowId;
+            StartedWorkflowRunMode = "full";
+            StartedTargetNodeInstanceId = null;
+            return Task.FromResult(StartWorkflowResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string runMode,
+            string? targetNodeInstanceId = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            StartedWorkflowId = workflowId;
+            StartedWorkflowRunMode = runMode;
+            StartedTargetNodeInstanceId = targetNodeInstanceId;
             return Task.FromResult(StartWorkflowResponse);
         }
 

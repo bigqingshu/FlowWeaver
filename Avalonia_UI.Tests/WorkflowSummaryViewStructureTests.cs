@@ -355,8 +355,8 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewSectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewPendingText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewEmptyText}\"");
-        StringAssert.Contains(xaml, "Content=\"{Binding DataPreviewRefreshText}\"");
-        StringAssert.Contains(xaml, "Command=\"{Binding RefreshSelectedWorkflowNodeDataPreviewCommand}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding PreviewSelectedNodeText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding PreviewSelectedWorkflowNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding RunText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding StartSelectedWorkflowCommand}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsDataPreviewBusy}\"");

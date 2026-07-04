@@ -20,8 +20,8 @@
                              IsIndeterminate="True"
                              IsVisible="{Binding IsDataPreviewBusy}"/>
                 <Button Grid.Column="2"
-                        Content="{Binding DataPreviewRefreshText}"
-                        Command="{Binding RefreshSelectedWorkflowNodeDataPreviewCommand}"
+                        Content="{Binding PreviewSelectedNodeText}"
+                        Command="{Binding PreviewSelectedWorkflowNodeCommand}"
                         MinWidth="96"/>
                 <Button Grid.Column="3"
                         Content="{Binding RunText}"

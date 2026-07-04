@@ -163,6 +163,30 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string runMode,
+        string? targetNodeInstanceId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var payload = new Dictionary<string, string?>
+        {
+            ["run_mode"] = runMode,
+        };
+        if (!string.IsNullOrWhiteSpace(targetNodeInstanceId))
+        {
+            payload["target_node_instance_id"] = targetNodeInstanceId;
+        }
+
+        return SendAsync<WorkflowRunDto>(
+            settings,
+            HttpMethod.Post,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}/runs",
+            payload: payload,
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsAsync(
         EngineHostConnectionSettings settings,
         string? workflowId = null,

@@ -181,6 +181,12 @@ public sealed record WorkflowRunDto
     [JsonPropertyName("status")]
     public string Status { get; init; } = string.Empty;
 
+    [JsonPropertyName("run_mode")]
+    public string RunMode { get; init; } = string.Empty;
+
+    [JsonPropertyName("target_node_instance_id")]
+    public string? TargetNodeInstanceId { get; init; }
+
     [JsonPropertyName("state_version")]
     public int StateVersion { get; init; }
 

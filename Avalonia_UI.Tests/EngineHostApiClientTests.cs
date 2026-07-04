@@ -258,6 +258,41 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task StartWorkflowRunAsyncPostsPreviewTargetPayload()
+    {
+        HttpMethod? method = null;
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            method = request.Method;
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-1","workflow_id":"wf-1","revision_id":"rev-1","workflow_version":2,"definition_hash":"hash","status":"PENDING","run_mode":"preview_to_node","target_node_instance_id":"node-1","state_version":1,"owner_process_id":null,"process_generation":0,"fencing_token":null,"input_snapshot_id":null,"started_at":null,"finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.StartWorkflowRunAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "wf 1",
+            "preview_to_node",
+            "node-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, method);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/wf%201/runs"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual("preview_to_node", payload.RootElement.GetProperty("run_mode").GetString());
+        Assert.AreEqual("node-1", payload.RootElement.GetProperty("target_node_instance_id").GetString());
+        Assert.AreEqual("preview_to_node", result.Data?.RunMode);
+        Assert.AreEqual("node-1", result.Data?.TargetNodeInstanceId);
+    }
+
+    [TestMethod]
     public async Task ListWorkflowsAsyncRejectsMissingTokenBeforeRequest()
     {
         var handler = new StubHandler(_ => throw new InvalidOperationException("Should not send."));
@@ -576,13 +611,15 @@ public sealed class EngineHostApiClientTests
     public void WorkflowRunDtoUsesActualJsonNames()
     {
         var envelope = JsonSerializer.Deserialize<ApiResponseEnvelope<WorkflowRunDto>>(
-            """{"ok":true,"data":{"workflow_run_id":"run","workflow_id":"wf","revision_id":"rev","workflow_version":2,"definition_hash":"hash","status":"RUNNING","state_version":3,"owner_process_id":"proc","process_generation":1,"fencing_token":"fence","input_snapshot_id":null,"started_at":"2026-06-29T01:02:03Z","finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}""",
+            """{"ok":true,"data":{"workflow_run_id":"run","workflow_id":"wf","revision_id":"rev","workflow_version":2,"definition_hash":"hash","status":"RUNNING","run_mode":"preview_to_node","target_node_instance_id":"node-1","state_version":3,"owner_process_id":"proc","process_generation":1,"fencing_token":"fence","input_snapshot_id":null,"started_at":"2026-06-29T01:02:03Z","finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}""",
             FlowWeaverJson.Options);
 
         Assert.IsNotNull(envelope);
         Assert.IsTrue(envelope!.Ok);
         Assert.AreEqual("run", envelope.Data?.WorkflowRunId);
         Assert.AreEqual("RUNNING", envelope.Data?.Status);
+        Assert.AreEqual("preview_to_node", envelope.Data?.RunMode);
+        Assert.AreEqual("node-1", envelope.Data?.TargetNodeInstanceId);
         Assert.AreEqual(3, envelope.Data?.StateVersion);
     }
 

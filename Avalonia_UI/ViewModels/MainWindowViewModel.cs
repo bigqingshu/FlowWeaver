@@ -702,6 +702,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DataPreviewRefreshText => T("definition.data_preview_refresh");
 
+    public string PreviewSelectedNodeText => T("definition.preview_selected_node");
+
     public string NodeInstanceIdText => T("definition.node_instance_id");
 
     public string NodeTypeText => T("definition.node_type");
@@ -842,6 +844,17 @@ public partial class MainWindowViewModel : ViewModelBase
             && SelectedWorkflow is not null
             && IsActiveWorkflowStatus(SelectedWorkflow.Status)
             && !IsWorkflowBusy;
+    }
+
+    private bool CanPreviewSelectedWorkflowNode()
+    {
+        return CanUseEngineActions
+            && SelectedWorkflow is not null
+            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
+            && WorkflowDefinitionDetail is not null
+            && SelectedWorkflowDefinitionNode is not null
+            && !IsWorkflowBusy
+            && !IsDataPreviewBusy;
     }
 
     private bool CanCreateTemplateWorkflow()
@@ -1702,6 +1715,58 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowMessage = T("workflow.start_failed");
         WorkflowErrorMessage = DescribeError(response);
+        IsStartingWorkflow = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPreviewSelectedWorkflowNode))]
+    private async Task PreviewSelectedWorkflowNodeAsync()
+    {
+        if (SelectedWorkflow is null || SelectedWorkflowDefinitionNode is null)
+        {
+            return;
+        }
+
+        var targetNodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
+        IsStartingWorkflow = true;
+        WorkflowMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
+        WorkflowErrorMessage = null;
+        DataPreviewMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
+        DataPreviewErrorMessage = null;
+        LastStartedRunId = null;
+        LastStartedRunStatus = null;
+        ClearDataPreviewRows();
+
+        var response = await _apiClient.StartWorkflowRunAsync(
+            BuildSettings(),
+            SelectedWorkflow.WorkflowId,
+            "preview_to_node",
+            targetNodeInstanceId,
+            _shutdown.Token);
+
+        if (response.Ok && response.Data is not null)
+        {
+            LastStartedRunId = response.Data.WorkflowRunId;
+            LastStartedRunStatus = response.Data.Status;
+            WorkflowMessage =
+                F(
+                    "format.started_preview_run_with_status",
+                    response.Data.WorkflowRunId,
+                    response.Data.Status,
+                    targetNodeInstanceId);
+            IsStartingWorkflow = false;
+            await LoadRunsAsync(response.Data.WorkflowRunId);
+            if (CanRefreshSelectedWorkflowNodeDataPreview())
+            {
+                await RefreshSelectedWorkflowNodeDataPreviewAsync();
+            }
+
+            return;
+        }
+
+        WorkflowMessage = T("workflow.start_failed");
+        WorkflowErrorMessage = DescribeError(response);
+        DataPreviewMessage = T("data_preview.preview_failed");
+        DataPreviewErrorMessage = DescribeError(response);
         IsStartingWorkflow = false;
     }
 
@@ -3621,6 +3686,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewEmptyText));
         OnPropertyChanged(nameof(DataPreviewPendingText));
         OnPropertyChanged(nameof(DataPreviewRefreshText));
+        OnPropertyChanged(nameof(PreviewSelectedNodeText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
@@ -3767,6 +3833,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         workflowDefinitionLoadVersion++;
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
         Runs.Clear();
         SelectedRun = null;
@@ -3827,6 +3894,7 @@ public partial class MainWindowViewModel : ViewModelBase
         AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedWorkflowDefinitionNodeChanged(
@@ -3839,6 +3907,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
@@ -4129,6 +4198,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsDataPreviewBusy));
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnTableRefErrorMessageChanged(string? value)
@@ -4215,6 +4285,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyRunCommandStateChanged()
@@ -4233,6 +4304,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         RefreshRunsCommand.NotifyCanExecuteChanged();
         CancelSelectedRunCommand.NotifyCanExecuteChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
