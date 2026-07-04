@@ -275,6 +275,76 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task RefreshSelectedWorkflowNodeDataPreviewKeepsPreviousRowsUntilNextSuccessfulLoad()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-1", "run-1", "generate"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        apiClient.TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(new List<TableRefDto>());
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.HasCount(2, viewModel.DataPreviewColumns);
+        Assert.AreEqual("row_id", viewModel.DataPreviewColumns[0].Name);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual("Node generate has no readable output table.", viewModel.DataPreviewMessage);
+        Assert.IsFalse(viewModel.HasDataPreviewError);
+
+        apiClient.TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            new List<TableRefDto>
+            {
+                TableRef("table-2", "run-1", "node-run-1"),
+            });
+        apiClient.TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                "table-2",
+                ["code"],
+                [
+                    JsonDocument.Parse("""{"code":"A"}""")
+                        .RootElement
+                        .Clone(),
+                ],
+                rowCount: 1));
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.DataPreviewColumns);
+        Assert.AreEqual("code", viewModel.DataPreviewColumns[0].Name);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "A" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
+        Assert.IsFalse(viewModel.HasDataPreviewError);
+    }
+
+    [TestMethod]
     public void DataRefreshCommandsRequireEngineActionsAndRequiredSelection()
     {
         var viewModel = CreateViewModel(new FakeApiClient());

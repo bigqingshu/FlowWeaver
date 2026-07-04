@@ -1741,7 +1741,6 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewErrorMessage = null;
         LastStartedRunId = null;
         LastStartedRunStatus = null;
-        ClearDataPreviewRows();
 
         var response = await _apiClient.StartWorkflowRunAsync(
             BuildSettings(),
@@ -2048,7 +2047,6 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingDataPreview = true;
         DataPreviewMessage = F("format.loading_data_preview", requestedNodeInstanceId);
         DataPreviewErrorMessage = null;
-        ClearDataPreviewRows();
 
         try
         {
