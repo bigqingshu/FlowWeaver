@@ -39,6 +39,7 @@ def test_o4_portable_launcher_no_desktop_runs_enginehost_end_to_end() -> None:
     engine_stdout_path = log_dir / "enginehost.stdout.log"
     engine_stderr_path = log_dir / "enginehost.stderr.log"
     token_path = enginehost_dir / "runtime" / "config" / "local_api_token"
+    enginehost_lock_path = enginehost_dir / "runtime" / "enginehost.lock"
     port = free_port()
     base_url = f"http://127.0.0.1:{port}"
 
@@ -94,6 +95,7 @@ def test_o4_portable_launcher_no_desktop_runs_enginehost_end_to_end() -> None:
                 engine_stderr_after_stop = _read_text(engine_stderr_path)
             if health_ready:
                 _wait_until_health_unreachable(base_url)
+                assert not enginehost_lock_path.exists()
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
 

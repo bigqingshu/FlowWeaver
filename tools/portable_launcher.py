@@ -412,6 +412,39 @@ def stop_process(process: PollableProcess, *, timeout_seconds: float = 5.0) -> N
         process.wait(timeout=timeout_seconds)
 
 
+def stop_enginehost_process(
+    process: PollableProcess,
+    *,
+    graceful_timeout_seconds: float = 5.0,
+    force_timeout_seconds: float = 5.0,
+) -> None:
+    if process.poll() is not None:
+        return
+    if request_process_interrupt(process):
+        try:
+            process.wait(timeout=graceful_timeout_seconds)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+    stop_process(process, timeout_seconds=force_timeout_seconds)
+
+
+def request_process_interrupt(process: PollableProcess) -> bool:
+    send_signal = getattr(process, "send_signal", None)
+    if send_signal is None:
+        return False
+    interrupt_signal = (
+        signal.CTRL_BREAK_EVENT
+        if os.name == "nt" and hasattr(signal, "CTRL_BREAK_EVENT")
+        else signal.SIGINT
+    )
+    try:
+        send_signal(interrupt_signal)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def wait_for_desktop_exit(
     enginehost_process: PollableProcess,
     desktop_process: PollableProcess,
@@ -518,7 +551,7 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
             enginehost_process.poll() is None
             and should_stop_enginehost
         ):
-            stop_process(enginehost_process)
+            stop_enginehost_process(enginehost_process)
             append_launcher_log(plan.layout, "EngineHost stopped", token=token)
 
 

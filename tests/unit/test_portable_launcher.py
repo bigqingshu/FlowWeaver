@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import signal
 import socket
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -278,6 +280,30 @@ def test_stop_process_terminates_running_process() -> None:
     assert process.killed is False
 
 
+def test_stop_enginehost_process_requests_interrupt_first() -> None:
+    process = FakeProcess(returncode=None)
+
+    launcher().stop_enginehost_process(process)
+
+    assert process.signals == [_expected_interrupt_signal()]
+    assert process.terminated is False
+    assert process.killed is False
+
+
+def test_stop_enginehost_process_terminates_when_interrupt_times_out() -> None:
+    process = InterruptTimeoutProcess(returncode=None)
+
+    launcher().stop_enginehost_process(
+        process,
+        graceful_timeout_seconds=0,
+        force_timeout_seconds=1,
+    )
+
+    assert process.signals == [_expected_interrupt_signal()]
+    assert process.terminated is True
+    assert process.killed is False
+
+
 def test_handle_interrupt_signal_raises_keyboard_interrupt() -> None:
     with pytest.raises(KeyboardInterrupt):
         launcher().handle_interrupt_signal(2, None)
@@ -322,10 +348,12 @@ def test_run_launch_plan_runs_fake_desktop_and_stops_enginehost(
         "wait_for_desktop_exit",
         lambda enginehost, desktop: 0,
     )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
 
     assert launcher().run_launch_plan(plan) == 0
 
-    assert enginehost_process.terminated is True
+    assert enginehost_process.signals == [_expected_interrupt_signal()]
+    assert enginehost_process.terminated is False
     assert desktop_process.terminated is False
     log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
     assert "Starting Desktop" in log_content
@@ -367,6 +395,7 @@ def test_run_launch_plan_keeps_enginehost_after_desktop_exit_when_requested(
         "wait_for_desktop_exit",
         lambda enginehost, desktop: 0,
     )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
 
     assert launcher().run_launch_plan(plan) == 0
 
@@ -401,9 +430,11 @@ def test_run_launch_plan_stops_enginehost_when_desktop_start_fails(
         raise launcher().LauncherRuntimeError("Failed to start Desktop: fake")
 
     monkeypatch.setattr(launcher(), "start_desktop_process", fail_desktop_start)
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
 
     assert launcher().run_launch_plan(plan) == 1
-    assert enginehost_process.terminated is True
+    assert enginehost_process.signals == [_expected_interrupt_signal()]
+    assert enginehost_process.terminated is False
     log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
     assert "Launcher runtime error: Failed to start Desktop: fake" in log_content
     assert "EngineHost stopped" in log_content
@@ -434,9 +465,11 @@ def test_run_launch_plan_no_desktop_keep_flag_still_stops_on_interrupt(
         "wait_for_local_api_token",
         lambda *a, **k: "secret-token",
     )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
 
     assert launcher().run_launch_plan(plan) == 130
-    assert enginehost_process.terminated is True
+    assert enginehost_process.signals == [_expected_interrupt_signal()]
+    assert enginehost_process.terminated is False
     log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
     assert "Launcher interrupted by user" in log_content
     assert "EngineHost stopped" in log_content
@@ -448,12 +481,17 @@ class FakeProcess:
         self.pid = pid
         self.terminated = False
         self.killed = False
+        self.signals: list[int] = []
 
     def poll(self) -> int | None:
         return self.returncode
 
     def terminate(self) -> None:
         self.terminated = True
+        self.returncode = 0
+
+    def send_signal(self, signum: int) -> None:
+        self.signals.append(signum)
         self.returncode = 0
 
     def kill(self) -> None:
@@ -470,6 +508,24 @@ class InterruptingProcess(FakeProcess):
             self._interrupted = True
             raise KeyboardInterrupt
         return self.returncode
+
+
+class InterruptTimeoutProcess(FakeProcess):
+    def send_signal(self, signum: int) -> None:
+        self.signals.append(signum)
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.terminated or self.killed:
+            return super().wait(timeout=timeout)
+        raise subprocess.TimeoutExpired("fake", timeout)
+
+
+def _expected_interrupt_signal() -> int:
+    return (
+        signal.CTRL_BREAK_EVENT
+        if hasattr(signal, "CTRL_BREAK_EVENT")
+        else signal.SIGINT
+    )
 
 
 def _create_minimal_layout(
