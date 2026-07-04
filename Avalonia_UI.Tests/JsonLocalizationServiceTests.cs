@@ -50,6 +50,9 @@ public sealed class JsonLocalizationServiceTests
             service.GetString("definition.node_moved"));
         Assert.AreEqual("复制节点", service.GetString("definition.copy_node"));
         Assert.AreEqual(
+            "已选择 2 个节点",
+            service.Format("definition.batch_selected_nodes", 2));
+        Assert.AreEqual(
             "节点已复制到草稿。保存前请重新校验。",
             service.GetString("definition.node_copied"));
         Assert.AreEqual(

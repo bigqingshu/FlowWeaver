@@ -64,6 +64,7 @@
   "definition.add_node": "Add node",
   "definition.copy_node": "Copy node",
   "definition.delete_node": "Delete node",
+  "definition.batch_selected_nodes": "{0} selected node(s)",
   "definition.move_node_up": "Move up",
   "definition.move_node_down": "Move down",
   "definition.node_actions": "Node actions",

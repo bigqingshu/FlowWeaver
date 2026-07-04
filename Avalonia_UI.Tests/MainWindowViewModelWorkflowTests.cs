@@ -446,6 +446,121 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task WorkflowDefinitionBatchSelectionTracksDraftNodeRefreshes()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.AreEqual(
+            "0 selected node(s)",
+            viewModel.WorkflowDefinitionBatchSelectedNodeCountText);
+
+        viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "source").IsBatchSelected = true;
+        viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "filter").IsBatchSelected = true;
+
+        Assert.AreEqual(2, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.AreEqual(
+            "2 selected node(s)",
+            viewModel.WorkflowDefinitionBatchSelectedNodeCountText);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.IsTrue(viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "source").IsBatchSelected);
+        Assert.IsFalse(viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "sink").IsBatchSelected);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.AreEqual(
+            "0 selected node(s)",
+            viewModel.WorkflowDefinitionBatchSelectedNodeCountText);
+    }
+
+    [TestMethod]
+    public async Task LoadingWorkflowDefinitionClearsDraftBatchSelection()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftNodes.Single().IsBatchSelected = true;
+
+        Assert.AreEqual(1, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.IsFalse(viewModel.WorkflowDefinitionDraftNodes.Single().IsBatchSelected);
+    }
+
+    [TestMethod]
     public async Task NewDraftNodeInputUsesDefaultsAndResetsWhenDefinitionLoads()
     {
         var definitionJson =

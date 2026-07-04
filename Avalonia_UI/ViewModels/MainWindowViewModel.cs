@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -548,6 +549,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string WorkflowDefinitionDraftNodeCountText =>
         DisplayTextFormatter.FormatNodeCount(WorkflowDefinitionDraftNodes.Count);
+
+    public int WorkflowDefinitionBatchSelectedNodeCount =>
+        WorkflowDefinitionDraftNodes.Count(node => node.IsBatchSelected);
+
+    public string WorkflowDefinitionBatchSelectedNodeCountText =>
+        F(
+            "definition.batch_selected_nodes",
+            WorkflowDefinitionBatchSelectedNodeCount);
 
     public int WorkflowDefinitionDraftConnectionCount =>
         WorkflowDefinitionDraftStructure?.ConnectionCount ?? 0;
@@ -2909,22 +2918,36 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var selectedNodeId = SelectedWorkflowDefinitionNode?.NodeInstanceId;
         var hadSelectedNode = !string.IsNullOrWhiteSpace(selectedNodeId);
+        var batchSelectedNodeIds = WorkflowDefinitionDraftNodes
+            .Where(node => node.IsBatchSelected)
+            .Select(node => node.NodeInstanceId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var node in WorkflowDefinitionDraftNodes)
+        {
+            node.PropertyChanged -= OnWorkflowDefinitionDraftNodeItemPropertyChanged;
+        }
+
         WorkflowDefinitionDraftNodes.Clear();
 
         if (WorkflowDefinitionDraftStructure is not null)
         {
             foreach (var node in WorkflowDefinitionDraftStructure.Nodes)
             {
-                WorkflowDefinitionDraftNodes.Add(
-                    new WorkflowDefinitionNodeListItemViewModel(
-                        node.NodeInstanceId,
-                        node.NodeType,
-                        node.NodeVersion,
-                        node.DisplayName,
-                        node.Enabled,
-                        node.ConfigJson,
-                        DisplayTextFormatter,
-                        _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName)));
+                var nodeItem = new WorkflowDefinitionNodeListItemViewModel(
+                    node.NodeInstanceId,
+                    node.NodeType,
+                    node.NodeVersion,
+                    node.DisplayName,
+                    node.Enabled,
+                    node.ConfigJson,
+                    DisplayTextFormatter,
+                    _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName))
+                {
+                    IsBatchSelected = batchSelectedNodeIds.Contains(node.NodeInstanceId),
+                };
+                nodeItem.PropertyChanged += OnWorkflowDefinitionDraftNodeItemPropertyChanged;
+                WorkflowDefinitionDraftNodes.Add(nodeItem);
             }
         }
 
@@ -2936,6 +2959,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
+        RefreshWorkflowDefinitionBatchSelectionState();
     }
 
     private void SelectWorkflowDefinitionDraftNode(string nodeInstanceId)
@@ -2963,6 +2987,32 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
         SelectedWorkflowDefinitionDraftConnectionId = string.Empty;
+    }
+
+    private void ClearWorkflowDefinitionDraftBatchSelection()
+    {
+        foreach (var node in WorkflowDefinitionDraftNodes)
+        {
+            node.IsBatchSelected = false;
+        }
+
+        RefreshWorkflowDefinitionBatchSelectionState();
+    }
+
+    private void OnWorkflowDefinitionDraftNodeItemPropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(WorkflowDefinitionNodeListItemViewModel.IsBatchSelected))
+        {
+            RefreshWorkflowDefinitionBatchSelectionState();
+        }
+    }
+
+    private void RefreshWorkflowDefinitionBatchSelectionState()
+    {
+        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCount));
+        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
     }
 
     private void ResetNewDraftConnectionInput()
@@ -3841,6 +3891,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(NodesSectionText));
         OnPropertyChanged(nameof(WorkflowNodesSectionText));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
+        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(StructuredEditSectionText));
@@ -4053,6 +4104,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnWorkflowDefinitionDetailChanged(WorkflowDefinitionDetailViewModel? value)
     {
+        ClearWorkflowDefinitionDraftBatchSelection();
         ResetWorkflowDefinitionStructuredEditInput();
         OnPropertyChanged(nameof(HasWorkflowDefinition));
         RefreshSelectedNodeConfigDraftState();
@@ -4127,6 +4179,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCount));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCount));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
+        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCount));
+        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftConnectionCountText));
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraftStructureWarnings));
         NotifyWorkflowDefinitionNodeActionCommandsChanged();

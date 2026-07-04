@@ -6,6 +6,7 @@ using System.Text.Json;
 using Avalonia_UI.Api;
 using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -178,8 +179,10 @@ public sealed class WorkflowDefinitionDetailViewModel
     }
 }
 
-public sealed class WorkflowDefinitionNodeListItemViewModel
+public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
 {
+    private bool isBatchSelected;
+
     public WorkflowDefinitionNodeListItemViewModel(
         string nodeInstanceId,
         string nodeType,
@@ -219,6 +222,12 @@ public sealed class WorkflowDefinitionNodeListItemViewModel
     public DisplayTextFormatter DisplayTextFormatter { get; }
 
     public NodeEditorResolution NodeEditorResolution { get; }
+
+    public bool IsBatchSelected
+    {
+        get => isBatchSelected;
+        set => SetProperty(ref isBatchSelected, value);
+    }
 
     public string TypeText => $"{NodeType}@{NodeVersion}";
 

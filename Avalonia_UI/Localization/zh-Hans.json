@@ -64,6 +64,7 @@
   "definition.add_node": "新增节点",
   "definition.copy_node": "复制节点",
   "definition.delete_node": "删除节点",
+  "definition.batch_selected_nodes": "已选择 {0} 个节点",
   "definition.move_node_up": "上移",
   "definition.move_node_down": "下移",
   "definition.node_actions": "节点操作",

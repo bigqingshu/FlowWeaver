@@ -20,6 +20,12 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowNodesSectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionDraftNodeCountText}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsChecked=\"{Binding IsBatchSelected, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "Text=\"{Binding WorkflowDefinitionBatchSelectedNodeCountText}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding WorkflowDefinitionDraftNodes}\"");
         StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeEditorStatusText}\"");
