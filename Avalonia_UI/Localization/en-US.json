@@ -10,6 +10,7 @@
   "language.en-US": "English",
   "language.zh-Hans": "Simplified Chinese",
   "common.refresh": "Refresh",
+  "common.close": "Close",
   "common.limit": "Limit",
   "connection.base_url": "Base URL",
   "connection.token": "Token",

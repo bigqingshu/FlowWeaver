@@ -3,15 +3,22 @@
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowAddNodeView"
              x:DataType="vm:MainWindowViewModel">
-    <Border Classes="Card" Padding="14">
+    <Border Padding="12"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6">
         <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding AddNodeText}"
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <Button Grid.Column="1"
+                        Content="{Binding CloseText}"
+                        Command="{Binding CloseWorkflowAddNodePanelCommand}"
+                        MinWidth="78"/>
+                <Button Grid.Column="2"
                         Content="{Binding AddNodeText}"
                         Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
                         MinWidth="104"/>

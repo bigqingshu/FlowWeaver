@@ -861,6 +861,41 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task WorkflowAddNodePanelCommandsOpenCloseAndResetOnDefinitionReload()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        Assert.IsFalse(viewModel.OpenWorkflowAddNodePanelCommand.CanExecute(null));
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.OpenWorkflowAddNodePanelCommand.CanExecute(null));
+
+        viewModel.OpenWorkflowAddNodePanelCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsWorkflowAddNodePanelVisible);
+
+        viewModel.CloseWorkflowAddNodePanelCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsWorkflowAddNodePanelVisible);
+
+        viewModel.OpenWorkflowAddNodePanelCommand.Execute(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.IsWorkflowAddNodePanelVisible);
+    }
+
+    [TestMethod]
     public async Task AddWorkflowDefinitionDraftNodeCommandAddsNodeToDraft()
     {
         var definitionJson =
@@ -884,12 +919,14 @@ public sealed class MainWindowViewModelWorkflowTests
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.OpenWorkflowAddNodePanelCommand.Execute(null);
         viewModel.NewDraftNodeInstanceId = "source";
         viewModel.NewDraftNodeType = "GenerateTestTableNode";
         viewModel.NewDraftNodeVersion = "1.0";
         viewModel.NewDraftNodeDisplayName = "Generate rows";
         viewModel.NewDraftNodeConfigJson = """{"rows":3}""";
 
+        Assert.IsTrue(viewModel.IsWorkflowAddNodePanelVisible);
         Assert.IsTrue(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
 
         viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
@@ -912,6 +949,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(string.Empty, viewModel.NewDraftNodeType);
         Assert.AreEqual("1.0", viewModel.NewDraftNodeVersion);
         Assert.AreEqual("{}", viewModel.NewDraftNodeConfigJson);
+        Assert.IsFalse(viewModel.IsWorkflowAddNodePanelVisible);
     }
 
     [TestMethod]
@@ -1061,6 +1099,7 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.NewDraftNodeType = "GenerateTestTableNode";
         viewModel.NewDraftNodeVersion = "1.0";
         viewModel.NewDraftNodeConfigJson = "{";
+        viewModel.IsWorkflowAddNodePanelVisible = true;
 
         Assert.IsTrue(viewModel.AddWorkflowDefinitionDraftNodeCommand.CanExecute(null));
 
@@ -1072,6 +1111,7 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
         Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
+        Assert.IsTrue(viewModel.IsWorkflowAddNodePanelVisible);
     }
 
     [TestMethod]
@@ -1104,6 +1144,7 @@ public sealed class MainWindowViewModelWorkflowTests
         viewModel.NewDraftNodeType = "FilterRowsNode";
         viewModel.NewDraftNodeVersion = "1.0";
         viewModel.NewDraftNodeConfigJson = "{}";
+        viewModel.IsWorkflowAddNodePanelVisible = true;
 
         viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
 
@@ -1113,6 +1154,7 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.WorkflowDefinitionValidationErrorMessage);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
+        Assert.IsTrue(viewModel.IsWorkflowAddNodePanelVisible);
     }
 
     [TestMethod]

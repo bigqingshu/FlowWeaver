@@ -34,6 +34,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("语言: 简体中文", viewModel.LanguageMenuHeaderText);
         Assert.AreEqual("执行", viewModel.ExecutionTabText);
         Assert.AreEqual("刷新", viewModel.RefreshText);
+        Assert.AreEqual("关闭", viewModel.CloseText);
         Assert.AreEqual("工作流定义", viewModel.WorkflowDefinitionSectionText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
@@ -85,6 +86,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("设置", viewModel.SettingsMenuText);
         Assert.AreEqual("服务地址", viewModel.ConnectionBaseUrlText);
         Assert.AreEqual("数据", viewModel.DataTabText);
+        Assert.AreEqual("关闭", viewModel.CloseText);
         Assert.AreEqual("审计事件", viewModel.AuditEventsSectionText);
         Assert.AreEqual("节点类型", viewModel.NodeTypeText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);

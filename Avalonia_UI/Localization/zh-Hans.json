@@ -10,6 +10,7 @@
   "language.en-US": "English",
   "language.zh-Hans": "简体中文",
   "common.refresh": "刷新",
+  "common.close": "关闭",
   "common.limit": "限制",
   "connection.base_url": "服务地址",
   "connection.token": "令牌",

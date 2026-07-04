@@ -183,6 +183,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool isWorkflowConnectionsAdvancedVisible;
 
     [ObservableProperty]
+    private bool isWorkflowAddNodePanelVisible;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -658,6 +661,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string RefreshText => T("common.refresh");
 
+    public string CloseText => T("common.close");
+
     public string RunText => T("workflow.run");
 
     public string CreateText => T("workflow.create");
@@ -952,6 +957,15 @@ public partial class MainWindowViewModel : ViewModelBase
             && !string.IsNullOrWhiteSpace(NewDraftNodeType)
             && !string.IsNullOrWhiteSpace(NewDraftNodeVersion)
             && !string.IsNullOrWhiteSpace(NewDraftNodeConfigJson);
+    }
+
+    private bool CanOpenWorkflowAddNodePanel()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict;
     }
 
     private bool CanDeleteWorkflowDefinitionDraftNode()
@@ -1577,6 +1591,19 @@ public partial class MainWindowViewModel : ViewModelBase
                 patchResult.RemovedConnections,
                 patchResult.AddedConnections);
         ResetNewDraftNodeInput();
+        IsWorkflowAddNodePanelVisible = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenWorkflowAddNodePanel))]
+    private void OpenWorkflowAddNodePanel()
+    {
+        IsWorkflowAddNodePanelVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseWorkflowAddNodePanel()
+    {
+        IsWorkflowAddNodePanelVisible = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteWorkflowDefinitionDraftNode))]
@@ -3140,6 +3167,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ResetWorkflowDefinitionStructuredEditInput()
     {
+        IsWorkflowAddNodePanelVisible = false;
         lastSuggestedNewDraftNodeInstanceId = string.Empty;
         lastSuggestedNewDraftConnectionId = string.Empty;
         ResetNewDraftNodeInput();
@@ -3921,6 +3949,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataTabText));
         OnPropertyChanged(nameof(WorkflowsSectionText));
         OnPropertyChanged(nameof(RefreshText));
+        OnPropertyChanged(nameof(CloseText));
         OnPropertyChanged(nameof(RunText));
         OnPropertyChanged(nameof(CreateText));
         OnPropertyChanged(nameof(WorkflowNameWatermarkText));
@@ -4282,6 +4311,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void NotifyWorkflowDefinitionNodeActionCommandsChanged()
     {
+        OpenWorkflowAddNodePanelCommand.NotifyCanExecuteChanged();
         CopyWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();

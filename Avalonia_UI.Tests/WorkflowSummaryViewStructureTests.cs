@@ -149,12 +149,23 @@ public sealed class WorkflowSummaryViewStructureTests
             "Workflow",
             "WorkflowNodeListView.axaml");
 
-        StringAssert.Contains(summaryXaml, "<workflow:WorkflowAddNodeView />");
+        Assert.IsFalse(
+            summaryXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal));
+        StringAssert.Contains(
+            nodeListXaml,
+            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding AddNodeText}\"");
+        StringAssert.Contains(addNodeXaml, "Content=\"{Binding CloseText}\"");
+        StringAssert.Contains(
+            addNodeXaml,
+            "Command=\"{Binding CloseWorkflowAddNodePanelCommand}\"");
         StringAssert.Contains(addNodeXaml, "Content=\"{Binding AddNodeText}\"");
         StringAssert.Contains(
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
+        StringAssert.Contains(
+            nodeListXaml,
+            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
         StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeInstanceIdText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeTypeText}\"");
@@ -295,9 +306,16 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
         StringAssert.Contains(xaml, "<WrapPanel Orientation=\"Horizontal\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding AddNodeText}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
         StringAssert.Contains(
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding MoveNodeUpText}\"");
         StringAssert.Contains(
             xaml,
@@ -329,8 +347,6 @@ public sealed class WorkflowSummaryViewStructureTests
             summaryXaml.Contains("Text=\"{Binding NodeActionsSectionText}\"", StringComparison.Ordinal));
         Assert.IsFalse(
             summaryXaml.Contains("Content=\"{Binding ShowAdvancedDraftJsonText}\"", StringComparison.Ordinal));
-        Assert.IsFalse(
-            xaml.Contains("Content=\"{Binding AddNodeText}\"", StringComparison.Ordinal));
 
         var actionGroupIndex = xaml.IndexOf(
             "Text=\"{Binding NodeActionsSectionText}\"",
@@ -443,30 +459,43 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
-    public void WorkflowSummaryViewHostsAddNodeAboveSelectedNodeConfig()
+    public void WorkflowNodeListViewHostsInlineAddNodePanel()
     {
-        var xaml = ReadSourceFile(
+        var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
             "Components",
             "Workflow",
             "WorkflowSummaryView.axaml");
+        var nodeListXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowNodeListView.axaml");
 
-        var addNodeIndex = xaml.IndexOf("<workflow:WorkflowAddNodeView />", StringComparison.Ordinal);
-        var configIndex = xaml.IndexOf("<workflow:WorkflowSelectedNodeConfigView />", StringComparison.Ordinal);
+        var openCommandIndex = nodeListXaml.IndexOf(
+            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"",
+            StringComparison.Ordinal);
+        var panelIndex = nodeListXaml.IndexOf(
+            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>",
+            StringComparison.Ordinal);
 
+        Assert.IsFalse(
+            summaryXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal),
+            "The middle column should no longer host the add-node area as a permanent card.");
         Assert.AreNotEqual(
             -1,
-            addNodeIndex,
-            "The middle column should host the dedicated add-node area.");
+            openCommandIndex,
+            "The node actions area should expose the add-node panel entry.");
         Assert.AreNotEqual(
             -1,
-            configIndex,
-            "The middle column should host the dedicated selected-node config area.");
+            panelIndex,
+            "The node actions area should host the inline add-node panel.");
         Assert.IsLessThan(
-            configIndex,
-            addNodeIndex,
-            "The add-node area should stay above the selected-node config area.");
+            panelIndex,
+            openCommandIndex,
+            "The add-node panel should be hosted after the node action entry.");
     }
 
     private static string ReadSourceFile(params string[] pathParts)

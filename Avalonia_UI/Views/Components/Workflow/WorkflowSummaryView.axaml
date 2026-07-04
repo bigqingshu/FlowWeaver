@@ -59,8 +59,6 @@
             </Grid>
         </Border>
 
-        <workflow:WorkflowAddNodeView />
-
         <workflow:WorkflowSelectedNodeConfigView />
 
         <workflow:WorkflowEditorView IsVisible="{Binding IsWorkflowDraftJsonAdvancedVisible}"/>
