@@ -348,6 +348,35 @@ public static class WorkflowDefinitionDraftNodePatcher
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
+    private static string BuildUniqueNodeInstanceId(
+        JsonArray nodes,
+        string sourceNodeInstanceId)
+    {
+        var existingIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in nodes)
+        {
+            if (node is JsonObject nodeObject)
+            {
+                var nodeInstanceId = GetStringValue(nodeObject, "node_instance_id");
+                if (!string.IsNullOrWhiteSpace(nodeInstanceId))
+                {
+                    existingIds.Add(nodeInstanceId);
+                }
+            }
+        }
+
+        var baseId = $"{sourceNodeInstanceId}_copy";
+        var candidate = baseId;
+        var suffix = 2;
+        while (existingIds.Contains(candidate))
+        {
+            candidate = $"{baseId}_{suffix}";
+            suffix++;
+        }
+
+        return candidate;
+    }
+
     public static WorkflowDefinitionDraftNodePatchResult DeleteNode(
         string workflowDefinitionDraftJson,
         string nodeInstanceId)
@@ -410,6 +439,63 @@ public static class WorkflowDefinitionDraftNodePatcher
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
             RemovedConnections = removedConnections,
+            UpdatedWorkflowDefinitionDraftJson =
+                readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
+    public static WorkflowDefinitionDraftNodePatchResult CopyNode(
+        string workflowDefinitionDraftJson,
+        string sourceNodeInstanceId,
+        string? newNodeInstanceId = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceNodeInstanceId))
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        var readResult = ReadMutableDraft(workflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            return Failed(readResult.Status, readResult.Warning);
+        }
+
+        var sourceIndex = FindNodeIndex(readResult.Nodes, sourceNodeInstanceId);
+        if (sourceIndex < 0 ||
+            readResult.Nodes[sourceIndex] is not JsonObject sourceNode)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeNotFound,
+                "NODE_NOT_FOUND");
+        }
+
+        var addedNodeInstanceId = string.IsNullOrWhiteSpace(newNodeInstanceId)
+            ? BuildUniqueNodeInstanceId(readResult.Nodes, sourceNodeInstanceId)
+            : newNodeInstanceId.Trim();
+        if (string.IsNullOrWhiteSpace(addedNodeInstanceId))
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        if (FindNodeIndex(readResult.Nodes, addedNodeInstanceId) >= 0)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeAlreadyExists,
+                "NODE_ALREADY_EXISTS");
+        }
+
+        var copiedNode = sourceNode.DeepClone().AsObject();
+        copiedNode["node_instance_id"] = addedNodeInstanceId;
+        readResult.Nodes.Insert(sourceIndex + 1, copiedNode);
+
+        return new WorkflowDefinitionDraftNodePatchResult
+        {
+            Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            AddedNodeInstanceId = addedNodeInstanceId,
             UpdatedWorkflowDefinitionDraftJson =
                 readResult.Root.ToJsonString(IndentedJsonOptions),
         };

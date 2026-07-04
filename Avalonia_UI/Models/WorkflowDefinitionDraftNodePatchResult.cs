@@ -8,6 +8,8 @@ public sealed record WorkflowDefinitionDraftNodePatchResult
 
     public string UpdatedWorkflowDefinitionDraftJson { get; init; } = string.Empty;
 
+    public string? AddedNodeInstanceId { get; init; }
+
     public string? Warning { get; init; }
 
     public IReadOnlyList<WorkflowDefinitionDraftConnection> RemovedConnections { get; init; } =

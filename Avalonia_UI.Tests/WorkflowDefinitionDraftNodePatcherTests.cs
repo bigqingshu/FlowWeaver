@@ -545,4 +545,155 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
             WorkflowDefinitionDraftNodePatchStatus.ConnectionsMissing,
             missingConnections.Status);
     }
+
+    [TestMethod]
+    public void CopyNodeInsertsCopiedNodeAfterSourceAndPreservesConnections()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "display_name": "Source rows",
+                  "config": {"rows": 3, "nested": {"enabled": true}},
+                  "enabled": true
+                },
+                {
+                  "node_instance_id": "source_copy",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {"rows": 1}
+                },
+                {
+                  "node_instance_id": "sink"
+                }
+              ],
+              "connections": [
+                {"connection_id": "source_to_sink", "source_node_id": "source", "source_port": "rows", "target_node_id": "sink", "target_port": "rows"}
+              ],
+              "metadata": {"owner": "tester"}
+            }
+            """,
+            "source");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.Succeeded, result.Status);
+        Assert.AreEqual("source_copy_2", result.AddedNodeInstanceId);
+        Assert.IsNull(result.Warning);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var root = updated.RootElement;
+        Assert.AreEqual("tester", root.GetProperty("metadata").GetProperty("owner").GetString());
+
+        var nodes = root.GetProperty("nodes");
+        Assert.AreEqual(4, nodes.GetArrayLength());
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("source_copy_2", nodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("source_copy", nodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[3].GetProperty("node_instance_id").GetString());
+
+        var copied = nodes[1];
+        Assert.AreEqual("GenerateTestTableNode", copied.GetProperty("node_type").GetString());
+        Assert.AreEqual("1.0", copied.GetProperty("node_version").GetString());
+        Assert.AreEqual("Source rows", copied.GetProperty("display_name").GetString());
+        Assert.IsTrue(copied.GetProperty("enabled").GetBoolean());
+        Assert.AreEqual(3, copied.GetProperty("config").GetProperty("rows").GetInt32());
+        Assert.IsTrue(
+            copied
+                .GetProperty("config")
+                .GetProperty("nested")
+                .GetProperty("enabled")
+                .GetBoolean());
+
+        var connections = root.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual(
+            "source_to_sink",
+            connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("sink", connections[0].GetProperty("target_node_id").GetString());
+    }
+
+    [TestMethod]
+    public void CopyNodeUsesRequestedNodeInstanceId()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode"}
+              ],
+              "connections": []
+            }
+            """,
+            "source",
+            "source_duplicate");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual("source_duplicate", result.AddedNodeInstanceId);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var nodes = updated.RootElement.GetProperty("nodes");
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("source_duplicate", nodes[1].GetProperty("node_instance_id").GetString());
+    }
+
+    [TestMethod]
+    public void CopyNodeRejectsDuplicateRequestedNodeInstanceId()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "existing"}
+              ],
+              "connections": []
+            }
+            """,
+            "source",
+            "existing");
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeAlreadyExists, result.Status);
+        Assert.AreEqual("NODE_ALREADY_EXISTS", result.Warning);
+    }
+
+    [TestMethod]
+    public void CopyNodeRejectsMissingOrBlankSourceNode()
+    {
+        var blank = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """{"nodes":[],"connections":[]}""",
+            " ");
+        var missing = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            "missing");
+
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired, blank.Status);
+        Assert.AreEqual("NODE_INSTANCE_ID_REQUIRED", blank.Warning);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeNotFound, missing.Status);
+        Assert.AreEqual("NODE_NOT_FOUND", missing.Warning);
+    }
+
+    [TestMethod]
+    public void CopyNodeRejectsInvalidWorkflowDraftShape()
+    {
+        var invalidJson = WorkflowDefinitionDraftNodePatcher.CopyNode("{", "source");
+        var missingNodes = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """{"connections":[]}""",
+            "source");
+        var missingConnections = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            """{"nodes":[]}""",
+            "source");
+
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.JsonInvalid, invalidJson.Status);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodesMissing, missingNodes.Status);
+        Assert.AreEqual(
+            WorkflowDefinitionDraftNodePatchStatus.ConnectionsMissing,
+            missingConnections.Status);
+    }
 }
