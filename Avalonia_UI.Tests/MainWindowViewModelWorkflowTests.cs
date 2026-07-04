@@ -2621,6 +2621,80 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task PreviewSelectedWorkflowNodeRetriesUntilOutputTableIsReady()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-preview", "wf-1", "PENDING") with
+                {
+                    RunMode = "preview_to_node",
+                    TargetNodeInstanceId = "generate",
+                }),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-preview", "wf-1", "PENDING") }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-1") }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":2,"amount":20}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        apiClient.NodeRunsResponses.Enqueue(
+            ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>()));
+        apiClient.NodeRunsResponses.Enqueue(
+            ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }));
+        var previewRetryDelayCount = 0;
+        var viewModel = CreateViewModel(
+            apiClient,
+            dataPreviewRunRefreshDelay: _ =>
+            {
+                previewRetryDelayCount++;
+                return Task.CompletedTask;
+            });
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.ListNodeRunsCallCount);
+        Assert.AreEqual(1, previewRetryDelayCount);
+        Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "2", "20" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
     public void StartSelectedWorkflowIsDisabledWithoutSelection()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
@@ -2817,11 +2891,15 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasNodeRunError);
     }
 
-    private static MainWindowViewModel CreateViewModel(FakeApiClient apiClient)
+    private static MainWindowViewModel CreateViewModel(
+        FakeApiClient apiClient,
+        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
-            apiClient)
+            apiClient,
+            new EngineHostRuntimeEventStreamClient(),
+            dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay)
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
@@ -3015,6 +3093,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public ApiResponseEnvelope<List<NodeRunDto>> NodeRunsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>());
 
+        public Queue<ApiResponseEnvelope<List<NodeRunDto>>> NodeRunsResponses { get; } = new();
+
         public ApiResponseEnvelope<WorkflowProcessDto> CancelRunResponse { get; set; } =
             ApiResponseEnvelope<WorkflowProcessDto>.Failure("NOT_CONFIGURED", "No cancel response configured.");
 
@@ -3063,6 +3143,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? LastRunWorkflowId { get; private set; }
 
         public string? LastNodeRunWorkflowRunId { get; private set; }
+
+        public int ListNodeRunsCallCount { get; private set; }
 
         public string? LastTableRefWorkflowRunId { get; private set; }
 
@@ -3205,7 +3287,11 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             LastSettings = settings;
             LastNodeRunWorkflowRunId = workflowRunId;
-            return Task.FromResult(NodeRunsResponse);
+            ListNodeRunsCallCount++;
+            return Task.FromResult(
+                NodeRunsResponses.Count > 0
+                    ? NodeRunsResponses.Dequeue()
+                    : NodeRunsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelRunAsync(

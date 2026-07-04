@@ -57,7 +57,7 @@
                     BorderThickness="1"
                     CornerRadius="4"
                     MaxHeight="180"
-                    IsVisible="{Binding HasDataPreviewRows}">
+                    IsVisible="{Binding HasDataPreviewColumns}">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel>

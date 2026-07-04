@@ -364,7 +364,7 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewMessage}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewErrorMessage}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewError}\"");
-        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewRows}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewColumns}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding DataPreviewColumns}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding DataPreviewRows}\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewColumnViewModel\"");

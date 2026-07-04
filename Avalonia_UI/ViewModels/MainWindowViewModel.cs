@@ -19,11 +19,13 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private const int MaxRuntimeEvents = 50;
     private const int DataPreviewRowLimit = 50;
+    private const int DataPreviewRunRefreshAttemptCount = 8;
 
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
     private readonly IEngineHostRuntimeEventStreamClient _runtimeEventStreamClient;
     private readonly Func<CancellationToken, Task> _runtimeEventReconnectDelay;
+    private readonly Func<CancellationToken, Task> _dataPreviewRunRefreshDelay;
     private readonly IConnectionSettingsStore _connectionSettingsStore;
     private readonly IUiSettingsStore _uiSettingsStore;
     private readonly ILocalizationService _localizationService;
@@ -376,13 +378,16 @@ public partial class MainWindowViewModel : ViewModelBase
         Func<CancellationToken, Task>? runtimeEventReconnectDelay = null,
         IConnectionSettingsStore? connectionSettingsStore = null,
         IUiSettingsStore? uiSettingsStore = null,
-        ILocalizationService? localizationService = null)
+        ILocalizationService? localizationService = null,
+        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
         _runtimeEventStreamClient = runtimeEventStreamClient;
         _runtimeEventReconnectDelay = runtimeEventReconnectDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromSeconds(2), cancellationToken));
+        _dataPreviewRunRefreshDelay = dataPreviewRunRefreshDelay
+            ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
         _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
         _localizationService = localizationService ?? new JsonLocalizationService();
@@ -1704,11 +1709,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     response.Data.WorkflowRunId,
                     response.Data.Status);
             IsStartingWorkflow = false;
-            await LoadRunsAsync(response.Data.WorkflowRunId);
-            if (CanRefreshSelectedWorkflowNodeDataPreview())
-            {
-                await RefreshSelectedWorkflowNodeDataPreviewAsync();
-            }
+            await RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(response.Data.WorkflowRunId);
 
             return;
         }
@@ -1754,11 +1755,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     response.Data.Status,
                     targetNodeInstanceId);
             IsStartingWorkflow = false;
-            await LoadRunsAsync(response.Data.WorkflowRunId);
-            if (CanRefreshSelectedWorkflowNodeDataPreview())
-            {
-                await RefreshSelectedWorkflowNodeDataPreviewAsync();
-            }
+            await RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(response.Data.WorkflowRunId);
 
             return;
         }
@@ -2140,6 +2137,34 @@ public partial class MainWindowViewModel : ViewModelBase
             if (requestVersion == dataPreviewLoadVersion)
             {
                 IsLoadingDataPreview = false;
+            }
+        }
+    }
+
+    private async Task RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(
+        string workflowRunId)
+    {
+        for (var attempt = 0; attempt < DataPreviewRunRefreshAttemptCount; attempt++)
+        {
+            await LoadRunsAsync(workflowRunId);
+            if (CanRefreshSelectedWorkflowNodeDataPreview())
+            {
+                await RefreshSelectedWorkflowNodeDataPreviewAsync();
+            }
+
+            if (HasDataPreviewColumns)
+            {
+                return;
+            }
+
+            if (SelectedRun is not null && IsTerminalRunStatus(SelectedRun.Status))
+            {
+                return;
+            }
+
+            if (attempt + 1 < DataPreviewRunRefreshAttemptCount)
+            {
+                await _dataPreviewRunRefreshDelay(_shutdown.Token);
             }
         }
     }

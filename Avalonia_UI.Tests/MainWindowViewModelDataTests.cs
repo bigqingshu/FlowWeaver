@@ -162,6 +162,42 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task RefreshSelectedWorkflowNodeDataPreviewShowsEmptyTableColumns()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-1", "run-1", "generate"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [],
+                    rowCount: 0)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.HasCount(2, viewModel.DataPreviewColumns);
+        Assert.AreEqual("row_id", viewModel.DataPreviewColumns[0].Name);
+        Assert.IsEmpty(viewModel.DataPreviewRows);
+        Assert.IsTrue(viewModel.HasDataPreviewColumns);
+        Assert.IsFalse(viewModel.HasDataPreviewRows);
+        Assert.AreEqual("Loaded 0/0 preview row(s) for orders.", viewModel.DataPreviewMessage);
+    }
+
+    [TestMethod]
     public async Task RefreshSelectedWorkflowNodeDataPreviewReportsMissingOutputTable()
     {
         var apiClient = new FakeApiClient
