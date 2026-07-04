@@ -4146,25 +4146,26 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowRunListItemViewModel? oldValue,
         WorkflowRunListItemViewModel? newValue)
     {
-        nodeRunsLoadVersion++;
-        tableRefsLoadVersion++;
-        IsLoadingNodeRuns = false;
-        IsLoadingTableRefs = false;
-        NodeRuns.Clear();
-        TableRefs.Clear();
-        NodeRunMessage = newValue is null
-            ? T("status.select_run_node_status")
-            : F("format.selected_run_refresh_nodes", newValue.WorkflowRunId);
-        NodeRunErrorMessage = null;
-        TableRefMessage = newValue is null
-            ? T("status.select_run_table_refs")
-            : F("format.selected_run_refresh_table_refs", newValue.WorkflowRunId);
-        TableRefErrorMessage = null;
-        if (!string.Equals(
-                oldValue?.WorkflowRunId,
-                newValue?.WorkflowRunId,
-                StringComparison.Ordinal))
+        var runChanged = !string.Equals(
+            oldValue?.WorkflowRunId,
+            newValue?.WorkflowRunId,
+            StringComparison.Ordinal);
+        if (runChanged)
         {
+            nodeRunsLoadVersion++;
+            tableRefsLoadVersion++;
+            IsLoadingNodeRuns = false;
+            IsLoadingTableRefs = false;
+            NodeRuns.Clear();
+            TableRefs.Clear();
+            NodeRunMessage = newValue is null
+                ? T("status.select_run_node_status")
+                : F("format.selected_run_refresh_nodes", newValue.WorkflowRunId);
+            NodeRunErrorMessage = null;
+            TableRefMessage = newValue is null
+                ? T("status.select_run_table_refs")
+                : F("format.selected_run_refresh_table_refs", newValue.WorkflowRunId);
+            TableRefErrorMessage = null;
             ResetDataPreviewSelectionState();
         }
         else

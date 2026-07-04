@@ -198,7 +198,7 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
-    public async Task SameRunStatusRefreshKeepsSelectedNodeDataPreview()
+    public async Task SameRunStatusRefreshKeepsRunRelatedData()
     {
         var apiClient = new FakeApiClient
         {
@@ -226,10 +226,16 @@ public sealed class MainWindowViewModelDataTests
         var viewModel = CreateViewModel(apiClient);
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
         viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+        await viewModel.RefreshNodeRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
         await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
 
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
 
+        Assert.HasCount(1, viewModel.NodeRuns);
+        Assert.AreEqual("generate", viewModel.NodeRuns[0].NodeInstanceId);
+        Assert.HasCount(1, viewModel.TableRefs);
+        Assert.AreEqual("orders", viewModel.TableRefs[0].LogicalTableId);
         Assert.IsTrue(viewModel.HasDataPreviewColumns);
         Assert.IsTrue(viewModel.HasDataPreviewRows);
         Assert.HasCount(1, viewModel.DataPreviewRows);
@@ -237,6 +243,8 @@ public sealed class MainWindowViewModelDataTests
 
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-2", "wf-1"));
 
+        Assert.IsEmpty(viewModel.NodeRuns);
+        Assert.IsEmpty(viewModel.TableRefs);
         Assert.IsFalse(viewModel.HasDataPreviewColumns);
         Assert.IsFalse(viewModel.HasDataPreviewRows);
         Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
