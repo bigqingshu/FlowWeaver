@@ -1092,6 +1092,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ErrorMessage = null;
             await SaveConnectionSettingsAsync(settings);
             await RefreshNodeDefinitionsAfterHealthyConnectionAsync();
+            await RefreshWorkflowsAfterHealthyConnectionAsync();
             return;
         }
 
@@ -1336,6 +1337,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         await RefreshNodeDefinitionsAsync();
+    }
+
+    private async Task RefreshWorkflowsAfterHealthyConnectionAsync()
+    {
+        if (Workflows.Count > 0 || !CanRefreshWorkflows())
+        {
+            return;
+        }
+
+        await RefreshWorkflowsAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]

@@ -127,6 +127,33 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public async Task CheckConnectionLoadsWorkflowsWhenHealthyAndListIsEmpty()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+            WorkflowsResponse =
+                ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                    new List<WorkflowDefinitionDto>
+                    {
+                        Workflow("workflow-1", "Daily report"),
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.BaseUrl = "http://127.0.0.1:8012/";
+        viewModel.Token = "secret";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(ConnectionStatus.Connected, viewModel.ConnectionStatus);
+        Assert.AreEqual(1, apiClient.ListWorkflowsCallCount);
+        Assert.HasCount(1, viewModel.Workflows);
+        Assert.AreEqual("workflow-1", viewModel.SelectedWorkflow?.WorkflowId);
+        Assert.AreEqual("Loaded 1 workflow(s).", viewModel.WorkflowMessage);
+    }
+
+    [TestMethod]
     public async Task CheckConnectionDoesNotSaveWhenHealthFails()
     {
         var apiClient = new FakeApiClient
@@ -293,6 +320,8 @@ public sealed class MainWindowViewModelConnectionSettingsTests
 
         public int ListNodeDefinitionsCallCount { get; private set; }
 
+        public int ListWorkflowsCallCount { get; private set; }
+
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
@@ -314,6 +343,7 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
         {
+            ListWorkflowsCallCount++;
             LastSettings = settings;
             return Task.FromResult(WorkflowsResponse);
         }
@@ -451,5 +481,23 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private static WorkflowDefinitionDto Workflow(string workflowId, string name)
+    {
+        return new WorkflowDefinitionDto
+        {
+            WorkflowId = workflowId,
+            RevisionId = $"revision-{workflowId}",
+            Name = name,
+            Version = 1,
+            Status = "ACTIVE",
+            Definition = JsonDocument.Parse("""{"schema_version":"1.0","nodes":[],"connections":[]}""")
+                .RootElement
+                .Clone(),
+            DefinitionHash = $"hash-{workflowId}",
+            CreatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+            UpdatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+        };
     }
 }
