@@ -799,10 +799,29 @@ public partial class MainWindowViewModel : ViewModelBase
     public async Task LoadConnectionSettingsAsync(
         CancellationToken cancellationToken = default)
     {
+        await TryLoadConnectionSettingsAsync(cancellationToken);
+    }
+
+    public async Task LoadConnectionSettingsAndCheckConnectionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var loaded = await TryLoadConnectionSettingsAsync(cancellationToken);
+        if (!loaded || !CanCheckConnection())
+        {
+            return;
+        }
+
+        await CheckConnectionCoreAsync(cancellationToken);
+    }
+
+    private async Task<bool> TryLoadConnectionSettingsAsync(
+        CancellationToken cancellationToken)
+    {
         try
         {
             var settings = await _connectionSettingsStore.LoadAsync(cancellationToken);
             BaseUrl = settings.LastSuccessfulBaseUrl;
+            return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -811,6 +830,7 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             ErrorMessage = F("format.connection_settings_load_failed", ex.Message);
+            return false;
         }
     }
 
@@ -1092,6 +1112,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanCheckConnection))]
     private async Task CheckConnectionAsync()
     {
+        await CheckConnectionCoreAsync(_shutdown.Token);
+    }
+
+    private async Task CheckConnectionCoreAsync(
+        CancellationToken cancellationToken)
+    {
         ConnectionStatus = ConnectionStatus.Connecting;
         StatusMessage = T("status.checking_enginehost");
         ErrorMessage = null;
@@ -1102,7 +1128,7 @@ public partial class MainWindowViewModel : ViewModelBase
             Token = Token,
         };
 
-        var result = await _healthClient.CheckAsync(settings);
+        var result = await _healthClient.CheckAsync(settings, cancellationToken);
 
         if (result.IsHealthy)
         {

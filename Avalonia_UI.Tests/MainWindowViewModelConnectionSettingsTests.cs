@@ -66,6 +66,77 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public async Task LoadConnectionSettingsAndCheckConnectionUsesPersistedBaseUrlWhenHealthy()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+        };
+        var store = new FakeConnectionSettingsStore
+        {
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl("http://127.0.0.1:8013"),
+        };
+        var viewModel = CreateViewModel(apiClient, store);
+
+        await viewModel.LoadConnectionSettingsAndCheckConnectionAsync();
+
+        Assert.AreEqual("http://127.0.0.1:8013", viewModel.BaseUrl);
+        Assert.AreEqual(ConnectionStatus.Connected, viewModel.ConnectionStatus);
+        Assert.AreEqual("EngineHost health check passed.", viewModel.StatusMessage);
+        Assert.AreEqual(1, store.LoadCount);
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.AreEqual("http://127.0.0.1:8013", store.SavedSettings?.LastSuccessfulBaseUrl);
+        Assert.AreEqual("http://127.0.0.1:8013", apiClient.LastSettings?.BaseUrl);
+        Assert.AreEqual(string.Empty, apiClient.LastSettings?.Token);
+    }
+
+    [TestMethod]
+    public async Task LoadConnectionSettingsAndCheckConnectionShowsFailureWhenUnavailable()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse = ApiResponseEnvelope<HealthStatusDto>.Failure(
+                "UNAVAILABLE",
+                "EngineHost unavailable."),
+        };
+        var store = new FakeConnectionSettingsStore
+        {
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl("http://127.0.0.1:8014"),
+        };
+        var viewModel = CreateViewModel(apiClient, store);
+
+        await viewModel.LoadConnectionSettingsAndCheckConnectionAsync();
+
+        Assert.AreEqual("http://127.0.0.1:8014", viewModel.BaseUrl);
+        Assert.AreEqual(ConnectionStatus.Error, viewModel.ConnectionStatus);
+        Assert.AreEqual("Connection failed.", viewModel.StatusMessage);
+        Assert.AreEqual("EngineHost unavailable.", viewModel.ErrorMessage);
+        Assert.AreEqual(1, store.LoadCount);
+        Assert.AreEqual(0, store.SaveCount);
+        Assert.AreEqual("http://127.0.0.1:8014", apiClient.LastSettings?.BaseUrl);
+    }
+
+    [TestMethod]
+    public async Task LoadConnectionSettingsAndCheckConnectionDoesNotCheckWhenLoadFails()
+    {
+        var apiClient = new FakeApiClient();
+        var store = new FakeConnectionSettingsStore
+        {
+            LoadException = new InvalidOperationException("settings unavailable"),
+        };
+        var viewModel = CreateViewModel(apiClient, store);
+
+        await viewModel.LoadConnectionSettingsAndCheckConnectionAsync();
+
+        Assert.AreEqual(EngineHostConnectionSettings.DefaultBaseUrl, viewModel.BaseUrl);
+        Assert.AreEqual(ConnectionStatus.Disconnected, viewModel.ConnectionStatus);
+        Assert.AreEqual(1, store.LoadCount);
+        Assert.AreEqual(0, store.SaveCount);
+        Assert.IsNull(apiClient.LastSettings);
+    }
+
+    [TestMethod]
     public async Task CheckConnectionSavesBaseUrlWhenHealthy()
     {
         var apiClient = new FakeApiClient

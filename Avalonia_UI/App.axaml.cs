@@ -29,7 +29,7 @@ public partial class App : Application
                 DataContext = viewModel,
             };
             _ = viewModel.LoadUiSettingsAsync();
-            _ = viewModel.LoadConnectionSettingsAsync();
+            _ = viewModel.LoadConnectionSettingsAndCheckConnectionAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
