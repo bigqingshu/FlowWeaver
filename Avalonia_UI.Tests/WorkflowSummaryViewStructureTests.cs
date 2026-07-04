@@ -357,6 +357,8 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewEmptyText}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding DataPreviewRefreshText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding RefreshSelectedWorkflowNodeDataPreviewCommand}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding RunText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding StartSelectedWorkflowCommand}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsDataPreviewBusy}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNoSelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewMessage}\"");
@@ -370,6 +372,21 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewCellViewModel\"");
         StringAssert.Contains(xaml, "MinHeight=\"172\"");
         Assert.IsFalse(nodeListXaml.Contains("DataPreview", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void WorkflowListViewDoesNotHostRunButton()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowListView.axaml");
+
+        Assert.IsFalse(xaml.Contains("Content=\"{Binding RunText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            xaml.Contains("Command=\"{Binding StartSelectedWorkflowCommand}\"", StringComparison.Ordinal));
     }
 
     [TestMethod]

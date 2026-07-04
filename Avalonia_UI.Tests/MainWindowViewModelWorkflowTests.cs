@@ -2488,6 +2488,67 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task StartSelectedWorkflowRefreshesSelectedNodeDataPreviewWhenAvailable()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-1", "wf-1", "SUCCEEDED")),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "SUCCEEDED") }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-1", "run-1", "generate", "SUCCEEDED", 1, "done") }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto> { TableRef("table-1", "run-1", "node-run-1") }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.StartSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
+        Assert.AreEqual("run-1", apiClient.LastNodeRunWorkflowRunId);
+        Assert.AreEqual("run-1", apiClient.LastTableRefWorkflowRunId);
+        Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
     public void StartSelectedWorkflowIsDisabledWithoutSelection()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
@@ -2770,6 +2831,49 @@ public sealed class MainWindowViewModelWorkflowTests
         };
     }
 
+    private static TableRefDto TableRef(
+        string tableRefId,
+        string workflowRunId,
+        string nodeRunId)
+    {
+        return new TableRefDto
+        {
+            TableRefId = tableRefId,
+            WorkflowRunId = workflowRunId,
+            NodeRunId = nodeRunId,
+            Role = "OUTPUT",
+            StorageKind = "RUNTIME_SQL",
+            Scope = "WORKFLOW_SCOPE",
+            Mutability = "IMMUTABLE",
+            ProviderId = "runtime",
+            LogicalTableId = "orders",
+            Schema = JsonDocument.Parse("""{"fields":[]}""").RootElement.Clone(),
+            SchemaFingerprint = "schema-1",
+            Version = 1,
+            Capabilities = ["READ"],
+            LifecycleStatus = "PUBLISHED",
+            CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+        };
+    }
+
+    private static TableDataRowsDto TableRows(
+        string tableRefId,
+        string[] columns,
+        JsonElement[] rows,
+        long rowCount)
+    {
+        return new TableDataRowsDto
+        {
+            TableRefId = tableRefId,
+            Offset = 0,
+            Limit = 50,
+            RowCount = rowCount,
+            Columns = columns,
+            Rows = rows,
+            HasMore = false,
+        };
+    }
+
     private static NodeDefinitionDto NodeDefinition(
         string nodeType,
         string displayName,
@@ -2842,6 +2946,22 @@ public sealed class MainWindowViewModelWorkflowTests
         public ApiResponseEnvelope<WorkflowProcessDto> CancelRunResponse { get; set; } =
             ApiResponseEnvelope<WorkflowProcessDto>.Failure("NOT_CONFIGURED", "No cancel response configured.");
 
+        public ApiResponseEnvelope<List<TableRefDto>> TableRefsResponse { get; set; } =
+            ApiResponseEnvelope<List<TableRefDto>>.Success(new List<TableRefDto>());
+
+        public ApiResponseEnvelope<TableDataRowsDto> TableRowsResponse { get; set; } =
+            ApiResponseEnvelope<TableDataRowsDto>.Success(
+                new TableDataRowsDto
+                {
+                    TableRefId = "table-1",
+                    Offset = 0,
+                    Limit = 50,
+                    RowCount = 0,
+                    Columns = [],
+                    Rows = [],
+                    HasMore = false,
+                });
+
         public EngineHostConnectionSettings? LastSettings { get; private set; }
 
         public string? LastWorkflowDetailId { get; private set; }
@@ -2867,6 +2987,10 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? LastRunWorkflowId { get; private set; }
 
         public string? LastNodeRunWorkflowRunId { get; private set; }
+
+        public string? LastTableRefWorkflowRunId { get; private set; }
+
+        public string? LastTableRowsTableRefId { get; private set; }
 
         public string? CancelledWorkflowRunId { get; private set; }
 
@@ -3007,7 +3131,23 @@ public sealed class MainWindowViewModelWorkflowTests
             string workflowRunId,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastSettings = settings;
+            LastTableRefWorkflowRunId = workflowRunId;
+            return Task.FromResult(TableRefsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
+            EngineHostConnectionSettings settings,
+            string tableRefId,
+            int offset = 0,
+            int limit = 50,
+            IReadOnlyCollection<string>? columns = null,
+            IReadOnlyCollection<string>? orderBy = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            LastTableRowsTableRefId = tableRefId;
+            return Task.FromResult(TableRowsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(

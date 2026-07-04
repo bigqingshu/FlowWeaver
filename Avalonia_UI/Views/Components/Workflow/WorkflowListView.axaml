@@ -5,7 +5,7 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="18">
         <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding WorkflowsSectionText}"
                            FontSize="18"
                            FontWeight="SemiBold"
@@ -21,10 +21,6 @@
                         Content="{Binding RefreshText}"
                         Command="{Binding RefreshWorkflowsCommand}"
                         MinWidth="84"/>
-                <Button Grid.Column="3"
-                        Content="{Binding RunText}"
-                        Command="{Binding StartSelectedWorkflowCommand}"
-                        MinWidth="72"/>
             </Grid>
 
             <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">

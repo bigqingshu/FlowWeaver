@@ -1692,6 +1692,11 @@ public partial class MainWindowViewModel : ViewModelBase
                     response.Data.Status);
             IsStartingWorkflow = false;
             await LoadRunsAsync(response.Data.WorkflowRunId);
+            if (CanRefreshSelectedWorkflowNodeDataPreview())
+            {
+                await RefreshSelectedWorkflowNodeDataPreviewAsync();
+            }
+
             return;
         }
 
