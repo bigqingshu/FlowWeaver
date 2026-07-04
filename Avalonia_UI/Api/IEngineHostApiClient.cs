@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -80,6 +81,34 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         string workflowRunId,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Table data schema API is not implemented.");
+    }
+
+    Task<ApiResponseEnvelope<TableDataSummaryDto>> GetTableDataSummaryAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Table data summary API is not implemented.");
+    }
+
+    Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? columns = null,
+        IReadOnlyCollection<string>? orderBy = null,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Table data rows API is not implemented.");
+    }
 
     Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(
         EngineHostConnectionSettings settings,

@@ -224,6 +224,62 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<TableDataSchemaDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/data/{Uri.EscapeDataString(tableRefId)}/schema",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<TableDataSummaryDto>> GetTableDataSummaryAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<TableDataSummaryDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/data/{Uri.EscapeDataString(tableRefId)}/summary",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? columns = null,
+        IReadOnlyCollection<string>? orderBy = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+        if (columns is not null)
+        {
+            query.AddRange(columns.Select(column => new KeyValuePair<string, string?>("columns", column)));
+        }
+
+        if (orderBy is not null)
+        {
+            query.AddRange(orderBy.Select(column => new KeyValuePair<string, string?>("order_by", column)));
+        }
+
+        return SendAsync<TableDataRowsDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/data/{Uri.EscapeDataString(tableRefId)}/rows",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(
         EngineHostConnectionSettings settings,
         long? afterSequenceNumber = null,

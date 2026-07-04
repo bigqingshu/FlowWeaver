@@ -368,6 +368,93 @@ public sealed record TableRefDto
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+public sealed record TableFieldSchemaDto
+{
+    [JsonPropertyName("field_id")]
+    public string FieldId { get; init; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("data_type")]
+    public string DataType { get; init; } = string.Empty;
+
+    [JsonPropertyName("nullable")]
+    public bool Nullable { get; init; }
+
+    [JsonPropertyName("ordinal")]
+    public int Ordinal { get; init; }
+}
+
+public sealed record TableDataSchemaDto
+{
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("schema")]
+    public TableFieldSchemaDto[] Schema { get; init; } = [];
+
+    [JsonPropertyName("schema_fingerprint")]
+    public string SchemaFingerprint { get; init; } = string.Empty;
+}
+
+public sealed record TableDataSummaryDto
+{
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("workflow_run_id")]
+    public string WorkflowRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_run_id")]
+    public string NodeRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("logical_table_id")]
+    public string LogicalTableId { get; init; } = string.Empty;
+
+    [JsonPropertyName("storage_kind")]
+    public string StorageKind { get; init; } = string.Empty;
+
+    [JsonPropertyName("lifecycle_status")]
+    public string LifecycleStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("version")]
+    public int Version { get; init; }
+
+    [JsonPropertyName("schema_fingerprint")]
+    public string SchemaFingerprint { get; init; } = string.Empty;
+
+    [JsonPropertyName("capabilities")]
+    public string[] Capabilities { get; init; } = [];
+
+    [JsonPropertyName("row_count")]
+    public long RowCount { get; init; }
+}
+
+public sealed record TableDataRowsDto
+{
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("row_count")]
+    public long RowCount { get; init; }
+
+    [JsonPropertyName("columns")]
+    public string[] Columns { get; init; } = [];
+
+    [JsonPropertyName("rows")]
+    public JsonElement[] Rows { get; init; } = [];
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
+}
+
 public sealed record SharedPublicationDto
 {
     [JsonPropertyName("publication_id")]

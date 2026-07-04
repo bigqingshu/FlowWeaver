@@ -398,6 +398,76 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetTableDataSchemaAsyncUsesDataSchemaPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"table_ref_id":"table-1","schema":[{"field_id":"f1","name":"row_id","data_type":"INTEGER","nullable":false,"ordinal":0}],"schema_fingerprint":"fp"},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetTableDataSchemaAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "table 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/data/table%201/schema"),
+            handler.RequestUri);
+        Assert.AreEqual("table-1", result.Data?.TableRefId);
+        Assert.AreEqual("row_id", result.Data?.Schema[0].Name);
+        Assert.AreEqual("INTEGER", result.Data?.Schema[0].DataType);
+    }
+
+    [TestMethod]
+    public async Task GetTableDataSummaryAsyncUsesDataSummaryPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"table_ref_id":"table-1","workflow_run_id":"run-1","node_run_id":"node-run-1","logical_table_id":"orders","storage_kind":"RUNTIME_SQL","lifecycle_status":"PUBLISHED","version":2,"schema_fingerprint":"fp","capabilities":["READ"],"row_count":3},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetTableDataSummaryAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "table-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/data/table-1/summary"),
+            handler.RequestUri);
+        Assert.AreEqual("orders", result.Data?.LogicalTableId);
+        Assert.AreEqual(3, result.Data?.RowCount);
+        CollectionAssert.AreEqual(new[] { "READ" }, result.Data?.Capabilities);
+    }
+
+    [TestMethod]
+    public async Task GetTableDataRowsAsyncBuildsPreviewQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"table_ref_id":"table-1","offset":1,"limit":2,"row_count":3,"columns":["row_id","amount"],"rows":[{"row_id":2,"amount":3.0}],"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetTableDataRowsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "table 1",
+            offset: 1,
+            limit: 2,
+            columns: ["row_id", "amount"],
+            orderBy: ["row_id"]);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/data/table%201/rows?offset=1&limit=2&columns=row_id&columns=amount&order_by=row_id"),
+            handler.RequestUri);
+        Assert.AreEqual(2, result.Data?.Columns.Length);
+        Assert.AreEqual(2, result.Data?.Rows[0].GetProperty("row_id").GetInt32());
+        Assert.AreEqual(3.0, result.Data?.Rows[0].GetProperty("amount").GetDouble());
+    }
+
+    [TestMethod]
     public async Task ListSharedPublicationsAsyncBuildsFilterQuery()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
