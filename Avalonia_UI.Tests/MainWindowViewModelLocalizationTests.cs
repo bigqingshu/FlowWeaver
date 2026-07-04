@@ -39,6 +39,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
         Assert.AreEqual("结构化编辑", viewModel.StructuredEditSectionText);
         Assert.AreEqual("新增节点", viewModel.AddNodeText);
+        Assert.AreEqual("复制节点", viewModel.CopyNodeText);
         Assert.AreEqual("删除节点", viewModel.DeleteNodeText);
         Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
@@ -84,6 +85,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("节点类型", viewModel.NodeTypeText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
+        Assert.AreEqual("复制节点", viewModel.CopyNodeText);
         Assert.AreEqual("节点版本", viewModel.NodeVersionText);
         Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);

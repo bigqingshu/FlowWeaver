@@ -927,6 +927,77 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task CopyWorkflowDefinitionDraftNodeCommandCopiesSelectedNodeAfterSource()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "display_name": "Source rows", "config": {"rows": 3}},
+                {"node_instance_id": "source_copy", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {"rows": 1}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_sink", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode = null;
+
+        Assert.IsFalse(viewModel.CopyWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "source");
+
+        Assert.IsTrue(viewModel.CopyWorkflowDefinitionDraftNodeCommand.CanExecute(null));
+
+        viewModel.CopyWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.AreEqual(
+            "Node copied to draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual("source_copy_2", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.HasCount(4, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.AreEqual("source", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
+        Assert.AreEqual("source_copy_2", viewModel.WorkflowDefinitionDraftNodes[1].NodeInstanceId);
+        Assert.AreEqual("source_copy", viewModel.WorkflowDefinitionDraftNodes[2].NodeInstanceId);
+        Assert.AreEqual("sink", viewModel.WorkflowDefinitionDraftNodes[3].NodeInstanceId);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var nodes = draft.RootElement.GetProperty("nodes");
+        var copied = nodes[1];
+        Assert.AreEqual("source_copy_2", copied.GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("GenerateTestTableNode", copied.GetProperty("node_type").GetString());
+        Assert.AreEqual("Source rows", copied.GetProperty("display_name").GetString());
+        Assert.AreEqual(3, copied.GetProperty("config").GetProperty("rows").GetInt32());
+
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual(
+            "source_to_sink",
+            connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("sink", connections[0].GetProperty("target_node_id").GetString());
+    }
+
+    [TestMethod]
     public async Task SelectedWorkflowDefinitionDraftNodeInputResetsAndClearsWhenDraftChanges()
     {
         var definitionJson =

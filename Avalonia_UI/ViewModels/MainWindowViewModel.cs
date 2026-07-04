@@ -693,6 +693,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string AddNodeText => T("definition.add_node");
 
+    public string CopyNodeText => T("definition.copy_node");
+
     public string DeleteNodeText => T("definition.delete_node");
 
     public string MoveNodeUpText => T("definition.move_node_up");
@@ -942,6 +944,17 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     private bool CanDeleteWorkflowDefinitionDraftNode()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && SelectedWorkflowDefinitionNode is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict
+            && FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is not null;
+    }
+
+    private bool CanCopyWorkflowDefinitionDraftNode()
     {
         return CanUseEngineActions
             && WorkflowDefinitionDetail is not null
@@ -1569,6 +1582,35 @@ public partial class MainWindowViewModel : ViewModelBase
                 : T("definition.node_deleted");
         WorkflowDefinitionValidationErrorMessage =
             FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCopyWorkflowDefinitionDraftNode))]
+    private void CopyWorkflowDefinitionDraftNode()
+    {
+        if (SelectedWorkflowDefinitionNode is null)
+        {
+            return;
+        }
+
+        var patchResult = WorkflowDefinitionDraftNodePatcher.CopyNode(
+            WorkflowDefinitionDraftJson,
+            SelectedWorkflowDefinitionNode.NodeInstanceId);
+        if (!patchResult.Succeeded)
+        {
+            WorkflowDefinitionValidationMessage = T("definition.node_copy_failed");
+            WorkflowDefinitionValidationErrorMessage =
+                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            return;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        if (!string.IsNullOrWhiteSpace(patchResult.AddedNodeInstanceId))
+        {
+            SelectWorkflowDefinitionDraftNode(patchResult.AddedNodeInstanceId);
+        }
+
+        WorkflowDefinitionValidationMessage = T("definition.node_copied");
+        WorkflowDefinitionValidationErrorMessage = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanMoveSelectedWorkflowDefinitionDraftNodeUp))]
@@ -3803,6 +3845,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(StructuredEditSectionText));
         OnPropertyChanged(nameof(AddNodeText));
+        OnPropertyChanged(nameof(CopyNodeText));
         OnPropertyChanged(nameof(DeleteNodeText));
         OnPropertyChanged(nameof(MoveNodeUpText));
         OnPropertyChanged(nameof(MoveNodeDownText));
@@ -4135,6 +4178,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void NotifyWorkflowDefinitionNodeActionCommandsChanged()
     {
+        CopyWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeUpCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeDownCommand.NotifyCanExecuteChanged();

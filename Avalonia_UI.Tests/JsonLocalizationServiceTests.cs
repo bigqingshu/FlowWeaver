@@ -48,6 +48,10 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual(
             "节点已在草稿中移动。保存前请重新校验。",
             service.GetString("definition.node_moved"));
+        Assert.AreEqual("复制节点", service.GetString("definition.copy_node"));
+        Assert.AreEqual(
+            "节点已复制到草稿。保存前请重新校验。",
+            service.GetString("definition.node_copied"));
         Assert.AreEqual(
             "所选节点无法继续向该方向移动。",
             service.GetString("definition.warning.node_move_out_of_range"));
