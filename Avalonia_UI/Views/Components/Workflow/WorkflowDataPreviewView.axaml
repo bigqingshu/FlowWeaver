@@ -56,8 +56,9 @@
                     BorderBrush="{DynamicResource ControlBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="4"
+                    MinHeight="96"
                     MaxHeight="180"
-                    IsVisible="{Binding HasDataPreviewColumns}">
+                    ClipToBounds="True">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel>
