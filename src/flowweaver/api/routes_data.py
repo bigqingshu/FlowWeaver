@@ -48,6 +48,7 @@ def get_table_ref(
     )
     if rejection is not None:
         return rejection
+    assert table_ref is not None
     return ok_response(request, table_ref)
 
 
@@ -69,6 +70,7 @@ def get_table_ref_schema(
     )
     if rejection is not None:
         return rejection
+    assert table_ref is not None
 
     try:
         schema = provider.get_schema(table_ref)
@@ -103,6 +105,7 @@ def get_table_ref_summary(
     )
     if rejection is not None:
         return rejection
+    assert table_ref is not None
 
     try:
         row_count = provider.count_rows(table_ref)
@@ -134,6 +137,7 @@ def get_table_ref_rows(
     )
     if rejection is not None:
         return rejection
+    assert table_ref is not None
 
     selected_columns = columns or [field.name for field in table_ref.schema]
     try:
