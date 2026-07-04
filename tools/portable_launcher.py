@@ -60,6 +60,146 @@ class PollableProcess(Protocol):
         ...
 
 
+class ProcessJob(Protocol):
+    @property
+    def enabled(self) -> bool:
+        ...
+
+    def assign(self, process: PollableProcess) -> None:
+        ...
+
+    def close(self) -> None:
+        ...
+
+
+class NoopProcessJob:
+    @property
+    def enabled(self) -> bool:
+        return False
+
+    def assign(self, process: PollableProcess) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class WindowsKillOnCloseJob:
+    def __init__(self, *, handle: int, kernel32: object) -> None:
+        self._handle = handle
+        self._kernel32 = kernel32
+
+    @property
+    def enabled(self) -> bool:
+        return self._handle != 0
+
+    @classmethod
+    def create(cls) -> WindowsKillOnCloseJob:
+        import ctypes
+        from ctypes import wintypes
+
+        class JobObjectBasicLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class JobObjectExtendedLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", JobObjectBasicLimitInformation),
+                ("IoInfo", IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        job_object_extended_limit_information = 9
+        job_object_limit_kill_on_job_close = 0x00002000
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.SetInformationJobObject.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+        ]
+        kernel32.SetInformationJobObject.restype = wintypes.BOOL
+        kernel32.AssignProcessToJobObject.argtypes = [
+            wintypes.HANDLE,
+            wintypes.HANDLE,
+        ]
+        kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        handle = kernel32.CreateJobObjectW(None, None)
+        if not handle:
+            _raise_last_windows_error("Could not create Windows Job Object")
+
+        limits = JobObjectExtendedLimitInformation()
+        limits.BasicLimitInformation.LimitFlags = (
+            job_object_limit_kill_on_job_close
+        )
+        if not kernel32.SetInformationJobObject(
+            handle,
+            job_object_extended_limit_information,
+            ctypes.byref(limits),
+            ctypes.sizeof(limits),
+        ):
+            kernel32.CloseHandle(handle)
+            _raise_last_windows_error(
+                "Could not configure Windows Job Object kill-on-close"
+            )
+        return cls(handle=handle, kernel32=kernel32)
+
+    def assign(self, process: PollableProcess) -> None:
+        process_handle = getattr(process, "_handle", None)
+        if process_handle is None:
+            raise LauncherRuntimeError(
+                "Could not assign process to Windows Job Object: "
+                "process handle is unavailable"
+            )
+        try:
+            process_handle = int(process_handle)
+        except (TypeError, ValueError):
+            pass
+        if not self._kernel32.AssignProcessToJobObject(
+            self._handle,
+            process_handle,
+        ):
+            _raise_last_windows_error(
+                "Could not assign process to Windows Job Object"
+            )
+
+    def close(self) -> None:
+        if self._handle == 0:
+            return
+        handle = self._handle
+        self._handle = 0
+        if not self._kernel32.CloseHandle(handle):
+            _raise_last_windows_error("Could not close Windows Job Object")
+
+
 @dataclass(frozen=True)
 class LauncherSettings:
     host: str = DEFAULT_HOST
@@ -359,6 +499,89 @@ def process_group_popen_kwargs() -> dict[str, object]:
     return {"start_new_session": True}
 
 
+def create_process_job() -> ProcessJob:
+    if os.name != "nt":
+        return NoopProcessJob()
+    return WindowsKillOnCloseJob.create()
+
+
+def create_process_job_for_launch(layout: PortableLayout) -> ProcessJob:
+    try:
+        process_job = create_process_job()
+    except Exception as exc:
+        append_launcher_log(
+            layout,
+            f"Process containment warning: {exc}",
+        )
+        return NoopProcessJob()
+    if process_job.enabled:
+        append_launcher_log(
+            layout,
+            "Process containment enabled: Windows Job Object kill-on-close",
+        )
+    return process_job
+
+
+def should_assign_enginehost_to_process_job(plan: PortableLaunchPlan) -> bool:
+    return not (
+        plan.desktop is not None
+        and plan.settings.keep_enginehost_on_desktop_exit
+    )
+
+
+def assign_process_to_job(
+    job: ProcessJob,
+    process: PollableProcess,
+    layout: PortableLayout,
+    process_name: str,
+    *,
+    token: str | None = None,
+) -> None:
+    if not job.enabled:
+        return
+    pid = getattr(process, "pid", "unknown")
+    try:
+        job.assign(process)
+    except Exception as exc:
+        append_launcher_log(
+            layout,
+            "Process containment warning: "
+            f"Could not assign {process_name} pid={pid} to Job Object: {exc}",
+            token=token,
+        )
+        return
+    append_launcher_log(
+        layout,
+        f"Process containment assigned {process_name} pid={pid} to Job Object",
+        token=token,
+    )
+
+
+def close_process_job(
+    job: ProcessJob,
+    layout: PortableLayout,
+    *,
+    token: str | None = None,
+) -> None:
+    if not job.enabled:
+        return
+    try:
+        job.close()
+    except Exception as exc:
+        append_launcher_log(
+            layout,
+            f"Process containment warning: Could not close Job Object: {exc}",
+            token=token,
+        )
+
+
+def _raise_last_windows_error(message: str) -> None:
+    import ctypes
+
+    error_code = ctypes.get_last_error()
+    raise LauncherRuntimeError(f"{message}. Windows error code: {error_code}")
+
+
 def enginehost_health_is_ok(base_url: str, *, timeout_seconds: float = 1.0) -> bool:
     url = f"{base_url.rstrip('/')}/api/v1/health"
     try:
@@ -478,6 +701,20 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
     append_launcher_log(plan.layout, f"Starting EngineHost at {plan.base_url}")
     ensure_port_available(plan.settings.host, plan.settings.port)
     enginehost_process = start_enginehost_process(plan.enginehost)
+    process_job = create_process_job_for_launch(plan.layout)
+    if should_assign_enginehost_to_process_job(plan):
+        assign_process_to_job(
+            process_job,
+            enginehost_process,
+            plan.layout,
+            "EngineHost",
+        )
+    elif process_job.enabled:
+        append_launcher_log(
+            plan.layout,
+            "Process containment skipped EngineHost because "
+            "--keep-enginehost-on-desktop-exit is set",
+        )
     desktop_process: PollableProcess | None = None
     should_stop_enginehost = True
     token: str | None = None
@@ -517,6 +754,13 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
             token=token,
         )
         desktop_process = start_desktop_process(plan.desktop)
+        assign_process_to_job(
+            process_job,
+            desktop_process,
+            plan.layout,
+            "Desktop",
+            token=token,
+        )
         append_launcher_log(
             plan.layout,
             f"Desktop pid={desktop_process.pid} cwd={plan.desktop.cwd}",
@@ -553,6 +797,7 @@ def run_launch_plan(plan: PortableLaunchPlan) -> int:
         ):
             stop_enginehost_process(enginehost_process)
             append_launcher_log(plan.layout, "EngineHost stopped", token=token)
+        close_process_job(process_job, plan.layout, token=token)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

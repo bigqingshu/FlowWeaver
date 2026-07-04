@@ -32,6 +32,15 @@ def launcher() -> ModuleType:
     return _LAUNCHER
 
 
+@pytest.fixture(autouse=True)
+def disable_process_job_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        launcher(),
+        "create_process_job",
+        lambda: launcher().NoopProcessJob(),
+    )
+
+
 def test_parse_launcher_args_defaults_to_loopback_port_and_desktop() -> None:
     settings = launcher().parse_launcher_args([])
 
@@ -406,6 +415,183 @@ def test_run_launch_plan_keeps_enginehost_after_desktop_exit_when_requested(
     assert "EngineHost stopped" not in log_content
 
 
+def test_run_launch_plan_assigns_enginehost_and_desktop_to_process_job(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
+    process_job = FakeProcessJob()
+
+    monkeypatch.setattr(launcher(), "create_process_job", lambda: process_job)
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    assert process_job.assigned == [enginehost_process, desktop_process]
+    assert process_job.closed is True
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Process containment enabled" in log_content
+    assert "Process containment assigned EngineHost pid=101" in log_content
+    assert "Process containment assigned Desktop pid=202" in log_content
+
+
+def test_run_launch_plan_skips_enginehost_job_when_keep_flag_is_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(
+        layout.root,
+        launcher().LauncherSettings(keep_enginehost_on_desktop_exit=True),
+    )
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
+    process_job = FakeProcessJob()
+
+    monkeypatch.setattr(launcher(), "create_process_job", lambda: process_job)
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    assert process_job.assigned == [desktop_process]
+    assert process_job.closed is True
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Process containment skipped EngineHost" in log_content
+    assert "EngineHost stopped" not in log_content
+
+
+def test_run_launch_plan_continues_when_process_job_assignment_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
+    process_job = FakeProcessJob(failing_pids={101})
+
+    monkeypatch.setattr(launcher(), "create_process_job", lambda: process_job)
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    assert process_job.assigned == [desktop_process]
+    assert process_job.closed is True
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Process containment warning" in log_content
+    assert "Could not assign EngineHost pid=101" in log_content
+    assert "EngineHost stopped" in log_content
+
+
+def test_run_launch_plan_continues_when_process_job_creation_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    layout = _create_minimal_layout(tmp_path, include_desktop=True)
+    plan = launcher().build_launch_plan(layout.root, launcher().LauncherSettings())
+    enginehost_process = FakeProcess(returncode=None, pid=101)
+    desktop_process = FakeProcess(returncode=0, pid=202)
+
+    def fail_process_job():
+        raise launcher().LauncherRuntimeError("fake process job failure")
+
+    monkeypatch.setattr(launcher(), "create_process_job", fail_process_job)
+    monkeypatch.setattr(
+        launcher(),
+        "start_enginehost_process",
+        lambda spec: enginehost_process,
+    )
+    monkeypatch.setattr(launcher(), "wait_for_enginehost_health", lambda *a, **k: None)
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_local_api_token",
+        lambda *a, **k: "secret-token",
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "start_desktop_process",
+        lambda spec: desktop_process,
+    )
+    monkeypatch.setattr(
+        launcher(),
+        "wait_for_desktop_exit",
+        lambda enginehost, desktop: 0,
+    )
+    monkeypatch.setattr(launcher(), "ensure_port_available", lambda *a, **k: None)
+
+    assert launcher().run_launch_plan(plan) == 0
+
+    log_content = launcher().launcher_log_path(layout).read_text(encoding="utf-8")
+    assert "Process containment warning: fake process job failure" in log_content
+    assert "EngineHost stopped" in log_content
+
+
 def test_run_launch_plan_stops_enginehost_when_desktop_start_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -500,6 +686,25 @@ class FakeProcess:
 
     def wait(self, timeout: float | None = None) -> int:
         return self.returncode or 0
+
+
+class FakeProcessJob:
+    def __init__(self, *, failing_pids: set[int] | None = None) -> None:
+        self._failing_pids = failing_pids or set()
+        self.assigned: list[FakeProcess] = []
+        self.closed = False
+
+    @property
+    def enabled(self) -> bool:
+        return not self.closed
+
+    def assign(self, process: FakeProcess) -> None:
+        if process.pid in self._failing_pids:
+            raise launcher().LauncherRuntimeError("fake process job assignment failure")
+        self.assigned.append(process)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class InterruptingProcess(FakeProcess):

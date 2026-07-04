@@ -559,3 +559,150 @@ mindmap
 | 类型 | 路径 |
 | --- | --- |
 | fixed launcher timing | `.tmp/shutdown-timing-launcher-fixed-20260704-143332` |
+
+## 14. 覆盖 PyCharm/任务管理器硬杀父进程的方案
+
+### 14.1 问题边界
+
+本节讨论的是：PyCharm、pytest、任务管理器或其他外层工具直接强制结束 launcher/测试父进程，导致 Python 代码没有机会执行 `except KeyboardInterrupt`、`finally` 或 `atexit`。
+
+这类场景和普通关闭不同：
+
+- 普通关闭：launcher 能收到 `CTRL_BREAK_EVENT` 或 `SIGINT`，可以在 `finally` 中 soft-stop EngineHost。
+- 父进程硬杀：launcher 立刻死亡，`finally` 不会执行，当前由 launcher 负责的 EngineHost 清理逻辑不会运行。
+- 如果只杀父进程，EngineHost 可能继续运行。
+- 如果连 EngineHost 一起强杀，任何 Python 清理逻辑都无法保证执行，FastAPI lifespan 也不会运行。
+
+因此，这类场景不能只靠 Python `try/finally` 修复，需要引入操作系统级托管或独立守护机制。
+
+### 14.2 覆盖目标分层
+
+| 目标层级 | 目标 | 能否完全保证 | 说明 |
+| --- | --- | --- | --- |
+| L1 无残留进程 | 父进程被硬杀后，EngineHost/Desktop 不继续留在后台 | 基本可保证 | 需要 Windows Job Object 或等价进程组托管 |
+| L2 尽量优雅清理 | 父进程被硬杀后，EngineHost 仍能执行 lifespan，释放锁和数据库连接 | 只能尽量 | 需要 EngineHost 自监控或独立 guardian 先发 soft-stop |
+| L3 任意强杀都完整清理 | EngineHost 自身也被任务管理器强杀时仍释放锁 | 不能保证 | 进程被内核终止时，用户态代码没有执行机会 |
+
+建议把目标定为：默认先保证 L1，无残留进程；随后通过自监控或 guardian 尽量提升到 L2。L3 不作为硬性目标，只通过 stale lock 恢复机制兜底。
+
+### 14.3 方案矩阵
+
+| 方案 | 覆盖能力 | 对主程序影响 | 性能影响 | 复杂度 | 风险 | 建议 |
+| --- | --- | --- | --- | --- | --- | --- |
+| A. Windows Job Object 托管子进程 | launcher 被硬杀时，OS 自动结束 EngineHost/Desktop | launcher 进程创建逻辑增加 Windows 分支；EngineHost 业务无变化 | 正常运行几乎无影响 | 中 | Windows-only；如果当前进程已处在 IDE/CI 的 Job 中，嵌套或 assign 可能失败；只能保证杀进程，不能保证 lifespan 执行 | 推荐第一阶段做 |
+| B. EngineHost 自监控父进程 | launcher 父进程消失时，EngineHost 自己触发 graceful shutdown | 需要改变 portable 启动入口或增加 server wrapper，EngineHost 要知道 parent PID/handle | 多一个等待线程或低频轮询，影响极低 | 中高 | Uvicorn shutdown 集成要谨慎；PID 复用要避免；误判父进程死亡会导致后端退出 | 推荐第二阶段评估 |
+| C. 独立 guardian/broker 进程 | launcher 被硬杀后，guardian 先 soft-stop EngineHost，超时再 hard kill | 新增一个守护进程和生命周期协议 | 多一个轻量进程 | 高 | 打包复杂度、调试复杂度、杀毒/权限误报概率、guardian 自身残留风险 | 仅在发布版强需求时做 |
+| D. 启动时恢复/清理 stale lock | 下次启动时识别上次非正常退出，不被 stale lock 卡死 | 已有 stale lock 基础，可增强日志和提示 | 启动时一次检查 | 低 | 如果旧 EngineHost 仍活着，不能贸然删除锁；误杀风险要控制 | 必做兜底，不单独解决残留进程 |
+| E. shutdown API 或本地控制管道 | 外部工具可请求 EngineHost 自己退出 | 增加本地管理入口，需要鉴权 | 运行期几乎无影响 | 中 | 安全边界要严；父进程已经被硬杀时无人调用，需配合 B/C | 可作为 B/C 的 soft-stop 通道 |
+
+### 14.4 推荐路线
+
+推荐分三步，不建议一次做到 guardian 级别：
+
+| 阶段 | 内容 | 验收标准 | 风险控制 |
+| --- | --- | --- | --- |
+| 第一阶段 | launcher 在 Windows 下用 Job Object 管理 EngineHost/Desktop；保留当前 soft-stop 逻辑，Job 只做硬杀兜底 | 已落地：强杀 launcher 后，EngineHost health 不可达；正常关闭仍走 soft-stop | Job assign 失败时记录日志并退回当前逻辑；不影响非 Windows |
+| 第二阶段 | 增强启动恢复：明确记录 stale lock 恢复、异常退出原因和用户提示 | 上次异常退出后，下次启动能自动恢复或给出明确提示 | 不自动杀未知进程，只处理 stale PID |
+| 第三阶段 | 如确实需要释放锁而不是只杀进程，再引入 EngineHost 自监控父进程或 guardian | 强杀 launcher 后，EngineHost 能先执行 graceful shutdown；超时后仍无残留 | 设置短 grace 时间，保留 hard kill 兜底 |
+
+### 14.5 Job Object 方案细节
+
+Job Object 的核心思路是：launcher 创建一个 Windows Job，把 EngineHost 和 Desktop 都加入该 Job，并设置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`。当 launcher 被任务管理器或 PyCharm 强杀时，launcher 持有的 Job handle 会被内核关闭，Job 内子进程会被系统终止。
+
+当前实现状态：
+
+- Windows 下 launcher 会创建 kill-on-close Job Object，并把 EngineHost 加入 Job。
+- Desktop 启动后也会加入同一个 Job。
+- 正常关闭时仍先执行现有 soft-stop：Desktop `terminate/kill`，EngineHost 先 `CTRL_BREAK_EVENT`，超时后再 `terminate/kill`；Job Object 只做父进程硬杀兜底。
+- 非 Windows 使用 no-op job，不改变原有进程组行为。
+- Job 创建或 assign 失败只写入 `portable-launcher.log` warning，启动流程继续。
+- `--keep-enginehost-on-desktop-exit` 模式下不会把 EngineHost 加入 Job，避免正常关闭 Desktop 后保留后端的语义被破坏；因此该模式下“硬杀 launcher 自动清理 EngineHost”的覆盖会降低。
+
+适合解决：
+
+- PyCharm/pytest 父进程被硬杀，EngineHost 不应残留。
+- 用户从任务管理器结束 launcher，后端不应继续占端口。
+- launcher 自身崩溃，子进程应被 OS 收走。
+
+不能解决：
+
+- 不能保证 FastAPI lifespan 执行。
+- 不能保证 `enginehost.lock` 被正常删除。
+- 如果用户直接强杀 EngineHost 进程本身，仍然无法执行应用清理。
+
+风险点：
+
+| 风险 | 说明 | 缓解 |
+| --- | --- | --- |
+| Windows API 复杂度 | Python 需要用 `ctypes` 调 `CreateJobObject`、`SetInformationJobObject`、`AssignProcessToJobObject` | 封装成小模块，单元测试 fake API，真实 Windows smoke 覆盖 |
+| IDE/CI 已经使用 Job | PyCharm、CI 或打包器可能已经把 launcher 放入 Job，assign 新 Job 在部分限制下可能失败 | 检测失败并记录日志，失败时退回现有 soft-stop；不要让启动失败 |
+| 非 graceful 终止 | Job close 是硬终止，lifespan 不执行 | 只把 Job 当父进程硬杀兜底；正常关闭仍先 soft-stop |
+| 子孙进程归属 | workflow process、node executor 等孙进程是否自动进入 Job，取决于它们是否 breakaway | 测试 workflow 运行中强杀 launcher，检查所有 Python 子进程是否消失 |
+| 调试体验 | 开发者可能希望后端在 launcher 退出后保留 | 保留 `--keep-enginehost-on-desktop-exit` 的正常关闭语义；必要时增加开发模式禁用 Job 参数 |
+
+### 14.6 EngineHost 自监控方案细节
+
+EngineHost 自监控的核心思路是：launcher 启动 EngineHost 时传入父进程标识，EngineHost 持有父进程 handle 或 parent PID，并启动一个轻量 watcher。当 watcher 发现 launcher 异常消失时，EngineHost 主动触发自己的 graceful shutdown。
+
+较好的实现方式不是继续使用裸 `python -m uvicorn`，而是新增一个 EngineHost server wrapper，例如：
+
+```text
+python -m flowweaver.api.server --host 127.0.0.1 --port 8000 --parent-pid <launcher-pid>
+```
+
+wrapper 内部创建 `uvicorn.Server`，保存 server 实例；父进程 watcher 检测到父进程退出后设置 `server.should_exit = True`。这样 Uvicorn 会走正常 shutdown 流程，FastAPI lifespan 有机会调用 `container.close()`。
+
+优点：
+
+- 比 Job Object 更接近真正的安全退出。
+- 可以释放锁、关闭数据库连接、停 supervisor。
+- 对 PyCharm/任务管理器只杀 launcher 的情况效果好。
+
+风险点：
+
+| 风险 | 说明 | 缓解 |
+| --- | --- | --- |
+| 启动入口变化 | portable launcher 从 `python -m uvicorn` 切到自有 wrapper | 先只在 portable launcher 使用 wrapper；开发态命令暂不改 |
+| 父进程误判 | PID 可能复用；父进程正常重启可能被误判 | Windows 使用进程 handle 等待，不只靠 PID 轮询 |
+| shutdown 触发可靠性 | watcher 线程如何安全通知 Uvicorn 退出要验证 | 使用 `uvicorn.Server.should_exit`，加真实 smoke |
+| 复杂度上升 | 引入 server wrapper、父进程参数、测试矩阵 | 分阶段落地，先不混入 workflow cancel 改造 |
+
+性能影响：
+
+- watcher 使用 `WaitForSingleObject` 或低频轮询，运行期影响接近 0。
+- 退出时会多等 graceful shutdown 时间，预计与当前修复后 launcher 退出同量级，约数百毫秒；有运行中 workflow 时取决于后续 grace 配置。
+
+### 14.7 Guardian/Broker 方案细节
+
+Guardian 是最强但也最重的方案：launcher 先启动一个独立 guardian，由 guardian 启动或接管 EngineHost，并持有 Job Object。launcher 被硬杀后，guardian 仍存活，先请求 EngineHost graceful shutdown，等待 grace，超时后关闭 Job 强杀。
+
+优点：
+
+- 同时覆盖无残留进程和尽量 graceful。
+- 对 launcher 崩溃、IDE 强杀父进程的覆盖最强。
+
+主要代价：
+
+- 需要新增一个长期存活的辅助进程。
+- 打包、日志、升级、退出码、异常恢复都更复杂。
+- 如果 guardian 自身残留，会引入新的问题。
+- 某些安全软件可能对“守护进程管理子进程”更敏感。
+
+结论：除非发布版明确要求“父进程被硬杀也必须尽量 graceful”，否则不建议第一阶段做 guardian。
+
+### 14.8 测试建议
+
+| 测试 | 目的 | 推荐级别 |
+| --- | --- | --- |
+| 单元测试 fake Job API | 验证 assign 成功、assign 失败、close 兜底路径 | 已覆盖 |
+| Windows smoke：启动 launcher 后硬杀 launcher | 验证 EngineHost 不残留 | 已覆盖 |
+| Windows smoke：运行 workflow 时强杀 launcher | 验证 workflow process/node executor 不残留 | 推荐 |
+| Windows smoke：Job assign 失败降级 | 验证不会阻塞启动 | 推荐 |
+| PyCharm 手工验证 Stop/kill 行为 | 验证 IDE 真实体验 | 推荐，但不作为 CI 必跑 |
+| 任务管理器 End task / End process tree 手工验证 | 验证用户真实操作 | 推荐 |
+
+### 14.9 总结建议
+
+当前已修复两条路径：一是“正常中断 launcher”，它会请求 EngineHost 温和退出并释放锁；二是“PyCharm/任务管理器硬杀 launcher 父进程”，Windows 下通过 Job Object 兜底，目标是杜绝后台残留 EngineHost/Desktop。Job Object 不能保证 lifespan 执行，所以仍需要 stale lock 恢复作为兜底。
+
+如果后续要求“父进程被硬杀时也尽量释放锁”，再做 EngineHost server wrapper + 父进程 watcher。Guardian/Broker 是最高覆盖方案，但复杂度明显更高，建议只在发布版质量目标要求时引入。

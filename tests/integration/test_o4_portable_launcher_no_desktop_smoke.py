@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -14,6 +15,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
 from formal_smoke_helpers import free_port, get_json, response_data
 
 
@@ -113,6 +115,67 @@ def test_o4_portable_launcher_no_desktop_runs_enginehost_end_to_end() -> None:
 
     assert "Launcher interrupted by user" in launcher_log_after_stop
     assert "EngineHost stopped" in launcher_log_after_stop
+
+
+def test_o4_portable_launcher_hard_kill_stops_enginehost_on_windows() -> None:
+    if os.name != "nt":
+        pytest.skip("Windows Job Object containment is Windows-only")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    create_portable_layout = _load_create_portable_layout(repo_root)
+    output_dir = (
+        repo_root
+        / ".tmp"
+        / f"FlowWeaverPortableHardKillTest-{uuid.uuid4().hex}"
+    )
+    portable_dir = create_portable_layout(
+        repo_root=repo_root,
+        output_dir=output_dir,
+        include_python=True,
+        include_desktop_build=False,
+    )
+
+    enginehost_dir = portable_dir / "EngineHost"
+    python_exe = enginehost_dir / "python312" / "python.exe"
+    launcher_log_path = (
+        enginehost_dir / "runtime" / "logs" / "portable-launcher.log"
+    )
+    port = free_port()
+    base_url = f"http://127.0.0.1:{port}"
+
+    process: subprocess.Popen[bytes] | None = None
+    enginehost_pid: int | None = None
+
+    try:
+        process = _start_portable_launcher(
+            portable_dir=portable_dir,
+            python_exe=python_exe,
+            port=port,
+        )
+        _wait_for_health(process=process, base_url=base_url)
+        launcher_log = _wait_for_text_or_containment_warning(
+            launcher_log_path,
+            expected="Process containment assigned EngineHost",
+            process=process,
+        )
+        enginehost_pid = _extract_enginehost_pid(launcher_log)
+        if "Process containment assigned EngineHost" not in launcher_log:
+            _stop_launcher_gracefully(process)
+            pytest.skip(
+                "Windows Job Object containment was unavailable in this environment"
+            )
+
+        process.kill()
+        process.communicate(timeout=10)
+
+        _wait_until_health_unreachable(base_url, timeout_seconds=10)
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+        if enginehost_pid is not None and _health_is_reachable(base_url):
+            _force_kill_pid(enginehost_pid)
+        shutil.rmtree(output_dir, ignore_errors=True)
 
 
 def _load_create_portable_layout(repo_root: Path):
@@ -247,6 +310,50 @@ def _wait_for_text(
     )
 
 
+def _wait_for_text_or_containment_warning(
+    path: Path,
+    *,
+    expected: str,
+    process: subprocess.Popen[bytes],
+    timeout_seconds: float = 10,
+) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    content = ""
+    while time.monotonic() < deadline:
+        if path.exists():
+            content = path.read_text(encoding="utf-8", errors="replace")
+            if expected in content or "Process containment warning" in content:
+                return content
+        if process.poll() is not None:
+            raise AssertionError(
+                {
+                    "message": (
+                        f"launcher exited before {expected!r} or containment "
+                        "warning was logged"
+                    ),
+                    "exit_code": process.returncode,
+                    "content": content,
+                }
+            )
+        time.sleep(0.1)
+    raise AssertionError(
+        {
+            "message": (
+                f"timed out waiting for {expected!r} or containment warning"
+            ),
+            "path": str(path),
+            "content": content,
+        }
+    )
+
+
+def _extract_enginehost_pid(launcher_log: str) -> int | None:
+    match = re.search(r"EngineHost pid=(\d+)", launcher_log)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
 def _stop_launcher_gracefully(
     process: subprocess.Popen[bytes],
 ) -> tuple[str, str, int | None]:
@@ -282,9 +389,26 @@ def _wait_until_health_unreachable(
     raise AssertionError("EngineHost health remained reachable after launcher exit")
 
 
+def _health_is_reachable(base_url: str) -> bool:
+    try:
+        _get_json_short(f"{base_url}/api/v1/health", timeout_seconds=0.5)
+    except (OSError, TimeoutError, urllib.error.URLError):
+        return False
+    return True
+
+
 def _get_json_short(url: str, *, timeout_seconds: float = 1) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _force_kill_pid(pid: int) -> None:
+    subprocess.run(
+        ["taskkill", "/F", "/PID", str(pid)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def _pipe_tail(pipe: Any, *, max_chars: int = 2000) -> str:
