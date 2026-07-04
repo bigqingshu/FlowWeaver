@@ -7,7 +7,7 @@ namespace Avalonia_UI.Models;
 
 public sealed class PersistedConnectionSettings
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     public const int MaxRecentBaseUrls = 5;
 
     [JsonPropertyName("schema_version")]
@@ -24,6 +24,9 @@ public sealed class PersistedConnectionSettings
     [JsonPropertyName("token")]
     public string Token { get; init; } = string.Empty;
 
+    [JsonPropertyName("runtime_event_stream_auto_connect")]
+    public bool RuntimeEventStreamAutoConnect { get; init; }
+
     [JsonPropertyName("updated_at_utc")]
     public DateTimeOffset UpdatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 
@@ -35,7 +38,8 @@ public sealed class PersistedConnectionSettings
     public static PersistedConnectionSettings FromBaseUrl(
         string baseUrl,
         string token = "",
-        DateTimeOffset? updatedAtUtc = null)
+        DateTimeOffset? updatedAtUtc = null,
+        bool runtimeEventStreamAutoConnect = false)
     {
         var normalizedBaseUrl = NormalizeBaseUrl(baseUrl)
             ?? EngineHostConnectionSettings.DefaultBaseUrl;
@@ -44,6 +48,7 @@ public sealed class PersistedConnectionSettings
             LastSuccessfulBaseUrl = normalizedBaseUrl,
             RecentBaseUrls = new[] { normalizedBaseUrl },
             Token = NormalizeToken(token),
+            RuntimeEventStreamAutoConnect = runtimeEventStreamAutoConnect,
             UpdatedAtUtc = updatedAtUtc ?? DateTimeOffset.UtcNow,
         };
     }
@@ -77,6 +82,7 @@ public sealed class PersistedConnectionSettings
             LastSuccessfulBaseUrl = normalizedUrls[0],
             RecentBaseUrls = normalizedUrls,
             Token = NormalizeToken(Token),
+            RuntimeEventStreamAutoConnect = RuntimeEventStreamAutoConnect,
             UpdatedAtUtc = UpdatedAtUtc,
         };
     }

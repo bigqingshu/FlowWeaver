@@ -44,6 +44,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int runtimeEventLogLoadVersion;
     private int auditEventLogLoadVersion;
     private bool isSynchronizingShellSelection;
+    private bool runtimeEventStreamAutoConnect;
 
     [ObservableProperty]
     private string baseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
@@ -812,6 +813,13 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         await CheckConnectionCoreAsync(cancellationToken);
+        if (ConnectionStatus == ConnectionStatus.Connected
+            && runtimeEventStreamAutoConnect
+            && !string.IsNullOrWhiteSpace(Token)
+            && CanStartRuntimeEventStream())
+        {
+            await StartRuntimeEventStreamAsync();
+        }
     }
 
     private async Task<bool> TryLoadConnectionSettingsAsync(
@@ -822,6 +830,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var settings = await _connectionSettingsStore.LoadAsync(cancellationToken);
             BaseUrl = settings.LastSuccessfulBaseUrl;
             Token = settings.Token;
+            runtimeEventStreamAutoConnect = settings.RuntimeEventStreamAutoConnect;
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1851,19 +1860,22 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand(CanExecute = nameof(CanStartRuntimeEventStream))]
-    private Task StartRuntimeEventStreamAsync()
+    private async Task StartRuntimeEventStreamAsync()
     {
+        var settings = BuildSettings();
         try
         {
-            _runtimeEventStreamClient.BuildEventsUri(BuildSettings());
+            _runtimeEventStreamClient.BuildEventsUri(settings);
         }
         catch (InvalidOperationException ex)
         {
             RuntimeEventStreamMessage = T("events.stream_config_invalid");
             RuntimeEventStreamErrorMessage = ex.Message;
-            return Task.CompletedTask;
+            return;
         }
 
+        runtimeEventStreamAutoConnect = true;
+        await SaveConnectionSettingsAsync(settings);
         RuntimeEventStreamErrorMessage = null;
         RuntimeEventStreamMessage = T("events.stream_connecting");
         RuntimeEvents.Clear();
@@ -1878,7 +1890,6 @@ public partial class MainWindowViewModel : ViewModelBase
         IsRuntimeEventStreamConnected = false;
         _runtimeEventStreamTask = RunRuntimeEventStreamLoopAsync(
             _runtimeEventStreamCancellation.Token);
-        return Task.CompletedTask;
     }
 
     [RelayCommand(CanExecute = nameof(CanStopRuntimeEventStream))]
@@ -1904,6 +1915,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
         RuntimeEventStreamMessage = T("events.stream_stopped");
         RuntimeEventStreamErrorMessage = null;
+        runtimeEventStreamAutoConnect = false;
+        await SaveConnectionSettingsAsync(BuildSettings());
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshRuntimeEventLog), AllowConcurrentExecutions = true)]
@@ -2723,7 +2736,10 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             await _connectionSettingsStore.SaveAsync(
-                PersistedConnectionSettings.FromBaseUrl(settings.BaseUrl, settings.Token),
+                PersistedConnectionSettings.FromBaseUrl(
+                    settings.BaseUrl,
+                    settings.Token,
+                    runtimeEventStreamAutoConnect: runtimeEventStreamAutoConnect),
                 _shutdown.Token);
         }
         catch (OperationCanceledException) when (_shutdown.Token.IsCancellationRequested)

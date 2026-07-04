@@ -125,16 +125,68 @@ public sealed class MainWindowViewModelRuntimeEventTests
         Assert.AreEqual("Event stream stopped.", viewModel.RuntimeEventStreamMessage);
     }
 
+    [TestMethod]
+    public async Task StartRuntimeEventStreamSavesTokenAndAutoConnectPreference()
+    {
+        var apiClient = new FakeApiClient();
+        var streamClient = new FakeRuntimeEventStreamClient(new FakeRuntimeEventStream());
+        var store = new FakeConnectionSettingsStore();
+        var viewModel = CreateViewModel(apiClient, streamClient, store: store);
+
+        await viewModel.StartRuntimeEventStreamCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => streamClient.ConnectCount == 1);
+
+        Assert.AreEqual(1, store.SaveCount);
+        Assert.AreEqual("http://127.0.0.1:8000", store.SavedSettings?.LastSuccessfulBaseUrl);
+        Assert.AreEqual("secret", store.SavedSettings?.Token);
+        Assert.IsTrue(store.SavedSettings?.RuntimeEventStreamAutoConnect);
+
+        await viewModel.StopRuntimeEventStreamCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, store.SaveCount);
+        Assert.IsFalse(store.SavedSettings?.RuntimeEventStreamAutoConnect);
+    }
+
+    [TestMethod]
+    public async Task LoadConnectionSettingsAutoStartsRuntimeEventStreamWhenPreferenceIsSaved()
+    {
+        var apiClient = new FakeApiClient();
+        var streamClient = new FakeRuntimeEventStreamClient(new FakeRuntimeEventStream());
+        var store = new FakeConnectionSettingsStore
+        {
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl(
+                "http://127.0.0.1:8015",
+                "restored-token",
+                runtimeEventStreamAutoConnect: true),
+        };
+        var viewModel = CreateViewModel(apiClient, streamClient, store: store);
+        viewModel.BaseUrl = EngineHostConnectionSettings.DefaultBaseUrl;
+        viewModel.Token = string.Empty;
+
+        await viewModel.LoadConnectionSettingsAndCheckConnectionAsync();
+        await WaitUntilAsync(() => streamClient.ConnectCount == 1);
+
+        Assert.AreEqual("http://127.0.0.1:8015", viewModel.BaseUrl);
+        Assert.AreEqual("restored-token", viewModel.Token);
+        Assert.IsTrue(viewModel.IsRuntimeEventStreamRunning);
+        Assert.AreEqual("http://127.0.0.1:8015", streamClient.LastSettings?.BaseUrl);
+        Assert.AreEqual("restored-token", streamClient.LastSettings?.Token);
+
+        await viewModel.StopRuntimeEventStreamCommand.ExecuteAsync(null);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
         FakeRuntimeEventStreamClient streamClient,
-        Func<CancellationToken, Task>? reconnectDelay = null)
+        Func<CancellationToken, Task>? reconnectDelay = null,
+        IConnectionSettingsStore? store = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
             apiClient,
             streamClient,
-            reconnectDelay ?? (_ => Task.CompletedTask))
+            reconnectDelay ?? (_ => Task.CompletedTask),
+            connectionSettingsStore: store ?? new FakeConnectionSettingsStore())
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
@@ -225,6 +277,8 @@ public sealed class MainWindowViewModelRuntimeEventTests
 
         public int ConnectCount { get; private set; }
 
+        public EngineHostConnectionSettings? LastSettings { get; private set; }
+
         public Uri BuildEventsUri(EngineHostConnectionSettings settings)
         {
             return settings.BuildRuntimeEventsWebSocketUri();
@@ -236,6 +290,7 @@ public sealed class MainWindowViewModelRuntimeEventTests
         {
             await Task.Yield();
             _ = BuildEventsUri(settings);
+            LastSettings = settings;
             ConnectCount++;
             if (ConnectException is not null)
             {
@@ -279,6 +334,31 @@ public sealed class MainWindowViewModelRuntimeEventTests
         }
     }
 
+    private sealed class FakeConnectionSettingsStore : IConnectionSettingsStore
+    {
+        public PersistedConnectionSettings SettingsToLoad { get; init; } =
+            PersistedConnectionSettings.Default();
+
+        public int SaveCount { get; private set; }
+
+        public PersistedConnectionSettings? SavedSettings { get; private set; }
+
+        public Task<PersistedConnectionSettings> LoadAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(SettingsToLoad);
+        }
+
+        public Task SaveAsync(
+            PersistedConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            SaveCount++;
+            SavedSettings = settings.Normalized();
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class FakeApiClient : IEngineHostApiClient
     {
         public ApiResponseEnvelope<List<WorkflowRunDto>> RunsResponse { get; set; } =
@@ -303,7 +383,9 @@ public sealed class MainWindowViewModelRuntimeEventTests
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            return Task.FromResult(
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>()));
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(

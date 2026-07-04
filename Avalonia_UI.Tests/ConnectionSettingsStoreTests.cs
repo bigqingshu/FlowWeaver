@@ -26,6 +26,7 @@ public sealed class ConnectionSettingsStoreTests
                 "http://127.0.0.1:8000/",
             },
             Token = " secret-token ",
+            RuntimeEventStreamAutoConnect = true,
             UpdatedAtUtc = DateTimeOffset.Parse("2026-06-29T00:00:00Z"),
         };
 
@@ -36,6 +37,7 @@ public sealed class ConnectionSettingsStoreTests
             new[] { "https://engine.local:8443/root", "http://127.0.0.1:8000" },
             normalized.RecentBaseUrls.ToArray());
         Assert.AreEqual("secret-token", normalized.Token);
+        Assert.IsTrue(normalized.RuntimeEventStreamAutoConnect);
         Assert.AreEqual(PersistedConnectionSettings.CurrentSchemaVersion, normalized.SchemaVersion);
     }
 
@@ -80,12 +82,14 @@ public sealed class ConnectionSettingsStoreTests
         var settings = PersistedConnectionSettings.FromBaseUrl(
             "http://127.0.0.1:8000",
             "secret-token",
-            DateTimeOffset.Parse("2026-06-29T00:00:00Z"));
+            DateTimeOffset.Parse("2026-06-29T00:00:00Z"),
+            runtimeEventStreamAutoConnect: true);
 
         var json = JsonSerializer.Serialize(settings, FlowWeaverJson.Options);
 
         StringAssert.Contains(json, "last_successful_base_url");
         StringAssert.Contains(json, "\"token\":\"secret-token\"");
+        StringAssert.Contains(json, "\"runtime_event_stream_auto_connect\":true");
         Assert.IsFalse(json.Contains("authorization", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -110,6 +114,7 @@ public sealed class ConnectionSettingsStoreTests
             LastSuccessfulBaseUrl = "http://127.0.0.1:8010/",
             RecentBaseUrls = new[] { "http://127.0.0.1:8010/", "https://engine.local" },
             Token = "secret-token",
+            RuntimeEventStreamAutoConnect = true,
             UpdatedAtUtc = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
         };
 
@@ -121,6 +126,7 @@ public sealed class ConnectionSettingsStoreTests
             new[] { "http://127.0.0.1:8010", "https://engine.local" },
             loaded.RecentBaseUrls.ToArray());
         Assert.AreEqual("secret-token", loaded.Token);
+        Assert.IsTrue(loaded.RuntimeEventStreamAutoConnect);
         Assert.AreEqual(DateTimeOffset.Parse("2026-06-29T01:02:03Z"), loaded.UpdatedAtUtc);
     }
 
