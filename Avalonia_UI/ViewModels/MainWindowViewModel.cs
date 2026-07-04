@@ -18,6 +18,7 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
 {
     private const int MaxRuntimeEvents = 50;
+    private const int DataPreviewRowLimit = 50;
 
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
@@ -36,6 +37,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int tableRefsLoadVersion;
     private int sharedPublicationsLoadVersion;
     private int sharedPublicationVersionsLoadVersion;
+    private int dataPreviewLoadVersion;
     private int runtimeEventLogLoadVersion;
     private int auditEventLogLoadVersion;
     private bool isSynchronizingShellSelection;
@@ -281,6 +283,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? tableRefErrorMessage;
 
     [ObservableProperty]
+    private bool isLoadingDataPreview;
+
+    [ObservableProperty]
+    private string dataPreviewMessage =
+        "Select a run and workflow node to load data preview.";
+
+    [ObservableProperty]
+    private string? dataPreviewErrorMessage;
+
+    [ObservableProperty]
     private string sharedPublicationShareNameFilter = string.Empty;
 
     [ObservableProperty]
@@ -449,6 +461,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
 
+    public ObservableCollection<string> DataPreviewColumns { get; } = new();
+
+    public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
+        new();
+
     public ObservableCollection<SharedPublicationListItemViewModel> SharedPublications { get; } =
         new();
 
@@ -557,6 +574,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasTableRefError => !string.IsNullOrWhiteSpace(TableRefErrorMessage);
 
+    public bool HasDataPreviewError =>
+        !string.IsNullOrWhiteSpace(DataPreviewErrorMessage);
+
+    public bool HasDataPreviewColumns => DataPreviewColumns.Count > 0;
+
+    public bool HasDataPreviewRows => DataPreviewRows.Count > 0;
+
     public bool HasSharedPublicationError =>
         !string.IsNullOrWhiteSpace(SharedPublicationErrorMessage);
 
@@ -565,6 +589,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsDataBusy =>
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
+
+    public bool IsDataPreviewBusy => IsLoadingDataPreview;
 
     public string AppTitleText => T("app.title");
 
@@ -673,6 +699,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewEmptyText => T("definition.data_preview_empty");
 
     public string DataPreviewPendingText => T("definition.data_preview_pending");
+
+    public string DataPreviewRefreshText => T("definition.data_preview_refresh");
 
     public string NodeInstanceIdText => T("definition.node_instance_id");
 
@@ -1019,6 +1047,14 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanRefreshTableRefs()
     {
         return CanUseEngineActions && SelectedRun is not null && !IsLoadingTableRefs;
+    }
+
+    private bool CanRefreshSelectedWorkflowNodeDataPreview()
+    {
+        return CanUseEngineActions
+            && SelectedRun is not null
+            && SelectedWorkflowDefinitionNode is not null
+            && !IsLoadingDataPreview;
     }
 
     private bool CanRefreshSharedPublications()
@@ -1908,6 +1944,207 @@ public partial class MainWindowViewModel : ViewModelBase
                 IsLoadingTableRefs = false;
             }
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRefreshSelectedWorkflowNodeDataPreview))]
+    private async Task RefreshSelectedWorkflowNodeDataPreviewAsync()
+    {
+        if (SelectedRun is null || SelectedWorkflowDefinitionNode is null)
+        {
+            return;
+        }
+
+        var requestedRunId = SelectedRun.WorkflowRunId;
+        var requestedNodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
+        var requestVersion = ++dataPreviewLoadVersion;
+        IsLoadingDataPreview = true;
+        DataPreviewMessage = F("format.loading_data_preview", requestedNodeInstanceId);
+        DataPreviewErrorMessage = null;
+        ClearDataPreviewRows();
+
+        try
+        {
+            var nodeRunsResponse = await _apiClient.ListNodeRunsAsync(
+                BuildSettings(),
+                requestedRunId,
+                _shutdown.Token);
+
+            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
+            {
+                return;
+            }
+
+            if (!nodeRunsResponse.Ok || nodeRunsResponse.Data is null)
+            {
+                DataPreviewMessage = T("data_preview.refresh_failed");
+                DataPreviewErrorMessage = DescribeError(nodeRunsResponse);
+                return;
+            }
+
+            var nodeRun = nodeRunsResponse.Data.FirstOrDefault(item =>
+                string.Equals(
+                    item.NodeInstanceId,
+                    requestedNodeInstanceId,
+                    StringComparison.Ordinal));
+            if (nodeRun is null)
+            {
+                DataPreviewMessage =
+                    F("format.data_preview_node_run_not_found", requestedNodeInstanceId);
+                return;
+            }
+
+            var tableRefsResponse = await _apiClient.ListTableRefsAsync(
+                BuildSettings(),
+                requestedRunId,
+                _shutdown.Token);
+
+            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
+            {
+                return;
+            }
+
+            if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
+            {
+                DataPreviewMessage = T("data_preview.refresh_failed");
+                DataPreviewErrorMessage = DescribeError(tableRefsResponse);
+                return;
+            }
+
+            var tableRef = tableRefsResponse.Data
+                .Where(item =>
+                    string.Equals(item.NodeRunId, nodeRun.NodeRunId, StringComparison.Ordinal)
+                    && IsReadablePublishedTableRef(item))
+                .OrderByDescending(item => item.Version)
+                .ThenByDescending(item => item.CreatedAt)
+                .FirstOrDefault();
+            if (tableRef is null)
+            {
+                DataPreviewMessage =
+                    F("format.data_preview_table_ref_not_found", requestedNodeInstanceId);
+                return;
+            }
+
+            var rowsResponse = await _apiClient.GetTableDataRowsAsync(
+                BuildSettings(),
+                tableRef.TableRefId,
+                offset: 0,
+                limit: DataPreviewRowLimit,
+                cancellationToken: _shutdown.Token);
+
+            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
+            {
+                return;
+            }
+
+            if (!rowsResponse.Ok || rowsResponse.Data is null)
+            {
+                DataPreviewMessage = T("data_preview.refresh_failed");
+                DataPreviewErrorMessage = DescribeError(rowsResponse);
+                return;
+            }
+
+            LoadDataPreviewRows(rowsResponse.Data);
+            DataPreviewMessage = F(
+                "format.loaded_data_preview",
+                rowsResponse.Data.Rows.Length,
+                rowsResponse.Data.RowCount,
+                tableRef.LogicalTableId);
+        }
+        finally
+        {
+            if (requestVersion == dataPreviewLoadVersion)
+            {
+                IsLoadingDataPreview = false;
+            }
+        }
+    }
+
+    private bool IsStaleDataPreviewRequest(
+        int requestVersion,
+        string requestedRunId,
+        string requestedNodeInstanceId)
+    {
+        return requestVersion != dataPreviewLoadVersion
+            || !string.Equals(
+                SelectedRun?.WorkflowRunId,
+                requestedRunId,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                SelectedWorkflowDefinitionNode?.NodeInstanceId,
+                requestedNodeInstanceId,
+                StringComparison.Ordinal);
+    }
+
+    private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
+    {
+        return string.Equals(
+                tableRef.LifecycleStatus,
+                "PUBLISHED",
+                StringComparison.OrdinalIgnoreCase)
+            && tableRef.Capabilities.Any(capability =>
+                string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ClearDataPreviewRows()
+    {
+        DataPreviewColumns.Clear();
+        DataPreviewRows.Clear();
+        NotifyDataPreviewRowsChanged();
+    }
+
+    private void ResetDataPreviewSelectionState()
+    {
+        dataPreviewLoadVersion++;
+        IsLoadingDataPreview = false;
+        DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
+        DataPreviewErrorMessage = null;
+        ClearDataPreviewRows();
+        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+    }
+
+    private void LoadDataPreviewRows(TableDataRowsDto rows)
+    {
+        DataPreviewColumns.Clear();
+        foreach (var column in rows.Columns)
+        {
+            DataPreviewColumns.Add(column);
+        }
+
+        DataPreviewRows.Clear();
+        foreach (var row in rows.Rows)
+        {
+            DataPreviewRows.Add(
+                new TableDataPreviewRowViewModel(
+                    rows.Columns
+                        .Select(column => FormatDataPreviewCell(row, column))
+                        .ToArray()));
+        }
+
+        NotifyDataPreviewRowsChanged();
+    }
+
+    private void NotifyDataPreviewRowsChanged()
+    {
+        OnPropertyChanged(nameof(HasDataPreviewColumns));
+        OnPropertyChanged(nameof(HasDataPreviewRows));
+    }
+
+    private static string FormatDataPreviewCell(JsonElement row, string column)
+    {
+        if (row.ValueKind != JsonValueKind.Object
+            || !row.TryGetProperty(column, out var value))
+        {
+            return string.Empty;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False =>
+                value.GetRawText(),
+            _ => value.GetRawText(),
+        };
     }
 
     [RelayCommand(CanExecute = nameof(CanRefreshSharedPublications))]
@@ -3179,6 +3416,8 @@ public partial class MainWindowViewModel : ViewModelBase
             ["status.no_runtime_events_loaded"] = T("status.no_runtime_events_loaded"),
             ["status.no_audit_events_loaded"] = T("status.no_audit_events_loaded"),
             ["status.select_run_table_refs"] = T("status.select_run_table_refs"),
+            ["status.select_run_and_workflow_node_data_preview"] =
+                T("status.select_run_and_workflow_node_data_preview"),
             ["status.no_shared_publications_loaded"] = T("status.no_shared_publications_loaded"),
             ["status.select_share_versions"] = T("status.select_share_versions"),
         };
@@ -3266,6 +3505,14 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         if (ShouldRefreshDefault(
+            DataPreviewMessage,
+            previousDefaults,
+            "status.select_run_and_workflow_node_data_preview"))
+        {
+            DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
+        }
+
+        if (ShouldRefreshDefault(
             SharedPublicationMessage,
             previousDefaults,
             "status.no_shared_publications_loaded"))
@@ -3350,6 +3597,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewSectionText));
         OnPropertyChanged(nameof(DataPreviewEmptyText));
         OnPropertyChanged(nameof(DataPreviewPendingText));
+        OnPropertyChanged(nameof(DataPreviewRefreshText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
@@ -3556,9 +3804,11 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasSelectedWorkflowDefinitionNode));
         OnPropertyChanged(nameof(HasNoSelectedWorkflowDefinitionNode));
+        ResetDataPreviewSelectionState();
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
+        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
@@ -3784,6 +4034,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ? T("status.select_run_table_refs")
             : F("format.selected_run_refresh_table_refs", value.WorkflowRunId);
         TableRefErrorMessage = null;
+        ResetDataPreviewSelectionState();
         NotifyEngineActionStateChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
@@ -3844,9 +4095,20 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
     }
 
+    partial void OnIsLoadingDataPreviewChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDataPreviewBusy));
+        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnTableRefErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasTableRefError));
+    }
+
+    partial void OnDataPreviewErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasDataPreviewError));
     }
 
     partial void OnIsLoadingSharedPublicationsChanged(bool value)
@@ -3956,6 +4218,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
         RefreshAuditEventsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
+        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
