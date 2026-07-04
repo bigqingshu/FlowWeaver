@@ -252,9 +252,15 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowPage.axaml");
 
         StringAssert.Contains(xaml, "ColumnDefinitions=\"340,*,340\"");
-        StringAssert.Contains(xaml, "<workflow:WorkflowListView Grid.Column=\"0\" />");
+        StringAssert.Contains(xaml, "RowDefinitions=\"*,Auto\"");
+        StringAssert.Contains(xaml, "RowSpacing=\"16\"");
+        StringAssert.Contains(xaml, "<workflow:WorkflowListView Grid.Column=\"0\"");
+        StringAssert.Contains(xaml, "Grid.RowSpan=\"2\"");
         StringAssert.Contains(xaml, "<workflow:WorkflowSummaryView Grid.Column=\"1\" />");
         StringAssert.Contains(xaml, "<workflow:WorkflowNodeListView Grid.Column=\"2\" />");
+        StringAssert.Contains(xaml, "<workflow:WorkflowDataPreviewView Grid.Row=\"1\"");
+        StringAssert.Contains(xaml, "Grid.Column=\"1\"");
+        StringAssert.Contains(xaml, "Grid.ColumnSpan=\"2\"");
         Assert.IsFalse(xaml.Contains("<workflow:WorkflowEditorView", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("<workflow:WorkflowNodeCatalogView", StringComparison.Ordinal));
     }
@@ -331,9 +337,15 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
-    public void WorkflowNodeListViewHostsReadOnlyDataPreview()
+    public void WorkflowDataPreviewViewHostsReadOnlyDataPreview()
     {
         var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowDataPreviewView.axaml");
+        var nodeListXaml = ReadSourceFile(
             "Avalonia_UI",
             "Views",
             "Components",
@@ -347,11 +359,6 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Command=\"{Binding RefreshSelectedWorkflowNodeDataPreviewCommand}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsDataPreviewBusy}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNoSelectedWorkflowDefinitionNode}\"");
-        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasSelectedWorkflowDefinitionNode}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeInstanceId}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.TypeText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.DisplayNameText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.ConfigJson}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewMessage}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewErrorMessage}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewError}\"");
@@ -361,7 +368,8 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewColumnViewModel\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewRowViewModel\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewCellViewModel\"");
-        StringAssert.Contains(xaml, "MinHeight=\"128\"");
+        StringAssert.Contains(xaml, "MinHeight=\"172\"");
+        Assert.IsFalse(nodeListXaml.Contains("DataPreview", StringComparison.Ordinal));
     }
 
     [TestMethod]
