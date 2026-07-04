@@ -19,32 +19,35 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     {
         var store = new FakeConnectionSettingsStore
         {
-            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl("http://127.0.0.1:8010"),
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl(
+                "http://127.0.0.1:8010",
+                "restored-token"),
         };
         var viewModel = CreateViewModel(new FakeApiClient(), store);
-        viewModel.Token = "secret";
 
         await viewModel.LoadConnectionSettingsAsync();
 
         Assert.AreEqual("http://127.0.0.1:8010", viewModel.BaseUrl);
-        Assert.AreEqual("secret", viewModel.Token);
+        Assert.AreEqual("restored-token", viewModel.Token);
         Assert.AreEqual(1, store.LoadCount);
         Assert.AreEqual(0, store.SaveCount);
     }
 
     [TestMethod]
-    public async Task LoadConnectionSettingsDoesNotRestoreToken()
+    public async Task LoadConnectionSettingsRestoresToken()
     {
         var store = new FakeConnectionSettingsStore
         {
-            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl("http://127.0.0.1:8011"),
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl(
+                "http://127.0.0.1:8011",
+                "persisted-token"),
         };
         var viewModel = CreateViewModel(new FakeApiClient(), store);
 
         await viewModel.LoadConnectionSettingsAsync();
 
         Assert.AreEqual("http://127.0.0.1:8011", viewModel.BaseUrl);
-        Assert.AreEqual(string.Empty, viewModel.Token);
+        Assert.AreEqual("persisted-token", viewModel.Token);
     }
 
     [TestMethod]
@@ -75,7 +78,9 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         };
         var store = new FakeConnectionSettingsStore
         {
-            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl("http://127.0.0.1:8013"),
+            SettingsToLoad = PersistedConnectionSettings.FromBaseUrl(
+                "http://127.0.0.1:8013",
+                "restored-token"),
         };
         var viewModel = CreateViewModel(apiClient, store);
 
@@ -87,8 +92,9 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.AreEqual(1, store.LoadCount);
         Assert.AreEqual(1, store.SaveCount);
         Assert.AreEqual("http://127.0.0.1:8013", store.SavedSettings?.LastSuccessfulBaseUrl);
+        Assert.AreEqual("restored-token", store.SavedSettings?.Token);
         Assert.AreEqual("http://127.0.0.1:8013", apiClient.LastSettings?.BaseUrl);
-        Assert.AreEqual(string.Empty, apiClient.LastSettings?.Token);
+        Assert.AreEqual("restored-token", apiClient.LastSettings?.Token);
     }
 
     [TestMethod]
@@ -154,6 +160,7 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.AreEqual(ConnectionStatus.Connected, viewModel.ConnectionStatus);
         Assert.AreEqual(1, store.SaveCount);
         Assert.AreEqual("http://127.0.0.1:8012", store.SavedSettings?.LastSuccessfulBaseUrl);
+        Assert.AreEqual("secret", store.SavedSettings?.Token);
         Assert.AreEqual("secret", viewModel.Token);
     }
 

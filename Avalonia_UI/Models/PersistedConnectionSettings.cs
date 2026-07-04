@@ -7,7 +7,7 @@ namespace Avalonia_UI.Models;
 
 public sealed class PersistedConnectionSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     public const int MaxRecentBaseUrls = 5;
 
     [JsonPropertyName("schema_version")]
@@ -21,6 +21,9 @@ public sealed class PersistedConnectionSettings
     public IReadOnlyList<string> RecentBaseUrls { get; init; } =
         new[] { EngineHostConnectionSettings.DefaultBaseUrl };
 
+    [JsonPropertyName("token")]
+    public string Token { get; init; } = string.Empty;
+
     [JsonPropertyName("updated_at_utc")]
     public DateTimeOffset UpdatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 
@@ -31,6 +34,7 @@ public sealed class PersistedConnectionSettings
 
     public static PersistedConnectionSettings FromBaseUrl(
         string baseUrl,
+        string token = "",
         DateTimeOffset? updatedAtUtc = null)
     {
         var normalizedBaseUrl = NormalizeBaseUrl(baseUrl)
@@ -39,8 +43,16 @@ public sealed class PersistedConnectionSettings
         {
             LastSuccessfulBaseUrl = normalizedBaseUrl,
             RecentBaseUrls = new[] { normalizedBaseUrl },
+            Token = NormalizeToken(token),
             UpdatedAtUtc = updatedAtUtc ?? DateTimeOffset.UtcNow,
         };
+    }
+
+    public static PersistedConnectionSettings FromBaseUrl(
+        string baseUrl,
+        DateTimeOffset? updatedAtUtc)
+    {
+        return FromBaseUrl(baseUrl, string.Empty, updatedAtUtc);
     }
 
     public PersistedConnectionSettings Normalized()
@@ -64,6 +76,7 @@ public sealed class PersistedConnectionSettings
             SchemaVersion = CurrentSchemaVersion,
             LastSuccessfulBaseUrl = normalizedUrls[0],
             RecentBaseUrls = normalizedUrls,
+            Token = NormalizeToken(Token),
             UpdatedAtUtc = UpdatedAtUtc,
         };
     }
@@ -94,5 +107,10 @@ public sealed class PersistedConnectionSettings
             Query = string.Empty,
             Fragment = string.Empty,
         }.Uri.ToString().TrimEnd('/');
+    }
+
+    private static string NormalizeToken(string? token)
+    {
+        return token?.Trim() ?? string.Empty;
     }
 }

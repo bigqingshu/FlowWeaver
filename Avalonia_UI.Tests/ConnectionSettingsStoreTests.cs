@@ -25,6 +25,7 @@ public sealed class ConnectionSettingsStoreTests
                 "ftp://invalid",
                 "http://127.0.0.1:8000/",
             },
+            Token = " secret-token ",
             UpdatedAtUtc = DateTimeOffset.Parse("2026-06-29T00:00:00Z"),
         };
 
@@ -34,6 +35,7 @@ public sealed class ConnectionSettingsStoreTests
         CollectionAssert.AreEqual(
             new[] { "https://engine.local:8443/root", "http://127.0.0.1:8000" },
             normalized.RecentBaseUrls.ToArray());
+        Assert.AreEqual("secret-token", normalized.Token);
         Assert.AreEqual(PersistedConnectionSettings.CurrentSchemaVersion, normalized.SchemaVersion);
     }
 
@@ -73,16 +75,17 @@ public sealed class ConnectionSettingsStoreTests
     }
 
     [TestMethod]
-    public void PersistedConnectionSettingsJsonDoesNotContainToken()
+    public void PersistedConnectionSettingsJsonRecordsTokenWithoutAuthorizationHeader()
     {
         var settings = PersistedConnectionSettings.FromBaseUrl(
             "http://127.0.0.1:8000",
+            "secret-token",
             DateTimeOffset.Parse("2026-06-29T00:00:00Z"));
 
         var json = JsonSerializer.Serialize(settings, FlowWeaverJson.Options);
 
         StringAssert.Contains(json, "last_successful_base_url");
-        Assert.IsFalse(json.Contains("token", StringComparison.OrdinalIgnoreCase));
+        StringAssert.Contains(json, "\"token\":\"secret-token\"");
         Assert.IsFalse(json.Contains("authorization", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -106,6 +109,7 @@ public sealed class ConnectionSettingsStoreTests
         {
             LastSuccessfulBaseUrl = "http://127.0.0.1:8010/",
             RecentBaseUrls = new[] { "http://127.0.0.1:8010/", "https://engine.local" },
+            Token = "secret-token",
             UpdatedAtUtc = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
         };
 
@@ -116,6 +120,7 @@ public sealed class ConnectionSettingsStoreTests
         CollectionAssert.AreEqual(
             new[] { "http://127.0.0.1:8010", "https://engine.local" },
             loaded.RecentBaseUrls.ToArray());
+        Assert.AreEqual("secret-token", loaded.Token);
         Assert.AreEqual(DateTimeOffset.Parse("2026-06-29T01:02:03Z"), loaded.UpdatedAtUtc);
     }
 

@@ -821,6 +821,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var settings = await _connectionSettingsStore.LoadAsync(cancellationToken);
             BaseUrl = settings.LastSuccessfulBaseUrl;
+            Token = settings.Token;
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2722,7 +2723,7 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             await _connectionSettingsStore.SaveAsync(
-                PersistedConnectionSettings.FromBaseUrl(settings.BaseUrl),
+                PersistedConnectionSettings.FromBaseUrl(settings.BaseUrl, settings.Token),
                 _shutdown.Token);
         }
         catch (OperationCanceledException) when (_shutdown.Token.IsCancellationRequested)
