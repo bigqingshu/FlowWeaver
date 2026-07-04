@@ -102,6 +102,8 @@ class WorkflowRun:
     process_generation: int
     fencing_token: str | None
     input_snapshot_id: str | None
+    run_mode: str
+    target_node_instance_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
     completion_reason: str | None
@@ -463,6 +465,8 @@ class RuntimeStore:
         workflow_run_id: str | None = None,
         status: WorkflowRunStatus = WorkflowRunStatus.PENDING,
         started_at: datetime | None = None,
+        run_mode: str = "full",
+        target_node_instance_id: str | None = None,
     ) -> WorkflowRun:
         if workflow_version is not None:
             raise ValueError("Workflow run version is derived from revision")
@@ -493,6 +497,8 @@ class RuntimeStore:
                 process_generation=0,
                 fencing_token=None,
                 input_snapshot_id=None,
+                run_mode=run_mode,
+                target_node_instance_id=target_node_instance_id,
                 started_at=_optional_datetime_to_text(started_at),
                 finished_at=None,
                 completion_reason=None,
@@ -1834,6 +1840,8 @@ def _workflow_run_from_record(record: WorkflowRunRecord) -> WorkflowRun:
         process_generation=record.process_generation,
         fencing_token=record.fencing_token,
         input_snapshot_id=record.input_snapshot_id,
+        run_mode=record.run_mode,
+        target_node_instance_id=record.target_node_instance_id,
         started_at=_optional_datetime_from_text(record.started_at),
         finished_at=_optional_datetime_from_text(record.finished_at),
         completion_reason=record.completion_reason,

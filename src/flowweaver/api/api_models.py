@@ -35,6 +35,11 @@ class WorkflowUpdateRequest(StrictModel):
     base_revision_id: str | None = None
 
 
+class WorkflowRunStartRequest(StrictModel):
+    run_mode: str = "full"
+    target_node_instance_id: str | None = None
+
+
 class WorkflowDefinitionData(StrictModel):
     workflow_id: str
     name: str
@@ -101,6 +106,8 @@ class WorkflowRunData(StrictModel):
     process_generation: int
     fencing_token: str | None
     input_snapshot_id: str | None
+    run_mode: str
+    target_node_instance_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
     completion_reason: str | None

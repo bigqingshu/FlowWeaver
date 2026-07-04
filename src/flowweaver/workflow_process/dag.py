@@ -58,6 +58,56 @@ def build_workflow_dag(definition: WorkflowDefinitionModel) -> WorkflowDag:
     )
 
 
+def restrict_workflow_dag_to_upstream_closure(
+    dag: WorkflowDag,
+    target_node_instance_id: str,
+) -> WorkflowDag:
+    node_by_id = {node.node_instance_id: node for node in dag.nodes}
+    if target_node_instance_id not in node_by_id:
+        raise ValueError(
+            f"Target node not found in workflow DAG: {target_node_instance_id}"
+        )
+
+    selected: set[str] = set()
+    stack = [target_node_instance_id]
+    while stack:
+        node_id = stack.pop()
+        if node_id in selected:
+            continue
+        selected.add(node_id)
+        stack.extend(node_by_id[node_id].upstream_node_ids)
+
+    ordered_ids = tuple(
+        node_id for node_id in dag.topological_order if node_id in selected
+    )
+    nodes = tuple(
+        DagNode(
+            node_instance_id=node_id,
+            node_type=node_by_id[node_id].node_type,
+            node_version=node_by_id[node_id].node_version,
+            config=node_by_id[node_id].config,
+            upstream_node_ids=tuple(
+                upstream_id
+                for upstream_id in node_by_id[node_id].upstream_node_ids
+                if upstream_id in selected
+            ),
+            downstream_node_ids=tuple(
+                downstream_id
+                for downstream_id in node_by_id[node_id].downstream_node_ids
+                if downstream_id in selected
+            ),
+        )
+        for node_id in ordered_ids
+    )
+    return WorkflowDag(
+        nodes=nodes,
+        topological_order=ordered_ids,
+        ready_node_ids=tuple(
+            node.node_instance_id for node in nodes if not node.upstream_node_ids
+        ),
+    )
+
+
 def _topological_sort(
     node_ids: list[str],
     downstream: dict[str, set[str]],

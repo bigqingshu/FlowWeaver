@@ -607,6 +607,111 @@ def test_start_non_empty_workflow_completes_with_fake_executor(tmp_path: Path) -
     assert process.status == "EXITED"
 
 
+def test_start_workflow_run_accepts_preview_to_node_payload(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={
+                "name": "Preview run",
+                "definition": {
+                    "schema_version": "1.0",
+                    "nodes": [
+                        {
+                            "node_instance_id": "source",
+                            "node_type": "core.source",
+                            "node_version": "1.0",
+                        },
+                        {
+                            "node_instance_id": "transform",
+                            "node_type": "core.transform",
+                            "node_version": "1.0",
+                        },
+                    ],
+                    "connections": [
+                        {
+                            "connection_id": "c1",
+                            "source_node_id": "source",
+                            "source_port": "out",
+                            "target_node_id": "transform",
+                            "target_port": "in",
+                        }
+                    ],
+                },
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    run = response_data(
+        client.post(
+            f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+            json={
+                "run_mode": "preview_to_node",
+                "target_node_instance_id": "transform",
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    loaded = store.get_workflow_run(run["workflow_run_id"])
+    assert run["run_mode"] == "preview_to_node"
+    assert run["target_node_instance_id"] == "transform"
+    assert loaded is not None
+    assert loaded.run_mode == "preview_to_node"
+    assert loaded.target_node_instance_id == "transform"
+
+
+def test_start_workflow_run_rejects_invalid_preview_payload(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+    workflow = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={
+                "name": "Preview run",
+                "definition": {
+                    "schema_version": "1.0",
+                    "nodes": [
+                        {
+                            "node_instance_id": "source",
+                            "node_type": "core.source",
+                            "node_version": "1.0",
+                        }
+                    ],
+                    "connections": [],
+                },
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    unsupported = client.post(
+        f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+        json={"run_mode": "unknown"},
+        headers=auth_headers(),
+    )
+    missing_target = client.post(
+        f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+        json={"run_mode": "preview_to_node"},
+        headers=auth_headers(),
+    )
+    unknown_target = client.post(
+        f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+        json={
+            "run_mode": "preview_to_node",
+            "target_node_instance_id": "missing",
+        },
+        headers=auth_headers(),
+    )
+
+    assert unsupported.status_code == 422
+    assert unsupported.json()["error"]["error_code"] == "WORKFLOW_RUN_MODE_UNSUPPORTED"
+    assert missing_target.status_code == 422
+    assert missing_target.json()["error"]["error_code"] == "TARGET_NODE_REQUIRED"
+    assert unknown_target.status_code == 404
+    assert unknown_target.json()["error"]["error_code"] == "TARGET_NODE_NOT_FOUND"
+
+
 def test_cancel_run_marks_process_cancel_requested(tmp_path: Path) -> None:
     client, store, _container = make_client(tmp_path)
     workflow = store.create_workflow_definition(

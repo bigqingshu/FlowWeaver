@@ -1007,6 +1007,92 @@ def test_workflow_process_executes_ready_nodes_with_default_subprocess_executor(
     ]
 
 
+def test_workflow_process_preview_to_node_runs_only_upstream_closure(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Preview to node workflow",
+        definition={
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "transform",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "publish",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [
+                {
+                    "connection_id": "c1",
+                    "source_node_id": "source",
+                    "source_port": "out",
+                    "target_node_id": "transform",
+                    "target_port": "in",
+                },
+                {
+                    "connection_id": "c2",
+                    "source_node_id": "transform",
+                    "source_port": "out",
+                    "target_node_id": "publish",
+                    "target_port": "in",
+                },
+            ],
+        },
+        workflow_id="workflow-preview",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-preview",
+        run_mode="preview_to_node",
+        target_node_instance_id="transform",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-preview",
+    )
+    assert process is not None
+    executor = NodeOutcomeExecutor()
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    loaded_run = store.get_workflow_run(run.workflow_run_id)
+    node_runs = {
+        node.node_instance_id: node.status
+        for node in store.list_node_runs(run.workflow_run_id)
+    }
+    started_event = store.list_runtime_events()[0]
+    assert exit_code == 0
+    assert loaded_run is not None
+    assert loaded_run.status == "SUCCEEDED"
+    assert loaded_run.run_mode == "preview_to_node"
+    assert loaded_run.target_node_instance_id == "transform"
+    assert node_runs == {
+        "source": "SUCCEEDED",
+        "transform": "SUCCEEDED",
+    }
+    assert executor.executed_nodes == ["source", "transform"]
+    assert started_event.payload["run_mode"] == "preview_to_node"
+    assert started_event.payload["target_node_instance_id"] == "transform"
+
+
 def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
     tmp_path: Path,
 ) -> None:

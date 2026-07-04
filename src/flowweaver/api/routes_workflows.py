@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Body, Depends, Request
 
 from flowweaver.api.api_models import (
     APIResponseModel,
     WorkflowCreateRequest,
+    WorkflowRunStartRequest,
     WorkflowUpdateRequest,
     WorkflowValidateRequest,
 )
@@ -22,6 +23,7 @@ from flowweaver.engine.runtime_store import RuntimeStore, WorkflowRevisionConfli
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.nodes.registry import NodeRegistry
 from flowweaver.protocols.enums import WorkflowRunStatus
+from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow.validation import validate_workflow_definition
 
 router = APIRouter(
@@ -95,6 +97,7 @@ def start_workflow_run(
     workflow_id: str,
     store: Annotated[RuntimeStore, Depends(get_runtime_store)],
     supervisor: Annotated[Supervisor, Depends(get_supervisor)],
+    payload: Annotated[WorkflowRunStartRequest | None, Body()] = None,
 ):
     workflow = store.get_workflow_definition(workflow_id)
     if workflow is None:
@@ -104,10 +107,51 @@ def start_workflow_run(
             message="Workflow not found",
             status_code=404,
         )
+    run_mode = payload.run_mode if payload is not None else "full"
+    target_node_instance_id = (
+        payload.target_node_instance_id if payload is not None else None
+    )
+    if run_mode not in {"full", "preview_to_node"}:
+        return error_response(
+            request,
+            error_code="WORKFLOW_RUN_MODE_UNSUPPORTED",
+            message="Workflow run mode is not supported",
+            status_code=422,
+            details={"run_mode": run_mode},
+        )
+    if run_mode == "full" and target_node_instance_id is not None:
+        return error_response(
+            request,
+            error_code="WORKFLOW_RUN_TARGET_UNSUPPORTED",
+            message="Full workflow run does not accept target_node_instance_id",
+            status_code=422,
+        )
+    if run_mode == "preview_to_node":
+        if not target_node_instance_id:
+            return error_response(
+                request,
+                error_code="TARGET_NODE_REQUIRED",
+                message="target_node_instance_id is required for preview_to_node",
+                status_code=422,
+            )
+        definition = WorkflowDefinitionModel.model_validate(workflow.definition)
+        if not any(
+            node.enabled and node.node_instance_id == target_node_instance_id
+            for node in definition.nodes
+        ):
+            return error_response(
+                request,
+                error_code="TARGET_NODE_NOT_FOUND",
+                message="Target node was not found in workflow definition",
+                status_code=404,
+                details={"target_node_instance_id": target_node_instance_id},
+            )
     run = store.create_workflow_run(
         workflow_id=workflow.workflow_id,
         revision_id=workflow.revision_id,
         status=WorkflowRunStatus.PENDING,
+        run_mode=run_mode,
+        target_node_instance_id=target_node_instance_id,
     )
     try:
         supervisor.start_workflow_process(run.workflow_run_id)

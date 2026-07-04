@@ -59,7 +59,11 @@ from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
 )
-from flowweaver.workflow_process.dag import WorkflowDag, build_workflow_dag
+from flowweaver.workflow_process.dag import (
+    WorkflowDag,
+    build_workflow_dag,
+    restrict_workflow_dag_to_upstream_closure,
+)
 from flowweaver.workflow_process.executor_pool import (
     DispatchedNodeTask,
     ExecutorTaskCompletion,
@@ -341,11 +345,37 @@ def _run_workflow_process_loop(
         EventModel(
             event_type=EventType.WORKFLOW_STARTED,
             workflow_run_id=workflow_run_id,
-            payload={"process_id": process_id},
+            payload={
+                "process_id": process_id,
+                "run_mode": run.run_mode,
+                "target_node_instance_id": run.target_node_instance_id,
+            },
         )
     )
 
     dag = build_workflow_dag(definition)
+    if run.run_mode == "preview_to_node":
+        if not run.target_node_instance_id:
+            return _fail(
+                store,
+                workflow_run_id,
+                process_id,
+                "target_node_instance_id is required for preview_to_node",
+                process_generation=process_generation,
+            )
+        try:
+            dag = restrict_workflow_dag_to_upstream_closure(
+                dag,
+                run.target_node_instance_id,
+            )
+        except ValueError as exc:
+            return _fail(
+                store,
+                workflow_run_id,
+                process_id,
+                str(exc),
+                process_generation=process_generation,
+            )
     if not dag.nodes:
         return _complete_empty_workflow(
             store,
