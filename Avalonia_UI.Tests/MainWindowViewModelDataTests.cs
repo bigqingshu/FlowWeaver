@@ -198,6 +198,51 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task SameRunStatusRefreshKeepsSelectedNodeDataPreview()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-1", "run-1", "generate"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        Assert.IsTrue(viewModel.HasDataPreviewColumns);
+        Assert.IsTrue(viewModel.HasDataPreviewRows);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-2", "wf-1"));
+
+        Assert.IsFalse(viewModel.HasDataPreviewColumns);
+        Assert.IsFalse(viewModel.HasDataPreviewRows);
+        Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
+    }
+
+    [TestMethod]
     public async Task RefreshSelectedWorkflowNodeDataPreviewReportsMissingOutputTable()
     {
         var apiClient = new FakeApiClient
