@@ -230,6 +230,44 @@
 - 不影响预览选中节点、运行工作流、保存 revision 等既有链路。
 - 未实现的线性自动重排连接作为后续阶段保留。
 
+## WORKFLOW-UX-3.7 验收复核记录
+
+复核日期：2026-07-04
+
+### 完成矩阵
+
+| 小阶段 | 状态 | 提交 |
+| --- | --- | --- |
+| WORKFLOW-UX-3.0 语义清单 | 已完成 | `78a36d0 文档：固化工作流节点编辑体验增强清单` |
+| WORKFLOW-UX-3.1 复制节点 patcher | 已完成 | `83bc3c0 实现工作流草稿复制节点基础能力` |
+| WORKFLOW-UX-3.2 复制节点 UI 接入 | 已完成 | `83aaf20 接入工作流复制节点操作` |
+| WORKFLOW-UX-3.3 批量选择前置模型 | 已完成 | `f5f720a 接入工作流节点批量选择状态` |
+| WORKFLOW-UX-3.4 批量删除 | 已完成 | `85d5007 接入工作流节点批量删除操作` |
+| WORKFLOW-UX-3.5 上移/下移语义收口 | 已完成 | `629f259 收口工作流节点移动列表语义` |
+| WORKFLOW-UX-3.6 添加节点弹窗化 | 已完成 | `f889e8e 实现新增节点内联面板入口` |
+
+### 验收结果
+
+- 复制节点：已支持复制当前选中节点，生成唯一 `node_instance_id`，插入到源节点后，并保持复杂连接不被错误复制。
+- 批量删除：已支持基于复选状态删除多个节点，并同步移除 source 或 target 命中被删节点的 `connections`。
+- 上移/下移：已明确为调整 `nodes` 数组显示顺序，不改变运行依赖 DAG，不自动改写 `connections`。
+- 添加节点：已从中间列常驻表单调整为右侧工作流节点区域内联面板入口；新增成功关闭，失败保留输入和面板。
+- 高级连接信息：仍保持默认收起，不作为普通编辑入口。
+- 保存链路：仍通过现有 workflow definition revision 更新接口，后端继续作为最终校验边界。
+
+### 测试结果
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~WorkflowSummaryViewHeadlessSmokeTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests"`：120 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj`：326 passed。
+
+### 后续明确保留
+
+- 不在本阶段实现自由画布、拖拽连线、多入多出 DAG 自动重排。
+- 不在本阶段实现上移/下移自动改写 `connections`。
+- 不在本阶段实现复制复杂连接拓扑。
+- 不在本阶段实现撤销/重做。
+- 线性模式自动重排连接、批量操作撤销、节点拖拽排序、节点配置 schema 表单化可作为后续独立阶段评估。
+
 ## 第一版明确不支持
 
 - 自由画布式节点编排。
