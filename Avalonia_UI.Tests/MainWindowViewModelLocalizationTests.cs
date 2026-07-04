@@ -43,7 +43,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);
         Assert.AreEqual(
-            "当前显示选中节点与配置摘要，运行数据预览将在后续阶段接入。",
+            "选择运行和工作流节点后，可刷新查看该节点输出表的前 50 行。",
             viewModel.DataPreviewPendingText);
         Assert.AreEqual("刷新预览", viewModel.DataPreviewRefreshText);
         Assert.AreEqual("节点实例 ID", viewModel.NodeInstanceIdText);

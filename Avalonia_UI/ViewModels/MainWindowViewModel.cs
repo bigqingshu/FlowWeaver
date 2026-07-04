@@ -461,7 +461,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
 
-    public ObservableCollection<string> DataPreviewColumns { get; } = new();
+    public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewColumns { get; } = new();
 
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
@@ -2107,7 +2107,7 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewColumns.Clear();
         foreach (var column in rows.Columns)
         {
-            DataPreviewColumns.Add(column);
+            DataPreviewColumns.Add(new TableDataPreviewColumnViewModel(column));
         }
 
         DataPreviewRows.Clear();
@@ -2116,7 +2116,10 @@ public partial class MainWindowViewModel : ViewModelBase
             DataPreviewRows.Add(
                 new TableDataPreviewRowViewModel(
                     rows.Columns
-                        .Select(column => FormatDataPreviewCell(row, column))
+                        .Select(
+                            column =>
+                                new TableDataPreviewCellViewModel(
+                                    FormatDataPreviewCell(row, column)))
                         .ToArray()));
         }
 

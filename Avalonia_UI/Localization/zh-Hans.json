@@ -68,7 +68,7 @@
   "definition.node_actions": "节点操作",
   "definition.data_preview": "数据预览",
   "definition.data_preview_empty": "选择一个工作流节点以查看预览。",
-  "definition.data_preview_pending": "当前显示选中节点与配置摘要，运行数据预览将在后续阶段接入。",
+  "definition.data_preview_pending": "选择运行和工作流节点后，可刷新查看该节点输出表的前 50 行。",
   "definition.data_preview_refresh": "刷新预览",
   "definition.node_instance_id": "节点实例 ID",
   "definition.node_type": "节点类型",

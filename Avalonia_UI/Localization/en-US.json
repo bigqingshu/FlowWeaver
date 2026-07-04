@@ -68,7 +68,7 @@
   "definition.node_actions": "Node actions",
   "definition.data_preview": "Data preview",
   "definition.data_preview_empty": "Select a workflow node to inspect the preview.",
-  "definition.data_preview_pending": "This stage shows the selected node and config summary. Runtime data preview will be connected later.",
+  "definition.data_preview_pending": "Select a run and workflow node, then refresh to inspect the first 50 output rows.",
   "definition.data_preview_refresh": "Refresh preview",
   "definition.node_instance_id": "Node instance ID",
   "definition.node_type": "Node type",

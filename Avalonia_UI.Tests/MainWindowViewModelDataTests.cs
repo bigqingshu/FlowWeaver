@@ -150,11 +150,11 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(0, apiClient.LastTableRowsOffset);
         Assert.AreEqual(50, apiClient.LastTableRowsLimit);
         Assert.HasCount(2, viewModel.DataPreviewColumns);
-        Assert.AreEqual("row_id", viewModel.DataPreviewColumns[0]);
+        Assert.AreEqual("row_id", viewModel.DataPreviewColumns[0].Name);
         Assert.HasCount(1, viewModel.DataPreviewRows);
         CollectionAssert.AreEqual(
             new[] { "1", "12.5" },
-            viewModel.DataPreviewRows[0].Cells.ToArray());
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.IsTrue(viewModel.HasDataPreviewColumns);
         Assert.IsTrue(viewModel.HasDataPreviewRows);
         Assert.IsFalse(viewModel.HasDataPreviewError);
