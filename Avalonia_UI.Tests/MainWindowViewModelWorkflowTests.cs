@@ -2811,24 +2811,33 @@ public sealed class MainWindowViewModelWorkflowTests
                 }),
             RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
                 new List<WorkflowRunDto> { Run("run-preview", "wf-1", "PENDING") }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-old", "run-old", "generate", "SUCCEEDED", 1, "done") }),
             TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
-                new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-1") }),
+                new List<TableRefDto> { TableRef("table-old", "run-old", "node-run-old") }),
             TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
                 TableRows(
-                    "table-1",
+                    "table-old",
                     ["row_id", "amount"],
                     [
-                        JsonDocument.Parse("""{"row_id":2,"amount":20}""")
+                        JsonDocument.Parse("""{"row_id":99,"amount":990}""")
                             .RootElement
                             .Clone(),
                     ],
                     rowCount: 1)),
         };
-        apiClient.NodeRunsResponses.Enqueue(
-            ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>()));
-        apiClient.NodeRunsResponses.Enqueue(
-            ApiResponseEnvelope<List<NodeRunDto>>.Success(
-                new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }));
+        var previewTableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-1") });
+        var previewTableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                "table-1",
+                ["row_id", "amount"],
+                [
+                    JsonDocument.Parse("""{"row_id":2,"amount":20}""")
+                        .RootElement
+                        .Clone(),
+                ],
+                rowCount: 1));
         var previewRetryDelayCount = 0;
         var viewModel = CreateViewModel(
             apiClient,
@@ -2840,15 +2849,92 @@ public sealed class MainWindowViewModelWorkflowTests
 
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-old", "wf-1", "SUCCEEDED"));
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "99", "990" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+
+        apiClient.NodeRunsResponses.Enqueue(
+            ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>()));
+        apiClient.NodeRunsResponses.Enqueue(
+            ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }));
+        apiClient.TableRefsResponse = previewTableRefsResponse;
+        apiClient.TableRowsResponse = previewTableRowsResponse;
+
         await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
 
-        Assert.AreEqual(2, apiClient.ListNodeRunsCallCount);
+        Assert.AreEqual(3, apiClient.ListNodeRunsCallCount);
         Assert.AreEqual(1, previewRetryDelayCount);
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.HasCount(1, viewModel.DataPreviewRows);
         CollectionAssert.AreEqual(
             new[] { "2", "20" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
+    public async Task PreviewSelectedWorkflowNodeKeepsPreviousPreviewWhenStarted()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                "START_FAILED",
+                "Preview start failed."),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-old", "run-old", "generate", "SUCCEEDED", 1, "done") }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto> { TableRef("table-old", "run-old", "node-run-old") }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-old",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":99,"amount":990}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-old", "wf-1", "SUCCEEDED"));
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "99", "990" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual("Selected node preview failed.", viewModel.DataPreviewMessage);
+        Assert.AreEqual("START_FAILED: Preview start failed.", viewModel.DataPreviewErrorMessage);
     }
 
     [TestMethod]

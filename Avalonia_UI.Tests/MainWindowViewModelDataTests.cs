@@ -245,8 +245,22 @@ public sealed class MainWindowViewModelDataTests
 
         Assert.IsEmpty(viewModel.NodeRuns);
         Assert.IsEmpty(viewModel.TableRefs);
-        Assert.IsFalse(viewModel.HasDataPreviewColumns);
-        Assert.IsFalse(viewModel.HasDataPreviewRows);
+        Assert.IsTrue(viewModel.HasDataPreviewColumns);
+        Assert.IsTrue(viewModel.HasDataPreviewRows);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
+
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("filter");
+
+        Assert.IsTrue(viewModel.HasDataPreviewColumns);
+        Assert.IsTrue(viewModel.HasDataPreviewRows);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
     }
 

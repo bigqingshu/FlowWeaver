@@ -2036,9 +2036,14 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRefreshSelectedWorkflowNodeDataPreview))]
     private async Task RefreshSelectedWorkflowNodeDataPreviewAsync()
     {
+        await TryRefreshSelectedWorkflowNodeDataPreviewAsync();
+    }
+
+    private async Task<bool> TryRefreshSelectedWorkflowNodeDataPreviewAsync()
+    {
         if (SelectedRun is null || SelectedWorkflowDefinitionNode is null)
         {
-            return;
+            return false;
         }
 
         var requestedRunId = SelectedRun.WorkflowRunId;
@@ -2057,14 +2062,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
             {
-                return;
+                return false;
             }
 
             if (!nodeRunsResponse.Ok || nodeRunsResponse.Data is null)
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(nodeRunsResponse);
-                return;
+                return false;
             }
 
             var nodeRun = nodeRunsResponse.Data.FirstOrDefault(item =>
@@ -2076,7 +2081,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage =
                     F("format.data_preview_node_run_not_found", requestedNodeInstanceId);
-                return;
+                return false;
             }
 
             var tableRefsResponse = await _apiClient.ListTableRefsAsync(
@@ -2086,14 +2091,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
             {
-                return;
+                return false;
             }
 
             if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(tableRefsResponse);
-                return;
+                return false;
             }
 
             var tableRef = tableRefsResponse.Data
@@ -2107,7 +2112,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage =
                     F("format.data_preview_table_ref_not_found", requestedNodeInstanceId);
-                return;
+                return false;
             }
 
             var rowsResponse = await _apiClient.GetTableDataRowsAsync(
@@ -2119,14 +2124,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
             {
-                return;
+                return false;
             }
 
             if (!rowsResponse.Ok || rowsResponse.Data is null)
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(rowsResponse);
-                return;
+                return false;
             }
 
             LoadDataPreviewRows(rowsResponse.Data);
@@ -2135,6 +2140,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 rowsResponse.Data.Rows.Length,
                 rowsResponse.Data.RowCount,
                 tableRef.LogicalTableId);
+            return true;
         }
         finally
         {
@@ -2151,12 +2157,13 @@ public partial class MainWindowViewModel : ViewModelBase
         for (var attempt = 0; attempt < DataPreviewRunRefreshAttemptCount; attempt++)
         {
             await LoadRunsAsync(workflowRunId);
+            var loadedCurrentPreview = false;
             if (CanRefreshSelectedWorkflowNodeDataPreview())
             {
-                await RefreshSelectedWorkflowNodeDataPreviewAsync();
+                loadedCurrentPreview = await TryRefreshSelectedWorkflowNodeDataPreviewAsync();
             }
 
-            if (HasDataPreviewColumns)
+            if (loadedCurrentPreview)
             {
                 return;
             }
@@ -2253,20 +2260,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
     }
 
-    private void ClearDataPreviewRows()
-    {
-        DataPreviewColumns.Clear();
-        DataPreviewRows.Clear();
-        NotifyDataPreviewRowsChanged();
-    }
-
     private void ResetDataPreviewSelectionState()
     {
         dataPreviewLoadVersion++;
         IsLoadingDataPreview = false;
         DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
         DataPreviewErrorMessage = null;
-        ClearDataPreviewRows();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
     }
 
