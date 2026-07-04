@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import Request
 
 from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
 
@@ -17,6 +18,12 @@ def get_container(request: Request) -> ServiceContainer:
 
 def get_runtime_store(request: Request) -> RuntimeStore:
     return get_container(request).runtime_store
+
+
+def get_runtime_table_provider(request: Request) -> SQLiteRuntimeTableProvider:
+    return SQLiteRuntimeTableProvider(
+        get_container(request).config.resolved_runtime_dir()
+    )
 
 
 def get_node_registry(request: Request):

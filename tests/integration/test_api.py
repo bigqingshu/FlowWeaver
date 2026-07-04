@@ -15,6 +15,7 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
+from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
@@ -815,6 +816,181 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     assert versions[0]["share_name"] == "daily_report"
     assert versions[0]["publication_version"] == 1
     assert versions[0]["members"][0]["table_ref_id"] == table_ref.table_ref_id
+
+
+def test_data_api_reads_table_ref_schema_summary_and_limited_rows(
+    tmp_path: Path,
+) -> None:
+    client, store, container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Data preview",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-1",
+    )
+    provider = SQLiteRuntimeTableProvider(container.config.resolved_runtime_dir())
+    schema = [
+        FieldSchemaModel(
+            field_id="orders-row-id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        ),
+        FieldSchemaModel(
+            field_id="orders-amount",
+            name="amount",
+            data_type="FLOAT",
+            nullable=False,
+            ordinal=1,
+        ),
+        FieldSchemaModel(
+            field_id="orders-category",
+            name="category",
+            data_type="TEXT",
+            nullable=False,
+            ordinal=2,
+        ),
+    ]
+    staging = provider.create_staging_table(
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        output_name="orders",
+        schema=schema,
+    )
+    provider.insert_rows(
+        staging,
+        [
+            {"row_id": 1, "amount": 12.5, "category": "keep"},
+            {"row_id": 2, "amount": 3.0, "category": "drop"},
+            {"row_id": 3, "amount": 18.0, "category": "keep"},
+        ],
+    )
+    published = provider.published_ref_from_staging(staging)
+    provider.publish_staging(staging, published)
+    store.register_table_ref(published)
+
+    detail = response_data(
+        client.get(
+            f"/api/v1/data/{published.table_ref_id}",
+            headers=auth_headers(),
+        )
+    )
+    schema_response = response_data(
+        client.get(
+            f"/api/v1/data/{published.table_ref_id}/schema",
+            headers=auth_headers(),
+        )
+    )
+    summary = response_data(
+        client.get(
+            f"/api/v1/data/{published.table_ref_id}/summary",
+            headers=auth_headers(),
+        )
+    )
+    rows = response_data(
+        client.get(
+            f"/api/v1/data/{published.table_ref_id}/rows",
+            params=[
+                ("offset", "1"),
+                ("limit", "1"),
+                ("columns", "row_id"),
+                ("columns", "amount"),
+                ("order_by", "row_id"),
+            ],
+            headers=auth_headers(),
+        )
+    )
+
+    assert detail["table_ref_id"] == published.table_ref_id
+    assert "opaque_handle" not in detail
+    assert schema_response["schema_fingerprint"] == published.schema_fingerprint
+    assert [field["name"] for field in schema_response["schema"]] == [
+        "row_id",
+        "amount",
+        "category",
+    ]
+    assert summary == {
+        "table_ref_id": published.table_ref_id,
+        "workflow_run_id": run.workflow_run_id,
+        "node_run_id": node.node_run_id,
+        "logical_table_id": "orders",
+        "storage_kind": "RUNTIME_SQL",
+        "lifecycle_status": "PUBLISHED",
+        "version": 2,
+        "schema_fingerprint": published.schema_fingerprint,
+        "capabilities": ["READ"],
+        "row_count": 3,
+    }
+    assert rows == {
+        "table_ref_id": published.table_ref_id,
+        "offset": 1,
+        "limit": 1,
+        "row_count": 3,
+        "columns": ["row_id", "amount"],
+        "rows": [{"row_id": 2, "amount": 3.0}],
+        "has_more": True,
+    }
+
+
+def test_data_api_rejects_missing_and_invalid_table_ref_reads(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Data preview",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-1",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-1",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+    )
+    store.register_table_ref(table_ref)
+
+    missing = response_error(
+        client.get("/api/v1/data/missing/rows", headers=auth_headers())
+    )
+    invalid_column = response_error(
+        client.get(
+            f"/api/v1/data/{table_ref.table_ref_id}/rows",
+            params=[("columns", "missing")],
+            headers=auth_headers(),
+        )
+    )
+    invalid_limit = response_error(
+        client.get(
+            f"/api/v1/data/{table_ref.table_ref_id}/rows",
+            params={"limit": "0"},
+            headers=auth_headers(),
+        )
+    )
+
+    assert missing["error_code"] == "TABLE_REF_NOT_FOUND"
+    assert invalid_column["error_code"] == "DATA_READ_REJECTED"
+    assert invalid_limit["error_code"] == "VALIDATION_ERROR"
 
 
 def test_create_app_can_migrate_default_store(tmp_path: Path) -> None:
