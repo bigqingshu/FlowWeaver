@@ -78,6 +78,10 @@
                             Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
                             MinWidth="104"
                             Margin="0,0,8,8"/>
+                    <Button Content="{Binding DeleteSelectedNodesText}"
+                            Command="{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}"
+                            MinWidth="104"
+                            Margin="0,0,8,8"/>
                     <primitives:ToggleButton Content="{Binding ShowAdvancedDraftJsonText}"
                                              IsChecked="{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}"
                                              MinWidth="128"

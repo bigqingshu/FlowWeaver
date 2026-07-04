@@ -49,9 +49,16 @@ public sealed class JsonLocalizationServiceTests
             "节点已在草稿中移动。保存前请重新校验。",
             service.GetString("definition.node_moved"));
         Assert.AreEqual("复制节点", service.GetString("definition.copy_node"));
+        Assert.AreEqual("删除已选", service.GetString("definition.delete_selected_nodes"));
         Assert.AreEqual(
             "已选择 2 个节点",
             service.Format("definition.batch_selected_nodes", 2));
+        Assert.AreEqual(
+            "已从草稿删除 2 个节点。保存前请重新校验。",
+            service.Format("format.workflow_definition_nodes_deleted", 2));
+        Assert.AreEqual(
+            "已从草稿删除 2 个节点，并同步移除相关连接。保存前请重新校验。",
+            service.Format("format.workflow_definition_nodes_deleted_with_connections", 2));
         Assert.AreEqual(
             "节点已复制到草稿。保存前请重新校验。",
             service.GetString("definition.node_copied"));

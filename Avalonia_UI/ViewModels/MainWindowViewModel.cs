@@ -706,6 +706,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DeleteNodeText => T("definition.delete_node");
 
+    public string DeleteSelectedNodesText => T("definition.delete_selected_nodes");
+
     public string MoveNodeUpText => T("definition.move_node_up");
 
     public string MoveNodeDownText => T("definition.move_node_down");
@@ -961,6 +963,18 @@ public partial class MainWindowViewModel : ViewModelBase
             && !IsWorkflowDefinitionDraftBusy
             && !HasWorkflowDefinitionRevisionConflict
             && FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is not null;
+    }
+
+    private bool CanDeleteSelectedWorkflowDefinitionDraftNodes()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict
+            && WorkflowDefinitionDraftNodes.Any(node =>
+                node.IsBatchSelected
+                && FindDraftNode(node.NodeInstanceId) is not null);
     }
 
     private bool CanCopyWorkflowDefinitionDraftNode()
@@ -1589,6 +1603,40 @@ public partial class MainWindowViewModel : ViewModelBase
             patchResult.RemovedConnections.Count > 0
                 ? T("definition.node_deleted_with_connections")
                 : T("definition.node_deleted");
+        WorkflowDefinitionValidationErrorMessage =
+            FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowDefinitionDraftNodes))]
+    private void DeleteSelectedWorkflowDefinitionDraftNodes()
+    {
+        var selectedNodeIds = WorkflowDefinitionDraftNodes
+            .Where(node => node.IsBatchSelected)
+            .Select(node => node.NodeInstanceId)
+            .ToArray();
+        if (selectedNodeIds.Length == 0)
+        {
+            return;
+        }
+
+        var patchResult = WorkflowDefinitionDraftNodePatcher.DeleteNodes(
+            WorkflowDefinitionDraftJson,
+            selectedNodeIds);
+        if (!patchResult.Succeeded)
+        {
+            WorkflowDefinitionValidationMessage = T("definition.node_delete_failed");
+            WorkflowDefinitionValidationErrorMessage =
+                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            return;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        WorkflowDefinitionValidationMessage =
+            patchResult.RemovedConnections.Count > 0
+                ? F(
+                    "format.workflow_definition_nodes_deleted_with_connections",
+                    selectedNodeIds.Length)
+                : F("format.workflow_definition_nodes_deleted", selectedNodeIds.Length);
         WorkflowDefinitionValidationErrorMessage =
             FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
     }
@@ -3013,6 +3061,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCount));
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
+        DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
     }
 
     private void ResetNewDraftConnectionInput()
@@ -3898,6 +3947,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(AddNodeText));
         OnPropertyChanged(nameof(CopyNodeText));
         OnPropertyChanged(nameof(DeleteNodeText));
+        OnPropertyChanged(nameof(DeleteSelectedNodesText));
         OnPropertyChanged(nameof(MoveNodeUpText));
         OnPropertyChanged(nameof(MoveNodeDownText));
         OnPropertyChanged(nameof(NodeActionsSectionText));
@@ -4234,6 +4284,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         CopyWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
+        DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeUpCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeDownCommand.NotifyCanExecuteChanged();
     }

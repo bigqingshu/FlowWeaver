@@ -503,6 +503,74 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void DeleteNodesRemovesMultipleNodesAndRelatedConnections()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.DeleteNodes(
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "join"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_join", "source_node_id": "filter", "source_port": "out", "target_node_id": "join", "target_port": "left"},
+                {"connection_id": "join_to_sink", "source_node_id": "join", "source_port": "out", "target_node_id": "sink", "target_port": "in"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ],
+              "metadata": {"owner": "tester"}
+            }
+            """,
+            ["filter", "join"]);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.Succeeded, result.Status);
+        Assert.IsNull(result.Warning);
+        Assert.HasCount(3, result.RemovedConnections);
+        Assert.AreEqual("source_to_filter", result.RemovedConnections[0].ConnectionId);
+        Assert.AreEqual("filter_to_join", result.RemovedConnections[1].ConnectionId);
+        Assert.AreEqual("join_to_sink", result.RemovedConnections[2].ConnectionId);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var root = updated.RootElement;
+        Assert.AreEqual("tester", root.GetProperty("metadata").GetProperty("owner").GetString());
+
+        var nodes = root.GetProperty("nodes");
+        Assert.AreEqual(2, nodes.GetArrayLength());
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[1].GetProperty("node_instance_id").GetString());
+
+        var connections = root.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual("keep", connections[0].GetProperty("connection_id").GetString());
+    }
+
+    [TestMethod]
+    public void DeleteNodesRejectsMissingOrBlankNodeIds()
+    {
+        var missing = WorkflowDefinitionDraftNodePatcher.DeleteNodes(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            ["source", "missing"]);
+        var blank = WorkflowDefinitionDraftNodePatcher.DeleteNodes(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            ["source", " "]);
+        var empty = WorkflowDefinitionDraftNodePatcher.DeleteNodes(
+            """{"nodes":[{"node_instance_id":"source"}],"connections":[]}""",
+            []);
+
+        Assert.IsFalse(missing.Succeeded);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeNotFound, missing.Status);
+        Assert.AreEqual("NODE_NOT_FOUND", missing.Warning);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired, blank.Status);
+        Assert.AreEqual("NODE_INSTANCE_ID_REQUIRED", blank.Warning);
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired, empty.Status);
+        Assert.AreEqual("NODE_INSTANCE_ID_REQUIRED", empty.Warning);
+    }
+
+    [TestMethod]
     public void DeleteNodeRejectsMissingNode()
     {
         var result = WorkflowDefinitionDraftNodePatcher.DeleteNode(

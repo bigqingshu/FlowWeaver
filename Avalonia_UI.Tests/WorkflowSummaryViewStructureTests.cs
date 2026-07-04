@@ -314,6 +314,10 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding DeleteSelectedNodesText}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding ShowAdvancedDraftJsonText}\"");
         StringAssert.Contains(
             xaml,

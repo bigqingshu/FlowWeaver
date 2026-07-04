@@ -561,6 +561,80 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task DeleteSelectedWorkflowDefinitionDraftNodesCommandDeletesCheckedNodesAndConnections()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "join", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_join", "source_node_id": "filter", "source_port": "out", "target_node_id": "join", "target_port": "in"},
+                {"connection_id": "join_to_sink", "source_node_id": "join", "source_port": "out", "target_node_id": "sink", "target_port": "in"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.DeleteSelectedWorkflowDefinitionDraftNodesCommand.CanExecute(null));
+
+        viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "filter").IsBatchSelected = true;
+        viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+            node.NodeInstanceId == "join").IsBatchSelected = true;
+
+        Assert.AreEqual(2, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.IsTrue(viewModel.DeleteSelectedWorkflowDefinitionDraftNodesCommand.CanExecute(null));
+
+        viewModel.DeleteSelectedWorkflowDefinitionDraftNodesCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var nodes = draft.RootElement.GetProperty("nodes");
+        Assert.AreEqual(2, nodes.GetArrayLength());
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[1].GetProperty("node_instance_id").GetString());
+
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual("keep", connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "Deleted 2 node(s) from draft with related connections. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsNotNull(viewModel.WorkflowDefinitionValidationErrorMessage);
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "source_to_filter");
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "filter_to_join");
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "join_to_sink");
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(0, viewModel.WorkflowDefinitionBatchSelectedNodeCount);
+        Assert.IsFalse(viewModel.DeleteSelectedWorkflowDefinitionDraftNodesCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task NewDraftNodeInputUsesDefaultsAndResetsWhenDefinitionLoads()
     {
         var definitionJson =

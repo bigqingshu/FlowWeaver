@@ -444,6 +444,79 @@ public static class WorkflowDefinitionDraftNodePatcher
         };
     }
 
+    public static WorkflowDefinitionDraftNodePatchResult DeleteNodes(
+        string workflowDefinitionDraftJson,
+        IReadOnlyCollection<string> nodeInstanceIds)
+    {
+        if (nodeInstanceIds.Count == 0)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        var targetNodeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var nodeInstanceId in nodeInstanceIds)
+        {
+            if (string.IsNullOrWhiteSpace(nodeInstanceId))
+            {
+                return Failed(
+                    WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                    "NODE_INSTANCE_ID_REQUIRED");
+            }
+
+            targetNodeIds.Add(nodeInstanceId.Trim());
+        }
+
+        var readResult = ReadMutableDraft(workflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            return Failed(readResult.Status, readResult.Warning);
+        }
+
+        foreach (var nodeInstanceId in targetNodeIds)
+        {
+            if (FindNodeIndex(readResult.Nodes, nodeInstanceId) < 0)
+            {
+                return Failed(
+                    WorkflowDefinitionDraftNodePatchStatus.NodeNotFound,
+                    "NODE_NOT_FOUND");
+            }
+        }
+
+        var removedConnections = new List<WorkflowDefinitionDraftConnection>();
+        for (var index = readResult.Connections.Count - 1; index >= 0; index--)
+        {
+            if (readResult.Connections[index] is JsonObject connectionObject &&
+                (targetNodeIds.Contains(
+                    GetStringValue(connectionObject, "source_node_id") ?? string.Empty)
+                || targetNodeIds.Contains(
+                    GetStringValue(connectionObject, "target_node_id") ?? string.Empty)))
+            {
+                removedConnections.Insert(0, ReadConnection(connectionObject));
+                readResult.Connections.RemoveAt(index);
+            }
+        }
+
+        for (var index = readResult.Nodes.Count - 1; index >= 0; index--)
+        {
+            if (readResult.Nodes[index] is JsonObject nodeObject &&
+                targetNodeIds.Contains(
+                    GetStringValue(nodeObject, "node_instance_id") ?? string.Empty))
+            {
+                readResult.Nodes.RemoveAt(index);
+            }
+        }
+
+        return new WorkflowDefinitionDraftNodePatchResult
+        {
+            Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            RemovedConnections = removedConnections,
+            UpdatedWorkflowDefinitionDraftJson =
+                readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
     public static WorkflowDefinitionDraftNodePatchResult CopyNode(
         string workflowDefinitionDraftJson,
         string sourceNodeInstanceId,
