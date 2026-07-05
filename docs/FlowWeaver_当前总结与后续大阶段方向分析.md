@@ -20,7 +20,6 @@ FlowWeaver 已经不再是单纯的后端原型，也不只是一个界面演示
 - WorkflowRun 启动和取消。
 - NodeRun 状态、进度、阶段和心跳。
 - RuntimeEvent。
-- AuditEvent。
 - TableRef。
 - SharedPublication。
 - Token 鉴权。
@@ -45,7 +44,7 @@ FlowWeaver 已经不再是单纯的后端原型，也不只是一个界面演示
 → 启动 WorkflowRun
 → 查看 NodeRun
 → 取消或等待完成
-→ 查看 RuntimeEvent / AuditEvent
+→ 查看 RuntimeEvent
 → 查看 TableRef / SharedPublication
 ```
 
@@ -256,7 +255,7 @@ P+2 解决：
 - WorkflowPage。
 - RunMonitorPage。
 - DataPage。
-- LogsAuditPage。
+- LogsPage。
 - SettingsPage。
 
 因此本阶段不再重复拆 MainWindow。
@@ -354,12 +353,12 @@ P+2 解决：
 - 只读提示。
 - 未实现能力说明。
 
-## UI-USABILITY-4：日志与审计
+## UI-USABILITY-4：运行日志
 
 ### 主要实现
 
 - 筛选区。
-- RuntimeEvent 和 AuditEvent 区分。
+- RuntimeEvent 筛选。
 - 事件级别。
 - 技术详情。
 - 复制信息。
@@ -700,8 +699,8 @@ SettingsViewModel
 - 明确输入。
 - 明确输出。
 - 配置 Schema。
-- 权限声明。
-- 审计。
+- 外部资源与副作用声明。
+- 运行诊断输出。
 - 可重试语义。
 - 失败策略。
 - 测试。
@@ -1020,7 +1019,7 @@ UI-USABILITY-0 页面体验审查
 → UI-USABILITY-1 工作流页
 → UI-USABILITY-2 运行监控页
 → UI-USABILITY-3 数据页
-→ UI-USABILITY-4 日志审计页
+→ UI-USABILITY-4 运行日志页
 → UI-USABILITY-5 设置页
 ```
 

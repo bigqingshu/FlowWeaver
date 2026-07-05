@@ -155,8 +155,8 @@ config_schema
 | --- | --- |
 | `table-selector` | 依赖运行时数据和当前 workflow 上下文 |
 | `field-selector` | 依赖输入表 schema，不能只靠静态 NodeDefinition 得出 |
-| `file-path` / `directory-path` | 涉及本机路径权限和跨平台 UI 体验 |
-| `secret` | 涉及脱敏、持久化和审计策略 |
+| `file-path` / `directory-path` | 涉及本机外部资源访问、用户确认和跨平台 UI 体验 |
+| `secret` | 涉及脱敏、持久化和节点侧安全策略 |
 | `regex` 专用控件 | 可先作为普通 string |
 | 条件显示 / 动态联动 | 需要单独 UI 状态协议 |
 

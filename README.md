@@ -4,7 +4,9 @@
 
 ## 当前阶段
 
-当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 已完成 J.0 权限审计边界确认、J.1 权限审计协议模型、J.2 Store 边界、J.3 节点权限声明解析、J.4 主循环权限句柄绑定、J.5 内置节点发布前权限检查、J.6 STANDARD 权限审计事件和 J.7 阶段验收复核。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent/AuditEvent 日志和审计最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L 已完成 L.0 桌面端运行入口与配置边界清单、L.1a 后端运行入口收口、L.1b 桌面端运行入口收口、L.1c 组合开发脚本边界、L.2 UI连接配置持久化边界、L.2a 连接配置模型与 Store 边界、L.2b UI接入前复核、L.2c UI启动加载/health成功保存 BaseUrl、L.2d 连接配置失败场景验收复核、L.3 正式路径烟雾清单、L.3a 空数据库正式路径烟雾执行、L.3b 已有工作流正式链路烟雾执行、L.3c EngineHost 重启恢复正式路径烟雾执行和 L 阶段总体验收复核。阶段 M 已完成 M.0 工作流定义与节点配置入口边界清单、M.1 节点定义只读 API、M.2 Workflow detail / revision API 客户端接入、M.3 Workflow definition 只读视图、M.4 最小创建入口、M.5 最小 JSON 草稿校验、M.6 保存 revision 与冲突保护、M.7 工作流定义与运行闭环验收。阶段 N 已完成 N.0 真实 EngineHost + Avalonia API/WebSocket 客户端的正式路径运行闭环 smoke、N.1 连接体验稳定化复核、N.2 打包发布前置清单、N.3 便携版双进程发布布局设计、N.4 便携发布目录生成与 smoke 前置实现、N.5 便携目录后端完整 runtime smoke、N.6 Avalonia publish 与 Desktop 产物 smoke、N.7 Desktop 发布产物 API Client 联调前置 smoke、N.8 Desktop 发布产物 RuntimeEvent WebSocket Client 前置 smoke、N.9 Desktop 发布产物最小 WorkflowRun 事件联调 smoke和 N 阶段便携发布联调总体验收复核。阶段 O 已完成 O.0 到 O.12 便携组合启动入口与 launcher 生命周期收口，包括 backend-only 入口、Desktop 组合入口、真实 Desktop 最小 smoke、失败路径清理和阶段 O 总体验收复核。阶段 P 已完成 P.0 发布物归档与用户手册边界分析、P.0a 发布归档补充边界、P.1 发布归档脚本方案、P.2 runtime audit 与归档前检查、P.3 最小归档脚本、P.4 clean-room 解压 smoke、P.5 便携版用户手册骨架、P.6 用户手册内容收口和 P.7 阶段总体验收复核，后续暂不进入安装器、自动更新或后台服务。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
+当前已完成第一阶段从阶段 A 到阶段 H 的主程序骨架、执行主循环、节点任务、进程监督、IPC、并发前置和失败策略收口。阶段 I 已完成 I.0 边界确认、I.1 `SharedPublication` Store 边界、I.2 发布输入校验与多表原子发布边界、I.3 `InputSnapshot` Store 边界、I.4 `ReadLease` Store 边界、I.5 读取共享表服务、I.6 共享表节点最小骨架、I.7 WorkflowRunProcess 接入、I.8 生命周期收口和 I.9 阶段总体验收。阶段 J 的权限审计实现已移除并后置，历史记录保留下方阶段说明。阶段 K 已完成 K.0a 架构与验收基线固化、K.0b 默认正式路径烟雾测试及后端组合根缺口修正、K.0c UI API 契约复核与只读接口补齐、K.1 Avalonia_UI 最小桌面 UI 工程骨架与 EngineHost health 连接检查、K.2 UI API Client、K.3 工作流列表与运行入口、K.4 运行和节点状态 REST 恢复视图、K.5 RuntimeEvent WebSocket 事件流和断线重连、K.6 RuntimeEvent 日志最小只读视图、K.7 TableRef 和 SharedPublication 数据摘要视图、K.8 阶段总体验收。阶段 L 已完成 L.0 桌面端运行入口与配置边界清单、L.1a 后端运行入口收口、L.1b 桌面端运行入口收口、L.1c 组合开发脚本边界、L.2 UI连接配置持久化边界、L.2a 连接配置模型与 Store 边界、L.2b UI接入前复核、L.2c UI启动加载/health成功保存 BaseUrl、L.2d 连接配置失败场景验收复核、L.3 正式路径烟雾清单、L.3a 空数据库正式路径烟雾执行、L.3b 已有工作流正式链路烟雾执行、L.3c EngineHost 重启恢复正式路径烟雾执行和 L 阶段总体验收复核。阶段 M 已完成 M.0 工作流定义与节点配置入口边界清单、M.1 节点定义只读 API、M.2 Workflow detail / revision API 客户端接入、M.3 Workflow definition 只读视图、M.4 最小创建入口、M.5 最小 JSON 草稿校验、M.6 保存 revision 与冲突保护、M.7 工作流定义与运行闭环验收。阶段 N 已完成 N.0 真实 EngineHost + Avalonia API/WebSocket 客户端的正式路径运行闭环 smoke、N.1 连接体验稳定化复核、N.2 打包发布前置清单、N.3 便携版双进程发布布局设计、N.4 便携发布目录生成与 smoke 前置实现、N.5 便携目录后端完整 runtime smoke、N.6 Avalonia publish 与 Desktop 产物 smoke、N.7 Desktop 发布产物 API Client 联调前置 smoke、N.8 Desktop 发布产物 RuntimeEvent WebSocket Client 前置 smoke、N.9 Desktop 发布产物最小 WorkflowRun 事件联调 smoke和 N 阶段便携发布联调总体验收复核。阶段 O 已完成 O.0 到 O.12 便携组合启动入口与 launcher 生命周期收口，包括 backend-only 入口、Desktop 组合入口、真实 Desktop 最小 smoke、失败路径清理和阶段 O 总体验收复核。阶段 P 已完成 P.0 发布物归档与用户手册边界分析、P.0a 发布归档补充边界、P.1 发布归档脚本方案、P.2 runtime audit 与归档前检查、P.3 最小归档脚本、P.4 clean-room 解压 smoke、P.5 便携版用户手册骨架、P.6 用户手册内容收口和 P.7 阶段总体验收复核，后续暂不进入安装器、自动更新或后台服务。后续 UI 技术路线保持为 `Avalonia_UI/` 下的 Avalonia + .NET 10.0 + C# + MVVM，通信方式为 HTTP + WebSocket。
+
+2026-07-05 当前决策：默认主程序权限/审计模块已移除并后置。主程序不再内置权限申请、授权句柄、`permission_grants`、`audit_events`、`/api/v1/audit-events` 或桌面 AuditEvent 列表；运行诊断保留 RuntimeEvent、NodeRun、节点结果、TableRef 和 SharedPublication。发布包 `runtime audit` 属于发布检查工具，不在本次移除范围内。
 
 阶段 A 范围包括：
 
@@ -85,8 +87,8 @@
 - `WorkflowRunProcess` 默认执行器路径已能分流并执行内置表节点和共享表节点
 - 默认 `EngineHost` 已注册第一阶段内置节点定义，API 创建内置节点 workflow 不再依赖测试专用注册表
 - 正式子进程启动会显式加载当前 `src` 路径，避免嵌入式 Python 捡到旧安装包
-- 读取共享表节点在执行前已校验 `READ_SHARED` 权限并记录 `STANDARD` 审计事件
-- UI 前置只读 API 已补齐：审计事件、运行 TableRef、共享发布列表、共享发布版本和 RuntimeEvent 服务端过滤
+- 读取共享表节点保留共享表自身数据校验、固定版本读取和 read lease 生命周期，不再走主程序权限句柄
+- UI 前置只读 API 已补齐：运行 TableRef、共享发布列表、共享发布版本和 RuntimeEvent 服务端过滤
 - K 阶段 UI 后续路径固定为 `Avalonia_UI/`，使用 Avalonia、.NET 10.0、C#、MVVM，通过 HTTP + WebSocket 访问 Python FastAPI EngineHost
 - 阶段 I 已具备 A 发布 V1/V2、B 固定读取 V1、B 结束释放 ReadLease 的主循环验收
 - `RuntimeDataRegistry` 已具备单表 STAGING 注册、发布为 PUBLISHED、按 workflow/node 查询和节点失败清理
@@ -109,12 +111,12 @@
 - M.5 最小 JSON 草稿校验已新增 Avalonia `ValidateWorkflowDraftAsync()`、Definition 页 draft JSON 编辑和后端 validate 结果展示，完成记录 `docs/FlowWeaver_阶段M.5_最小JSON草稿校验.md`
 - M.6 保存 revision 与冲突保护已新增后端 `base_revision_id` 检查、`WORKFLOW_REVISION_CONFLICT`、Avalonia `UpdateWorkflowAsync()` 和 Definition 页 Save，完成记录 `docs/FlowWeaver_阶段M.6_保存Revision与冲突保护.md`
 - M.7 工作流定义与运行闭环验收已新增 ViewModel 级创建、加载、编辑 draft、validate、save、启动 run 和 node status 观察闭环测试，完成记录 `docs/FlowWeaver_阶段M.7_工作流定义与运行闭环验收.md`
-- N.0 正式路径运行闭环 smoke 已新增真实 EngineHost + Avalonia API/WebSocket 客户端的创建、校验、保存 revision、启动、事件/REST恢复和数据/审计摘要闭环测试，完成记录 `docs/FlowWeaver_阶段N.0_正式路径运行闭环Smoke.md`
+- N.0 正式路径运行闭环 smoke 已新增真实 EngineHost + Avalonia API/WebSocket 客户端的创建、校验、保存 revision、启动、事件/REST恢复和数据摘要闭环测试，完成记录 `docs/FlowWeaver_阶段N.0_正式路径运行闭环Smoke.md`
 - N.1 连接体验稳定化复核已新增连接错误描述和 WebSocket token 脱敏边界，完成记录 `docs/FlowWeaver_阶段N.1_连接体验稳定化复核.md`
 - N.2 打包发布前置清单已固化运行时、数据目录、token、日志、配置迁移和发布 smoke 边界，完成记录 `docs/FlowWeaver_阶段N.2_打包发布前置清单.md`
 - N.3 便携版双进程发布布局设计已固化便携目录结构、后端工作目录、Python runtime、Avalonia UI、runtime、日志和发布目录 smoke 边界，完成记录 `docs/FlowWeaver_阶段N.3_便携版双进程发布布局设计.md`
 - N.4 便携发布目录生成与 smoke 前置实现已新增 `.tmp/FlowWeaverPortable/` 生成器、`.tmp/` 忽略规则和后端工作目录最小 smoke，完成记录 `docs/FlowWeaver_阶段N.4_便携发布目录生成与Smoke前置实现.md`
-- N.5 便携目录后端完整 runtime smoke 已验证便携目录自带 `python312/python.exe` 可完成 workflow、run、NodeRun、RuntimeEvent REST、TableRef、SharedPublication、AuditEvent 和 workflow run 日志链路，完成记录 `docs/FlowWeaver_阶段N.5_便携目录后端完整RuntimeSmoke.md`
+- N.5 便携目录后端完整 runtime smoke 已验证便携目录自带 `python312/python.exe` 可完成 workflow、run、NodeRun、RuntimeEvent REST、TableRef、SharedPublication 和 workflow run 日志链路，完成记录 `docs/FlowWeaver_阶段N.5_便携目录后端完整RuntimeSmoke.md`
 - N.6 Avalonia publish 与 Desktop 产物 smoke 已新增 `.tmp/FlowWeaverPortable/Desktop/` 发布工具和文件级产物验收，完成记录 `docs/FlowWeaver_阶段N.6_AvaloniaPublish与Desktop产物Smoke.md`
 - N.7 Desktop 发布产物 API Client 联调前置 smoke 已验证发布目录 `Avalonia_UI.dll` 中的 API Client 可连接便携 EngineHost 并完成 health、node definitions 和 workflows 基础 API，完成记录 `docs/FlowWeaver_阶段N.7_Desktop发布产物APIClient联调前置Smoke.md`
 - N.8 Desktop 发布产物 RuntimeEvent WebSocket Client 前置 smoke 已验证发布目录 `Avalonia_UI.dll` 中的 RuntimeEvent WebSocket Client 可连接便携 EngineHost 并收到 `ENGINE_READY`，完成记录 `docs/FlowWeaver_阶段N.8_Desktop发布产物RuntimeEventWebSocketClient前置Smoke.md`
@@ -343,6 +345,8 @@ A发布V2后B当前运行仍固定V1
 
 ## 阶段 J 计划
 
+> 历史说明：阶段 J 的权限与审计实现已在 2026-07-05 从默认主程序移除并后置。以下内容保留为历史阶段记录，不再代表当前运行期契约；当前主程序只保留 RuntimeEvent、NodeRun、节点结果、TableRef/SharedPublication 等运行诊断和数据中转能力。
+
 阶段 J 对应第一阶段规范中的“权限与审计”部分，目标是验证：
 
 ```text
@@ -425,7 +429,7 @@ K.1 验收结果：
 K.2 验收结果：
 
 - 已补 `EngineHostApiClient`，封装 REST 统一响应 envelope、错误模型、Bearer token 注入和超时入口
-- 已补 Workflow、Run、NodeRun、RuntimeEvent、TableRef、SharedPublication、AuditEvent 的最小 DTO
+- 已补 Workflow、Run、NodeRun、RuntimeEvent、TableRef 和 SharedPublication 的最小 DTO
 - 已补 RuntimeEvent WebSocket 客户端边界，固定 `/ws/v1/events?token=...`
 - health 检查已改为复用 API Client，不在 ViewModel 或控件里写 HTTP 细节
 - 已补 C# 单元测试覆盖鉴权失败、连接失败、事件过滤查询、错误 envelope 和 RuntimeEvent 解析
@@ -457,15 +461,15 @@ K.5 验收结果：
 - WebSocket 正常关闭或异常后会提示断线，执行 REST 补状态，然后按最小重连延迟重新连接
 - 缺少 token 时启动事件流会在 UI 层明确拒绝，不进入重连循环
 - 已补 C# 测试覆盖缺 token 拒绝、收到 RuntimeEvent 后刷新状态、断线后重连并恢复状态
-- 暂未实现 RuntimeEvent/AuditEvent 可过滤只读日志视图、长期离线缓存和事件详情展开
+- 暂未实现 RuntimeEvent 可过滤只读日志视图、长期离线缓存和事件详情展开
 
 K.6 验收结果：
 
 - 主窗口已拆为 `Execution` 和 `Logs` 页签，运行操作与日志查询互不挤占
 - `Logs` 页签已接入 RuntimeEvent REST 只读视图，支持 workflow_run_id、node_run_id、event_type、after_sequence_number 和 limit 过滤
-- `Logs` 页签已接入 AuditEvent REST 只读视图，支持 workflow_run_id、node_run_id 和 event_type 过滤
+- `Logs` 页签保留 RuntimeEvent REST 只读视图，支持 workflow_run_id、node_run_id、event_type 和 limit 过滤
 - RuntimeEvent limit 限制为 1 到 1000，非法显式输入会在 UI 层拒绝，不发送无效请求
-- 已补 C# 测试覆盖 RuntimeEvent 过滤查询、非法 limit 拒绝、AuditEvent 过滤查询和 audit API 路径
+- 已补 C# 测试覆盖 RuntimeEvent 过滤查询和非法 limit 拒绝
 - 暂未实现权限审批页面、事件详情展开、长期离线缓存和完整大表查看
 
 K.7 验收结果：

@@ -1,7 +1,7 @@
 # FlowWeaver：交给 Gemini 的 UI 界面设计、MainWindow 拆分与组件接口规划任务说明
 
 > 文档用途：本文件用于交给 Gemini，作为 FlowWeaver Avalonia 桌面端界面设计、`MainWindow.axaml` 拆分、页面组件规划和 XAML 重构的统一任务说明。  
-> 当前状态：UI 本地化与语言切换工作已经由 Codex 单独进行，Gemini 不负责翻译或本地化实现。  
+> 当前状态：UI 本地化与语言切换工作已经由 Codex 单独进行，Gemini 不负责翻译或本地化实现。默认主程序权限/审计模块已于 2026-07-05 移除并后置，本文件后续 UI 规划只按 RuntimeEvent 日志页继续。
 > 技术栈：Avalonia UI + .NET 10 + C# + MVVM + HTTP/WebSocket。  
 > 核心目标：允许 Gemini 设计并实现界面结构，但必须分阶段、可回滚、保持现有业务功能和绑定契约。  
 > 后续分工：Gemini 负责界面结构、XAML、组件和样式；Codex 负责绑定复核、业务接线、构建测试、本地化复核和功能回归。
@@ -33,7 +33,6 @@
 - API 路由。
 - Workflow Definition Schema。
 - RuntimeEvent 协议。
-- AuditEvent 协议。
 - TableRef 或 SharedPublication 协议。
 - 发布和打包。
 - 自动更新。
@@ -60,7 +59,7 @@ FlowWeaver 当前已经具备：
 - 后端 Validate。
 - 保存新 Revision。
 - Revision 冲突保护。
-- RuntimeEvent 和 AuditEvent 日志查看。
+- RuntimeEvent 日志查看。
 - TableRef 和 SharedPublication 摘要查看。
 - 便携启动与发布归档能力。
 
@@ -149,7 +148,6 @@ docs/FlowWeaver_阶段P*
 - Validate。
 - Save。
 - RuntimeEvent 日志。
-- AuditEvent。
 - TableRef。
 - SharedPublication。
 
@@ -228,7 +226,7 @@ MainWindow
   │    ├─ WorkflowPage
   │    ├─ RunMonitorPage
   │    ├─ DataPage
-  │    ├─ LogsAuditPage
+  │    ├─ LogsPage
   │    └─ SettingsPage
   └─ GlobalOverlay / DialogHost
 ```
@@ -290,7 +288,6 @@ FAILED
 CANCELLED
 PUBLISHED
 RuntimeEvent event_type
-AuditEvent decision
 workflow_run_id
 node_run_id
 table_ref_id
@@ -342,7 +339,7 @@ Avalonia_UI/Views/
     WorkflowPage.axaml
     RunMonitorPage.axaml
     DataPage.axaml
-    LogsAuditPage.axaml
+    LogsPage.axaml
     SettingsPage.axaml
 ```
 
@@ -392,7 +389,6 @@ SharedPublicationListView
 SharedPublicationVersionView
 
 RuntimeEventListView
-AuditEventListView
 LogFilterBar
 
 ConnectionPanelView
@@ -412,7 +408,7 @@ ConfirmDialogView
 工作流
 运行监控
 数据
-日志与审计
+运行日志
 设置
 ```
 
@@ -470,7 +466,7 @@ View 拆分和 ViewModel 拆分不要同时进行。
 工作流
 运行监控
 数据
-日志与审计
+运行日志
 设置
 ```
 
@@ -576,12 +572,11 @@ View 拆分和 ViewModel 拆分不要同时进行。
 
 不设计完整数据库表格编辑器。
 
-### 8.4 日志与审计
+### 8.4 运行日志
 
 主要用于：
 
 - RuntimeEvent。
-- AuditEvent。
 - WorkflowRun ID 筛选。
 - NodeRun ID 筛选。
 - Event Type 筛选。
@@ -721,7 +716,6 @@ x:DataType="..."
 - Workflow Definition Schema。
 - Revision 语义。
 - RuntimeEvent。
-- AuditEvent。
 - TableRef。
 - SharedPublication。
 - 现有 Command 行为。
@@ -991,22 +985,21 @@ Gemini 一次性重写全部 UI
 5. 修改 Workflow Schema。
 6. 修改 Revision 语义。
 7. 修改 RuntimeEvent 协议。
-8. 修改 AuditEvent 协议。
-9. 修改 TableRef 或 SharedPublication 协议。
-10. 将业务逻辑移入 code-behind。
-11. 在 View 中直接发送 HTTP。
-12. 删除现有 JSON 编辑入口。
-13. 直接实现自由节点画布。
-14. 删除现有诊断能力。
-15. 用静态假数据替代真实绑定。
-16. 创建无法运行的展示按钮。
-17. 无映射地一次性重写全部 UI。
-18. 随意修改依赖版本。
-19. 同时拆 View 和 ViewModel。
-20. 与 Codex 当前本地化工作发生冲突。
-21. 新增硬编码中文或英文用户可见文本。
-22. 在 XAML 中重新拼接已由 ViewModel 派生的列表显示文本。
-23. 翻译协议状态、事件类型、审计决策、ID、版本号、序列号、时间戳或 JSON 字段名。
+8. 修改 TableRef 或 SharedPublication 协议。
+9. 将业务逻辑移入 code-behind。
+10. 在 View 中直接发送 HTTP。
+11. 删除现有 JSON 编辑入口。
+12. 直接实现自由节点画布。
+13. 删除现有诊断能力。
+14. 用静态假数据替代真实绑定。
+15. 创建无法运行的展示按钮。
+16. 无映射地一次性重写全部 UI。
+17. 随意修改依赖版本。
+18. 同时拆 View 和 ViewModel。
+19. 与 Codex 当前本地化工作发生冲突。
+20. 新增硬编码中文或英文用户可见文本。
+21. 在 XAML 中重新拼接已由 ViewModel 派生的列表显示文本。
+22. 翻译协议状态、事件类型、ID、版本号、序列号、时间戳或 JSON 字段名。
 
 ---
 
@@ -1100,7 +1093,7 @@ Codex 可以逐步复核
 → 启动运行
 → 查看节点状态
 → 查看数据
-→ 查看日志与审计
+→ 查看运行日志
 → 处理失败或冲突
 ```
 

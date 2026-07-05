@@ -36,7 +36,6 @@
 | `WorkflowListItemViewModel.cs` | `v{n}`、时间格式 | 技术/紧凑格式，暂保留 |
 | `WorkflowRunListItemViewModel.cs` | `v{n}`、`-`、时间格式、状态和 completion_reason | 协议/紧凑格式，暂保留 |
 | `RuntimeEventListItemViewModel.cs` | `#{sequence}`、事件类型、run/node id、`-` | 协议/技术标识，保留原文 |
-| `AuditEventListItemViewModel.cs` | event type、decision、run/node id、`-` | 协议/审计标识，保留原文 |
 | `TableRefListItemViewModel.cs` | role、storage_kind、capabilities、lifecycle_status、`v{n}` | 协议/能力标识，保留原文 |
 | `SharedPublicationMemberListItemViewModel.cs` | `v{n}` | 技术版本格式，暂保留 |
 
@@ -45,7 +44,7 @@
 以下内容继续保留原文：
 
 - API/数据库状态枚举，例如 `RUNNING`、`FAILED`、`PUBLISHED`
-- RuntimeEvent 和 AuditEvent 类型
+- RuntimeEvent 类型
 - table role、storage kind、capability、lifecycle status
 - node type、node version、workflow id、run id、node run id
 - `v{n}`、`#{sequence}`、`yyyy-MM-dd HH:mm:ss`
@@ -54,7 +53,7 @@
 原因：
 
 - 这些值主要用于排障和与后端协议对齐
-- 翻译后容易和 API payload、日志、审计记录产生歧义
+- 翻译后容易和 API payload、日志记录产生歧义
 - 部分文本来自用户或 workflow definition，桌面端不应擅自翻译
 
 ## 4. 后续最小实现建议

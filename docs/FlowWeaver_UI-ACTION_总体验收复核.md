@@ -2,7 +2,7 @@
 
 > 文档状态：UI-ACTION 阶段总体验收复核完成
 > 当前日期：2026-07-01
-> 适用范围：Avalonia UI 的 RunMonitor、Workflow、Data、Settings / Connection、Logs / Audit ActionState 收口
+> 适用范围：Avalonia UI 的 RunMonitor、Workflow、Data、Settings / Connection、Logs ActionState 收口
 > 优先级：低于 `00_第一阶段技术接口与验收规范.md`、`01_第一阶段执行方案.md`、`FlowWeaver_UI_交互状态矩阵与ActionState实施清单.md` 和 `FlowWeaver_UI_BackendFactsContract.md`
 
 ## 1. 复核结论
@@ -14,7 +14,7 @@ UI-ACTION 阶段可以视为完成当前最小验收闭环。
 - 依赖 EngineHost 鉴权业务接口的动作已接入 `CanUseEngineActions`。
 - Event Stream 连接状态不会误伤仍可用的 HTTP 业务动作。
 - Run、Workflow、Data 和 Logs 相关旧请求覆盖风险已用 request version 边界处理。
-- 日志和审计过滤器变化会废弃旧请求，同时释放 loading 状态，避免刷新按钮永久锁定。
+- 运行日志过滤器变化会废弃旧请求，同时释放 loading 状态，避免刷新按钮永久锁定。
 - Workflow 启动动作已补齐 `SelectedWorkflow.Status == "ACTIVE"` 的最小门控。
 - XAML 未发现未实现 WIP 按钮、事件处理器绕过 Command 或显式业务判断。
 
@@ -28,7 +28,7 @@ UI-ACTION 阶段可以视为完成当前最小验收闭环。
 | UI-ACTION-2 | Workflow List / Definition | 通过 | Dirty、Validate 失效、Revision 冲突、旧 Definition 请求丢弃和 ACTIVE 启动门控已覆盖 |
 | UI-ACTION-3 | Data | 通过 | TableRef、SharedPublication、Versions 刷新状态和旧请求丢弃已覆盖；未显示未实现 WIP 按钮 |
 | UI-ACTION-4 | Settings / Connection | 通过 | health 不等于鉴权成功；鉴权失败禁用业务动作；Event Stream 断开不禁用 HTTP 动作 |
-| UI-ACTION-5 | Logs / Audit | 通过 | RuntimeEvent / AuditEvent 刷新状态、过滤器变化、旧查询丢弃和 busy 释放已覆盖 |
+| UI-ACTION-5 | Logs | 通过 | RuntimeEvent 刷新状态、过滤器变化、旧查询丢弃和 busy 释放已覆盖 |
 
 ## 3. 关键验收点
 
@@ -57,20 +57,19 @@ Token 非空
 - SharedPublication：`sharedPublicationsLoadVersion`
 - SharedPublication Versions：`sharedPublicationVersionsLoadVersion`
 - RuntimeEvent Log：`runtimeEventLogLoadVersion`
-- AuditEvent Log：`auditEventLogLoadVersion`
 
 过滤器、Run、Share 或 Workflow 上下文变化后，旧响应不得覆盖当前 UI 状态。
 
 ### 3.3 日志过滤收口
 
-本次复核重点确认了 Logs / Audit 的慢请求场景：
+本次复核重点确认了 Logs 的慢请求场景：
 
 1. 用户发起日志刷新。
 2. 请求未返回时修改过滤条件。
 3. 旧请求返回后被版本号丢弃。
-4. `IsLoadingRuntimeEventLog` / `IsLoadingAuditEventLog` 不会永久停留在 `true`。
+4. `IsLoadingRuntimeEventLog` 不会永久停留在 `true`。
 
-为支持过滤变化后立即重新查询，RuntimeEvent 和 AuditEvent 刷新命令允许并发执行，但仍受 `CanExecute` 与 loading 状态控制。
+为支持过滤变化后立即重新查询，RuntimeEvent 刷新命令允许并发执行，但仍受 `CanExecute` 与 loading 状态控制。
 
 ### 3.4 Workflow 启动门控
 
