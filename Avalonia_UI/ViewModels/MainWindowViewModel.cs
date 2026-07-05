@@ -685,6 +685,21 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string RunText => T("workflow.run");
 
+    public string WorkflowRunGuardText
+    {
+        get
+        {
+            if (HasWorkflowDefinitionRevisionConflict)
+            {
+                return T("workflow.run_guard_revision_conflict");
+            }
+
+            return IsWorkflowDefinitionDraftDirty
+                ? T("workflow.run_guard_dirty_draft")
+                : T("workflow.run_guard_saved_revision");
+        }
+    }
+
     public string CreateText => T("workflow.create");
 
     public string WorkflowNameWatermarkText => T("workflow.name_watermark");
@@ -4271,6 +4286,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(CloseText));
         OnPropertyChanged(nameof(RunText));
+        OnPropertyChanged(nameof(WorkflowRunGuardText));
         OnPropertyChanged(nameof(CreateText));
         OnPropertyChanged(nameof(WorkflowNameWatermarkText));
         OnPropertyChanged(nameof(RunsSectionText));
@@ -4601,6 +4617,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(WorkflowRunGuardText));
     }
 
     partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
@@ -4614,6 +4631,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(WorkflowRunGuardText));
     }
 
     partial void OnIsValidatingWorkflowDefinitionDraftChanged(bool value)

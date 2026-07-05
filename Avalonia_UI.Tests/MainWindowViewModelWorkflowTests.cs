@@ -3104,6 +3104,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
         Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Run and preview use the currently saved workflow revision.",
+            viewModel.WorkflowRunGuardText);
 
         viewModel.WorkflowDefinitionDraftJson =
             """
@@ -3119,12 +3122,18 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
         Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Save the draft before running; unsaved changes are not sent to EngineHost.",
+            viewModel.WorkflowRunGuardText);
 
         viewModel.IsWorkflowDefinitionDraftDirty = false;
         viewModel.HasWorkflowDefinitionRevisionConflict = true;
 
         Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
         Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Reload the workflow definition before running; the loaded revision is conflicted.",
+            viewModel.WorkflowRunGuardText);
     }
 
     [TestMethod]

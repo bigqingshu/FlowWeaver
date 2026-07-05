@@ -35,6 +35,9 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual("服务地址", service.GetString("connection.base_url"));
         Assert.AreEqual("关闭", service.GetString("common.close"));
         Assert.AreEqual("简体中文", service.GetString("language.zh-Hans"));
+        Assert.AreEqual(
+            "运行前请先保存草稿；未保存修改不会发送给 EngineHost。",
+            service.GetString("workflow.run_guard_dirty_draft"));
         Assert.AreEqual("尚未加载数据预览。", service.GetString("data_preview.source_not_loaded"));
         Assert.AreEqual(
             "来源：完整运行 run-1，节点 generate，表 orders。",

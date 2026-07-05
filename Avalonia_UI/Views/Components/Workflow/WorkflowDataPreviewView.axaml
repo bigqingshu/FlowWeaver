@@ -37,6 +37,10 @@
 
             <StackPanel Grid.Row="2"
                         Spacing="4">
+                <TextBlock Text="{Binding WorkflowRunGuardText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding DataPreviewEmptyText}"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"

@@ -462,3 +462,20 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests"`：83 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。
+
+### RUN-SAVE-UX-2：运行保护可见提示
+
+状态：已完成。
+
+完成内容：
+
+- 新增运行保护提示文本，显示在数据预览/运行区域。
+- 已保存状态提示“运行和预览使用当前已保存的工作流版本”。
+- dirty draft 状态提示“运行前请先保存草稿，未保存修改不会发送给 EngineHost”。
+- revision conflict 状态提示“运行前请重新加载工作流定义”。
+- 补充中英文文案、结构测试和状态切换断言。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：125 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。
