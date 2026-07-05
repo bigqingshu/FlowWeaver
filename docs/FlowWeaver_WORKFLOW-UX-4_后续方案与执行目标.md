@@ -97,6 +97,15 @@
 - 非线性或复杂 DAG 场景不自动重排。
 - 线性连接自动调整必须有测试覆盖。
 
+建议拆分：
+
+- `WORKFLOW-UX-5.0`：线性链路语义和拒绝边界分析，只写文档。
+- `WORKFLOW-UX-5.1`：只读识别层，判断当前草稿是否满足单入口、单出口、单链路线性条件。
+- `WORKFLOW-UX-5.2`：线性删除桥接，删除中间节点时在安全条件下连接前驱和后继。
+- `WORKFLOW-UX-5.3`：线性上移/下移重排连接，只支持相邻节点交换。
+- `WORKFLOW-UX-5.4`：线性模式 UI 提示与拒绝原因。
+- `WORKFLOW-UX-5.5`：阶段验收复核。
+
 ### DATA-PREVIEW：真实数据预览体验增强
 
 目标功能：
@@ -221,3 +230,26 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelLocalizationTests"`：115 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：331 passed。
+
+### WORKFLOW-UX-5.0：线性链路语义和拒绝边界分析
+
+状态：已完成。
+
+边界结论：
+
+- 线性模式只处理单入口、单出口、每个中间节点最多一个前驱且最多一个后继的简单链路。
+- 自动重排只允许在所有相关端口可确定、连接唯一、且不会丢失旁路连接的情况下发生。
+- 多入、多出、分支、汇合、旁路连接、缺失端口、重复连接 ID、未知节点引用都必须拒绝自动重排。
+- 当前 `AddNode` 已有“单下游连接 + 单输入端口 + 单输出端口”的最小自动插入能力，可作为线性模式的既有基础。
+- 当前 `DeleteNode` / `DeleteNodes` 只同步移除相关连接，不会自动桥接前驱和后继。
+- 当前 `MoveNode` 只调整 `nodes` 数组顺序，明确不改变 `connections`。
+
+建议下一步：
+
+- 先实现只读识别层 `WORKFLOW-UX-5.1`，只返回“是否线性、节点顺序、拒绝原因”，不改写草稿。
+- 识别层通过测试后，再决定是否进入删除桥接和相邻上移/下移重排。
+- UI 在识别层完成前继续保持 4.3a 的提示：上移/下移只调整列表顺序，不改变连接和执行依赖。
+
+测试结果：
+
+- 文档分析小步，未改代码，未运行测试。
