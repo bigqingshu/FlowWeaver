@@ -59,6 +59,16 @@
             </Grid>
         </Border>
 
+        <Border Classes="Card" Padding="10">
+            <StackPanel Spacing="8">
+                <Button Content="{Binding AddNodeText}"
+                        Command="{Binding OpenWorkflowAddNodePanelCommand}"
+                        MinWidth="88"
+                        HorizontalAlignment="Left"/>
+                <workflow:WorkflowAddNodeView IsVisible="{Binding IsWorkflowAddNodePanelVisible}"/>
+            </StackPanel>
+        </Border>
+
         <workflow:WorkflowSelectedNodeConfigView />
 
         <workflow:WorkflowEditorView IsVisible="{Binding IsWorkflowDraftJsonAdvancedVisible}"/>

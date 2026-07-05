@@ -3,31 +3,31 @@
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowAddNodeView"
              x:DataType="vm:MainWindowViewModel">
-    <Border Padding="12"
+    <Border Padding="10"
             BorderBrush="{DynamicResource ControlBorderBrush}"
             BorderThickness="1"
-            CornerRadius="6">
-        <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+            CornerRadius="4">
+        <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <TextBlock Text="{Binding AddNodeText}"
-                           FontSize="16"
+                           FontSize="14"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                 <Button Grid.Column="1"
                         Content="{Binding CloseText}"
                         Command="{Binding CloseWorkflowAddNodePanelCommand}"
-                        MinWidth="78"/>
+                        MinWidth="64"/>
                 <Button Grid.Column="2"
                         Content="{Binding AddNodeText}"
                         Command="{Binding AddWorkflowDefinitionDraftNodeCommand}"
-                        MinWidth="104"/>
+                        MinWidth="84"/>
             </Grid>
 
             <Grid Grid.Row="1"
-                  ColumnDefinitions="120,*"
+                  ColumnDefinitions="104,*"
                   RowDefinitions="Auto,Auto,Auto,Auto,Auto"
-                  ColumnSpacing="10"
+                  ColumnSpacing="8"
                   RowSpacing="6"
                   IsVisible="{Binding HasWorkflowDefinition}">
                 <TextBlock Text="{Binding NodeInstanceIdText}"
@@ -67,7 +67,7 @@
                                ToolTip.Tip="{Binding RefreshNodeDefinitionsDisabledReasonText}">
                             <Button Content="{Binding RefreshText}"
                                     Command="{Binding RefreshNodeDefinitionsCommand}"
-                                    MinWidth="84"/>
+                                    MinWidth="72"/>
                         </Panel>
                     </Grid>
                     <TextBox Text="{Binding NewDraftNodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>

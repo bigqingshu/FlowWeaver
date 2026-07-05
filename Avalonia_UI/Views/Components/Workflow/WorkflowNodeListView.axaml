@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:primitives="using:Avalonia.Controls.Primitives"
              xmlns:vm="using:Avalonia_UI.ViewModels"
-             xmlns:workflow="using:Avalonia_UI.Views.Components.Workflow"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowNodeListView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
@@ -63,10 +62,6 @@
 
                 <WrapPanel Orientation="Horizontal"
                            HorizontalAlignment="Right">
-                    <Button Content="{Binding AddNodeText}"
-                            Command="{Binding OpenWorkflowAddNodePanelCommand}"
-                            MinWidth="104"
-                            Margin="0,0,8,8"/>
                     <Button Content="{Binding MoveNodeUpText}"
                             Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeUpCommand}"
                             MinWidth="84"
@@ -92,8 +87,6 @@
                                              MinWidth="128"
                                              Margin="0,0,0,8"/>
                 </WrapPanel>
-
-                <workflow:WorkflowAddNodeView IsVisible="{Binding IsWorkflowAddNodePanelVisible}"/>
 
                 <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
                            TextWrapping="Wrap"

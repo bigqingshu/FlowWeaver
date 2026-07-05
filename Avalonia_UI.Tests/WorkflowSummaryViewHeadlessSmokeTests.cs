@@ -8,7 +8,7 @@ namespace Avalonia_UI.Tests;
 public sealed class WorkflowSummaryViewHeadlessSmokeTests
 {
     [TestMethod]
-    public void WorkflowNodeListViewKeepsInlineAddNodePanelBindingsInSourceXaml()
+    public void WorkflowSummaryViewKeepsAddNodePanelBindingsInSourceXaml()
     {
         var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
@@ -29,15 +29,18 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
             "Workflow",
             "WorkflowAddNodeView.axaml");
 
-        Assert.IsFalse(
-            summaryXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal),
-            "The middle workflow summary column should not permanently host the add-node panel.");
         StringAssert.Contains(
-            nodeListXaml,
+            summaryXaml,
             "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
         StringAssert.Contains(
-            nodeListXaml,
+            summaryXaml,
             "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>");
+        Assert.IsFalse(
+            nodeListXaml.Contains("OpenWorkflowAddNodePanelCommand", StringComparison.Ordinal),
+            "The node management column should not host add-node controls.");
+        Assert.IsFalse(
+            nodeListXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal),
+            "The node management column should not host the add-node panel.");
         StringAssert.Contains(
             addNodeXaml,
             "ItemsSource=\"{Binding NodeDefinitions}\"");
