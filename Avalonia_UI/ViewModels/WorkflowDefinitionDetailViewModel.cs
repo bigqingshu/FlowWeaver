@@ -79,6 +79,7 @@ public sealed class WorkflowDefinitionDetailViewModel
             yield break;
         }
 
+        var displayOrder = 1;
         foreach (var node in nodes.EnumerateArray())
         {
             var nodeType = GetString(node, "node_type");
@@ -93,7 +94,9 @@ public sealed class WorkflowDefinitionDetailViewModel
                     ? FormatJson(config)
                     : "{}",
                 displayTextFormatter,
-                nodeEditorResolver.Resolve(nodeType, displayName));
+                nodeEditorResolver.Resolve(nodeType, displayName),
+                displayOrder);
+            displayOrder++;
         }
     }
 
@@ -191,7 +194,8 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
         bool enabled,
         string configJson,
         DisplayTextFormatter? displayTextFormatter = null,
-        NodeEditorResolution? nodeEditorResolution = null)
+        NodeEditorResolution? nodeEditorResolution = null,
+        int displayOrder = 0)
     {
         NodeInstanceId = nodeInstanceId;
         NodeType = nodeType;
@@ -199,6 +203,7 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
         DisplayName = displayName;
         Enabled = enabled;
         ConfigJson = configJson;
+        DisplayOrder = displayOrder;
         DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         NodeEditorResolution = nodeEditorResolution
             ?? NodeEditorResolution.JsonFallback(
@@ -219,6 +224,8 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
 
     public string ConfigJson { get; }
 
+    public int DisplayOrder { get; }
+
     public DisplayTextFormatter DisplayTextFormatter { get; }
 
     public NodeEditorResolution NodeEditorResolution { get; }
@@ -230,6 +237,23 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
     }
 
     public string TypeText => $"{NodeType}@{NodeVersion}";
+
+    public string OrderText => DisplayOrder > 0 ? $"#{DisplayOrder}" : string.Empty;
+
+    public string TitleText =>
+        string.IsNullOrWhiteSpace(DisplayName) ? NodeInstanceId : DisplayName;
+
+    public string NodeTypeDisplayText =>
+        DisplayTextFormatter.FormatNodeDefinitionDisplayName(
+            NodeType,
+            string.IsNullOrWhiteSpace(NodeEditorResolution.DisplayName)
+                ? NodeType
+                : NodeEditorResolution.DisplayName);
+
+    public string NodeSummaryText =>
+        string.IsNullOrWhiteSpace(NodeTypeDisplayText)
+            ? NodeInstanceId
+            : $"{NodeInstanceId} / {NodeTypeDisplayText}";
 
     public string DisplayNameText =>
         string.IsNullOrWhiteSpace(DisplayName) ? "-" : DisplayName;

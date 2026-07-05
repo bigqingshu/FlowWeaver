@@ -472,6 +472,9 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual(
             "JSON 回退编辑器",
             viewModel.WorkflowDefinitionDetail?.Nodes[0].NodeEditorStatusText);
+        Assert.AreEqual(
+            "source / 生成测试表",
+            viewModel.WorkflowDefinitionDetail?.Nodes[0].NodeSummaryText);
         Assert.AreEqual("已禁用", viewModel.WorkflowDefinitionDetail?.Nodes[1].EnabledText);
         Assert.AreEqual("第 1 次尝试", viewModel.NodeRuns[0].AttemptText);
         Assert.AreEqual("1 个成员", viewModel.SharedPublications[0].MemberCountText);

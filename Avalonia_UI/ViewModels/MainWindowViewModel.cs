@@ -3277,6 +3277,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (WorkflowDefinitionDraftStructure is not null)
         {
+            var displayOrder = 1;
             foreach (var node in WorkflowDefinitionDraftStructure.Nodes)
             {
                 var nodeItem = new WorkflowDefinitionNodeListItemViewModel(
@@ -3287,12 +3288,14 @@ public partial class MainWindowViewModel : ViewModelBase
                     node.Enabled,
                     node.ConfigJson,
                     DisplayTextFormatter,
-                    _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName))
+                    _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName),
+                    displayOrder)
                 {
                     IsBatchSelected = batchSelectedNodeIds.Contains(node.NodeInstanceId),
                 };
                 nodeItem.PropertyChanged += OnWorkflowDefinitionDraftNodeItemPropertyChanged;
                 WorkflowDefinitionDraftNodes.Add(nodeItem);
+                displayOrder++;
             }
         }
 

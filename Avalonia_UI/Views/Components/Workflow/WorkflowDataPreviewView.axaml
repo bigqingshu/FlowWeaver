@@ -3,56 +3,70 @@
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowDataPreviewView"
              x:DataType="vm:MainWindowViewModel">
-    <Border Classes="Card" Padding="14" MinHeight="172">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+    <Border Classes="Card" Padding="12" MinHeight="172">
+        <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
                   ColumnSpacing="8">
                 <TextBlock Text="{Binding DataPreviewSectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <ProgressBar Grid.Column="1"
+                <Button Grid.Column="1"
+                        Content="?"
+                        MinWidth="28"
+                        Padding="8,2"
+                        ToolTip.Tip="{Binding DataPreviewPendingText}">
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel MaxWidth="300" Spacing="6">
+                                <TextBlock Text="{Binding DataPreviewPendingText}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding WorkflowRunGuardText}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <ProgressBar Grid.Column="2"
                              Width="72"
                              Height="8"
                              VerticalAlignment="Center"
                              IsIndeterminate="True"
                              IsVisible="{Binding IsDataPreviewBusy}"/>
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         Content="{Binding PreviewSelectedNodeText}"
                         Command="{Binding PreviewSelectedWorkflowNodeCommand}"
                         MinWidth="96"/>
-                <Button Grid.Column="3"
+                <Button Grid.Column="4"
                         Content="{Binding RunText}"
                         Command="{Binding StartSelectedWorkflowCommand}"
-                        MinWidth="72"/>
+                        MinWidth="72"
+                        ToolTip.Tip="{Binding WorkflowRunGuardText}"/>
             </Grid>
 
-            <TextBlock Grid.Row="1"
-                       Text="{Binding DataPreviewPendingText}"
-                       FontSize="12"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource TextSecondaryBrush}"/>
-
-            <StackPanel Grid.Row="2"
-                        Spacing="4">
-                <TextBlock Text="{Binding WorkflowRunGuardText}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel Grid.Row="1"
+                        Spacing="3">
                 <TextBlock Text="{Binding DataPreviewEmptyText}"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            IsVisible="{Binding HasNoSelectedWorkflowDefinitionNode}"/>
-                <TextBlock Text="{Binding DataPreviewSourceText}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding DataPreviewMessage}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Grid ColumnDefinitions="*,*"
+                      ColumnSpacing="12">
+                    <TextBlock Text="{Binding DataPreviewSourceText}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding DataPreviewMessage}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Grid>
                 <TextBlock Text="{Binding DataPreviewErrorMessage}"
                            FontSize="12"
                            TextWrapping="Wrap"
@@ -60,12 +74,12 @@
                            IsVisible="{Binding HasDataPreviewError}"/>
             </StackPanel>
 
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     BorderBrush="{DynamicResource ControlBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="4"
                     MinHeight="96"
-                    MaxHeight="180"
+                    MaxHeight="220"
                     ClipToBounds="True">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">

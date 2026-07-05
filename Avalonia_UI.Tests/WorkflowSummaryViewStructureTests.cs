@@ -9,7 +9,7 @@ namespace Avalonia_UI.Tests;
 public sealed class WorkflowSummaryViewStructureTests
 {
     [TestMethod]
-    public void NodeTemplateShowsEditorStatusAsReadOnlyText()
+    public void NodeTemplateShowsCompactNodeSummaryWithoutConfigJson()
     {
         var xaml = ReadSourceFile(
             "Avalonia_UI",
@@ -28,11 +28,15 @@ public sealed class WorkflowSummaryViewStructureTests
             "Text=\"{Binding WorkflowDefinitionBatchSelectedNodeCountText}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding WorkflowDefinitionDraftNodes}\"");
         StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedWorkflowDefinitionNode}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding NodeEditorStatusText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding ConfigJson}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding OrderText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding TitleText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding EnabledText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeSummaryText}\"");
+        Assert.IsFalse(xaml.Contains("Text=\"{Binding NodeEditorStatusText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("Text=\"{Binding ConfigJson}\"", StringComparison.Ordinal));
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionValidationMessage}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowDefinitionValidationErrorMessage}\"");
-        StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto,Auto,Auto\"");
+        StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto\"");
         Assert.IsFalse(xaml.Contains("NodeEditorStatusText}\" Command=", StringComparison.Ordinal));
     }
 
@@ -327,9 +331,16 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowSummaryView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
+        StringAssert.Contains(xaml, "Content=\"?\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding NodeMoveSemanticsText}\"");
+        StringAssert.Contains(xaml, "<Button.Flyout>");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeMoveSemanticsText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowLinearChainStatusText}\"");
         StringAssert.Contains(xaml, "<WrapPanel Orientation=\"Horizontal\"");
+        Assert.AreEqual(
+            1,
+            CountOccurrences(xaml, "Text=\"{Binding NodeMoveSemanticsText}\""),
+            "The node move semantics text should live only in the info flyout.");
         StringAssert.Contains(
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
@@ -408,6 +419,21 @@ public sealed class WorkflowSummaryViewStructureTests
             0,
             editorIndex,
             "The draft JSON editor should remain controlled by the node action group's advanced toggle.");
+
+        var infoFlyoutIndex = xaml.IndexOf("<Button.Flyout>", StringComparison.Ordinal);
+        var nodeMoveSemanticsIndex = xaml.IndexOf(
+            "Text=\"{Binding NodeMoveSemanticsText}\"",
+            StringComparison.Ordinal);
+        var batchSelectionIndex = xaml.IndexOf(
+            "Text=\"{Binding WorkflowDefinitionBatchSelectedNodeCountText}\"",
+            StringComparison.Ordinal);
+        Assert.IsTrue(
+            infoFlyoutIndex >= 0 && nodeMoveSemanticsIndex > infoFlyoutIndex,
+            "The node move semantics explanation should be hidden behind the info button.");
+        Assert.IsGreaterThan(
+            nodeMoveSemanticsIndex,
+            batchSelectionIndex,
+            "The permanent action area should start after the compact info flyout.");
     }
 
     [TestMethod]
@@ -427,26 +453,40 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowNodeListView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewSectionText}\"");
+        StringAssert.Contains(xaml, "Content=\"?\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding DataPreviewPendingText}\"");
+        StringAssert.Contains(xaml, "<Button.Flyout>");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewPendingText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WorkflowRunGuardText}\"");
+        Assert.AreEqual(
+            1,
+            CountOccurrences(xaml, "Text=\"{Binding DataPreviewPendingText}\""),
+            "The data preview guidance should live only in the info flyout.");
+        Assert.AreEqual(
+            1,
+            CountOccurrences(xaml, "Text=\"{Binding WorkflowRunGuardText}\""),
+            "The workflow run guard explanation should live only in the info flyout.");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewEmptyText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewSourceText}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding PreviewSelectedNodeText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding PreviewSelectedWorkflowNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding RunText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding StartSelectedWorkflowCommand}\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding WorkflowRunGuardText}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsDataPreviewBusy}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNoSelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewMessage}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewErrorMessage}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewError}\"");
         StringAssert.Contains(xaml, "MinHeight=\"96\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"220\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding DataPreviewColumns}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding DataPreviewRows}\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewColumnViewModel\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewRowViewModel\"");
         StringAssert.Contains(xaml, "x:DataType=\"vm:TableDataPreviewCellViewModel\"");
         StringAssert.Contains(xaml, "MinHeight=\"172\"");
+        StringAssert.Contains(xaml, "RowDefinitions=\"Auto,Auto,*\"");
         Assert.IsFalse(nodeListXaml.Contains("DataPreview", StringComparison.Ordinal));
     }
 
@@ -557,6 +597,19 @@ public sealed class WorkflowSummaryViewStructureTests
     {
         var repoRoot = GetRepoRoot();
         return File.ReadAllText(Path.Combine(pathParts.Prepend(repoRoot).ToArray()));
+    }
+
+    private static int CountOccurrences(string value, string pattern)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(pattern, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += pattern.Length;
+        }
+
+        return count;
     }
 
     private static string GetRepoRoot()

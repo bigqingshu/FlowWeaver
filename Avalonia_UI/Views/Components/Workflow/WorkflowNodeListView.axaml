@@ -26,42 +26,64 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:WorkflowDefinitionNodeListItemViewModel"
                                   x:DataType="vm:WorkflowDefinitionNodeListItemViewModel">
-                        <Grid ColumnDefinitions="Auto,*,Auto"
-                              RowDefinitions="Auto,Auto,Auto,Auto"
-                              ColumnSpacing="12"
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="10"
+                              RowSpacing="2"
                               Margin="8">
-                            <CheckBox Grid.RowSpan="4"
+                            <CheckBox Grid.RowSpan="2"
                                       IsChecked="{Binding IsBatchSelected, Mode=TwoWay}"
                                       VerticalAlignment="Top"
                                       Margin="0,1,0,0"/>
-                            <TextBlock Grid.Column="1" Text="{Binding NodeInstanceId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
-                            <TextBlock Grid.Column="2" Text="{Binding EnabledText}" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TypeText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding DisplayNameText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="1"
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding OrderText}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding TitleText}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="3"
+                                       Text="{Binding EnabledText}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="2"
                                        Grid.ColumnSpan="2"
-                                       Text="{Binding NodeEditorStatusText}"
+                                       Text="{Binding NodeSummaryText}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"
                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ConfigJson}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
             <StackPanel Grid.Row="2" Spacing="8">
-                <TextBlock Text="{Binding NodeActionsSectionText}"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding NodeActionsSectionText}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <Button Grid.Column="1"
+                            Content="?"
+                            MinWidth="28"
+                            Padding="8,2"
+                            ToolTip.Tip="{Binding NodeMoveSemanticsText}">
+                        <Button.Flyout>
+                            <Flyout>
+                                <TextBlock Text="{Binding NodeMoveSemanticsText}"
+                                           MaxWidth="260"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
                 <TextBlock Text="{Binding WorkflowDefinitionBatchSelectedNodeCountText}"
                            FontSize="12"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding NodeMoveSemanticsText}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding WorkflowLinearChainStatusText}"
                            FontSize="12"

@@ -280,7 +280,18 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreSame(viewModel.WorkflowDefinitionDraftNodes[0], viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsTrue(viewModel.HasSelectedWorkflowDefinitionNode);
         Assert.IsFalse(viewModel.HasNoSelectedWorkflowDefinitionNode);
+        Assert.AreEqual("#1", viewModel.WorkflowDefinitionDraftNodes[0].OrderText);
+        Assert.AreEqual("Source", viewModel.WorkflowDefinitionDraftNodes[0].TitleText);
+        Assert.AreEqual(
+            "source / Generate Test Table",
+            viewModel.WorkflowDefinitionDraftNodes[0].NodeSummaryText);
         Assert.AreEqual("GenerateTestTableNode@1.0", detail.Nodes[0].TypeText);
+        Assert.AreEqual("#1", detail.Nodes[0].OrderText);
+        Assert.AreEqual("Source", detail.Nodes[0].TitleText);
+        Assert.AreEqual("Generate Test Table", detail.Nodes[0].NodeTypeDisplayText);
+        Assert.AreEqual("source / Generate Test Table", detail.Nodes[0].NodeSummaryText);
+        Assert.AreEqual("#2", detail.Nodes[1].OrderText);
+        Assert.AreEqual("filter", detail.Nodes[1].TitleText);
         Assert.AreEqual(NodeEditorKind.JsonFallback, detail.Nodes[0].NodeEditorResolution.Kind);
         Assert.IsTrue(detail.Nodes[0].HasRegisteredNodeEditor);
         Assert.IsTrue(detail.Nodes[0].UsesJsonFallback);
