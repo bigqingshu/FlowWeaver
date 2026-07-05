@@ -321,3 +321,27 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests"`：133 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### WORKFLOW-UX-5.5：线性工作流易用模式阶段验收复核
+
+状态：已完成。
+
+验收结论：
+
+- 已固化线性链路边界：单入口、单出口、单链路；分支、汇合、断链、环路、旁路和未知引用均不进入自动维护。
+- 已实现只读识别层，可返回线性节点顺序和拒绝原因。
+- 已实现单节点删除桥接：仅在线性链路中删除中间节点时，自动连接前驱和后继。
+- 已实现相邻中间节点移动重排：仅在线性链路、相邻交换、端口可推导时重建 connections。
+- 已补 UI 只读状态提示，让用户能看到当前草稿是否支持线性自动维护。
+- 原有非线性操作保持保守：复杂 DAG、源/尾节点移动、端口不可推导、批量删除都不会自动改写连接。
+
+当前明确保留：
+
+- 批量删除桥接未实现；连续区间和非连续选择语义需要单独设计。
+- 节点实例 ID 重命名未实现；如支持，需要同步更新 connections 引用。
+- 复杂 DAG 的图形化连接编辑、拖拽编排和多端口 schema 表单不在本阶段范围内。
+- 运行到选中节点、数据预览来源说明和保存/运行 dirty draft 保护进入后续 DATA-PREVIEW 与 RUN-SAVE-UX 阶段。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
