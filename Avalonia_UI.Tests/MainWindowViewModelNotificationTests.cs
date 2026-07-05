@@ -31,6 +31,11 @@ public sealed class MainWindowViewModelNotificationTests
         Assert.AreEqual(1, viewModel.NotificationOpenSequence);
         Assert.AreEqual(1, viewModel.NotificationUpdateCount);
         Assert.IsNotNull(viewModel.NotificationUpdatedAt);
+        Assert.HasCount(1, viewModel.RecentEvents);
+        Assert.AreEqual("workflow.edit", viewModel.RecentEvents[0].Key);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.RecentEvents[0].Kind);
+        Assert.AreEqual("Saved", viewModel.RecentEvents[0].Title);
+        Assert.AreEqual("Workflow draft saved.", viewModel.RecentEvents[0].Message);
     }
 
     [TestMethod]
@@ -100,5 +105,46 @@ public sealed class MainWindowViewModelNotificationTests
 
         Assert.IsFalse(viewModel.IsNotificationOpen);
         Assert.IsNull(viewModel.NotificationAutoDismissAfter);
+    }
+
+    [TestMethod]
+    public void RecentEventsShowOneByDefaultAndFiveWhenExpanded()
+    {
+        var viewModel = new MainWindowViewModel();
+
+        for (var index = 0; index < 6; index++)
+        {
+            viewModel.ShowNotification(
+                $"event-{index}",
+                UiNotificationKind.Info,
+                $"Event {index}",
+                string.Empty);
+        }
+
+        Assert.HasCount(6, viewModel.RecentEvents);
+        Assert.HasCount(1, viewModel.VisibleRecentEvents);
+        Assert.AreEqual("Event 5", viewModel.VisibleRecentEvents[0].Title);
+        Assert.IsTrue(viewModel.HasMoreRecentEvents);
+        Assert.AreEqual("Show 5", viewModel.RecentEventsToggleText);
+
+        viewModel.IsRecentEventsExpanded = true;
+
+        Assert.HasCount(5, viewModel.VisibleRecentEvents);
+        Assert.AreEqual("Event 5", viewModel.VisibleRecentEvents[0].Title);
+        Assert.AreEqual("Event 1", viewModel.VisibleRecentEvents[4].Title);
+        Assert.AreEqual("Show 1", viewModel.RecentEventsToggleText);
+    }
+
+    [TestMethod]
+    public void ViewAllRecentEventsNavigatesToLogsPage()
+    {
+        var viewModel = new MainWindowViewModel
+        {
+            SelectedShellPageKey = ShellPageKey.Workflows,
+        };
+
+        viewModel.ViewAllRecentEventsCommand.Execute(null);
+
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
     }
 }

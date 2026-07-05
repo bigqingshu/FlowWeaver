@@ -124,6 +124,7 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <workflow:WorkflowRecentEventsView />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

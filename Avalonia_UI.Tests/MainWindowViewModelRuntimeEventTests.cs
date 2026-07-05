@@ -55,6 +55,12 @@ public sealed class MainWindowViewModelRuntimeEventTests
         Assert.AreEqual(1, streamClient.ConnectCount);
         Assert.AreEqual(7, viewModel.LastRuntimeEventSequenceNumber);
         Assert.AreEqual("NODE_STARTED", viewModel.RuntimeEvents[0].EventType);
+        Assert.HasCount(1, viewModel.RecentEvents);
+        Assert.AreEqual("runtime_event.7", viewModel.RecentEvents[0].Key);
+        Assert.AreEqual(UiNotificationKind.Info, viewModel.RecentEvents[0].Kind);
+        Assert.AreEqual("Received NODE_STARTED #7.", viewModel.RecentEvents[0].Title);
+        Assert.AreEqual("run run-1, node node-run-1", viewModel.RecentEvents[0].Message);
+        Assert.IsFalse(viewModel.IsNotificationOpen);
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
         Assert.HasCount(1, viewModel.NodeRuns);
         Assert.AreEqual("25%", viewModel.NodeRuns[0].ProgressText);

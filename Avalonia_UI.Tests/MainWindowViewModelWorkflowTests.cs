@@ -956,6 +956,11 @@ public sealed class MainWindowViewModelWorkflowTests
             "Node added to draft. Validate before saving.",
             viewModel.NotificationTitle);
         Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
+        Assert.HasCount(1, viewModel.RecentEvents);
+        Assert.AreEqual("workflow.definition.add_node", viewModel.RecentEvents[0].Key);
+        Assert.AreEqual(
+            "Node added to draft. Validate before saving.",
+            viewModel.RecentEvents[0].Title);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("1 node(s)", viewModel.WorkflowDefinitionDraftNodeCountText);

@@ -593,6 +593,45 @@ public sealed class WorkflowSummaryViewStructureTests
             "The node management column should not host the add-node panel.");
     }
 
+    [TestMethod]
+    public void WorkflowSummaryViewHostsRecentEventsBelowConnections()
+    {
+        var summaryXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSummaryView.axaml");
+        var recentEventsXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowRecentEventsView.axaml");
+
+        var connectionsIndex = summaryXaml.IndexOf(
+            "Text=\"{Binding ConnectionsSectionText}\"",
+            StringComparison.Ordinal);
+        var recentEventsIndex = summaryXaml.IndexOf(
+            "<workflow:WorkflowRecentEventsView />",
+            StringComparison.Ordinal);
+
+        Assert.AreNotEqual(-1, connectionsIndex);
+        Assert.AreNotEqual(-1, recentEventsIndex);
+        Assert.IsGreaterThan(
+            connectionsIndex,
+            recentEventsIndex,
+            "Recent events should sit below the connections section in the middle column.");
+        StringAssert.Contains(recentEventsXaml, "Text=\"{Binding RecentEventsSectionText}\"");
+        StringAssert.Contains(recentEventsXaml, "ItemsSource=\"{Binding VisibleRecentEvents}\"");
+        StringAssert.Contains(
+            recentEventsXaml,
+            "IsChecked=\"{Binding IsRecentEventsExpanded, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            recentEventsXaml,
+            "Command=\"{Binding ViewAllRecentEventsCommand}\"");
+    }
+
     private static string ReadSourceFile(params string[] pathParts)
     {
         var repoRoot = GetRepoRoot();
