@@ -22,6 +22,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int DataPreviewRowLimit = 50;
     private const int DataPreviewRunRefreshAttemptCount = 8;
     private const int WorkflowRunTerminalRefreshAttemptCount = 40;
+    private static readonly TimeSpan DefaultNotificationAutoDismissAfter = TimeSpan.FromSeconds(4);
 
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
@@ -503,6 +504,20 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         IsNotificationOpen = false;
         NotificationAutoDismissAfter = null;
+    }
+
+    private void ShowWorkflowDefinitionNotification(
+        string key,
+        UiNotificationKind kind,
+        bool isSticky = false)
+    {
+        ShowNotification(
+            key,
+            kind,
+            WorkflowDefinitionValidationMessage,
+            WorkflowDefinitionValidationErrorMessage ?? string.Empty,
+            isSticky,
+            DefaultNotificationAutoDismissAfter);
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
@@ -1721,6 +1736,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkflowDefinitionValidationMessage = T("definition.validation_rejected");
             WorkflowDefinitionValidationErrorMessage = T("definition.draft_required");
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.validate",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1734,6 +1752,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
             WorkflowDefinitionValidationErrorMessage = ex.Message;
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.validate",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1753,12 +1774,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 : T("definition.draft_has_issues");
             WorkflowDefinitionValidationErrorMessage = FormatValidationIssues(response.Data);
             IsValidatingWorkflowDefinitionDraft = false;
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.validate",
+                response.Data.Valid ? UiNotificationKind.Success : UiNotificationKind.Warning);
             return;
         }
 
         WorkflowDefinitionValidationMessage = T("definition.validation_failed");
         WorkflowDefinitionValidationErrorMessage = DescribeError(response);
         IsValidatingWorkflowDefinitionDraft = false;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.validate",
+            UiNotificationKind.Error);
     }
 
     [RelayCommand(CanExecute = nameof(CanApplySelectedNodeConfigDraft))]
@@ -1769,6 +1796,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
             WorkflowDefinitionValidationErrorMessage =
                 DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_config",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1780,6 +1810,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
             WorkflowDefinitionValidationErrorMessage =
                 FormatNodeConfigApplyErrors(configResult);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_config",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1792,12 +1825,18 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
             WorkflowDefinitionValidationErrorMessage = patchResult.Warning;
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_config",
+                UiNotificationKind.Error);
             return;
         }
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
         WorkflowDefinitionValidationMessage = T("definition.node_config_applied");
         WorkflowDefinitionValidationErrorMessage = null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.node_config",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanApplySelectedNodeDisplayNameDraft))]
@@ -1818,6 +1857,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_display_name_apply_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_display_name",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1825,6 +1867,9 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectWorkflowDefinitionDraftNode(nodeInstanceId);
         WorkflowDefinitionValidationMessage = T("definition.node_display_name_applied");
         WorkflowDefinitionValidationErrorMessage = null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.node_display_name",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftNode))]
@@ -1842,6 +1887,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
             WorkflowDefinitionValidationErrorMessage =
                 T("definition.node_add_config_json_invalid");
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.add_node",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1860,6 +1908,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.add_node",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1873,6 +1924,9 @@ public partial class MainWindowViewModel : ViewModelBase
             FormatAutoWiredConnectionsMessage(
                 patchResult.RemovedConnections,
                 patchResult.AddedConnections);
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.add_node",
+            UiNotificationKind.Success);
         ResetNewDraftNodeInput();
         IsWorkflowAddNodePanelVisible = false;
     }
@@ -1905,6 +1959,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_delete_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.delete_node",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1921,6 +1978,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     patchResult.RemovedConnections,
                     patchResult.AddedConnections)
                 : FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.delete_node",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowDefinitionDraftNodes))]
@@ -1943,6 +2003,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_delete_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.delete_nodes",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1955,6 +2018,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 : F("format.workflow_definition_nodes_deleted", selectedNodeIds.Length);
         WorkflowDefinitionValidationErrorMessage =
             FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.delete_nodes",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanCopyWorkflowDefinitionDraftNode))]
@@ -1973,6 +2039,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_copy_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.copy_node",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -1984,6 +2053,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionValidationMessage = T("definition.node_copied");
         WorkflowDefinitionValidationErrorMessage = null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.copy_node",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanMoveSelectedWorkflowDefinitionDraftNodeUp))]
@@ -2015,6 +2087,9 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionValidationMessage = T("definition.node_move_failed");
             WorkflowDefinitionValidationErrorMessage =
                 LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.move_node",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -2030,6 +2105,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     patchResult.RemovedConnections,
                     patchResult.AddedConnections)
                 : null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.move_node",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftConnection))]
@@ -2082,6 +2160,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkflowDefinitionValidationMessage = T("definition.save_rejected");
             WorkflowDefinitionValidationErrorMessage = T("definition.load_before_saving");
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.save",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -2095,6 +2176,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
             WorkflowDefinitionValidationErrorMessage = ex.Message;
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.save",
+                UiNotificationKind.Error);
             return;
         }
 
@@ -2116,6 +2200,9 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 WorkflowDefinitionValidationMessage =
                     F("format.saved_workflow", saved.Data.Name, saved.Data.Version);
+                ShowWorkflowDefinitionNotification(
+                    "workflow.definition.save",
+                    UiNotificationKind.Success);
                 IsWorkflowDefinitionDraftDirty = false;
                 HasWorkflowDefinitionRevisionConflict = false;
                 await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
@@ -2128,11 +2215,17 @@ public partial class MainWindowViewModel : ViewModelBase
                 HasWorkflowDefinitionRevisionConflict = true;
                 WorkflowDefinitionValidationMessage = T("definition.save_failed");
                 WorkflowDefinitionValidationErrorMessage = T("definition.revision_conflict");
+                ShowWorkflowDefinitionNotification(
+                    "workflow.definition.save",
+                    UiNotificationKind.Error);
                 return;
             }
 
             WorkflowDefinitionValidationMessage = T("definition.save_failed");
             WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.save",
+                UiNotificationKind.Error);
         }
         finally
         {

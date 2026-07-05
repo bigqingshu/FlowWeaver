@@ -950,6 +950,12 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(3, node.GetProperty("config").GetProperty("rows").GetInt32());
         Assert.AreEqual("Node added to draft. Validate before saving.", viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.AreEqual("workflow.definition.add_node", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual(
+            "Node added to draft. Validate before saving.",
+            viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("1 node(s)", viewModel.WorkflowDefinitionDraftNodeCountText);
@@ -1120,6 +1126,13 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Node config JSON is invalid.",
             viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual("workflow.definition.add_node", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Error, viewModel.NotificationKind);
+        Assert.AreEqual("Node add failed.", viewModel.NotificationTitle);
+        Assert.AreEqual(
+            "Node config JSON is invalid.",
+            viewModel.NotificationMessage);
+        Assert.IsTrue(viewModel.IsNotificationSticky);
         Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
         Assert.AreEqual("source", viewModel.NewDraftNodeInstanceId);
         Assert.IsTrue(viewModel.IsWorkflowAddNodePanelVisible);
@@ -1213,6 +1226,11 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Node copied to draft. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("workflow.definition.copy_node", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual(
+            "Node copied to draft. Validate before saving.",
+            viewModel.NotificationTitle);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual("source_copy_2", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
@@ -1336,6 +1354,11 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Node deleted from draft. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("workflow.definition.delete_node", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual(
+            "Node deleted from draft. Validate before saving.",
+            viewModel.NotificationTitle);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftNodeCount);
@@ -1387,6 +1410,11 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Node list order updated; connections are unchanged. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual("workflow.definition.move_node", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual(
+            "Node list order updated; connections are unchanged. Validate before saving.",
+            viewModel.NotificationTitle);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual("filter", viewModel.WorkflowDefinitionDraftNodes[0].NodeInstanceId);
@@ -2211,6 +2239,10 @@ public sealed class MainWindowViewModelWorkflowTests
                 .GetString());
         Assert.AreEqual("Workflow draft is valid.", viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.AreEqual("workflow.definition.validate", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Workflow draft is valid.", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -2273,6 +2305,14 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "UNKNOWN_NODE_TYPE at nodes[0]: Unknown node type/version: Missing@1.0",
             viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual("workflow.definition.validate", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Warning, viewModel.NotificationKind);
+        Assert.AreEqual(
+            "Workflow draft has validation issues.",
+            viewModel.NotificationTitle);
+        Assert.AreEqual(
+            "UNKNOWN_NODE_TYPE at nodes[0]: Unknown node type/version: Missing@1.0",
+            viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -2331,6 +2371,10 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("rev-wf-1-v2", viewModel.WorkflowDefinitionDetail?.RevisionId);
         Assert.AreEqual("Loaded Daily Load v2.", viewModel.WorkflowDefinitionMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.AreEqual("workflow.definition.save", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Saved workflow Daily Load v2.", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -2357,6 +2401,13 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Revision conflict: the workflow has been modified by another session.",
             viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual("workflow.definition.save", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Error, viewModel.NotificationKind);
+        Assert.AreEqual("Workflow draft save failed.", viewModel.NotificationTitle);
+        Assert.AreEqual(
+            "Revision conflict: the workflow has been modified by another session.",
+            viewModel.NotificationMessage);
+        Assert.IsTrue(viewModel.IsNotificationSticky);
         Assert.IsTrue(viewModel.HasWorkflowDefinitionValidationError);
         Assert.IsTrue(viewModel.HasWorkflowDefinitionRevisionConflict);
         Assert.AreEqual("""{"nodes":[],"connections":[]}""", viewModel.WorkflowDefinitionDraftJson);
