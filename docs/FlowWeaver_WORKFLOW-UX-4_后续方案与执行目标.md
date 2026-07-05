@@ -403,3 +403,20 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：134 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### DATA-PREVIEW-3：空表、失败保留和成功替换验收复核
+
+状态：已完成。
+
+验收结论：
+
+- 空表场景保留列头并显示 0 行，不误报错误。
+- 缺少输出表、刷新失败和预览启动失败不会清空上一份有效表格。
+- 后续成功刷新会全量替换列、行和来源信息。
+- 预览选中节点与完整运行都会在运行完成后尝试刷新数据预览。
+- 当前不新增分页、排序、筛选和大表虚拟化，这些进入后续数据体验阶段再设计。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：92 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
