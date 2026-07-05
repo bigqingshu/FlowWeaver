@@ -15,7 +15,9 @@ public sealed class MainWindowShellStructureTests
 
         StringAssert.Contains(xaml, "<shell:ShellHeaderView />");
         StringAssert.Contains(xaml, "<shell:AppShellPageHost Grid.Row=\"1\" />");
-        StringAssert.Contains(xaml, "<shell:ShellNotificationHostView Grid.RowSpan=\"2\"");
+        StringAssert.Contains(xaml, "<shell:ShellNotificationHostView Grid.Row=\"1\"");
+        StringAssert.Contains(xaml, "VerticalAlignment=\"Top\"");
+        StringAssert.Contains(xaml, "Margin=\"0,12,12,0\"");
         StringAssert.Contains(xaml, "ZIndex=\"10\"");
         Assert.IsFalse(xaml.Contains("AppTitleText", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("AppSubtitleText", StringComparison.Ordinal));
@@ -52,11 +54,18 @@ public sealed class MainWindowShellStructureTests
             "ShellNotificationHostView.axaml");
 
         StringAssert.Contains(xaml, "x:DataType=\"vm:MainWindowViewModel\"");
+        StringAssert.Contains(xaml, "Width=\"420\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"220\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsNotificationOpen}\"");
+        StringAssert.Contains(xaml, "ColumnDefinitions=\"Auto,*\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NotificationKindText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NotificationTitle}\"");
+        StringAssert.Contains(xaml, "TextWrapping=\"Wrap\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NotificationMessage}\"");
+        StringAssert.Contains(xaml, "<ScrollViewer Grid.Row=\"1\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"140\"");
         StringAssert.Contains(xaml, "Command=\"{Binding CloseNotificationCommand}\"");
+        Assert.IsFalse(xaml.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("RuntimeEvent", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("AuditEvent", StringComparison.Ordinal));
     }
