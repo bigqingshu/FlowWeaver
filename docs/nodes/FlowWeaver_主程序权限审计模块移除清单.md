@@ -61,6 +61,17 @@
 | `tests/integration/test_builtin_shared_table_nodes.py` | 当前共享表节点依赖权限句柄和审计断言。 | 改为验证共享表发布/读取本身。 |
 | `tests/integration/test_workflow_process_main.py` | 当前断言任务 permission handle、grant、permission audit。 | 删除权限相关断言，保留工作流执行和输出验证。 |
 | `tests/integration/test_k0b_formal_path_smoke.py` | 当前断言存在审计事件。 | 移除 `list_audit_events()` 断言。 |
+| `tests/integration/test_l3a_empty_runtime_smoke.py` | 空数据库正式路径 smoke 查询 `/api/v1/audit-events`。 | 改为验证 RuntimeEvent、NodeRun、TableRef 或 SharedPublication。 |
+| `tests/integration/test_l3b_formal_workflow_smoke.py` | 已有工作流正式路径 smoke 查询并断言审计事件。 | 移除审计 API 断言，保留运行、事件和数据链路验收。 |
+| `tests/integration/test_l3c_enginehost_restart_smoke.py` | EngineHost 重启恢复 smoke 查询并断言审计事件。 | 改为验证重启后的 RuntimeEvent、运行状态和数据恢复。 |
+| `tests/integration/test_n5_portable_runtime_smoke.py` | 便携目录后端完整 runtime smoke 包含 AuditEvent 查询。 | 删除审计事件断言，改为验证便携目录正式运行链路。 |
+| `tests/integration/test_table_lease_manager.py` | 表租约测试直接查询 `AuditEventRecord`。 | 删除租约审计断言；如保留诊断，改查 RuntimeEvent 或内部日志。 |
+| `Avalonia_UI.Tests/EngineHostApiClientTests.cs` | 测试 `ListAuditEventsAsync` 查询参数和 `/api/v1/audit-events` 路径。 | 删除审计 API 客户端测试，补 RuntimeEvent 查询测试即可。 |
+| `Avalonia_UI.Tests/EngineHostFormalSmokeTests.cs` | 桌面正式 smoke 调用 `ListAuditEventsAsync` 并断言审计事件。 | 移除审计断言，保留 API、WebSocket、运行和数据摘要验收。 |
+| `Avalonia_UI.Tests/MainWindowViewModelLogTests.cs` | 覆盖 `RefreshAuditEventsCommand`、审计加载状态和旧请求丢弃。 | 删除审计刷新测试，只保留 RuntimeEvent 日志状态测试。 |
+| `Avalonia_UI.Tests/AppShellPageHostStructureTests.cs` | 结构测试断言 `LogsAuditPage` 承载。 | 日志页重命名后同步调整为 `LogsPage` 或新的日志页面。 |
+| `Avalonia_UI.Tests/MainWindowViewModelLocalizationTests.cs` | 断言审计本地化文案，例如 `AuditEventsSectionText`。 | 删除审计文案断言，保留运行日志文案断言。 |
+| `Avalonia_UI.Tests/*` 中的 API fake | 多个 ViewModel 测试 fake 实现 `ListAuditEventsAsync`。 | 删除接口方法后同步清理所有 fake 实现，避免编译失败。 |
 
 ## 文档修改清单
 
@@ -70,20 +81,27 @@
 | `docs/01_第一阶段执行方案.md` | 包含 PermissionManager、AuditEvent、权限句柄相关执行计划。 | 移除主程序权限审计计划。 |
 | `docs/02_数据库共享表与节点故障隔离_讨论方案.md` | 共享表方案仍围绕权限句柄和审计控制。 | 改成共享表数据校验和运行引用，不走权限句柄。 |
 | `docs/03_架构讨论阶段总结.md` | 大量章节将权限/审计作为平台核心能力。 | 统一标记为已废弃或重写为“主程序不做权限审计”。 |
+| `README.md` | 当前阶段摘要和 J/K/N 记录仍把权限审计作为已完成主线能力。 | 作为主入口必须同步更新，明确主程序权限审计已改为移除/后置。 |
 | `docs/FlowWeaver_NODE-CONFIG-SCHEMA-0_后端配置Schema边界清单.md` | `secret`、路径权限、运行时权限校验仍指向主程序权限体系。 | 调整为后置能力，由节点方案单独讨论。 |
 | `docs/FlowWeaver_Gemini_UI界面设计_MainWindow拆分与接口规划任务说明.md` | UI 规划包含 AuditEvent、LogsAuditPage、审计列表。 | 移除审计页面要求，日志页只保留 RuntimeEvent。 |
 | `docs/FlowWeaver_UI-COMPACT-0_工作流页面精简与通知日志浮层边界清单.md` | 完整日志页仍描述 RuntimeEvent/AuditEvent 双列表。 | 改为 RuntimeEvent 和最近运行事件。 |
+| `docs/FlowWeaver_UI-COMPACT-6_总体验收复核.md` | 阶段复核中仍保留完整 RuntimeEvent/AuditEvent 日志页表述。 | 改为 RuntimeEvent 日志页和最近事件面板。 |
 | `docs/FlowWeaver_UI-ACTION_总体验收复核.md` | 复核范围包含 Logs/Audit 双刷新状态。 | 改为 RuntimeEvent 刷新状态。 |
+| `docs/FlowWeaver_UI_交互状态矩阵与ActionState实施清单.md` | 交互状态矩阵可能仍包含 AuditEvent 刷新和日志页动作。 | 删除审计动作状态，保留运行事件和通知状态。 |
+| `docs/FlowWeaver_UI_L10N_0_语言设置边界清单.md`、`docs/FlowWeaver_UI_L10N_后置复核.md` | 本地化清单可能仍列出审计事件相关 key。 | 清理审计文案，避免保留已删除页面的翻译要求。 |
+| `docs/UI组件MainWindow的后续计划.MD` | MainWindow 拆分计划仍引用 `LogsAuditPage` 或 AuditEvent。 | 更新为单纯日志页组件计划。 |
 | `docs/nodes/FlowWeaver_节点规划核心模板.md` | 节点模板包含权限句柄、AuditEvent、需要权限栏目。 | 移除权限句柄和审计，改为“副作用/外部资源说明”。 |
 | `docs/nodes/FlowWeaver_节点模板减法建议.md` | 仍保留简单权限声明和默认审计讨论。 | 改为后置或移除。 |
 | `docs/nodes/FlowWeaver_节点核心模板_当前主程序框架支持分析.md` | 当前把权限审计作为主程序支持能力/缺口分析。 | 更新为“权限审计将从默认主程序移除”。 |
 | `docs/nodes/00_FlowWeaver_防止主程序与节点耦合方案.md` | 仍把权限入口、授权、权限句柄写入主程序边界。 | 暂时保留，等代码移除完成后再统一更新耦合列表。 |
+| 历史阶段文档 | 多个 K/L/N/P 阶段记录会保留当时 AuditEvent 验收事实。 | 不建议逐篇重写历史；优先更新 README、当前计划和活跃设计文档，并在必要位置补“权限审计已后置/移除”说明。 |
 
 ## 不纳入本次移除范围
 
 | 内容 | 位置 | 保留原因 |
 |---|---|---|
 | 发布 runtime audit | `tools/portable_runtime_audit.py`、`tests/unit/test_portable_runtime_audit.py`、P 阶段发布文档 | 这是发布包运行时检查，不是主程序运行期权限/审计模块。 |
+| 发布归档 runtime audit 调用 | `tools/create_portable_archive.py`、`tests/unit/test_create_portable_archive.py`、`tests/integration/test_p4_portable_archive_clean_room_smoke.py` | 这些只负责发布物干净度检查、manifest 和 release strict，不应因移除主程序 AuditEvent 被删除。 |
 | RuntimeEvent | `src/flowweaver/protocols/events.py`、`src/flowweaver/api/routes_events.py`、桌面 RuntimeEvent 日志页面 | 这是工作流运行状态和调试显示所需能力，应保留。 |
 | 节点运行状态 | `NodeRunStatus` 中除 `WAITING_PERMISSION` 之外的状态 | 这是工作流运行所需状态机，应保留。 |
 | 数据引用和表格读取 | `TableRef`、`DataRef`、`SQLiteRuntimeTableProvider` | 这是当前数据中转核心能力，不属于权限审计模块。 |
