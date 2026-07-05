@@ -49,7 +49,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("已选择 0 个节点", viewModel.WorkflowDefinitionBatchSelectedNodeCountText);
         Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual(
-            "上移/下移只调整草稿节点列表顺序，不改变连接和执行依赖。",
+            "上移/下移仅在线性链路的中间相邻节点交换时重排连接；其他情况只调整草稿节点列表顺序。",
             viewModel.NodeMoveSemanticsText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);
@@ -104,7 +104,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("节点版本", viewModel.NodeVersionText);
         Assert.AreEqual("节点操作", viewModel.NodeActionsSectionText);
         Assert.AreEqual(
-            "上移/下移只调整草稿节点列表顺序，不改变连接和执行依赖。",
+            "上移/下移仅在线性链路的中间相邻节点交换时重排连接；其他情况只调整草稿节点列表顺序。",
             viewModel.NodeMoveSemanticsText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);

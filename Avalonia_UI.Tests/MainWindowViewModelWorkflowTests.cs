@@ -1404,6 +1404,75 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task MoveWorkflowDefinitionDraftNodeCommandRewiresLinearAdjacentMiddleNodes()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "transform", "node_type": "SelectColumnsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_transform", "source_node_id": "filter", "source_port": "out", "target_node_id": "transform", "target_port": "in"},
+                {"connection_id": "transform_to_sink", "source_node_id": "transform", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "transform");
+
+        viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpCommand.Execute(null);
+
+        Assert.AreEqual(
+            "Node list order updated and linear connections were rewired. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        var message = viewModel.WorkflowDefinitionValidationErrorMessage ?? string.Empty;
+        StringAssert.Contains(message, "Updated connections:");
+        StringAssert.Contains(message, "source_to_filter: source.out -> filter.in");
+        StringAssert.Contains(message, "source_to_transform: source.out -> transform.in");
+        StringAssert.Contains(message, "transform_to_filter: transform.out -> filter.in");
+        StringAssert.Contains(message, "filter_to_sink: filter.out -> sink.in");
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var nodes = draft.RootElement.GetProperty("nodes");
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("transform", nodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("filter", nodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[3].GetProperty("node_instance_id").GetString());
+
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(3, connections.GetArrayLength());
+        Assert.AreEqual(
+            "source_to_transform",
+            connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "transform_to_filter",
+            connections[1].GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "filter_to_sink",
+            connections[2].GetProperty("connection_id").GetString());
+    }
+
+    [TestMethod]
     public async Task WorkflowDefinitionNodeActionDisabledReasonsReflectSelectionAndBoundaries()
     {
         var definitionJson =

@@ -306,6 +306,92 @@ public static class WorkflowDefinitionDraftNodePatcher
         };
     }
 
+    private static IReadOnlyList<WorkflowDefinitionDraftConnection>? TryCreateLinearRewiredConnections(
+        JsonArray nodes,
+        JsonArray connections)
+    {
+        var nodeIds = TryReadNodeIds(nodes);
+        if (nodeIds is null || nodeIds.Count <= 1)
+        {
+            return null;
+        }
+
+        var outputPortsByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var inputPortsByNodeId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var connection in connections)
+        {
+            if (connection is not JsonObject connectionObject)
+            {
+                return null;
+            }
+
+            var current = ReadConnection(connectionObject);
+            if (string.IsNullOrWhiteSpace(current.SourceNodeId) ||
+                string.IsNullOrWhiteSpace(current.SourcePort) ||
+                string.IsNullOrWhiteSpace(current.TargetNodeId) ||
+                string.IsNullOrWhiteSpace(current.TargetPort) ||
+                !outputPortsByNodeId.TryAdd(current.SourceNodeId, current.SourcePort) ||
+                !inputPortsByNodeId.TryAdd(current.TargetNodeId, current.TargetPort))
+            {
+                return null;
+            }
+        }
+
+        var rewiredConnections = new List<WorkflowDefinitionDraftConnection>();
+        var reservedConnectionIds = new List<string>();
+        var emptyConnections = new JsonArray();
+        for (var index = 0; index < nodeIds.Count - 1; index++)
+        {
+            var sourceNodeId = nodeIds[index];
+            var targetNodeId = nodeIds[index + 1];
+            if (!outputPortsByNodeId.TryGetValue(sourceNodeId, out var sourcePort) ||
+                !inputPortsByNodeId.TryGetValue(targetNodeId, out var targetPort))
+            {
+                return null;
+            }
+
+            var connectionId = BuildUniqueConnectionId(
+                emptyConnections,
+                sourceNodeId,
+                targetNodeId,
+                reservedConnectionIds);
+            reservedConnectionIds.Add(connectionId);
+            rewiredConnections.Add(
+                new WorkflowDefinitionDraftConnection
+                {
+                    ConnectionId = connectionId,
+                    SourceNodeId = sourceNodeId,
+                    SourcePort = sourcePort,
+                    TargetNodeId = targetNodeId,
+                    TargetPort = targetPort,
+                });
+        }
+
+        return rewiredConnections;
+    }
+
+    private static IReadOnlyList<string>? TryReadNodeIds(JsonArray nodes)
+    {
+        var nodeIds = new List<string>();
+        foreach (var node in nodes)
+        {
+            if (node is not JsonObject nodeObject)
+            {
+                return null;
+            }
+
+            var nodeId = GetStringValue(nodeObject, "node_instance_id");
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                return null;
+            }
+
+            nodeIds.Add(nodeId);
+        }
+
+        return nodeIds;
+    }
+
     private static WorkflowDefinitionDraftConnection ReadConnection(
         JsonObject connectionObject)
     {
@@ -678,6 +764,31 @@ public static class WorkflowDefinitionDraftNodePatcher
         string nodeInstanceId,
         int offset)
     {
+        return MoveNodeCore(
+            workflowDefinitionDraftJson,
+            nodeInstanceId,
+            offset,
+            rewireLinearConnections: false);
+    }
+
+    public static WorkflowDefinitionDraftNodePatchResult MoveNodeWithLinearRewire(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId,
+        int offset)
+    {
+        return MoveNodeCore(
+            workflowDefinitionDraftJson,
+            nodeInstanceId,
+            offset,
+            rewireLinearConnections: true);
+    }
+
+    private static WorkflowDefinitionDraftNodePatchResult MoveNodeCore(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId,
+        int offset,
+        bool rewireLinearConnections)
+    {
         if (string.IsNullOrWhiteSpace(nodeInstanceId))
         {
             return Failed(
@@ -718,9 +829,41 @@ public static class WorkflowDefinitionDraftNodePatcher
         readResult.Nodes.RemoveAt(sourceIndex);
         readResult.Nodes.Insert(targetIndex, node);
 
+        var removedConnections = new List<WorkflowDefinitionDraftConnection>();
+        var addedConnections = new List<WorkflowDefinitionDraftConnection>();
+        if (rewireLinearConnections &&
+            Math.Abs(offset) == 1 &&
+            WorkflowDefinitionLinearChainAnalyzer
+                .Analyze(workflowDefinitionDraftJson)
+                .IsLinear)
+        {
+            var rewiredConnections = TryCreateLinearRewiredConnections(
+                readResult.Nodes,
+                readResult.Connections);
+            if (rewiredConnections is not null)
+            {
+                foreach (var connection in readResult.Connections)
+                {
+                    if (connection is JsonObject connectionObject)
+                    {
+                        removedConnections.Add(ReadConnection(connectionObject));
+                    }
+                }
+
+                readResult.Connections.Clear();
+                foreach (var rewiredConnection in rewiredConnections)
+                {
+                    readResult.Connections.Add(CreateConnectionObject(rewiredConnection));
+                    addedConnections.Add(rewiredConnection);
+                }
+            }
+        }
+
         return new WorkflowDefinitionDraftNodePatchResult
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            RemovedConnections = removedConnections,
+            AddedConnections = addedConnections,
             UpdatedWorkflowDefinitionDraftJson =
                 readResult.Root.ToJsonString(IndentedJsonOptions),
         };

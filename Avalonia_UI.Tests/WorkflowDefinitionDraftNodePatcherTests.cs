@@ -465,6 +465,87 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void MoveNodeWithLinearRewireReordersAdjacentMiddleNodesAndConnections()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.MoveNodeWithLinearRewire(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "transform"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_transform", "source_node_id": "filter", "source_port": "out", "target_node_id": "transform", "target_port": "in"},
+                {"connection_id": "transform_to_sink", "source_node_id": "transform", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """,
+            "transform",
+            -1);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.HasCount(3, result.RemovedConnections);
+        Assert.HasCount(3, result.AddedConnections);
+        Assert.AreEqual("source_to_transform", result.AddedConnections[0].ConnectionId);
+        Assert.AreEqual("source", result.AddedConnections[0].SourceNodeId);
+        Assert.AreEqual("transform", result.AddedConnections[0].TargetNodeId);
+        Assert.AreEqual("transform_to_filter", result.AddedConnections[1].ConnectionId);
+        Assert.AreEqual("transform", result.AddedConnections[1].SourceNodeId);
+        Assert.AreEqual("filter", result.AddedConnections[1].TargetNodeId);
+        Assert.AreEqual("filter_to_sink", result.AddedConnections[2].ConnectionId);
+        Assert.AreEqual("filter", result.AddedConnections[2].SourceNodeId);
+        Assert.AreEqual("sink", result.AddedConnections[2].TargetNodeId);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var nodes = updated.RootElement.GetProperty("nodes");
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("transform", nodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("filter", nodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[3].GetProperty("node_instance_id").GetString());
+
+        var connections = updated.RootElement.GetProperty("connections");
+        Assert.AreEqual(3, connections.GetArrayLength());
+        Assert.AreEqual("source_to_transform", connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("transform_to_filter", connections[1].GetProperty("connection_id").GetString());
+        Assert.AreEqual("filter_to_sink", connections[2].GetProperty("connection_id").GetString());
+    }
+
+    [TestMethod]
+    public void MoveNodeWithLinearRewirePreservesConnectionsWhenPortsCannotBeInferred()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.MoveNodeWithLinearRewire(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_sink", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """,
+            "source",
+            1);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.IsEmpty(result.RemovedConnections);
+        Assert.IsEmpty(result.AddedConnections);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var nodes = updated.RootElement.GetProperty("nodes");
+        Assert.AreEqual("filter", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("source", nodes[1].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[2].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual(2, updated.RootElement.GetProperty("connections").GetArrayLength());
+    }
+
+    [TestMethod]
     public void MoveNodeRejectsOutOfRangeMove()
     {
         var result = WorkflowDefinitionDraftNodePatcher.MoveNode(

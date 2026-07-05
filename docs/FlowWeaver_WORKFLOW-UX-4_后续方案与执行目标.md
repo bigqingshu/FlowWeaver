@@ -167,6 +167,7 @@
 - 节点实例 ID 编辑不能直接作为普通输入暴露；如果后续支持重命名，需要同步处理 connections 引用、选中状态、批量选择状态和保存前校验。
 - 线性识别层需要把“单节点但存在自环连接”视为非法拓扑，不能因为节点数为 1 就直接通过。
 - 线性删除桥接第一版只接入单节点删除；批量删除仍保持“删除节点并移除相关连接”，如需批量桥接需要单独定义连续区间和非连续选择的语义。
+- 线性上移/下移第一版只支持中间相邻节点交换；移动源节点、尾节点或端口无法推导时，应回退为只调整节点列表顺序。
 
 ## 阶段执行记录
 
@@ -288,3 +289,19 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests|FullyQualifiedName~JsonLocalizationServiceTests"`：127 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：343 passed。
+
+### WORKFLOW-UX-5.3：线性上移/下移相邻重排
+
+状态：已完成。
+
+完成内容：
+
+- 新增 `MoveNodeWithLinearRewire(...)`，保留原 `MoveNode(...)` 默认移动语义不变。
+- 上移/下移命令改用线性重排方法：旧草稿为线性链路、移动为相邻交换、且新顺序所有相邻端口均可推导时，重建线性 connections。
+- 移动源节点、尾节点、端口缺失或非线性草稿时，回退为只调整节点列表顺序，connections 不改变。
+- 更新移动成功文案和连接重排明细；同步修正节点操作区的移动语义说明。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests|FullyQualifiedName~JsonLocalizationServiceTests"`：152 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：346 passed。
