@@ -41,6 +41,10 @@
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            IsVisible="{Binding HasNoSelectedWorkflowDefinitionNode}"/>
+                <TextBlock Text="{Binding DataPreviewSourceText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Text="{Binding DataPreviewMessage}"
                            FontSize="12"
                            TextWrapping="Wrap"

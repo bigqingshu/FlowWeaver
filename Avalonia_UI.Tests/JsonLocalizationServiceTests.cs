@@ -35,6 +35,10 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual("服务地址", service.GetString("connection.base_url"));
         Assert.AreEqual("关闭", service.GetString("common.close"));
         Assert.AreEqual("简体中文", service.GetString("language.zh-Hans"));
+        Assert.AreEqual("尚未加载数据预览。", service.GetString("data_preview.source_not_loaded"));
+        Assert.AreEqual(
+            "来源：运行 run-1，节点 generate，表 orders。",
+            service.Format("format.data_preview_source", "run-1", "generate", "orders"));
         Assert.AreEqual(
             "请先删除相关连接，再删除该节点。",
             service.GetString("definition.warning.node_has_connections"));

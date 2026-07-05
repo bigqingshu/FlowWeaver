@@ -61,6 +61,7 @@ public sealed class MainWindowViewModelLocalizationTests
             viewModel.DataPreviewPendingText);
         Assert.AreEqual("刷新预览", viewModel.DataPreviewRefreshText);
         Assert.AreEqual("预览选中节点", viewModel.PreviewSelectedNodeText);
+        Assert.AreEqual("尚未加载数据预览。", viewModel.DataPreviewSourceText);
         Assert.AreEqual("节点实例 ID", viewModel.NodeInstanceIdText);
         Assert.AreEqual("配置 JSON", viewModel.ConfigJsonText);
         Assert.AreEqual("显示连接", viewModel.ShowConnectionsText);
@@ -116,6 +117,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);
         Assert.AreEqual("刷新预览", viewModel.DataPreviewRefreshText);
         Assert.AreEqual("预览选中节点", viewModel.PreviewSelectedNodeText);
+        Assert.AreEqual("尚未加载数据预览。", viewModel.DataPreviewSourceText);
         Assert.AreEqual("显示名称", viewModel.DisplayNameText);
         Assert.AreEqual("连接 ID", viewModel.ConnectionIdText);
         Assert.AreEqual("源端口", viewModel.SourcePortText);

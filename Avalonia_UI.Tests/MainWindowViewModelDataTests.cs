@@ -159,6 +159,9 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsTrue(viewModel.HasDataPreviewRows);
         Assert.IsFalse(viewModel.HasDataPreviewError);
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "Source: run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
     }
 
     [TestMethod]
@@ -285,6 +288,9 @@ public sealed class MainWindowViewModelDataTests
 
         Assert.IsFalse(viewModel.HasDataPreviewRows);
         Assert.AreEqual("Node generate has no readable output table.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "No data preview loaded yet.",
+            viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
     }
 
@@ -329,6 +335,9 @@ public sealed class MainWindowViewModelDataTests
             new[] { "1", "12.5" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Node generate has no readable output table.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "Source: run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
 
         apiClient.TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
@@ -355,6 +364,9 @@ public sealed class MainWindowViewModelDataTests
             new[] { "A" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "Source: run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
     }
 

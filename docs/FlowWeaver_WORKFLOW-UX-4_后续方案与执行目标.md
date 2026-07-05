@@ -371,3 +371,19 @@
 测试结果：
 
 - 现状复核小步，未改代码；本轮进入 DATA-PREVIEW 前已执行 `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### DATA-PREVIEW-1：预览来源常驻说明
+
+状态：已完成。
+
+完成内容：
+
+- 新增数据预览来源派生文本，展示上一次成功加载的 run、node 和 logical table。
+- 成功加载预览数据时更新来源；刷新失败、缺少输出表或选择变化时不清空上一份来源，与表格保留策略一致。
+- 数据预览窗口新增来源行；未成功加载过预览时显示“尚未加载数据预览”。
+- 补充中英文文案和结构测试。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：52 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。

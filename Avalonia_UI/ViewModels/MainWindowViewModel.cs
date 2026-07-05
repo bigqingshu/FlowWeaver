@@ -303,6 +303,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? dataPreviewErrorMessage;
 
+    private string? dataPreviewSourceWorkflowRunId;
+
+    private string? dataPreviewSourceNodeInstanceId;
+
+    private string? dataPreviewSourceLogicalTableId;
+
     [ObservableProperty]
     private string sharedPublicationShareNameFilter = string.Empty;
 
@@ -602,6 +608,17 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasDataPreviewColumns => DataPreviewColumns.Count > 0;
 
     public bool HasDataPreviewRows => DataPreviewRows.Count > 0;
+
+    public string DataPreviewSourceText =>
+        !string.IsNullOrWhiteSpace(dataPreviewSourceWorkflowRunId)
+        && !string.IsNullOrWhiteSpace(dataPreviewSourceNodeInstanceId)
+        && !string.IsNullOrWhiteSpace(dataPreviewSourceLogicalTableId)
+            ? F(
+                "format.data_preview_source",
+                dataPreviewSourceWorkflowRunId,
+                dataPreviewSourceNodeInstanceId,
+                dataPreviewSourceLogicalTableId)
+            : T("data_preview.source_not_loaded");
 
     public bool HasSharedPublicationError =>
         !string.IsNullOrWhiteSpace(SharedPublicationErrorMessage);
@@ -2491,6 +2508,10 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             LoadDataPreviewRows(rowsResponse.Data);
+            UpdateDataPreviewSource(
+                requestedRunId,
+                requestedNodeInstanceId,
+                tableRef.LogicalTableId);
             DataPreviewMessage = F(
                 "format.loaded_data_preview",
                 rowsResponse.Data.Rows.Length,
@@ -2647,6 +2668,17 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         NotifyDataPreviewRowsChanged();
+    }
+
+    private void UpdateDataPreviewSource(
+        string workflowRunId,
+        string nodeInstanceId,
+        string logicalTableId)
+    {
+        dataPreviewSourceWorkflowRunId = workflowRunId;
+        dataPreviewSourceNodeInstanceId = nodeInstanceId;
+        dataPreviewSourceLogicalTableId = logicalTableId;
+        OnPropertyChanged(nameof(DataPreviewSourceText));
     }
 
     private void NotifyDataPreviewRowsChanged()
@@ -4244,6 +4276,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewPendingText));
         OnPropertyChanged(nameof(DataPreviewRefreshText));
         OnPropertyChanged(nameof(PreviewSelectedNodeText));
+        OnPropertyChanged(nameof(DataPreviewSourceText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
