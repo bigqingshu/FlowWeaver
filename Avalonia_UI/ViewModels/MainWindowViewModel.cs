@@ -942,7 +942,9 @@ public partial class MainWindowViewModel : ViewModelBase
         return CanUseEngineActions
             && SelectedWorkflow is not null
             && IsActiveWorkflowStatus(SelectedWorkflow.Status)
-            && !IsWorkflowBusy;
+            && !IsWorkflowBusy
+            && !IsWorkflowDefinitionDraftDirty
+            && !HasWorkflowDefinitionRevisionConflict;
     }
 
     private bool CanPreviewSelectedWorkflowNode()
@@ -953,7 +955,9 @@ public partial class MainWindowViewModel : ViewModelBase
             && WorkflowDefinitionDetail is not null
             && SelectedWorkflowDefinitionNode is not null
             && !IsWorkflowBusy
-            && !IsDataPreviewBusy;
+            && !IsDataPreviewBusy
+            && !IsWorkflowDefinitionDraftDirty
+            && !HasWorkflowDefinitionRevisionConflict;
     }
 
     private bool CanCreateTemplateWorkflow()
@@ -4595,6 +4599,8 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnIsWorkflowDefinitionDraftDirtyChanged(bool value)
     {
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
@@ -4606,6 +4612,8 @@ public partial class MainWindowViewModel : ViewModelBase
         AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsValidatingWorkflowDefinitionDraftChanged(bool value)

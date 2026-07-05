@@ -446,3 +446,19 @@
 测试结果：
 
 - 现状复核小步，未改代码；进入本阶段前已执行 `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### RUN-SAVE-UX-1：dirty draft 运行保护
+
+状态：已完成。
+
+完成内容：
+
+- 完整运行命令在工作流草稿 dirty 或 revision conflict 时禁用。
+- 预览选中节点命令在工作流草稿 dirty 或 revision conflict 时禁用。
+- dirty/conflict 状态变化时同步刷新运行和预览命令可用性。
+- 不改变保存接口、不改变后端运行接口、不自动保存草稿。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests"`：83 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。

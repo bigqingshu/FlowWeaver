@@ -3075,6 +3075,59 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task RunCommandsAreDisabledWhenWorkflowDefinitionDraftIsDirtyOrConflicted()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate", "node_type": "GenerateTestTableNode", "node_version": "1.0", "display_name": "Unsaved", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+
+        viewModel.IsWorkflowDefinitionDraftDirty = false;
+        viewModel.HasWorkflowDefinitionRevisionConflict = true;
+
+        Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task StartSelectedWorkflowStoresRunFeedback()
     {
         var apiClient = new FakeApiClient
