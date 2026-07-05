@@ -309,6 +309,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string? dataPreviewSourceLogicalTableId;
 
+    private string? dataPreviewSourceRunMode;
+
+    private string? dataPreviewSourceTargetNodeInstanceId;
+
     [ObservableProperty]
     private string sharedPublicationShareNameFilter = string.Empty;
 
@@ -613,11 +617,7 @@ public partial class MainWindowViewModel : ViewModelBase
         !string.IsNullOrWhiteSpace(dataPreviewSourceWorkflowRunId)
         && !string.IsNullOrWhiteSpace(dataPreviewSourceNodeInstanceId)
         && !string.IsNullOrWhiteSpace(dataPreviewSourceLogicalTableId)
-            ? F(
-                "format.data_preview_source",
-                dataPreviewSourceWorkflowRunId,
-                dataPreviewSourceNodeInstanceId,
-                dataPreviewSourceLogicalTableId)
+            ? FormatDataPreviewSourceText()
             : T("data_preview.source_not_loaded");
 
     public bool HasSharedPublicationError =>
@@ -2511,7 +2511,9 @@ public partial class MainWindowViewModel : ViewModelBase
             UpdateDataPreviewSource(
                 requestedRunId,
                 requestedNodeInstanceId,
-                tableRef.LogicalTableId);
+                tableRef.LogicalTableId,
+                SelectedRun?.RunMode,
+                SelectedRun?.TargetNodeInstanceId);
             DataPreviewMessage = F(
                 "format.loaded_data_preview",
                 rowsResponse.Data.Rows.Length,
@@ -2673,12 +2675,39 @@ public partial class MainWindowViewModel : ViewModelBase
     private void UpdateDataPreviewSource(
         string workflowRunId,
         string nodeInstanceId,
-        string logicalTableId)
+        string logicalTableId,
+        string? runMode,
+        string? targetNodeInstanceId)
     {
         dataPreviewSourceWorkflowRunId = workflowRunId;
         dataPreviewSourceNodeInstanceId = nodeInstanceId;
         dataPreviewSourceLogicalTableId = logicalTableId;
+        dataPreviewSourceRunMode = runMode;
+        dataPreviewSourceTargetNodeInstanceId = targetNodeInstanceId;
         OnPropertyChanged(nameof(DataPreviewSourceText));
+    }
+
+    private string FormatDataPreviewSourceText()
+    {
+        if (string.Equals(
+                dataPreviewSourceRunMode,
+                "preview_to_node",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return F(
+                "format.data_preview_source_preview",
+                dataPreviewSourceWorkflowRunId!,
+                string.IsNullOrWhiteSpace(dataPreviewSourceTargetNodeInstanceId)
+                    ? dataPreviewSourceNodeInstanceId!
+                    : dataPreviewSourceTargetNodeInstanceId!,
+                dataPreviewSourceLogicalTableId!);
+        }
+
+        return F(
+            "format.data_preview_source_full",
+            dataPreviewSourceWorkflowRunId!,
+            dataPreviewSourceNodeInstanceId!,
+            dataPreviewSourceLogicalTableId!);
     }
 
     private void NotifyDataPreviewRowsChanged()

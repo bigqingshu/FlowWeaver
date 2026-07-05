@@ -160,7 +160,7 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsFalse(viewModel.HasDataPreviewError);
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
         Assert.AreEqual(
-            "Source: run run-1, node generate, table orders.",
+            "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
     }
 
@@ -336,7 +336,7 @@ public sealed class MainWindowViewModelDataTests
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Node generate has no readable output table.", viewModel.DataPreviewMessage);
         Assert.AreEqual(
-            "Source: run run-1, node generate, table orders.",
+            "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
 
@@ -365,7 +365,7 @@ public sealed class MainWindowViewModelDataTests
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
         Assert.AreEqual(
-            "Source: run run-1, node generate, table orders.",
+            "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
     }

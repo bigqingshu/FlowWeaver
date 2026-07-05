@@ -3164,6 +3164,9 @@ public sealed class MainWindowViewModelWorkflowTests
         CollectionAssert.AreEqual(
             new[] { "1", "12.5" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual(
+            "Source: full run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
     }
 
     [TestMethod]
@@ -3356,7 +3359,14 @@ public sealed class MainWindowViewModelWorkflowTests
                     TargetNodeInstanceId = "generate",
                 }),
             RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
-                new List<WorkflowRunDto> { Run("run-preview", "wf-1", "SUCCEEDED") }),
+                new List<WorkflowRunDto>
+                {
+                    Run("run-preview", "wf-1", "SUCCEEDED") with
+                    {
+                        RunMode = "preview_to_node",
+                        TargetNodeInstanceId = "generate",
+                    },
+                }),
             NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
                 new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }),
             TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
@@ -3393,6 +3403,9 @@ public sealed class MainWindowViewModelWorkflowTests
         CollectionAssert.AreEqual(
             new[] { "1", "12.5" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual(
+            "Source: preview run run-preview to node generate, table orders.",
+            viewModel.DataPreviewSourceText);
     }
 
     [TestMethod]

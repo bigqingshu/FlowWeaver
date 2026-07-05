@@ -387,3 +387,19 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：52 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### DATA-PREVIEW-2：预览运行与完整运行来源区分
+
+状态：已完成。
+
+完成内容：
+
+- `WorkflowRunListItemViewModel` 保留后端 `run_mode` 和 `target_node_instance_id`。
+- 数据预览来源行区分完整运行和预览运行：完整运行显示 `full run`，预览到节点显示 `preview run ... to node ...`。
+- 缺省或空 run mode 继续按完整运行处理，兼容已有手动刷新和旧响应。
+- 补充中英文来源格式和完整运行、预览运行断言。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：134 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
