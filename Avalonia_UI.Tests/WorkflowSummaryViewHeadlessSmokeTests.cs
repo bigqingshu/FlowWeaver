@@ -53,6 +53,12 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
         StringAssert.Contains(
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
+        Assert.IsFalse(
+            addNodeXaml.Contains("NewDraftNodeInstanceId", StringComparison.Ordinal),
+            "The add-node panel should not expose node identity editing.");
+        Assert.IsFalse(
+            addNodeXaml.Contains("NewDraftNodeConfigJson", StringComparison.Ordinal),
+            "The add-node panel should not expose config JSON editing.");
     }
 
     private static string ReadSourceFile(params string[] pathParts)

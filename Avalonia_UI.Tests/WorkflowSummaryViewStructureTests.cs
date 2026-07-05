@@ -169,16 +169,7 @@ public sealed class WorkflowSummaryViewStructureTests
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(nodeListXaml, "Content=\"{Binding DeleteNodeText}\"");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeInstanceIdText}\"");
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeTypeText}\"");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeVersionText}\"");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding DisplayNameText}\"");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding ConfigJsonText}\"");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeInstanceId, Mode=TwoWay");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeType, Mode=TwoWay");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeVersion, Mode=TwoWay");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeDisplayName, Mode=TwoWay");
-        StringAssert.Contains(addNodeXaml, "Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay");
         StringAssert.Contains(
             addNodeXaml,
             "ItemsSource=\"{Binding NodeDefinitions}\"");
@@ -194,6 +185,22 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             addNodeXaml,
             "x:DataType=\"vm:NodeDefinitionListItemViewModel\"");
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NodeInstanceIdText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NodeVersionText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding ConfigJsonText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NewDraftNodeInstanceId, Mode=TwoWay", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NewDraftNodeType, Mode=TwoWay", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NewDraftNodeVersion, Mode=TwoWay", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NewDraftNodeDisplayName, Mode=TwoWay", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Text=\"{Binding NewDraftNodeConfigJson, Mode=TwoWay", StringComparison.Ordinal));
         StringAssert.Contains(
             nodeListXaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");

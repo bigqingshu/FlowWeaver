@@ -156,3 +156,21 @@
 工作阶段如发现新问题，先追加到本节，再决定是否进入实现：
 
 - 待补充。
+
+## 阶段执行记录
+
+### WORKFLOW-UX-4.1：新增节点面板简化
+
+状态：已完成。
+
+完成内容：
+
+- 新增节点面板保留节点类型下拉、刷新、新增、关闭。
+- 移除新增节点面板中的节点实例 ID、节点版本、显示名、配置 JSON 输入。
+- 保持现有 ViewModel 自动生成节点实例 ID、版本和默认 config 的逻辑不变。
+- 新增节点区域仍位于节点配置上方。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~WorkflowSummaryViewHeadlessSmokeTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：92 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：326 passed。
