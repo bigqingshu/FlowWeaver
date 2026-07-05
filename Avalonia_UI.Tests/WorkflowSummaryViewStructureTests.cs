@@ -54,9 +54,20 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(summaryXaml, "<workflow:WorkflowSelectedNodeConfigView />");
         StringAssert.Contains(configXaml, "Text=\"{Binding SelectedNodeConfigDraftSummaryText}\"");
+        StringAssert.Contains(configXaml, "IsVisible=\"{Binding HasSelectedWorkflowDefinitionNode}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding NodeInstanceIdText}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeInstanceId}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding NodeTypeText}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeType}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding NodeVersionText}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeVersion}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding DisplayNameText}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.DisplayNameText}\"");
         StringAssert.Contains(
             configXaml,
             "ItemsSource=\"{Binding SelectedNodeConfigEditableInputFields}\"");
+        Assert.IsFalse(
+            configXaml.Contains("Text=\"{Binding SelectedWorkflowDefinitionNode.NodeInstanceId, Mode=TwoWay", StringComparison.Ordinal));
         Assert.IsFalse(
             summaryXaml.Contains("ItemsSource=\"{Binding WorkflowDefinitionDetail.Nodes}\"", StringComparison.Ordinal));
         Assert.IsFalse(

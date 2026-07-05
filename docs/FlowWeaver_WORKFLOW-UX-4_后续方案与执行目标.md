@@ -155,7 +155,7 @@
 
 工作阶段如发现新问题，先追加到本节，再决定是否进入实现：
 
-- 待补充。
+- 节点实例 ID 编辑不能直接作为普通输入暴露；如果后续支持重命名，需要同步处理 connections 引用、选中状态、批量选择状态和保存前校验。
 
 ## 阶段执行记录
 
@@ -173,4 +173,19 @@
 测试结果：
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~WorkflowSummaryViewHeadlessSmokeTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：92 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：326 passed。
+
+### WORKFLOW-UX-4.2a：节点配置区只读身份信息
+
+状态：已完成。
+
+完成内容：
+
+- 在节点配置区顶部展示当前选中节点的节点实例 ID、节点类型、节点版本和显示名。
+- 节点实例 ID 第一版保持只读，不引入重命名。
+- 保持现有 config schema 表单和应用配置命令不变。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：91 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：326 passed。
