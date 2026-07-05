@@ -51,6 +51,9 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual(
             "上移/下移仅在线性链路的中间相邻节点交换时重排连接；其他情况只调整草稿节点列表顺序。",
             viewModel.NodeMoveSemanticsText);
+        Assert.AreEqual(
+            "加载工作流定义后可检查线性连接支持状态。",
+            viewModel.WorkflowLinearChainStatusText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);
         Assert.AreEqual(
@@ -106,6 +109,9 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual(
             "上移/下移仅在线性链路的中间相邻节点交换时重排连接；其他情况只调整草稿节点列表顺序。",
             viewModel.NodeMoveSemanticsText);
+        Assert.AreEqual(
+            "加载工作流定义后可检查线性连接支持状态。",
+            viewModel.WorkflowLinearChainStatusText);
         Assert.AreEqual("数据预览", viewModel.DataPreviewSectionText);
         Assert.AreEqual("选择一个工作流节点以查看预览。", viewModel.DataPreviewEmptyText);
         Assert.AreEqual("刷新预览", viewModel.DataPreviewRefreshText);

@@ -63,6 +63,10 @@
                            FontSize="12"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding WorkflowLinearChainStatusText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
 
                 <WrapPanel Orientation="Horizontal"
                            HorizontalAlignment="Right">

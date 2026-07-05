@@ -1473,6 +1473,63 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task WorkflowLinearChainStatusTextReflectsDraftTopology()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_sink", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(
+            "Linear chain detected: 3 node(s). Supported delete/move operations may maintain connections automatically.",
+            viewModel.WorkflowLinearChainStatusText);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "left"},
+                {"node_instance_id": "right"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_left", "source_node_id": "source", "target_node_id": "left"},
+                {"connection_id": "source_to_right", "source_node_id": "source", "target_node_id": "right"}
+              ]
+            }
+            """;
+
+        Assert.AreEqual(
+            "Not a supported linear chain: A node has more than one outgoing connection.",
+            viewModel.WorkflowLinearChainStatusText);
+    }
+
+    [TestMethod]
     public async Task WorkflowDefinitionNodeActionDisabledReasonsReflectSelectionAndBoundaries()
     {
         var definitionJson =

@@ -328,6 +328,7 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding NodeMoveSemanticsText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding WorkflowLinearChainStatusText}\"");
         StringAssert.Contains(xaml, "<WrapPanel Orientation=\"Horizontal\"");
         StringAssert.Contains(
             addNodeXaml,

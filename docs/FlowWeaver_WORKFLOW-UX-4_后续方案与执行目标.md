@@ -305,3 +305,19 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests|FullyQualifiedName~JsonLocalizationServiceTests"`：152 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：346 passed。
+
+### WORKFLOW-UX-5.4：线性模式 UI 提示与拒绝原因
+
+状态：已完成。
+
+完成内容：
+
+- 新增 `WorkflowLinearChainStatusText`，在节点操作区显示当前草稿的线性链路识别状态。
+- 已加载线性草稿时显示可自动维护连接的节点数量提示。
+- 非线性草稿显示本地化拒绝原因，例如分支、汇合、断链、环路、非单入口单出口等。
+- 该状态只读展示，不改变按钮可用性、保存语义或运行语义。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests"`：133 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。

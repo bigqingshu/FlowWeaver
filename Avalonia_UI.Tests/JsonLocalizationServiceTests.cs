@@ -58,6 +58,14 @@ public sealed class JsonLocalizationServiceTests
                 "definition.node_move_rewired_connections",
                 "- old",
                 "- new"));
+        Assert.AreEqual(
+            "已识别为线性链路：3 个节点。支持的删除/移动操作可自动维护连接。",
+            service.Format("definition.linear_chain_status_linear", 3));
+        Assert.AreEqual(
+            "当前不是受支持的线性链路：存在一个节点连接到多个下游节点。",
+            service.Format(
+                "definition.linear_chain_status_not_linear",
+                service.GetString("definition.warning.linear_chain_branching")));
         Assert.AreEqual("复制节点", service.GetString("definition.copy_node"));
         Assert.AreEqual("删除已选", service.GetString("definition.delete_selected_nodes"));
         Assert.AreEqual(

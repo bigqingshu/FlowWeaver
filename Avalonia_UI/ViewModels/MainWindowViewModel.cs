@@ -726,6 +726,27 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string NodeMoveSemanticsText => T("definition.node_move_semantics");
 
+    public string WorkflowLinearChainStatusText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson))
+            {
+                return T("definition.linear_chain_status_not_loaded");
+            }
+
+            var analysis = WorkflowDefinitionLinearChainAnalyzer.Analyze(
+                WorkflowDefinitionDraftJson);
+            return analysis.IsLinear
+                ? F(
+                    "definition.linear_chain_status_linear",
+                    analysis.NodeInstanceIds.Count)
+                : F(
+                    "definition.linear_chain_status_not_linear",
+                    LocalizeWorkflowDefinitionDraftWarning(analysis.Warning));
+        }
+    }
+
     public string DataPreviewSectionText => T("definition.data_preview");
 
     public string DataPreviewEmptyText => T("definition.data_preview_empty");
@@ -3203,6 +3224,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
+        OnPropertyChanged(nameof(WorkflowLinearChainStatusText));
         RefreshWorkflowDefinitionBatchSelectionState();
     }
 
@@ -3578,12 +3600,18 @@ public partial class MainWindowViewModel : ViewModelBase
             "CONNECTION_ID_REQUIRED" => T("definition.warning.connection_id_required"),
             "CONNECTION_ALREADY_EXISTS" => T("definition.warning.connection_already_exists"),
             "CONNECTION_NOT_FOUND" => T("definition.warning.connection_not_found"),
+            "CONNECTION_UNSUPPORTED" => T("definition.warning.connection_unsupported"),
             "SOURCE_NODE_ID_REQUIRED" => T("definition.warning.source_node_id_required"),
             "SOURCE_NODE_NOT_FOUND" => T("definition.warning.source_node_not_found"),
             "SOURCE_PORT_REQUIRED" => T("definition.warning.source_port_required"),
             "TARGET_NODE_ID_REQUIRED" => T("definition.warning.target_node_id_required"),
             "TARGET_NODE_NOT_FOUND" => T("definition.warning.target_node_not_found"),
             "TARGET_PORT_REQUIRED" => T("definition.warning.target_port_required"),
+            "LINEAR_CHAIN_DISCONNECTED" => T("definition.warning.linear_chain_disconnected"),
+            "LINEAR_CHAIN_BRANCHING" => T("definition.warning.linear_chain_branching"),
+            "LINEAR_CHAIN_MERGING" => T("definition.warning.linear_chain_merging"),
+            "LINEAR_CHAIN_NOT_SINGLE_CHAIN" => T("definition.warning.linear_chain_not_single_chain"),
+            "LINEAR_CHAIN_CYCLE" => T("definition.warning.linear_chain_cycle"),
             _ => warning,
         };
     }
@@ -4209,6 +4237,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(MoveNodeDownText));
         OnPropertyChanged(nameof(NodeActionsSectionText));
         OnPropertyChanged(nameof(NodeMoveSemanticsText));
+        OnPropertyChanged(nameof(WorkflowLinearChainStatusText));
         NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
         OnPropertyChanged(nameof(DataPreviewSectionText));
         OnPropertyChanged(nameof(DataPreviewEmptyText));
