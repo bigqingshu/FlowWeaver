@@ -3213,7 +3213,7 @@ public sealed class MainWindowViewModelWorkflowTests
                     Status = "PENDING",
                 }),
             RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
-                new List<WorkflowRunDto> { Run("run-1", "wf-1", "PENDING") }),
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "SUCCEEDED") }),
         };
         var viewModel = CreateViewModel(apiClient);
 
@@ -3227,6 +3227,11 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.HasLastStartedRun);
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
         Assert.AreEqual("wf-1", apiClient.LastRunWorkflowId);
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.AreEqual("workflow.run", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Started run run-1 (PENDING).", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -3291,6 +3296,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
+        Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.NotificationTitle);
     }
 
     [TestMethod]
@@ -3530,6 +3538,9 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Source: preview run run-preview to node generate, table orders.",
             viewModel.DataPreviewSourceText);
+        Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.NotificationTitle);
     }
 
     [TestMethod]
@@ -3690,6 +3701,11 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Selected node preview failed.", viewModel.DataPreviewMessage);
         Assert.AreEqual("START_FAILED: Preview start failed.", viewModel.DataPreviewErrorMessage);
+        Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Error, viewModel.NotificationKind);
+        Assert.AreEqual("Selected node preview failed.", viewModel.NotificationTitle);
+        Assert.AreEqual("START_FAILED: Preview start failed.", viewModel.NotificationMessage);
+        Assert.IsTrue(viewModel.IsNotificationSticky);
     }
 
     [TestMethod]

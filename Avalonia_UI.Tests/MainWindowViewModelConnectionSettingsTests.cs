@@ -95,6 +95,11 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.AreEqual("restored-token", store.SavedSettings?.Token);
         Assert.AreEqual("http://127.0.0.1:8013", apiClient.LastSettings?.BaseUrl);
         Assert.AreEqual("restored-token", apiClient.LastSettings?.Token);
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.AreEqual("connection.check", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("EngineHost health check passed.", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -121,6 +126,12 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.AreEqual(1, store.LoadCount);
         Assert.AreEqual(0, store.SaveCount);
         Assert.AreEqual("http://127.0.0.1:8014", apiClient.LastSettings?.BaseUrl);
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.AreEqual("connection.check", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Error, viewModel.NotificationKind);
+        Assert.AreEqual("Connection failed.", viewModel.NotificationTitle);
+        Assert.AreEqual("EngineHost unavailable.", viewModel.NotificationMessage);
+        Assert.IsTrue(viewModel.IsNotificationSticky);
     }
 
     [TestMethod]

@@ -520,6 +520,36 @@ public partial class MainWindowViewModel : ViewModelBase
             DefaultNotificationAutoDismissAfter);
     }
 
+    private void ShowConnectionNotification(UiNotificationKind kind)
+    {
+        ShowNotification(
+            "connection.check",
+            kind,
+            StatusMessage,
+            kind == UiNotificationKind.Error ? ErrorMessage ?? string.Empty : string.Empty,
+            autoDismissAfter: DefaultNotificationAutoDismissAfter);
+    }
+
+    private void ShowWorkflowNotification(string key, UiNotificationKind kind)
+    {
+        ShowNotification(
+            key,
+            kind,
+            WorkflowMessage,
+            kind == UiNotificationKind.Error ? WorkflowErrorMessage ?? string.Empty : string.Empty,
+            autoDismissAfter: DefaultNotificationAutoDismissAfter);
+    }
+
+    private void ShowDataPreviewNotification(UiNotificationKind kind)
+    {
+        ShowNotification(
+            "data_preview.refresh",
+            kind,
+            DataPreviewMessage,
+            kind == UiNotificationKind.Error ? DataPreviewErrorMessage ?? string.Empty : string.Empty,
+            autoDismissAfter: DefaultNotificationAutoDismissAfter);
+    }
+
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
 
     public ObservableCollection<ThemeMenuItemViewModel> Themes { get; } = new();
@@ -1469,12 +1499,14 @@ public partial class MainWindowViewModel : ViewModelBase
             await SaveConnectionSettingsAsync(settings);
             await RefreshNodeDefinitionsAfterHealthyConnectionAsync();
             await RefreshWorkflowsAfterHealthyConnectionAsync();
+            ShowConnectionNotification(UiNotificationKind.Success);
             return;
         }
 
         ConnectionStatus = ConnectionStatus.Error;
         StatusMessage = LocalizeHealthStatusMessage(result);
         ErrorMessage = LocalizeHealthErrorMessage(result.ErrorMessage);
+        ShowConnectionNotification(UiNotificationKind.Error);
     }
 
     [RelayCommand]
@@ -2261,6 +2293,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     "format.started_run_with_status",
                     response.Data.WorkflowRunId,
                     response.Data.Status);
+            ShowWorkflowNotification("workflow.run", UiNotificationKind.Success);
             IsStartingWorkflow = false;
             await TrackWorkflowRunUntilTerminalAsync(response.Data.WorkflowRunId);
             await SelectLatestReadableOutputNodeForRunAsync(response.Data.WorkflowRunId);
@@ -2274,6 +2307,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowMessage = T("workflow.start_failed");
         WorkflowErrorMessage = DescribeError(response);
+        ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
         IsStartingWorkflow = false;
     }
 
@@ -2311,6 +2345,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     response.Data.WorkflowRunId,
                     response.Data.Status,
                     targetNodeInstanceId);
+            ShowWorkflowNotification("workflow.preview", UiNotificationKind.Success);
             IsStartingWorkflow = false;
             await RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(response.Data.WorkflowRunId);
 
@@ -2321,6 +2356,8 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowErrorMessage = DescribeError(response);
         DataPreviewMessage = T("data_preview.preview_failed");
         DataPreviewErrorMessage = DescribeError(response);
+        ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
+        ShowDataPreviewNotification(UiNotificationKind.Error);
         IsStartingWorkflow = false;
     }
 
@@ -2595,7 +2632,8 @@ public partial class MainWindowViewModel : ViewModelBase
         await TryRefreshSelectedWorkflowNodeDataPreviewAsync();
     }
 
-    private async Task<bool> TryRefreshSelectedWorkflowNodeDataPreviewAsync()
+    private async Task<bool> TryRefreshSelectedWorkflowNodeDataPreviewAsync(
+        bool notifyResult = true)
     {
         if (SelectedRun is null || SelectedWorkflowDefinitionNode is null)
         {
@@ -2625,6 +2663,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(nodeRunsResponse);
+                if (notifyResult)
+                {
+                    ShowDataPreviewNotification(UiNotificationKind.Error);
+                }
+
                 return false;
             }
 
@@ -2637,6 +2680,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage =
                     F("format.data_preview_node_run_not_found", requestedNodeInstanceId);
+                if (notifyResult)
+                {
+                    ShowDataPreviewNotification(UiNotificationKind.Warning);
+                }
+
                 return false;
             }
 
@@ -2654,6 +2702,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(tableRefsResponse);
+                if (notifyResult)
+                {
+                    ShowDataPreviewNotification(UiNotificationKind.Error);
+                }
+
                 return false;
             }
 
@@ -2668,6 +2721,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage =
                     F("format.data_preview_table_ref_not_found", requestedNodeInstanceId);
+                if (notifyResult)
+                {
+                    ShowDataPreviewNotification(UiNotificationKind.Warning);
+                }
+
                 return false;
             }
 
@@ -2687,6 +2745,11 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 DataPreviewMessage = T("data_preview.refresh_failed");
                 DataPreviewErrorMessage = DescribeError(rowsResponse);
+                if (notifyResult)
+                {
+                    ShowDataPreviewNotification(UiNotificationKind.Error);
+                }
+
                 return false;
             }
 
@@ -2702,6 +2765,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 rowsResponse.Data.Rows.Length,
                 rowsResponse.Data.RowCount,
                 tableRef.LogicalTableId);
+            if (notifyResult)
+            {
+                ShowDataPreviewNotification(UiNotificationKind.Success);
+            }
+
             return true;
         }
         finally
@@ -2722,16 +2790,20 @@ public partial class MainWindowViewModel : ViewModelBase
             var loadedCurrentPreview = false;
             if (CanRefreshSelectedWorkflowNodeDataPreview())
             {
-                loadedCurrentPreview = await TryRefreshSelectedWorkflowNodeDataPreviewAsync();
+                loadedCurrentPreview = await TryRefreshSelectedWorkflowNodeDataPreviewAsync(
+                    notifyResult: false);
             }
 
             if (loadedCurrentPreview)
             {
+                ShowDataPreviewNotification(UiNotificationKind.Success);
                 return;
             }
 
             if (SelectedRun is not null && IsTerminalRunStatus(SelectedRun.Status))
             {
+                ShowDataPreviewNotification(
+                    HasDataPreviewError ? UiNotificationKind.Error : UiNotificationKind.Warning);
                 return;
             }
 
@@ -2740,6 +2812,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 await _dataPreviewRunRefreshDelay(_shutdown.Token);
             }
         }
+
+        ShowDataPreviewNotification(
+            HasDataPreviewError ? UiNotificationKind.Error : UiNotificationKind.Warning);
     }
 
     private async Task TrackWorkflowRunUntilTerminalAsync(string workflowRunId)

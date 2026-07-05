@@ -162,6 +162,11 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(
             "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+        Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -292,6 +297,11 @@ public sealed class MainWindowViewModelDataTests
             "No data preview loaded yet.",
             viewModel.DataPreviewSourceText);
         Assert.IsFalse(viewModel.HasDataPreviewError);
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Warning, viewModel.NotificationKind);
+        Assert.AreEqual("Node generate has no readable output table.", viewModel.NotificationTitle);
+        Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 
     [TestMethod]
