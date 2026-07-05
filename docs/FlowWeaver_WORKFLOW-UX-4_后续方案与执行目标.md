@@ -149,6 +149,13 @@
 - 预览运行和完整运行的状态文案区分清楚。
 - 保存失败、revision 冲突和运行失败信息可读。
 
+建议拆分：
+
+- `RUN-SAVE-UX-0`：运行与保存当前边界复核，只写文档。
+- `RUN-SAVE-UX-1`：dirty draft 运行保护，未保存草稿时禁用完整运行和预览运行。
+- `RUN-SAVE-UX-2`：运行保护可见提示，说明后端运行的是已保存 revision。
+- `RUN-SAVE-UX-3`：保存、revision 冲突、运行失败阶段验收复核。
+
 ### RELEASE-UX：发布与使用体验
 
 目标功能：
@@ -420,3 +427,22 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelDataTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：92 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### RUN-SAVE-UX-0：运行与保存当前边界复核
+
+状态：已完成。
+
+复核结论：
+
+- 保存命令当前已依赖 `IsWorkflowDefinitionDraftDirty`、`WorkflowDefinitionDetail`、保存忙碌状态和 revision conflict 状态。
+- 保存失败、revision conflict 和保存后刷新定义已有基础测试覆盖。
+- 完整运行和预览运行当前仍未把 dirty draft 作为禁用条件，存在用户误以为“运行的是未保存草稿”的风险。
+- 数据预览来源已能区分完整运行和预览运行，但还需要运行前保护和可见提示说明后端运行的是已保存 revision。
+
+建议下一步：
+
+- 进入 `RUN-SAVE-UX-1`，先做最小保护：dirty draft 或 revision conflict 时禁用完整运行和预览运行，不改变后端接口。
+
+测试结果：
+
+- 现状复核小步，未改代码；进入本阶段前已执行 `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
