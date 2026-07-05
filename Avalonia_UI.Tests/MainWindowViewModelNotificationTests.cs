@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia_UI.Models;
 using Avalonia_UI.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -28,6 +29,8 @@ public sealed class MainWindowViewModelNotificationTests
         Assert.AreEqual("Workflow draft saved.", viewModel.NotificationMessage);
         Assert.IsFalse(viewModel.IsNotificationSticky);
         Assert.AreEqual(TimeSpan.FromSeconds(3), viewModel.NotificationAutoDismissAfter);
+        Assert.IsTrue(viewModel.HasNotificationCountdown);
+        Assert.AreEqual(1d, viewModel.NotificationCountdownProgress, 0.001);
         Assert.AreEqual(1, viewModel.NotificationOpenSequence);
         Assert.AreEqual(1, viewModel.NotificationUpdateCount);
         Assert.IsNotNull(viewModel.NotificationUpdatedAt);
@@ -59,6 +62,7 @@ public sealed class MainWindowViewModelNotificationTests
         Assert.IsTrue(viewModel.IsNotificationOpen);
         Assert.AreEqual(openSequence, viewModel.NotificationOpenSequence);
         Assert.AreEqual(2, viewModel.NotificationUpdateCount);
+        Assert.IsFalse(viewModel.HasNotificationCountdown);
         Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
         Assert.AreEqual("Saved", viewModel.NotificationTitle);
         Assert.AreEqual("Draft saved.", viewModel.NotificationMessage);
@@ -100,6 +104,8 @@ public sealed class MainWindowViewModelNotificationTests
 
         Assert.IsTrue(viewModel.IsNotificationSticky);
         Assert.IsNull(viewModel.NotificationAutoDismissAfter);
+        Assert.IsFalse(viewModel.HasNotificationCountdown);
+        Assert.AreEqual(0d, viewModel.NotificationCountdownProgress, 0.001);
 
         viewModel.CloseNotificationCommand.Execute(null);
 
@@ -133,6 +139,29 @@ public sealed class MainWindowViewModelNotificationTests
         Assert.AreEqual("Event 5", viewModel.VisibleRecentEvents[0].Title);
         Assert.AreEqual("Event 1", viewModel.VisibleRecentEvents[4].Title);
         Assert.AreEqual("Show 1", viewModel.RecentEventsToggleText);
+    }
+
+    [TestMethod]
+    public async Task NonStickyNotificationAutoDismissesAfterCountdown()
+    {
+        var viewModel = new MainWindowViewModel();
+
+        viewModel.ShowNotification(
+            "workflow.saved",
+            UiNotificationKind.Success,
+            "Saved",
+            string.Empty,
+            autoDismissAfter: TimeSpan.FromMilliseconds(30));
+
+        Assert.IsTrue(viewModel.IsNotificationOpen);
+        Assert.IsTrue(viewModel.HasNotificationCountdown);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+        Assert.IsFalse(viewModel.IsNotificationOpen);
+        Assert.IsFalse(viewModel.HasNotificationCountdown);
+        Assert.IsNull(viewModel.NotificationAutoDismissAfter);
+        Assert.AreEqual(0d, viewModel.NotificationCountdownProgress, 0.001);
     }
 
     [TestMethod]

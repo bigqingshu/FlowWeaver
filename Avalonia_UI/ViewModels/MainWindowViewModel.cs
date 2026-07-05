@@ -25,6 +25,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int DataPreviewRowLimit = 50;
     private const int DataPreviewRunRefreshAttemptCount = 8;
     private const int WorkflowRunTerminalRefreshAttemptCount = 40;
+    private const int NotificationCountdownTickMilliseconds = 16;
     private static readonly TimeSpan DefaultNotificationAutoDismissAfter = TimeSpan.FromSeconds(4);
 
     private readonly IEngineHostApiClient _apiClient;
@@ -39,6 +40,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private readonly CancellationTokenSource _shutdown = new();
     private CancellationTokenSource? _runtimeEventStreamCancellation;
+    private CancellationTokenSource? _notificationCountdownCancellation;
     private Task? _runtimeEventStreamTask;
     private int nodeRunsLoadVersion;
     private int nodeDefinitionsLoadVersion;
@@ -378,6 +380,12 @@ public partial class MainWindowViewModel : ViewModelBase
     private TimeSpan? notificationAutoDismissAfter;
 
     [ObservableProperty]
+    private bool hasNotificationCountdown;
+
+    [ObservableProperty]
+    private double notificationCountdownProgress;
+
+    [ObservableProperty]
     private int notificationOpenSequence;
 
     [ObservableProperty]
@@ -486,6 +494,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IsNotificationSticky = isSticky || kind == UiNotificationKind.Error;
         NotificationAutoDismissAfter = IsNotificationSticky ? null : autoDismissAfter;
         NotificationUpdateCount++;
+        StartNotificationCountdownIfNeeded(NotificationAutoDismissAfter);
         AddRecentEvent(
             normalizedKey,
             kind,
@@ -504,8 +513,82 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void CloseNotification()
     {
+        CancelNotificationCountdown();
         IsNotificationOpen = false;
         NotificationAutoDismissAfter = null;
+        HasNotificationCountdown = false;
+        NotificationCountdownProgress = 0;
+    }
+
+    private void StartNotificationCountdownIfNeeded(TimeSpan? autoDismissAfter)
+    {
+        CancelNotificationCountdown();
+
+        if (autoDismissAfter is null ||
+            autoDismissAfter.Value <= TimeSpan.Zero ||
+            IsNotificationSticky)
+        {
+            HasNotificationCountdown = false;
+            NotificationCountdownProgress = 0;
+            return;
+        }
+
+        HasNotificationCountdown = true;
+        NotificationCountdownProgress = 1;
+
+        _notificationCountdownCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        var cancellationToken = _notificationCountdownCancellation.Token;
+        var updateCount = NotificationUpdateCount;
+        _ = RunNotificationCountdownAsync(autoDismissAfter.Value, updateCount, cancellationToken);
+    }
+
+    private void CancelNotificationCountdown()
+    {
+        _notificationCountdownCancellation?.Cancel();
+        _notificationCountdownCancellation?.Dispose();
+        _notificationCountdownCancellation = null;
+    }
+
+    private async Task RunNotificationCountdownAsync(
+        TimeSpan duration,
+        int updateCount,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.Now;
+
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var elapsed = DateTimeOffset.Now - startedAt;
+                var remainingRatio = 1 - elapsed.TotalMilliseconds / duration.TotalMilliseconds;
+                NotificationCountdownProgress = Math.Clamp(remainingRatio, 0, 1);
+
+                if (NotificationCountdownProgress <= 0)
+                {
+                    break;
+                }
+
+                var remainingMilliseconds = duration.TotalMilliseconds - elapsed.TotalMilliseconds;
+                var delayMilliseconds = Math.Min(
+                    NotificationCountdownTickMilliseconds,
+                    Math.Max(1, remainingMilliseconds));
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(delayMilliseconds),
+                    cancellationToken);
+            }
+
+            if (!cancellationToken.IsCancellationRequested &&
+                IsNotificationOpen &&
+                NotificationUpdateCount == updateCount)
+            {
+                CloseNotification();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 
     [RelayCommand]
@@ -2295,6 +2378,11 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSaveWorkflowDefinitionDraft))]
     private async Task SaveWorkflowDefinitionDraftAsync()
     {
+        await TrySaveWorkflowDefinitionDraftAsync();
+    }
+
+    private async Task<bool> TrySaveWorkflowDefinitionDraftAsync()
+    {
         if (WorkflowDefinitionDetail is null)
         {
             WorkflowDefinitionValidationMessage = T("definition.save_rejected");
@@ -2302,7 +2390,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ShowWorkflowDefinitionNotification(
                 "workflow.definition.save",
                 UiNotificationKind.Error);
-            return;
+            return false;
         }
 
         JsonElement definition;
@@ -2318,7 +2406,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ShowWorkflowDefinitionNotification(
                 "workflow.definition.save",
                 UiNotificationKind.Error);
-            return;
+            return false;
         }
 
         IsSavingWorkflowDefinitionDraft = true;
@@ -2346,7 +2434,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 HasWorkflowDefinitionRevisionConflict = false;
                 await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
                 await LoadSelectedWorkflowDefinitionAsync();
-                return;
+                return true;
             }
 
             if (saved.Error?.ErrorCode == "WORKFLOW_REVISION_CONFLICT")
@@ -2357,7 +2445,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 ShowWorkflowDefinitionNotification(
                     "workflow.definition.save",
                     UiNotificationKind.Error);
-                return;
+                return false;
             }
 
             WorkflowDefinitionValidationMessage = T("definition.save_failed");
@@ -2365,11 +2453,18 @@ public partial class MainWindowViewModel : ViewModelBase
             ShowWorkflowDefinitionNotification(
                 "workflow.definition.save",
                 UiNotificationKind.Error);
+            return false;
         }
         finally
         {
             IsSavingWorkflowDefinitionDraft = false;
         }
+    }
+
+    private async Task<bool> EnsureWorkflowDefinitionDraftSavedForRunAsync()
+    {
+        return !IsWorkflowDefinitionDraftDirty ||
+            await TrySaveWorkflowDefinitionDraftAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -2386,6 +2481,29 @@ public partial class MainWindowViewModel : ViewModelBase
         LastStartedRunId = null;
         LastStartedRunStatus = null;
 
+        if (IsWorkflowDefinitionDraftDirty)
+        {
+            WorkflowMessage = T("workflow.saving_draft_before_run");
+            if (!await EnsureWorkflowDefinitionDraftSavedForRunAsync())
+            {
+                WorkflowMessage = T("workflow.start_failed");
+                WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
+                ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
+                IsStartingWorkflow = false;
+                return;
+            }
+        }
+
+        if (SelectedWorkflow is null)
+        {
+            WorkflowMessage = T("workflow.start_failed");
+            WorkflowErrorMessage = T("definition.load_before_saving");
+            ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
+            IsStartingWorkflow = false;
+            return;
+        }
+
+        WorkflowMessage = F("format.starting_workflow", SelectedWorkflow.Name);
         var response = await _apiClient.StartWorkflowRunAsync(
             BuildSettings(),
             SelectedWorkflow.WorkflowId,
@@ -2435,6 +2553,44 @@ public partial class MainWindowViewModel : ViewModelBase
         LastStartedRunId = null;
         LastStartedRunStatus = null;
 
+        if (IsWorkflowDefinitionDraftDirty)
+        {
+            WorkflowMessage = T("workflow.saving_draft_before_preview");
+            DataPreviewMessage = T("workflow.saving_draft_before_preview");
+            if (!await EnsureWorkflowDefinitionDraftSavedForRunAsync())
+            {
+                WorkflowMessage = T("workflow.start_failed");
+                WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
+                DataPreviewMessage = T("data_preview.preview_failed");
+                DataPreviewErrorMessage = WorkflowDefinitionValidationErrorMessage;
+                ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
+                ShowDataPreviewNotification(UiNotificationKind.Error);
+                IsStartingWorkflow = false;
+                return;
+            }
+
+            SelectWorkflowDefinitionDraftNode(targetNodeInstanceId);
+        }
+
+        if (SelectedWorkflow is null ||
+            SelectedWorkflowDefinitionNode is null ||
+            !string.Equals(
+                SelectedWorkflowDefinitionNode.NodeInstanceId,
+                targetNodeInstanceId,
+                StringComparison.Ordinal))
+        {
+            WorkflowMessage = T("workflow.start_failed");
+            WorkflowErrorMessage = T("action.disabled.workflow_node_missing");
+            DataPreviewMessage = T("data_preview.preview_failed");
+            DataPreviewErrorMessage = T("action.disabled.workflow_node_missing");
+            ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
+            ShowDataPreviewNotification(UiNotificationKind.Error);
+            IsStartingWorkflow = false;
+            return;
+        }
+
+        WorkflowMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
+        DataPreviewMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
         var response = await _apiClient.StartWorkflowRunAsync(
             BuildSettings(),
             SelectedWorkflow.WorkflowId,

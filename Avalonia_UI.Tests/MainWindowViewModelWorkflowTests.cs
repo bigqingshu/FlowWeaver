@@ -3243,7 +3243,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
         Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
         Assert.AreEqual(
-            "Draft has unsaved changes; run and preview still use the saved revision.",
+            "Draft has unsaved changes; run and preview save it first and use the latest revision.",
             viewModel.WorkflowRunGuardText);
 
         viewModel.HasWorkflowDefinitionRevisionConflict = true;
@@ -3253,6 +3253,176 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Reload the workflow definition before running; the loaded revision is conflicted.",
             viewModel.WorkflowRunGuardText);
+    }
+
+    [TestMethod]
+    public async Task StartSelectedWorkflowSavesDirtyDraftBeforeStartingRun()
+    {
+        var v1Json =
+            """
+            {"schema_version":"1.0","nodes":[],"connections":[]}
+            """;
+        var v2Json =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var v1 = Workflow("wf-1", "Daily Load", 1, v1Json);
+        var v2 = Workflow("wf-1", "Daily Load", 2, v2Json) with
+        {
+            RevisionId = "rev-wf-1-v2",
+            DefinitionHash = "hash-wf-1-v2",
+        };
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { v1 }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v1),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto> { Revision("rev-wf-1", "wf-1", 1, v1Json) }),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-1", "wf-1", "SUCCEEDED")),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto> { Run("run-1", "wf-1", "SUCCEEDED") }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = v2Json;
+        apiClient.WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+            new List<WorkflowDefinitionDto> { v2 });
+        apiClient.WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2);
+        apiClient.WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+            new List<WorkflowRevisionDto>
+            {
+                Revision("rev-wf-1", "wf-1", 1, v1Json),
+                Revision("rev-wf-1-v2", "wf-1", 2, v2Json),
+            });
+
+        await viewModel.StartSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.UpdatedWorkflowId);
+        Assert.AreEqual("rev-wf-1", apiClient.UpdatedWorkflowBaseRevisionId);
+        Assert.IsNotNull(apiClient.UpdatedWorkflowDefinition);
+        Assert.AreEqual(
+            "generate",
+            apiClient.UpdatedWorkflowDefinition.Value
+                .GetProperty("nodes")[0]
+                .GetProperty("node_instance_id")
+                .GetString());
+        Assert.AreEqual("wf-1", apiClient.StartedWorkflowId);
+        Assert.AreEqual("full", apiClient.StartedWorkflowRunMode);
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual("rev-wf-1-v2", viewModel.WorkflowDefinitionDetail?.RevisionId);
+        Assert.AreEqual("run-1", viewModel.LastStartedRunId);
+    }
+
+    [TestMethod]
+    public async Task PreviewSelectedWorkflowNodeSavesDirtyDraftAndKeepsTargetNode()
+    {
+        var v1Json =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var v2Json =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "generate", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "generate_to_filter", "source_node_instance_id": "generate", "source_port": "table", "target_node_instance_id": "filter", "target_port": "table"}
+              ]
+            }
+            """;
+        var v1 = Workflow("wf-1", "Daily Load", 1, v1Json);
+        var v2 = Workflow("wf-1", "Daily Load", 2, v2Json) with
+        {
+            RevisionId = "rev-wf-1-v2",
+            DefinitionHash = "hash-wf-1-v2",
+        };
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { v1 }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v1),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto> { Revision("rev-wf-1", "wf-1", 1, v1Json) }),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2),
+            StartWorkflowResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(
+                Run("run-preview", "wf-1", "SUCCEEDED") with
+                {
+                    RunMode = "preview_to_node",
+                    TargetNodeInstanceId = "filter",
+                }),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                new List<WorkflowRunDto>
+                {
+                    Run("run-preview", "wf-1", "SUCCEEDED") with
+                    {
+                        RunMode = "preview_to_node",
+                        TargetNodeInstanceId = "filter",
+                    },
+                }),
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto> { NodeRun("node-run-filter", "run-preview", "filter", "SUCCEEDED", 1, "done") }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-filter") }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":5,"amount":50}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson = v2Json;
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "filter");
+        apiClient.WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+            new List<WorkflowDefinitionDto> { v2 });
+        apiClient.WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(v2);
+        apiClient.WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+            new List<WorkflowRevisionDto>
+            {
+                Revision("rev-wf-1", "wf-1", 1, v1Json),
+                Revision("rev-wf-1-v2", "wf-1", 2, v2Json),
+            });
+
+        await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.UpdatedWorkflowId);
+        Assert.AreEqual("rev-wf-1", apiClient.UpdatedWorkflowBaseRevisionId);
+        Assert.AreEqual("wf-1", apiClient.StartedWorkflowId);
+        Assert.AreEqual("preview_to_node", apiClient.StartedWorkflowRunMode);
+        Assert.AreEqual("filter", apiClient.StartedTargetNodeInstanceId);
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual("filter", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewRows);
     }
 
     [TestMethod]

@@ -64,6 +64,8 @@ public sealed class MainWindowShellStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding NotificationMessage}\"");
         StringAssert.Contains(xaml, "<ScrollViewer Grid.Row=\"1\"");
         StringAssert.Contains(xaml, "MaxHeight=\"140\"");
+        StringAssert.Contains(xaml, "Value=\"{Binding NotificationCountdownProgress}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNotificationCountdown}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding CloseNotificationCommand}\"");
         Assert.IsFalse(xaml.Contains("Orientation=\"Horizontal\"", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("RuntimeEvent", StringComparison.Ordinal));
