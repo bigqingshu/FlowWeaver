@@ -54,7 +54,6 @@ class EngineConfig(StrictModel):
     temp_dir: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8000
-    audit_level: str = "STANDARD"
     local_api_token: str | None = None
     enforce_single_instance: bool = True
     max_concurrent_workflows: int = 4

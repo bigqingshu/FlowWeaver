@@ -216,27 +216,6 @@ def test_l3b_default_enginehost_runs_formal_workflow_shared_and_websocket_smoke(
             "WORKFLOW_FINISHED",
         }
 
-        producer_audit = response_data(
-            get_json(
-                (
-                    f"{base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={producer['workflow_run_id']}"
-                ),
-                token=token,
-            )
-        )
-        consumer_audit = response_data(
-            get_json(
-                (
-                    f"{base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={consumer['workflow_run_id']}"
-                ),
-                token=token,
-            )
-        )
-        assert producer_audit
-        assert consumer_audit
-
         all_runs = response_data(get_json(f"{base_url}/api/v1/runs", token=token))
         assert {
             item["workflow_run_id"]: item["status"] for item in all_runs

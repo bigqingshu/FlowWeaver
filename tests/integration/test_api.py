@@ -21,10 +21,8 @@ from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec, NodeRegistry
 from flowweaver.protocols.enums import (
-    AuditLevel,
     EventType,
     LifecycleStatus,
-    PermissionAction,
     TableMutability,
     TableRole,
     TableScope,
@@ -33,7 +31,6 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.permissions import AuditEventModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 TOKEN = "test-token"
@@ -865,36 +862,10 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
         producer_run_id=run.workflow_run_id,
         members={"orders": table_ref.table_ref_id},
     )
-    audit_event = store.append_audit_event(
-        AuditEventModel(
-            event_id="audit-event-1",
-            event_type="PERMISSION_CHECK",
-            workflow_run_id=run.workflow_run_id,
-            node_run_id=node.node_run_id,
-            subject_type="NODE",
-            subject_id=node.node_run_id,
-            resource_type="SHARED_PUBLICATION",
-            resource_id="daily_report",
-            action=PermissionAction.PUBLISH,
-            result="granted",
-            audit_level=AuditLevel.STANDARD,
-            summary={"node_instance_id": "generate"},
-        )
-    )
 
     table_refs = response_data(
         client.get(
             f"/api/v1/runs/{run.workflow_run_id}/table-refs",
-            headers=auth_headers(),
-        )
-    )
-    audit_events = response_data(
-        client.get(
-            "/api/v1/audit-events",
-            params={
-                "workflow_run_id": run.workflow_run_id,
-                "event_type": "PERMISSION_CHECK",
-            },
             headers=auth_headers(),
         )
     )
@@ -912,9 +883,6 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
     assert table_refs[0]["node_run_id"] == node.node_run_id
     assert table_refs[0]["lifecycle_status"] == "PUBLISHED"
-    assert audit_events[0]["event_id"] == audit_event.event_id
-    assert audit_events[0]["action"] == "PUBLISH"
-    assert audit_events[0]["summary"]["node_instance_id"] == "generate"
     assert [item["publication_id"] for item in publications] == [
         publication.publication_id
     ]

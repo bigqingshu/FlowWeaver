@@ -193,27 +193,6 @@ def test_n5_portable_python_runs_full_backend_runtime_smoke() -> None:
             "WORKFLOW_FINISHED",
         }
 
-        producer_audit = response_data(
-            get_json(
-                (
-                    f"{base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={producer['workflow_run_id']}"
-                ),
-                token=token,
-            )
-        )
-        consumer_audit = response_data(
-            get_json(
-                (
-                    f"{base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={consumer['workflow_run_id']}"
-                ),
-                token=token,
-            )
-        )
-        assert producer_audit
-        assert consumer_audit
-
         workflow_logs_dir = enginehost_dir / "runtime" / "logs" / "workflow_runs"
         assert any(workflow_logs_dir.glob("*.stdout.log"))
         assert any(workflow_logs_dir.glob("*.stderr.log"))

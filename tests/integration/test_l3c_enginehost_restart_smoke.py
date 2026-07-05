@@ -240,27 +240,6 @@ def test_l3c_default_enginehost_restores_state_after_restart(
             "WORKFLOW_FINISHED",
         }
 
-        producer_audit = response_data(
-            get_json(
-                (
-                    f"{second_base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={producer['workflow_run_id']}"
-                ),
-                token=second_token,
-            )
-        )
-        consumer_audit = response_data(
-            get_json(
-                (
-                    f"{second_base_url}/api/v1/audit-events?"
-                    f"workflow_run_id={consumer['workflow_run_id']}"
-                ),
-                token=second_token,
-            )
-        )
-        assert producer_audit
-        assert consumer_audit
-
         websocket_url = runtime_events_websocket_url(
             port=second_port,
             token=second_token,

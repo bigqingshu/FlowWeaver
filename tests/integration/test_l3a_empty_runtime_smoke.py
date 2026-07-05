@@ -59,7 +59,6 @@ def test_l3a_default_enginehost_creates_empty_runtime_and_returns_empty_lists(
             "/api/v1/workflows",
             "/api/v1/runs",
             "/api/v1/events",
-            "/api/v1/audit-events",
             "/api/v1/shared-publications",
         )
         for route in expected_empty_routes:

@@ -23,7 +23,6 @@ class NodeTaskModel(StrictModel):
     attempt: int
     input_refs: list[str]
     config: dict[str, Any]
-    permission_handle_id: str | None = None
     timeout_seconds: int
 
 

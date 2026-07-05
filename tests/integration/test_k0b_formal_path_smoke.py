@@ -245,8 +245,6 @@ def test_k0b_default_enginehost_runs_formal_table_and_shared_smoke(
         assert "WORKFLOW_STARTED" in {
             event["event_type"] for event in restored_events
         }
-        assert store.list_audit_events(workflow_run_id=producer.workflow_run_id)
-        assert store.list_audit_events(workflow_run_id=consumer.workflow_run_id)
 
         with client.websocket_connect(f"/ws/v1/events?token={TOKEN}") as websocket:
             reconnected = websocket.receive_json()

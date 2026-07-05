@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
-from flowweaver.engine.db_models import AuditEventRecord, TableLeaseRecord
+from flowweaver.engine.db_models import TableLeaseRecord
 from flowweaver.protocols.enums import TableLeaseStatus, TableLeaseType
 
 
@@ -84,13 +84,6 @@ class TableLeaseManager:
                 return None
             record.last_heartbeat_at = _datetime_to_text(now)
             record.expires_at = _datetime_to_text(now + timedelta(seconds=ttl_seconds))
-            self._audit(
-                session,
-                action="heartbeat",
-                result="granted",
-                lease=record,
-                summary={"ttl_seconds": ttl_seconds},
-            )
             return _lease_from_record(record)
 
     def release(self, lease_id: str) -> bool:
@@ -102,13 +95,6 @@ class TableLeaseManager:
                 return False
             record.status = TableLeaseStatus.RELEASED.value
             record.released_at = _datetime_to_text(now)
-            self._audit(
-                session,
-                action="release",
-                result="granted",
-                lease=record,
-                summary={},
-            )
             return True
 
     def active_read_count(self, table_ref_id: str) -> int:
@@ -149,13 +135,6 @@ class TableLeaseManager:
             active_leases = self._active_leases(session, table_ref_id, now)
             conflicts = _conflicts_for(lease_type, active_leases)
             if conflicts:
-                self._audit_conflict(
-                    session,
-                    table_ref_id=table_ref_id,
-                    owner_id=owner_id,
-                    lease_type=lease_type,
-                    conflict_lease_ids=[record.lease_id for record in conflicts],
-                )
                 return LeaseAcquireResult(
                     granted=False,
                     lease=None,
@@ -176,13 +155,6 @@ class TableLeaseManager:
                 metadata_json=_json_dumps(metadata),
             )
             session.add(record)
-            self._audit(
-                session,
-                action=f"acquire_{lease_type.value.lower()}",
-                result="granted",
-                lease=record,
-                summary={"ttl_seconds": ttl_seconds},
-            )
             return LeaseAcquireResult(
                 granted=True,
                 lease=_lease_from_record(record),
@@ -215,79 +187,7 @@ class TableLeaseManager:
         for record in stale_records:
             record.status = TableLeaseStatus.EXPIRED.value
             record.released_at = _datetime_to_text(now)
-            self._audit(
-                session,
-                action="expire",
-                result="granted",
-                lease=record,
-                summary={},
-            )
         return len(stale_records)
-
-    def _audit(
-        self,
-        session: Session,
-        *,
-        action: str,
-        result: str,
-        lease: TableLeaseRecord,
-        summary: dict[str, Any],
-    ) -> None:
-        session.add(
-            AuditEventRecord(
-                event_id=new_id(),
-                event_type="TABLE_LEASE",
-                timestamp=_datetime_to_text(utc_now()),
-                workflow_run_id=None,
-                node_run_id=None,
-                subject_type="ENGINE_HOST",
-                subject_id=lease.owner_id,
-                resource_type="TABLE_REF",
-                resource_id=lease.table_ref_id,
-                action=action,
-                result=result,
-                audit_level="STANDARD",
-                summary_json=_json_dumps(
-                    {
-                        "lease_id": lease.lease_id,
-                        "lease_type": lease.lease_type,
-                        **summary,
-                    }
-                ),
-            )
-        )
-
-    def _audit_conflict(
-        self,
-        session: Session,
-        *,
-        table_ref_id: str,
-        owner_id: str,
-        lease_type: TableLeaseType,
-        conflict_lease_ids: list[str],
-    ) -> None:
-        session.add(
-            AuditEventRecord(
-                event_id=new_id(),
-                event_type="TABLE_LEASE",
-                timestamp=_datetime_to_text(utc_now()),
-                workflow_run_id=None,
-                node_run_id=None,
-                subject_type="ENGINE_HOST",
-                subject_id=owner_id,
-                resource_type="TABLE_REF",
-                resource_id=table_ref_id,
-                action=f"acquire_{lease_type.value.lower()}",
-                result="conflict",
-                audit_level="STANDARD",
-                summary_json=_json_dumps(
-                    {
-                        "lease_type": lease_type.value,
-                        "conflict_lease_ids": conflict_lease_ids,
-                    }
-                ),
-            )
-        )
 
     @contextmanager
     def _immediate_session(self) -> Iterator[Session]:

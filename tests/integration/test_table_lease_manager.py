@@ -4,11 +4,8 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from flowweaver.common.time import utc_now
-from flowweaver.engine.db_models import AuditEventRecord
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.protocols.enums import (
@@ -151,32 +148,3 @@ def test_expired_read_lease_is_recovered_before_write(tmp_path: Path) -> None:
     assert write.lease is not None
     assert write.lease.status == TableLeaseStatus.ACTIVE.value
 
-
-def test_table_lease_operations_write_audit_events(tmp_path: Path) -> None:
-    store = make_store(tmp_path)
-    manager = TableLeaseManager(store.engine)
-
-    read = manager.acquire_read_lease(
-        table_ref_id="table-1",
-        owner_id="consumer",
-        ttl_seconds=60,
-    )
-    assert read.lease is not None
-    manager.heartbeat(read.lease.lease_id, ttl_seconds=60)
-    manager.release(read.lease.lease_id)
-
-    with Session(store.engine) as session:
-        records = list(
-            session.scalars(
-                select(AuditEventRecord).where(
-                    AuditEventRecord.event_type == "TABLE_LEASE"
-                )
-            )
-        )
-
-    assert [record.action for record in records] == [
-        "acquire_read",
-        "heartbeat",
-        "release",
-    ]
-    assert {record.audit_level for record in records} == {"STANDARD"}

@@ -564,7 +564,6 @@ class NodeTaskManager:
                     NodeRunStatus.PENDING,
                     NodeRunStatus.READY,
                     NodeRunStatus.WAITING_DEPENDENCY,
-                    NodeRunStatus.WAITING_PERMISSION,
                 ],
                 owner_process_id=process_id,
                 process_generation=process_generation,

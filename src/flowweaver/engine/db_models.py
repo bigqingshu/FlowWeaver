@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -153,7 +153,6 @@ class NodeTaskRecord(Base):
     attempt: Mapped[int] = mapped_column(Integer, nullable=False)
     input_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
     config_json: Mapped[str] = mapped_column(Text, nullable=False)
-    permission_handle_id: Mapped[str | None] = mapped_column(Text)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -282,40 +281,6 @@ class TableLeaseRecord(Base):
     expires_at: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     released_at: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
-
-
-class PermissionGrantRecord(Base):
-    __tablename__ = "permission_grants"
-
-    permission_handle_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    request_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    workflow_run_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    node_run_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    scopes_json: Mapped[str] = mapped_column(Text, nullable=False)
-    granted: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
-    issued_at: Mapped[str] = mapped_column(Text, nullable=False)
-    expires_at: Mapped[str | None] = mapped_column(Text)
-    revoked_at: Mapped[str | None] = mapped_column(Text)
-    denial_reason: Mapped[str | None] = mapped_column(Text)
-    audit_level: Mapped[str] = mapped_column(Text, nullable=False)
-
-
-class AuditEventRecord(Base):
-    __tablename__ = "audit_events"
-
-    event_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    event_type: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[str] = mapped_column(Text, nullable=False)
-    workflow_run_id: Mapped[str | None] = mapped_column(Text)
-    node_run_id: Mapped[str | None] = mapped_column(Text)
-    subject_type: Mapped[str] = mapped_column(Text, nullable=False)
-    subject_id: Mapped[str | None] = mapped_column(Text)
-    resource_type: Mapped[str | None] = mapped_column(Text)
-    resource_id: Mapped[str | None] = mapped_column(Text)
-    action: Mapped[str | None] = mapped_column(Text)
-    result: Mapped[str] = mapped_column(Text, nullable=False)
-    audit_level: Mapped[str] = mapped_column(Text, nullable=False, default="STANDARD")
-    summary_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class RuntimeEventRecord(Base):

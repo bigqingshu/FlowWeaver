@@ -15,7 +15,6 @@ from flowweaver.engine.runtime_store import (
     WorkflowRevision,
     WorkflowRun,
 )
-from flowweaver.protocols.permissions import AuditEventModel
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -201,6 +200,4 @@ def _to_jsonable(value: Any) -> Any:
                 for member in value.members
             ],
         }
-    if isinstance(value, AuditEventModel):
-        return value.model_dump(mode="json")
     return value

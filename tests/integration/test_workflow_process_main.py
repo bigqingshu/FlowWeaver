@@ -1195,23 +1195,23 @@ def test_workflow_process_fails_invalid_builtin_node_config(
     provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
-        executor_id="builtin-table-permission-reject",
+        executor_id="builtin-table-config-reject",
         store=store,
         registry=registry,
         table_provider=provider,
     )
     workflow = store.create_workflow_definition(
-        name="Invalid builtin permission workflow",
+        name="Invalid builtin config workflow",
         definition=invalid_definition,
-        workflow_id="workflow-invalid-builtin-permission",
+        workflow_id="workflow-invalid-builtin-config",
     )
     run = store.create_workflow_run(
         workflow_id=workflow.workflow_id,
-        workflow_run_id="run-invalid-builtin-permission",
+        workflow_run_id="run-invalid-builtin-config",
     )
     process = store.claim_workflow_process(
         workflow_run_id=run.workflow_run_id,
-        process_id="process-invalid-builtin-permission",
+        process_id="process-invalid-builtin-config",
     )
     assert process is not None
 

@@ -7,7 +7,6 @@ from fastapi.exceptions import RequestValidationError
 
 from flowweaver.api.dependencies import APIAuthError
 from flowweaver.api.responses import error_response
-from flowweaver.api.routes_audit_events import router as audit_events_router
 from flowweaver.api.routes_data import router as data_router
 from flowweaver.api.routes_events import router as rest_events_router
 from flowweaver.api.routes_node_definitions import router as node_definitions_router
@@ -72,7 +71,6 @@ def create_app(container: ServiceContainer) -> FastAPI:
     app.include_router(node_definitions_router)
     app.include_router(runs_router)
     app.include_router(data_router)
-    app.include_router(audit_events_router)
     app.include_router(shared_publications_router)
     app.include_router(rest_events_router)
     app.include_router(events_router)
