@@ -124,6 +124,13 @@
 - 显示当前预览来源。
 - 预览选中节点与完整运行结果有明确区分。
 
+建议拆分：
+
+- `DATA-PREVIEW-0`：现状复核与缺口确认，只写文档。
+- `DATA-PREVIEW-1`：预览来源常驻说明，显示当前表格来自哪个 run、node、table。
+- `DATA-PREVIEW-2`：预览选中节点与完整运行结果的状态文案复核。
+- `DATA-PREVIEW-3`：空表、失败保留和成功全量替换验收复核。
+
 ### RUN-SAVE-UX：运行与保存体验收口
 
 目标功能：
@@ -345,3 +352,22 @@
 测试结果：
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
+
+### DATA-PREVIEW-0：现状复核与缺口确认
+
+状态：已完成。
+
+复核结论：
+
+- 当前已经具备数据预览基础表格，`WorkflowDataPreviewView` 独立显示在工作流页面下方。
+- 当前已有“预览选中节点”和“运行”入口，预览选中节点会启动到目标节点的预览运行，完整运行后会尝试选择最新可读输出节点并刷新数据预览。
+- 当前已有失败保留上次有效表格的测试覆盖：刷新失败、缺少输出表和预览启动失败不会清空上一份有效数据。
+- 当前缺口是“当前表格来自哪个 run、哪个 node、哪个 table”还没有常驻来源行，只能从状态消息间接判断。
+
+建议下一步：
+
+- 进入 `DATA-PREVIEW-1`，新增只读来源文本，不改变后端接口、不改变预览和运行语义。
+
+测试结果：
+
+- 现状复核小步，未改代码；本轮进入 DATA-PREVIEW 前已执行 `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：347 passed。
