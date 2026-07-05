@@ -165,6 +165,7 @@
 工作阶段如发现新问题，先追加到本节，再决定是否进入实现：
 
 - 节点实例 ID 编辑不能直接作为普通输入暴露；如果后续支持重命名，需要同步处理 connections 引用、选中状态、批量选择状态和保存前校验。
+- 线性识别层需要把“单节点但存在自环连接”视为非法拓扑，不能因为节点数为 1 就直接通过。
 
 ## 阶段执行记录
 
@@ -253,3 +254,19 @@
 测试结果：
 
 - 文档分析小步，未改代码，未运行测试。
+
+### WORKFLOW-UX-5.1：线性链路只读识别层
+
+状态：已完成。
+
+完成内容：
+
+- 新增 `WorkflowDefinitionLinearChainAnalyzer`，只读判断草稿是否为单入口、单出口、单链路的线性结构。
+- 新增 `WorkflowDefinitionLinearChainAnalysis`，返回是否线性、线性节点顺序和拒绝原因。
+- 覆盖简单线性链、单节点无连接、分支、汇合、断链、未知节点引用、重复连接 ID、自环和无效草稿结构。
+- 本小步不改写 draft JSON，不接入 UI，不改变删除、上移、下移的现有语义。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests"`：9 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：340 passed。
