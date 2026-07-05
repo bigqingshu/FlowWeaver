@@ -247,6 +247,65 @@ public static class WorkflowDefinitionDraftNodePatcher
         return result;
     }
 
+    private static List<int> FindIncomingConnectionIndexes(
+        JsonArray connections,
+        string targetNodeId)
+    {
+        var result = new List<int>();
+        for (var index = 0; index < connections.Count; index++)
+        {
+            if (connections[index] is JsonObject connectionObject &&
+                string.Equals(
+                    GetStringValue(connectionObject, "target_node_id"),
+                    targetNodeId,
+                    StringComparison.Ordinal))
+            {
+                result.Add(index);
+            }
+        }
+
+        return result;
+    }
+
+    private static WorkflowDefinitionDraftConnection? TryCreateLinearBridgeConnection(
+        JsonArray connections,
+        string nodeInstanceId)
+    {
+        var incomingConnectionIndexes = FindIncomingConnectionIndexes(
+            connections,
+            nodeInstanceId);
+        var outgoingConnectionIndexes = FindOutgoingConnectionIndexes(
+            connections,
+            nodeInstanceId);
+        if (incomingConnectionIndexes.Count != 1 ||
+            outgoingConnectionIndexes.Count != 1 ||
+            connections[incomingConnectionIndexes[0]] is not JsonObject incomingConnectionObject ||
+            connections[outgoingConnectionIndexes[0]] is not JsonObject outgoingConnectionObject)
+        {
+            return null;
+        }
+
+        var incomingConnection = ReadConnection(incomingConnectionObject);
+        var outgoingConnection = ReadConnection(outgoingConnectionObject);
+        if (string.IsNullOrWhiteSpace(incomingConnection.SourcePort) ||
+            string.IsNullOrWhiteSpace(outgoingConnection.TargetPort))
+        {
+            return null;
+        }
+
+        return new WorkflowDefinitionDraftConnection
+        {
+            ConnectionId = BuildUniqueConnectionId(
+                connections,
+                incomingConnection.SourceNodeId,
+                outgoingConnection.TargetNodeId),
+            SourceNodeId = incomingConnection.SourceNodeId,
+            SourcePort = incomingConnection.SourcePort,
+            TargetNodeId = outgoingConnection.TargetNodeId,
+            TargetPort = outgoingConnection.TargetPort,
+        };
+    }
+
     private static WorkflowDefinitionDraftConnection ReadConnection(
         JsonObject connectionObject)
     {
@@ -381,6 +440,27 @@ public static class WorkflowDefinitionDraftNodePatcher
         string workflowDefinitionDraftJson,
         string nodeInstanceId)
     {
+        return DeleteNodeCore(
+            workflowDefinitionDraftJson,
+            nodeInstanceId,
+            bridgeLinearConnections: false);
+    }
+
+    public static WorkflowDefinitionDraftNodePatchResult DeleteNodeWithLinearBridge(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId)
+    {
+        return DeleteNodeCore(
+            workflowDefinitionDraftJson,
+            nodeInstanceId,
+            bridgeLinearConnections: true);
+    }
+
+    private static WorkflowDefinitionDraftNodePatchResult DeleteNodeCore(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId,
+        bool bridgeLinearConnections)
+    {
         if (string.IsNullOrWhiteSpace(nodeInstanceId))
         {
             return Failed(
@@ -416,6 +496,17 @@ public static class WorkflowDefinitionDraftNodePatcher
                 "NODE_NOT_FOUND");
         }
 
+        WorkflowDefinitionDraftConnection? bridgeConnection = null;
+        if (bridgeLinearConnections &&
+            WorkflowDefinitionLinearChainAnalyzer
+                .Analyze(workflowDefinitionDraftJson)
+                .IsLinear)
+        {
+            bridgeConnection = TryCreateLinearBridgeConnection(
+                readResult.Connections,
+                nodeInstanceId);
+        }
+
         var removedConnections = new List<WorkflowDefinitionDraftConnection>();
         for (var index = readResult.Connections.Count - 1; index >= 0; index--)
         {
@@ -435,10 +526,18 @@ public static class WorkflowDefinitionDraftNodePatcher
         }
 
         nodes.RemoveAt(targetIndex);
+        var addedConnections = new List<WorkflowDefinitionDraftConnection>();
+        if (bridgeConnection is not null)
+        {
+            readResult.Connections.Add(CreateConnectionObject(bridgeConnection));
+            addedConnections.Add(bridgeConnection);
+        }
+
         return new WorkflowDefinitionDraftNodePatchResult
         {
             Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
             RemovedConnections = removedConnections,
+            AddedConnections = addedConnections,
             UpdatedWorkflowDefinitionDraftJson =
                 readResult.Root.ToJsonString(IndentedJsonOptions),
         };

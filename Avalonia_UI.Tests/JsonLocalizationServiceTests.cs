@@ -80,6 +80,15 @@ public sealed class JsonLocalizationServiceTests
             service.Format(
                 "definition.node_delete_removed_connections",
                 "- c1: source.out -> filter.in"));
+        Assert.AreEqual(
+            "节点已从草稿删除，并已更新线性连接。保存前请重新校验。",
+            service.GetString("definition.node_deleted_with_rewired_connections"));
+        Assert.AreEqual(
+            "已更新连接：\n移除：\n- old\n新增：\n- new",
+            service.Format(
+                "definition.node_delete_rewired_connections",
+                "- old",
+                "- new"));
     }
 
     [TestMethod]

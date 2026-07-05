@@ -1543,6 +1543,67 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task DeleteWorkflowDefinitionDraftNodeCommandBridgesLinearMiddleNodeConnections()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0"},
+                {"node_instance_id": "filter", "node_type": "FilterRowsNode", "node_version": "1.0"},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_sink", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "filter");
+
+        viewModel.DeleteWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.AreEqual(
+            "Node deleted from draft and linear connections were updated. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        var message = viewModel.WorkflowDefinitionValidationErrorMessage ?? string.Empty;
+        StringAssert.Contains(message, "Updated connections:");
+        StringAssert.Contains(message, "source_to_filter: source.out -> filter.in");
+        StringAssert.Contains(message, "filter_to_sink: filter.out -> sink.in");
+        StringAssert.Contains(message, "source_to_sink: source.out -> sink.in");
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var nodes = draft.RootElement.GetProperty("nodes");
+        Assert.AreEqual(2, nodes.GetArrayLength());
+        Assert.AreEqual("source", nodes[0].GetProperty("node_instance_id").GetString());
+        Assert.AreEqual("sink", nodes[1].GetProperty("node_instance_id").GetString());
+
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual(
+            "source_to_sink",
+            connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("sink", connections[0].GetProperty("target_node_id").GetString());
+    }
+
+    [TestMethod]
     public async Task DraftConnectionInputResetsAndSelectedConnectionClearsWhenDraftChanges()
     {
         var definitionJson =

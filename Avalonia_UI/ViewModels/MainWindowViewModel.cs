@@ -1769,7 +1769,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var patchResult = WorkflowDefinitionDraftNodePatcher.DeleteNode(
+        var patchResult = WorkflowDefinitionDraftNodePatcher.DeleteNodeWithLinearBridge(
             WorkflowDefinitionDraftJson,
             SelectedWorkflowDefinitionNode.NodeInstanceId);
         if (!patchResult.Succeeded)
@@ -1782,11 +1782,17 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
         WorkflowDefinitionValidationMessage =
-            patchResult.RemovedConnections.Count > 0
+            patchResult.AddedConnections.Count > 0
+                ? T("definition.node_deleted_with_rewired_connections")
+                : patchResult.RemovedConnections.Count > 0
                 ? T("definition.node_deleted_with_connections")
                 : T("definition.node_deleted");
         WorkflowDefinitionValidationErrorMessage =
-            FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
+            patchResult.AddedConnections.Count > 0
+                ? FormatDeletedRewiredConnectionsMessage(
+                    patchResult.RemovedConnections,
+                    patchResult.AddedConnections)
+                : FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowDefinitionDraftNodes))]
@@ -3611,6 +3617,32 @@ public partial class MainWindowViewModel : ViewModelBase
 
         return F(
             "definition.node_add_rewired_connections",
+            removedText,
+            addedText);
+    }
+
+    private string? FormatDeletedRewiredConnectionsMessage(
+        IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections,
+        IReadOnlyList<WorkflowDefinitionDraftConnection> addedConnections)
+    {
+        if (removedConnections.Count == 0 && addedConnections.Count == 0)
+        {
+            return null;
+        }
+
+        var removedText = removedConnections.Count == 0
+            ? "-"
+            : string.Join(
+                Environment.NewLine,
+                removedConnections.Select(FormatRelatedConnectionSummary));
+        var addedText = addedConnections.Count == 0
+            ? "-"
+            : string.Join(
+                Environment.NewLine,
+                addedConnections.Select(FormatRelatedConnectionSummary));
+
+        return F(
+            "definition.node_delete_rewired_connections",
             removedText,
             addedText);
     }

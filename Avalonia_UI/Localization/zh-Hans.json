@@ -213,6 +213,8 @@
   "definition.node_deleted": "节点已从草稿删除。保存前请重新校验。",
   "definition.node_deleted_with_connections": "节点及相关连接已从草稿删除。保存前请重新校验。",
   "definition.node_delete_removed_connections": "已同步移除相关连接：\n{0}",
+  "definition.node_deleted_with_rewired_connections": "节点已从草稿删除，并已更新线性连接。保存前请重新校验。",
+  "definition.node_delete_rewired_connections": "已更新连接：\n移除：\n{0}\n新增：\n{1}",
   "definition.node_delete_failed": "节点删除失败。",
   "definition.node_moved": "节点列表顺序已更新，连接未改变。保存前请重新校验。",
   "definition.node_move_failed": "节点移动失败。",

@@ -166,6 +166,7 @@
 
 - 节点实例 ID 编辑不能直接作为普通输入暴露；如果后续支持重命名，需要同步处理 connections 引用、选中状态、批量选择状态和保存前校验。
 - 线性识别层需要把“单节点但存在自环连接”视为非法拓扑，不能因为节点数为 1 就直接通过。
+- 线性删除桥接第一版只接入单节点删除；批量删除仍保持“删除节点并移除相关连接”，如需批量桥接需要单独定义连续区间和非连续选择的语义。
 
 ## 阶段执行记录
 
@@ -270,3 +271,20 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests"`：9 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：340 passed。
+
+### WORKFLOW-UX-5.2：线性删除桥接
+
+状态：已完成。
+
+完成内容：
+
+- 新增 `DeleteNodeWithLinearBridge(...)`，保留原 `DeleteNode(...)` 默认删除语义不变。
+- 单节点删除命令改用线性桥接方法：在线性链路、中间节点有唯一前驱和唯一后继、端口可确定时，删除目标节点并新增前驱到后继的桥接连接。
+- 非线性草稿、旁路连接、端口缺失、源节点或尾节点删除仍回退为移除相关连接，不自动重排。
+- 批量删除暂不桥接，避免连续区间和非连续选择语义提前扩大。
+- 补充删除桥接的中英文提示文案和连接明细。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowDefinitionLinearChainAnalyzerTests|FullyQualifiedName~JsonLocalizationServiceTests"`：127 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：343 passed。

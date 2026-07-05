@@ -518,6 +518,82 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
     }
 
     [TestMethod]
+    public void DeleteNodeWithLinearBridgeConnectsNeighborsWhenDeletingMiddleNode()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.DeleteNodeWithLinearBridge(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_sink", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """,
+            "filter");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.HasCount(2, result.RemovedConnections);
+        Assert.HasCount(1, result.AddedConnections);
+        Assert.AreEqual("source_to_filter", result.RemovedConnections[0].ConnectionId);
+        Assert.AreEqual("filter_to_sink", result.RemovedConnections[1].ConnectionId);
+        Assert.AreEqual("source_to_sink", result.AddedConnections[0].ConnectionId);
+        Assert.AreEqual("source", result.AddedConnections[0].SourceNodeId);
+        Assert.AreEqual("out", result.AddedConnections[0].SourcePort);
+        Assert.AreEqual("sink", result.AddedConnections[0].TargetNodeId);
+        Assert.AreEqual("in", result.AddedConnections[0].TargetPort);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var root = updated.RootElement;
+        Assert.AreEqual(2, root.GetProperty("nodes").GetArrayLength());
+        var connections = root.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual(
+            "source_to_sink",
+            connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual(
+            "source",
+            connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual(
+            "sink",
+            connections[0].GetProperty("target_node_id").GetString());
+    }
+
+    [TestMethod]
+    public void DeleteNodeWithLinearBridgeKeepsExistingBehaviorWhenDraftIsNotLinear()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.DeleteNodeWithLinearBridge(
+            """
+            {
+              "nodes": [
+                {"node_instance_id": "source"},
+                {"node_instance_id": "filter"},
+                {"node_instance_id": "sink"}
+              ],
+              "connections": [
+                {"connection_id": "source_to_filter", "source_node_id": "source", "source_port": "out", "target_node_id": "filter", "target_port": "in"},
+                {"connection_id": "filter_to_sink", "source_node_id": "filter", "source_port": "out", "target_node_id": "sink", "target_port": "in"},
+                {"connection_id": "keep", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """,
+            "filter");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.HasCount(2, result.RemovedConnections);
+        Assert.IsEmpty(result.AddedConnections);
+
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var connections = updated.RootElement.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual("keep", connections[0].GetProperty("connection_id").GetString());
+    }
+
+    [TestMethod]
     public void DeleteNodesRemovesMultipleNodesAndRelatedConnections()
     {
         var result = WorkflowDefinitionDraftNodePatcher.DeleteNodes(

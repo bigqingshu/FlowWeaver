@@ -213,6 +213,8 @@
   "definition.node_deleted": "Node deleted from draft. Validate before saving.",
   "definition.node_deleted_with_connections": "Node deleted from draft with related connections. Validate before saving.",
   "definition.node_delete_removed_connections": "Removed related connections:\n{0}",
+  "definition.node_deleted_with_rewired_connections": "Node deleted from draft and linear connections were updated. Validate before saving.",
+  "definition.node_delete_rewired_connections": "Updated connections:\nRemoved:\n{0}\nAdded:\n{1}",
   "definition.node_delete_failed": "Node delete failed.",
   "definition.node_moved": "Node list order updated; connections are unchanged. Validate before saving.",
   "definition.node_move_failed": "Node move failed.",
