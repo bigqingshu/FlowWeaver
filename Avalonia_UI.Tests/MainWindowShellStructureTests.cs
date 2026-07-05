@@ -15,6 +15,8 @@ public sealed class MainWindowShellStructureTests
 
         StringAssert.Contains(xaml, "<shell:ShellHeaderView />");
         StringAssert.Contains(xaml, "<shell:AppShellPageHost Grid.Row=\"1\" />");
+        StringAssert.Contains(xaml, "<shell:ShellNotificationHostView Grid.RowSpan=\"2\"");
+        StringAssert.Contains(xaml, "ZIndex=\"10\"");
         Assert.IsFalse(xaml.Contains("AppTitleText", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("AppSubtitleText", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("ConnectionStatusView", StringComparison.Ordinal));
@@ -37,6 +39,26 @@ public sealed class MainWindowShellStructureTests
         Assert.IsFalse(xaml.Contains("AppShellPageHost", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("TabControl", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("TabItem", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void ShellNotificationHostOwnsNotificationOverlayBindings()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Shell",
+            "ShellNotificationHostView.axaml");
+
+        StringAssert.Contains(xaml, "x:DataType=\"vm:MainWindowViewModel\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding IsNotificationOpen}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NotificationKindText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NotificationTitle}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NotificationMessage}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding CloseNotificationCommand}\"");
+        Assert.IsFalse(xaml.Contains("RuntimeEvent", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("AuditEvent", StringComparison.Ordinal));
     }
 
     private static string ReadSourceFile(params string[] pathParts)

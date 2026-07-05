@@ -359,11 +359,43 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private int selectedShellPageIndex;
 
+    [ObservableProperty]
+    private bool isNotificationOpen;
+
+    [ObservableProperty]
+    private string notificationKey = string.Empty;
+
+    [ObservableProperty]
+    private UiNotificationKind notificationKind = UiNotificationKind.Info;
+
+    [ObservableProperty]
+    private string notificationTitle = string.Empty;
+
+    [ObservableProperty]
+    private string notificationMessage = string.Empty;
+
+    [ObservableProperty]
+    private DateTimeOffset? notificationUpdatedAt;
+
+    [ObservableProperty]
+    private bool isNotificationSticky;
+
+    [ObservableProperty]
+    private TimeSpan? notificationAutoDismissAfter;
+
+    [ObservableProperty]
+    private int notificationOpenSequence;
+
+    [ObservableProperty]
+    private int notificationUpdateCount;
+
     public bool CanUseEngineActions =>
         ConnectionStatus == ConnectionStatus.Connected
         && !string.IsNullOrWhiteSpace(BaseUrl)
         && !string.IsNullOrWhiteSpace(Token)
         && !IsAuthenticationFailed;
+
+    public string NotificationKindText => NotificationKind.ToString();
 
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
@@ -432,6 +464,45 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
         RefreshShellNavigationItems();
         RefreshSelectedNodeConfigDraftState();
+    }
+
+    public void ShowNotification(
+        string key,
+        UiNotificationKind kind,
+        string title,
+        string message,
+        bool isSticky = false,
+        TimeSpan? autoDismissAfter = null)
+    {
+        var normalizedKey = string.IsNullOrWhiteSpace(key)
+            ? "default"
+            : key.Trim();
+        var shouldStartOpenAnimation =
+            !IsNotificationOpen
+            || !string.Equals(NotificationKey, normalizedKey, StringComparison.Ordinal);
+
+        NotificationKey = normalizedKey;
+        NotificationKind = kind;
+        NotificationTitle = title ?? string.Empty;
+        NotificationMessage = message ?? string.Empty;
+        NotificationUpdatedAt = DateTimeOffset.Now;
+        IsNotificationSticky = isSticky || kind == UiNotificationKind.Error;
+        NotificationAutoDismissAfter = IsNotificationSticky ? null : autoDismissAfter;
+        NotificationUpdateCount++;
+
+        if (shouldStartOpenAnimation)
+        {
+            NotificationOpenSequence++;
+        }
+
+        IsNotificationOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseNotification()
+    {
+        IsNotificationOpen = false;
+        NotificationAutoDismissAfter = null;
     }
 
     public ObservableCollection<LanguageMenuItemViewModel> Languages { get; } = new();
@@ -4969,6 +5040,11 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnSharedPublicationVersionErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasSharedPublicationVersionError));
+    }
+
+    partial void OnNotificationKindChanged(UiNotificationKind value)
+    {
+        OnPropertyChanged(nameof(NotificationKindText));
     }
 
     private void NotifyWorkflowCommandStateChanged()
