@@ -174,6 +174,11 @@
 - manifest 与版本信息一致。
 - 用户手册覆盖启动、连接、运行、退出、故障排查。
 
+建议拆分：
+
+- `RELEASE-UX-0`：复核 P/P+ 发布阶段已有闭环，不重复实现发布工程。
+- 后续若继续发布方向，优先从 `docs/FlowWeaver_阶段P_正式发布前置完成清单.md` 和 `docs/FlowWeaver_阶段P后续_总体验收复核.md` 进入真实发布前演练。
+
 ## 后续方向判断
 
 工作阶段如发现新问题，先追加到本节，再决定是否进入实现：
@@ -502,3 +507,18 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：125 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。
+
+### RELEASE-UX-0：发布与使用体验现状复核
+
+状态：已完成。
+
+复核结论：
+
+- 发布归档、runtime audit、zip manifest、SHA-256、许可证 metadata、完整用户手册、release strict 和 release Python runtime 已在 P/P+ 阶段形成独立文档与工具链。
+- 当前主线无需重复实现发布工程；后续真实发布前应按 `FlowWeaver_阶段P_正式发布前置完成清单.md` 串联 release runtime、portable layout、Desktop publish、archive strict 与 clean-room smoke。
+- 本轮不自动执行真实 Desktop clean-room smoke，避免在用户未明确要求时打开窗口或影响本机后端/桌面状态。
+- 当前仍保留的发布方向包括签名、安装器、自动更新、后台服务、真实发布前演练记录等。
+
+测试结果：
+
+- `.\python312\python.exe -m pytest tests\unit\test_create_portable_archive.py tests\unit\test_create_release_python_runtime.py tests\unit\test_create_portable_layout.py tests\unit\test_portable_runtime_audit.py tests\unit\test_portable_launcher.py`：75 passed。
