@@ -479,3 +479,26 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：125 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。
+
+### RUN-SAVE-UX-3：保存、冲突与运行保护验收复核
+
+状态：已完成。
+
+验收结论：
+
+- 保存命令只在加载定义、草稿 dirty、未保存中、无 revision conflict 时启用。
+- 保存时使用已加载 revision id，保存成功后刷新工作流和定义详情。
+- revision conflict 会保留用户草稿并禁用继续编辑/运行相关入口，直到重新加载定义。
+- 完整运行和预览运行在 dirty draft 或 revision conflict 下禁用。
+- 数据预览/运行区域常驻提示后端运行的是已保存 revision，降低误操作风险。
+
+当前明确保留：
+
+- 不自动保存后再运行；是否提供“一键保存并运行”需要后续单独设计。
+- 不弹阻塞式确认框；当前采用按钮禁用和可见提示。
+- 不改变后端运行接口，不增加 draft 直接运行协议。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~MainWindowViewModelLocalizationTests|FullyQualifiedName~JsonLocalizationServiceTests|FullyQualifiedName~WorkflowSummaryViewStructureTests"`：125 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：348 passed。
