@@ -779,4 +779,76 @@ public sealed class WorkflowDefinitionDraftNodePatcherTests
             WorkflowDefinitionDraftNodePatchStatus.ConnectionsMissing,
             missingConnections.Status);
     }
+
+    [TestMethod]
+    public void UpdateDisplayNamePatchesSelectedNodeAndPreservesWorkflowShape()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.UpdateDisplayName(
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "display_name": "Source", "config": {"rows": 3}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_sink", "source_node_id": "source", "source_port": "rows", "target_node_id": "sink", "target_port": "rows"}
+              ]
+            }
+            """,
+            "source",
+            "Updated Source");
+
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.Succeeded, result.Status);
+        using var draft = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var nodes = draft.RootElement.GetProperty("nodes");
+        Assert.AreEqual(
+            "Updated Source",
+            nodes[0].GetProperty("display_name").GetString());
+        Assert.AreEqual(3, nodes[0].GetProperty("config").GetProperty("rows").GetInt32());
+        Assert.IsFalse(nodes[1].TryGetProperty("display_name", out _));
+        Assert.AreEqual(1, draft.RootElement.GetProperty("connections").GetArrayLength());
+    }
+
+    [TestMethod]
+    public void UpdateDisplayNameClearsBlankDisplayName()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.UpdateDisplayName(
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "display_name": "Source", "config": {}}
+              ],
+              "connections": []
+            }
+            """,
+            "source",
+            " ");
+
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.Succeeded, result.Status);
+        using var draft = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        Assert.IsFalse(
+            draft.RootElement
+                .GetProperty("nodes")[0]
+                .TryGetProperty("display_name", out _));
+    }
+
+    [TestMethod]
+    public void UpdateDisplayNameRejectsMissingNode()
+    {
+        var result = WorkflowDefinitionDraftNodePatcher.UpdateDisplayName(
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """,
+            "missing",
+            "Missing");
+
+        Assert.AreEqual(WorkflowDefinitionDraftNodePatchStatus.NodeNotFound, result.Status);
+        Assert.AreEqual("NODE_NOT_FOUND", result.Warning);
+    }
 }

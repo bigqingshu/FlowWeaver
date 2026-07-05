@@ -102,6 +102,9 @@ public partial class MainWindowViewModel : ViewModelBase
     private WorkflowDefinitionNodeListItemViewModel? selectedWorkflowDefinitionNode;
 
     [ObservableProperty]
+    private string selectedNodeDisplayNameDraft = string.Empty;
+
+    [ObservableProperty]
     private NodeConfigDraft? selectedNodeConfigDraft;
 
     [ObservableProperty]
@@ -703,6 +706,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ApplyNodeConfigText => T("definition.apply_node_config");
 
+    public string ApplyNodeDisplayNameText => T("definition.apply_node_display_name");
+
     public string StructuredEditSectionText => T("definition.structured_edit");
 
     public string AddNodeText => T("definition.add_node");
@@ -944,6 +949,20 @@ public partial class MainWindowViewModel : ViewModelBase
             && !IsWorkflowDefinitionDraftBusy
             && !HasWorkflowDefinitionRevisionConflict
             && HasSelectedNodeConfigEditableInputFields;
+    }
+
+    private bool CanApplySelectedNodeDisplayNameDraft()
+    {
+        return CanUseEngineActions
+            && WorkflowDefinitionDetail is not null
+            && SelectedWorkflowDefinitionNode is not null
+            && HasWorkflowDefinitionDraft
+            && !IsWorkflowDefinitionDraftBusy
+            && !HasWorkflowDefinitionRevisionConflict
+            && !string.Equals(
+                SelectedNodeDisplayNameDraft.Trim(),
+                SelectedWorkflowDefinitionNode.DisplayName,
+                StringComparison.Ordinal);
     }
 
     private bool CanAddWorkflowDefinitionDraftNode()
@@ -1541,6 +1560,33 @@ public partial class MainWindowViewModel : ViewModelBase
 
         WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
         WorkflowDefinitionValidationMessage = T("definition.node_config_applied");
+        WorkflowDefinitionValidationErrorMessage = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanApplySelectedNodeDisplayNameDraft))]
+    private void ApplySelectedNodeDisplayNameDraft()
+    {
+        if (SelectedWorkflowDefinitionNode is null)
+        {
+            return;
+        }
+
+        var nodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
+        var patchResult = WorkflowDefinitionDraftNodePatcher.UpdateDisplayName(
+            WorkflowDefinitionDraftJson,
+            nodeInstanceId,
+            SelectedNodeDisplayNameDraft);
+        if (!patchResult.Succeeded)
+        {
+            WorkflowDefinitionValidationMessage = T("definition.node_display_name_apply_failed");
+            WorkflowDefinitionValidationErrorMessage =
+                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            return;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        SelectWorkflowDefinitionDraftNode(nodeInstanceId);
+        WorkflowDefinitionValidationMessage = T("definition.node_display_name_applied");
         WorkflowDefinitionValidationErrorMessage = null;
     }
 
@@ -3175,6 +3221,11 @@ public partial class MainWindowViewModel : ViewModelBase
         ResetWorkflowDefinitionDraftSelectionInput();
     }
 
+    private void RefreshSelectedNodeDisplayNameDraftState()
+    {
+        SelectedNodeDisplayNameDraft = SelectedWorkflowDefinitionNode?.DisplayName ?? string.Empty;
+    }
+
     private void RefreshSelectedNodeConfigDraftState()
     {
         if (WorkflowDefinitionDetail is null ||
@@ -3972,6 +4023,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
+        OnPropertyChanged(nameof(ApplyNodeDisplayNameText));
         OnPropertyChanged(nameof(StructuredEditSectionText));
         OnPropertyChanged(nameof(AddNodeText));
         OnPropertyChanged(nameof(CopyNodeText));
@@ -4186,7 +4238,9 @@ public partial class MainWindowViewModel : ViewModelBase
         ClearWorkflowDefinitionDraftBatchSelection();
         ResetWorkflowDefinitionStructuredEditInput();
         OnPropertyChanged(nameof(HasWorkflowDefinition));
+        RefreshSelectedNodeDisplayNameDraftState();
         RefreshSelectedNodeConfigDraftState();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -4202,7 +4256,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSelectedWorkflowDefinitionNode));
         OnPropertyChanged(nameof(HasNoSelectedWorkflowDefinitionNode));
         ResetDataPreviewSelectionState();
+        RefreshSelectedNodeDisplayNameDraftState();
         RefreshSelectedNodeConfigDraftState();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
@@ -4243,6 +4299,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -4272,6 +4329,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
     {
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -4284,6 +4342,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -4296,6 +4355,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -4307,6 +4367,11 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnWorkflowDefinitionValidationErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionValidationError));
+    }
+
+    partial void OnSelectedNodeDisplayNameDraftChanged(string value)
+    {
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyWorkflowDefinitionNodeActionCommandsChanged()

@@ -62,7 +62,9 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(configXaml, "Text=\"{Binding NodeVersionText}\"");
         StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.NodeVersion}\"");
         StringAssert.Contains(configXaml, "Text=\"{Binding DisplayNameText}\"");
-        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedWorkflowDefinitionNode.DisplayNameText}\"");
+        StringAssert.Contains(configXaml, "Text=\"{Binding SelectedNodeDisplayNameDraft, Mode=TwoWay");
+        StringAssert.Contains(configXaml, "Content=\"{Binding ApplyNodeDisplayNameText}\"");
+        StringAssert.Contains(configXaml, "Command=\"{Binding ApplySelectedNodeDisplayNameDraftCommand}\"");
         StringAssert.Contains(
             configXaml,
             "ItemsSource=\"{Binding SelectedNodeConfigEditableInputFields}\"");

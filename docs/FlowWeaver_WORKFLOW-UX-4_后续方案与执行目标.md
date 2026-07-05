@@ -189,3 +189,19 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelWorkflowTests"`：91 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：326 passed。
+
+### WORKFLOW-UX-4.2b：节点显示名称编辑
+
+状态：已完成。
+
+完成内容：
+
+- 在节点配置区提供显示名称输入和“应用名称”按钮。
+- 新增 `WorkflowDefinitionDraftNodePatcher.UpdateDisplayName(...)`，只更新或清空选中节点的 `display_name`。
+- ViewModel 接入显示名称草稿状态和应用命令。
+- 节点实例 ID、节点类型、节点版本仍保持只读。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelLocalizationTests"`：144 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：330 passed。

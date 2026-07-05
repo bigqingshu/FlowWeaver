@@ -627,6 +627,50 @@ public static class WorkflowDefinitionDraftNodePatcher
         };
     }
 
+    public static WorkflowDefinitionDraftNodePatchResult UpdateDisplayName(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId,
+        string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(nodeInstanceId))
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeInstanceIdRequired,
+                "NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        var readResult = ReadMutableDraft(workflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            return Failed(readResult.Status, readResult.Warning);
+        }
+
+        var nodeIndex = FindNodeIndex(readResult.Nodes, nodeInstanceId);
+        if (nodeIndex < 0 ||
+            readResult.Nodes[nodeIndex] is not JsonObject nodeObject)
+        {
+            return Failed(
+                WorkflowDefinitionDraftNodePatchStatus.NodeNotFound,
+                "NODE_NOT_FOUND");
+        }
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            nodeObject.Remove("display_name");
+        }
+        else
+        {
+            nodeObject["display_name"] = displayName.Trim();
+        }
+
+        return new WorkflowDefinitionDraftNodePatchResult
+        {
+            Status = WorkflowDefinitionDraftNodePatchStatus.Succeeded,
+            UpdatedWorkflowDefinitionDraftJson =
+                readResult.Root.ToJsonString(IndentedJsonOptions),
+        };
+    }
+
     private static MutableWorkflowDraftReadResult ReadMutableDraft(
         string workflowDefinitionDraftJson)
     {

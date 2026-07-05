@@ -60,12 +60,16 @@
                                Text="{Binding DisplayNameText}"
                                FontSize="12"
                                Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="3"
-                               Text="{Binding SelectedWorkflowDefinitionNode.DisplayNameText}"
-                               FontSize="12"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <Grid Grid.Row="1"
+                          Grid.Column="3"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8">
+                        <TextBox Text="{Binding SelectedNodeDisplayNameDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Grid.Column="1"
+                                Content="{Binding ApplyNodeDisplayNameText}"
+                                Command="{Binding ApplySelectedNodeDisplayNameDraftCommand}"
+                                MinWidth="84"/>
+                    </Grid>
                 </Grid>
             </Border>
 

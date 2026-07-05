@@ -2459,6 +2459,64 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task ApplySelectedNodeDisplayNameDraftPatchesWorkflowDefinitionDraftJson()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "display_name": "Filter amount",
+                  "config": {"field": "amount"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Filter amount", viewModel.SelectedNodeDisplayNameDraft);
+        Assert.IsFalse(viewModel.ApplySelectedNodeDisplayNameDraftCommand.CanExecute(null));
+
+        viewModel.SelectedNodeDisplayNameDraft = "Filter total";
+
+        Assert.IsTrue(viewModel.ApplySelectedNodeDisplayNameDraftCommand.CanExecute(null));
+
+        viewModel.ApplySelectedNodeDisplayNameDraftCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(
+            "Filter total",
+            draft.RootElement
+                .GetProperty("nodes")[0]
+                .GetProperty("display_name")
+                .GetString());
+        Assert.AreEqual("Filter total", viewModel.SelectedWorkflowDefinitionNode?.DisplayName);
+        Assert.AreEqual("Filter total", viewModel.SelectedNodeDisplayNameDraft);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.AreEqual(
+            "Node display name applied to draft. Validate before saving.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.ApplySelectedNodeDisplayNameDraftCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task ApplySelectedNodeConfigDraftPatchesWorkflowDefinitionDraftJson()
     {
         var definitionJson =
