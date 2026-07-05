@@ -327,6 +327,7 @@ public sealed class WorkflowSummaryViewStructureTests
             "WorkflowSummaryView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeMoveSemanticsText}\"");
         StringAssert.Contains(xaml, "<WrapPanel Orientation=\"Horizontal\"");
         StringAssert.Contains(
             addNodeXaml,
@@ -346,20 +347,35 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Content=\"{Binding MoveNodeUpText}\"");
         StringAssert.Contains(
             xaml,
+            "ToolTip.Tip=\"{Binding MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText}\"");
+        StringAssert.Contains(
+            xaml,
             "Command=\"{Binding MoveSelectedWorkflowDefinitionDraftNodeUpCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding MoveNodeDownText}\"");
+        StringAssert.Contains(
+            xaml,
+            "ToolTip.Tip=\"{Binding MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText}\"");
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding MoveSelectedWorkflowDefinitionDraftNodeDownCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding CopyNodeText}\"");
         StringAssert.Contains(
             xaml,
+            "ToolTip.Tip=\"{Binding CopyWorkflowDefinitionDraftNodeDisabledReasonText}\"");
+        StringAssert.Contains(
+            xaml,
             "Command=\"{Binding CopyWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding DeleteNodeText}\"");
         StringAssert.Contains(
             xaml,
+            "ToolTip.Tip=\"{Binding DeleteWorkflowDefinitionDraftNodeDisabledReasonText}\"");
+        StringAssert.Contains(
+            xaml,
             "Command=\"{Binding DeleteWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding DeleteSelectedNodesText}\"");
+        StringAssert.Contains(
+            xaml,
+            "ToolTip.Tip=\"{Binding DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText}\"");
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}\"");

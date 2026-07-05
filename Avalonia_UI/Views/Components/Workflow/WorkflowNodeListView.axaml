@@ -59,29 +59,48 @@
                 <TextBlock Text="{Binding WorkflowDefinitionBatchSelectedNodeCountText}"
                            FontSize="12"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding NodeMoveSemanticsText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
 
                 <WrapPanel Orientation="Horizontal"
                            HorizontalAlignment="Right">
-                    <Button Content="{Binding MoveNodeUpText}"
-                            Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeUpCommand}"
-                            MinWidth="84"
-                            Margin="0,0,8,8"/>
-                    <Button Content="{Binding MoveNodeDownText}"
-                            Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeDownCommand}"
-                            MinWidth="84"
-                            Margin="0,0,8,8"/>
-                    <Button Content="{Binding CopyNodeText}"
-                            Command="{Binding CopyWorkflowDefinitionDraftNodeCommand}"
-                            MinWidth="104"
-                            Margin="0,0,8,8"/>
-                    <Button Content="{Binding DeleteNodeText}"
-                            Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
-                            MinWidth="104"
-                            Margin="0,0,8,8"/>
-                    <Button Content="{Binding DeleteSelectedNodesText}"
-                            Command="{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}"
-                            MinWidth="104"
-                            Margin="0,0,8,8"/>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText}"
+                           Margin="0,0,8,8">
+                        <Button Content="{Binding MoveNodeUpText}"
+                                Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeUpCommand}"
+                                MinWidth="84"/>
+                    </Panel>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText}"
+                           Margin="0,0,8,8">
+                        <Button Content="{Binding MoveNodeDownText}"
+                                Command="{Binding MoveSelectedWorkflowDefinitionDraftNodeDownCommand}"
+                                MinWidth="84"/>
+                    </Panel>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding CopyWorkflowDefinitionDraftNodeDisabledReasonText}"
+                           Margin="0,0,8,8">
+                        <Button Content="{Binding CopyNodeText}"
+                                Command="{Binding CopyWorkflowDefinitionDraftNodeCommand}"
+                                MinWidth="104"/>
+                    </Panel>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding DeleteWorkflowDefinitionDraftNodeDisabledReasonText}"
+                           Margin="0,0,8,8">
+                        <Button Content="{Binding DeleteNodeText}"
+                                Command="{Binding DeleteWorkflowDefinitionDraftNodeCommand}"
+                                MinWidth="104"/>
+                    </Panel>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText}"
+                           Margin="0,0,8,8">
+                        <Button Content="{Binding DeleteSelectedNodesText}"
+                                Command="{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}"
+                                MinWidth="104"/>
+                    </Panel>
                     <primitives:ToggleButton Content="{Binding ShowAdvancedDraftJsonText}"
                                              IsChecked="{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}"
                                              MinWidth="128"

@@ -724,6 +724,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string NodeActionsSectionText => T("definition.node_actions");
 
+    public string NodeMoveSemanticsText => T("definition.node_move_semantics");
+
     public string DataPreviewSectionText => T("definition.data_preview");
 
     public string DataPreviewEmptyText => T("definition.data_preview_empty");
@@ -1074,6 +1076,98 @@ public partial class MainWindowViewModel : ViewModelBase
             && !string.IsNullOrWhiteSpace(SelectedWorkflowDefinitionDraftConnectionId);
     }
 
+    private string? GetWorkflowDefinitionNodeMutationDisabledReason()
+    {
+        if (IsWorkflowDefinitionDraftBusy)
+        {
+            return T("action.disabled.busy");
+        }
+
+        if (!CanUseEngineActions)
+        {
+            return T("action.disabled.engine_not_connected");
+        }
+
+        if (WorkflowDefinitionDetail is null || !HasWorkflowDefinitionDraft)
+        {
+            return T("action.disabled.no_workflow_definition");
+        }
+
+        if (HasWorkflowDefinitionRevisionConflict)
+        {
+            return T("action.disabled.revision_conflict");
+        }
+
+        return null;
+    }
+
+    private string? GetSelectedWorkflowDefinitionNodeMutationDisabledReason()
+    {
+        var commonReason = GetWorkflowDefinitionNodeMutationDisabledReason();
+        if (commonReason is not null)
+        {
+            return commonReason;
+        }
+
+        if (SelectedWorkflowDefinitionNode is null)
+        {
+            return T("action.disabled.no_workflow_node_selected");
+        }
+
+        if (FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is null)
+        {
+            return T("action.disabled.workflow_node_missing");
+        }
+
+        return null;
+    }
+
+    private string? GetSelectedWorkflowDefinitionDraftNodesMutationDisabledReason()
+    {
+        var commonReason = GetWorkflowDefinitionNodeMutationDisabledReason();
+        if (commonReason is not null)
+        {
+            return commonReason;
+        }
+
+        var selectedNodes = WorkflowDefinitionDraftNodes
+            .Where(node => node.IsBatchSelected)
+            .ToArray();
+        if (selectedNodes.Length == 0)
+        {
+            return T("action.disabled.no_workflow_nodes_checked");
+        }
+
+        return selectedNodes.Any(node => FindDraftNode(node.NodeInstanceId) is null)
+            ? T("action.disabled.workflow_node_missing")
+            : null;
+    }
+
+    private string? GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(int offset)
+    {
+        var selectedReason = GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
+        if (selectedReason is not null)
+        {
+            return selectedReason;
+        }
+
+        var index = WorkflowDefinitionDraftNodes.IndexOf(SelectedWorkflowDefinitionNode!);
+        var targetIndex = index + offset;
+        if (index < 0)
+        {
+            return T("action.disabled.workflow_node_missing");
+        }
+
+        if (targetIndex < 0)
+        {
+            return T("action.disabled.workflow_node_at_top");
+        }
+
+        return targetIndex >= WorkflowDefinitionDraftNodes.Count
+            ? T("action.disabled.workflow_node_at_bottom")
+            : null;
+    }
+
     private bool CanSaveWorkflowDefinitionDraft()
     {
         return CanUseEngineActions
@@ -1136,6 +1230,21 @@ public partial class MainWindowViewModel : ViewModelBase
             return null;
         }
     }
+
+    public string? CopyWorkflowDefinitionDraftNodeDisabledReasonText =>
+        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
+
+    public string? DeleteWorkflowDefinitionDraftNodeDisabledReasonText =>
+        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
+
+    public string? DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText =>
+        GetSelectedWorkflowDefinitionDraftNodesMutationDisabledReason();
+
+    public string? MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText =>
+        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: -1);
+
+    public string? MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText =>
+        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: 1);
 
     private bool CanRefreshNodeRuns()
     {
@@ -3135,6 +3244,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCount));
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
         DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
     }
 
     private void ResetNewDraftConnectionInput()
@@ -4032,6 +4142,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(MoveNodeUpText));
         OnPropertyChanged(nameof(MoveNodeDownText));
         OnPropertyChanged(nameof(NodeActionsSectionText));
+        OnPropertyChanged(nameof(NodeMoveSemanticsText));
+        NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
         OnPropertyChanged(nameof(DataPreviewSectionText));
         OnPropertyChanged(nameof(DataPreviewEmptyText));
         OnPropertyChanged(nameof(DataPreviewPendingText));
@@ -4242,6 +4354,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshSelectedNodeConfigDraftState();
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
+        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
         AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
@@ -4382,6 +4495,16 @@ public partial class MainWindowViewModel : ViewModelBase
         DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeUpCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeDownCommand.NotifyCanExecuteChanged();
+        NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
+    }
+
+    private void NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged()
+    {
+        OnPropertyChanged(nameof(CopyWorkflowDefinitionDraftNodeDisabledReasonText));
+        OnPropertyChanged(nameof(DeleteWorkflowDefinitionDraftNodeDisabledReasonText));
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
+        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText));
+        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText));
     }
 
     partial void OnSelectedNewDraftNodeDefinitionChanged(

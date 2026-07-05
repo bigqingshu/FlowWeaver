@@ -205,3 +205,19 @@
 
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~WorkflowDefinitionDraftNodePatcherTests|FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelLocalizationTests"`：144 passed。
 - `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：330 passed。
+
+### WORKFLOW-UX-4.3a：节点操作禁用原因与移动语义说明
+
+状态：已完成。
+
+完成内容：
+
+- 为复制、删除、删除已选、列表上移、列表下移补充禁用原因文本。
+- 右侧节点操作按钮使用现有 `Panel + ToolTip.Tip` 模式展示禁用原因。
+- 节点操作区补充说明：上移/下移只调整草稿节点列表顺序，不改变连接和执行依赖。
+- 保持节点操作后端语义不变，不引入线性连接自动重排。
+
+测试结果：
+
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false --filter "FullyQualifiedName~MainWindowViewModelWorkflowTests|FullyQualifiedName~WorkflowSummaryViewStructureTests|FullyQualifiedName~MainWindowViewModelLocalizationTests"`：115 passed。
+- `dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -p:UseAppHost=false`：331 passed。

@@ -1404,6 +1404,73 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task WorkflowDefinitionNodeActionDisabledReasonsReflectSelectionAndBoundaries()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "PublishSharedTablesNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        Assert.AreEqual(
+            "Action is disabled because no workflow definition is loaded.",
+            viewModel.CopyWorkflowDefinitionDraftNodeDisabledReasonText);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("source", viewModel.SelectedWorkflowDefinitionNode?.NodeInstanceId);
+        Assert.IsNull(viewModel.CopyWorkflowDefinitionDraftNodeDisabledReasonText);
+        Assert.IsNull(viewModel.DeleteWorkflowDefinitionDraftNodeDisabledReasonText);
+        Assert.AreEqual(
+            "The selected node is already at the top of the list.",
+            viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText);
+        Assert.IsNull(viewModel.MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because no workflow nodes are checked.",
+            viewModel.DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText);
+
+        viewModel.WorkflowDefinitionDraftNodes[0].IsBatchSelected = true;
+
+        Assert.IsNull(viewModel.DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText);
+
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDraftNodes[1];
+
+        Assert.IsNull(viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText);
+        Assert.AreEqual(
+            "The selected node is already at the bottom of the list.",
+            viewModel.MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText);
+
+        viewModel.SelectedWorkflowDefinitionNode = null;
+
+        Assert.AreEqual(
+            "Action is disabled because no workflow node is selected.",
+            viewModel.CopyWorkflowDefinitionDraftNodeDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because no workflow node is selected.",
+            viewModel.DeleteWorkflowDefinitionDraftNodeDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because no workflow node is selected.",
+            viewModel.MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText);
+    }
+
+    [TestMethod]
     public async Task DeleteWorkflowDefinitionDraftNodeCommandDeletesConnectedNodeAndRelatedConnections()
     {
         var definitionJson =
