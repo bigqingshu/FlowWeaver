@@ -6,14 +6,21 @@
     <Border Classes="Card" Padding="12" MinHeight="172">
         <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
                   ColumnSpacing="8">
                 <TextBlock Text="{Binding DataPreviewSectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <Button Grid.Column="1"
+                <TextBlock Grid.Column="1"
+                           Text="{Binding DataPreviewMessage}"
+                           FontSize="12"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           ToolTip.Tip="{Binding DataPreviewSourceText}"/>
+                <Button Grid.Column="2"
                         Content="?"
                         MinWidth="28"
                         Padding="8,2"
@@ -31,48 +38,29 @@
                         </Flyout>
                     </Button.Flyout>
                 </Button>
-                <ProgressBar Grid.Column="2"
+                <ProgressBar Grid.Column="3"
                              Width="72"
                              Height="8"
                              VerticalAlignment="Center"
                              IsIndeterminate="True"
                              IsVisible="{Binding IsDataPreviewBusy}"/>
-                <Button Grid.Column="3"
+                <Button Grid.Column="4"
                         Content="{Binding PreviewSelectedNodeText}"
                         Command="{Binding PreviewSelectedWorkflowNodeCommand}"
                         MinWidth="96"/>
-                <Button Grid.Column="4"
+                <Button Grid.Column="5"
                         Content="{Binding RunText}"
                         Command="{Binding StartSelectedWorkflowCommand}"
                         MinWidth="72"
                         ToolTip.Tip="{Binding WorkflowRunGuardText}"/>
             </Grid>
 
-            <StackPanel Grid.Row="1"
-                        Spacing="3">
-                <TextBlock Text="{Binding DataPreviewEmptyText}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           IsVisible="{Binding HasNoSelectedWorkflowDefinitionNode}"/>
-                <Grid ColumnDefinitions="*,*"
-                      ColumnSpacing="12">
-                    <TextBlock Text="{Binding DataPreviewSourceText}"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding DataPreviewMessage}"
-                               FontSize="12"
-                               TextWrapping="Wrap"
-                               TextAlignment="Right"
-                               Foreground="{DynamicResource TextSecondaryBrush}"/>
-                </Grid>
-                <TextBlock Text="{Binding DataPreviewErrorMessage}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextErrorBrush}"
-                           IsVisible="{Binding HasDataPreviewError}"/>
-            </StackPanel>
+            <TextBlock Grid.Row="1"
+                       Text="{Binding DataPreviewErrorMessage}"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextErrorBrush}"
+                       IsVisible="{Binding HasDataPreviewError}"/>
 
             <Border Grid.Row="2"
                     BorderBrush="{DynamicResource ControlBorderBrush}"

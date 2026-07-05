@@ -466,16 +466,21 @@ public sealed class WorkflowSummaryViewStructureTests
             1,
             CountOccurrences(xaml, "Text=\"{Binding WorkflowRunGuardText}\""),
             "The workflow run guard explanation should live only in the info flyout.");
-        StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewEmptyText}\"");
-        StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewSourceText}\"");
+        Assert.IsFalse(
+            xaml.Contains("Text=\"{Binding DataPreviewEmptyText}\"", StringComparison.Ordinal),
+            "The data preview empty guidance should not occupy a permanent line.");
+        Assert.IsFalse(
+            xaml.Contains("Text=\"{Binding DataPreviewSourceText}\"", StringComparison.Ordinal),
+            "The data preview source should move out of the permanent text row.");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding DataPreviewSourceText}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding PreviewSelectedNodeText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding PreviewSelectedWorkflowNodeCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding RunText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding StartSelectedWorkflowCommand}\"");
         StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding WorkflowRunGuardText}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsDataPreviewBusy}\"");
-        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasNoSelectedWorkflowDefinitionNode}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewMessage}\"");
+        StringAssert.Contains(xaml, "TextTrimming=\"CharacterEllipsis\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DataPreviewErrorMessage}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDataPreviewError}\"");
         StringAssert.Contains(xaml, "MinHeight=\"96\"");
