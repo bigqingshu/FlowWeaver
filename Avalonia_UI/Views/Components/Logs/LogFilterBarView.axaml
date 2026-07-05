@@ -5,7 +5,7 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
         <Grid RowDefinitions="Auto,Auto"
-              ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto,Auto"
+              ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*,Auto"
               RowSpacing="10"
               ColumnSpacing="10">
             <TextBlock Text="{Binding WorkflowRunFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
@@ -17,11 +17,10 @@
             <TextBlock Grid.Column="6" Text="{Binding AfterFilterText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
             <TextBox Grid.Column="7" Text="{Binding RuntimeEventAfterSequenceNumberFilter}" Watermark="{Binding SequenceWatermarkText}"/>
             <Button Grid.Column="8" Content="{Binding RuntimeText}" Command="{Binding RefreshRuntimeEventLogCommand}" MinWidth="92"/>
-            <Button Grid.Column="9" Content="{Binding AuditText}" Command="{Binding RefreshAuditEventsCommand}" MinWidth="84"/>
 
             <TextBlock Grid.Row="1" Text="{Binding LimitText}" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" FontWeight="SemiBold"/>
             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RuntimeEventLimitFilter}" Watermark="100"/>
-            <ProgressBar Grid.Row="1" Grid.Column="8" Grid.ColumnSpan="2" Height="8" VerticalAlignment="Center" IsIndeterminate="True" IsVisible="{Binding IsLogBusy}"/>
+            <ProgressBar Grid.Row="1" Grid.Column="8" Height="8" VerticalAlignment="Center" IsIndeterminate="True" IsVisible="{Binding IsLogBusy}"/>
         </Grid>
     </Border>
 </UserControl>

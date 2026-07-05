@@ -517,16 +517,6 @@ public sealed class MainWindowViewModelRuntimeEventTests
             throw new NotSupportedException();
         }
 
-        public Task<ApiResponseEnvelope<List<AuditEventDto>>> ListAuditEventsAsync(
-            EngineHostConnectionSettings settings,
-            string? workflowRunId = null,
-            string? nodeRunId = null,
-            string? eventType = null,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
         public Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationsAsync(
             EngineHostConnectionSettings settings,
             string? shareName = null,

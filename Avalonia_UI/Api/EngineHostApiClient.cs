@@ -330,28 +330,6 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
-    public Task<ApiResponseEnvelope<List<AuditEventDto>>> ListAuditEventsAsync(
-        EngineHostConnectionSettings settings,
-        string? workflowRunId = null,
-        string? nodeRunId = null,
-        string? eventType = null,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new List<KeyValuePair<string, string?>>
-        {
-            new("workflow_run_id", workflowRunId),
-            new("node_run_id", nodeRunId),
-            new("event_type", eventType),
-        };
-
-        return SendAsync<List<AuditEventDto>>(
-            settings,
-            HttpMethod.Get,
-            "api/v1/audit-events",
-            query: query,
-            cancellationToken: cancellationToken);
-    }
-
     public Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationsAsync(
         EngineHostConnectionSettings settings,
         string? shareName = null,

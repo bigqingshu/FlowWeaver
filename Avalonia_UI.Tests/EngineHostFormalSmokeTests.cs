@@ -205,12 +205,6 @@ public sealed class EngineHostFormalSmokeTests
             CollectionAssert.IsSubsetOf(
                 new[] { "WORKFLOW_STARTED", "WORKFLOW_FINISHED" },
                 runtimeEvents.Select(item => item.EventType).ToList());
-
-            var auditEvents = AssertOk(
-                await client.ListAuditEventsAsync(
-                    settings,
-                    workflowRunId: started.WorkflowRunId));
-            Assert.IsNotEmpty(auditEvents);
         }
         finally
         {

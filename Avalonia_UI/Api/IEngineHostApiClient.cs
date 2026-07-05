@@ -129,13 +129,6 @@ public interface IEngineHostApiClient
         int limit = 100,
         CancellationToken cancellationToken = default);
 
-    Task<ApiResponseEnvelope<List<AuditEventDto>>> ListAuditEventsAsync(
-        EngineHostConnectionSettings settings,
-        string? workflowRunId = null,
-        string? nodeRunId = null,
-        string? eventType = null,
-        CancellationToken cancellationToken = default);
-
     Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationsAsync(
         EngineHostConnectionSettings settings,
         string? shareName = null,

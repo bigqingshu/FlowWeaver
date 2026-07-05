@@ -32,7 +32,7 @@ public static class BuiltinShellPages
                 ShellPageContentKey.Logs,
                 40,
                 nameof(MainWindowViewModel.LogsTabText),
-                typeof(LogsAuditPage).FullName!),
+                typeof(LogsPage).FullName!),
             new ShellPageDescriptor(
                 ShellPageKey.Settings,
                 ShellPageContentKey.Settings,

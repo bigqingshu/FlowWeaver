@@ -17,7 +17,7 @@ public sealed class AppShellPageHostStructureTests
         Assert.IsFalse(xaml.Contains("<pages:WorkflowPage", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("<pages:RunMonitorPage", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("<pages:DataPage", StringComparison.Ordinal));
-        Assert.IsFalse(xaml.Contains("<pages:LogsAuditPage", StringComparison.Ordinal));
+        Assert.IsFalse(xaml.Contains("<pages:LogsPage", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("<pages:SettingsPage", StringComparison.Ordinal));
     }
 
@@ -41,7 +41,7 @@ public sealed class AppShellPageHostStructureTests
         StringAssert.Contains(xaml, "<pages:WorkflowPage />");
         StringAssert.Contains(xaml, "<pages:RunMonitorPage />");
         StringAssert.Contains(xaml, "<pages:DataPage />");
-        StringAssert.Contains(xaml, "<pages:LogsAuditPage />");
+        StringAssert.Contains(xaml, "<pages:LogsPage />");
         StringAssert.Contains(xaml, "<pages:SettingsPage />");
         Assert.IsFalse(xaml.Contains("ItemsSource=", StringComparison.Ordinal));
         Assert.IsFalse(xaml.Contains("ContentTemplate", StringComparison.Ordinal));

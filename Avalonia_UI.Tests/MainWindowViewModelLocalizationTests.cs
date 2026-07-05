@@ -101,7 +101,6 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual(
             "运行和预览会使用当前已保存的工作流版本。",
             viewModel.WorkflowRunGuardText);
-        Assert.AreEqual("审计事件", viewModel.AuditEventsSectionText);
         Assert.AreEqual("节点类型", viewModel.NodeTypeText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
@@ -942,16 +941,6 @@ public sealed class MainWindowViewModelLocalizationTests
             string? nodeRunId = null,
             string? eventType = null,
             int limit = 100,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<ApiResponseEnvelope<List<AuditEventDto>>> ListAuditEventsAsync(
-            EngineHostConnectionSettings settings,
-            string? workflowRunId = null,
-            string? nodeRunId = null,
-            string? eventType = null,
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();

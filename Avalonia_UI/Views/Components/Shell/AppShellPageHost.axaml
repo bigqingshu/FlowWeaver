@@ -16,7 +16,7 @@
             <pages:DataPage />
         </TabItem>
         <TabItem Header="{Binding LogsNavigationItem.HeaderText}">
-            <pages:LogsAuditPage />
+            <pages:LogsPage />
         </TabItem>
         <TabItem Header="{Binding SettingsNavigationItem.HeaderText}">
             <pages:SettingsPage />

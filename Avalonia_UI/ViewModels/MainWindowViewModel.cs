@@ -47,7 +47,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private int sharedPublicationVersionsLoadVersion;
     private int dataPreviewLoadVersion;
     private int runtimeEventLogLoadVersion;
-    private int auditEventLogLoadVersion;
     private bool isSynchronizingShellSelection;
     private bool runtimeEventStreamAutoConnect;
 
@@ -278,15 +277,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? runtimeEventLogErrorMessage;
-
-    [ObservableProperty]
-    private bool isLoadingAuditEventLog;
-
-    [ObservableProperty]
-    private string auditEventLogMessage = "No audit events loaded.";
-
-    [ObservableProperty]
-    private string? auditEventLogErrorMessage;
 
     [ObservableProperty]
     private bool isLoadingTableRefs;
@@ -676,8 +666,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<RecentEventListItemViewModel> RecentEvents { get; } = new();
 
-    public ObservableCollection<AuditEventListItemViewModel> AuditEvents { get; } = new();
-
     public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
 
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewColumns { get; } = new();
@@ -807,10 +795,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasRuntimeEventLogError =>
         !string.IsNullOrWhiteSpace(RuntimeEventLogErrorMessage);
 
-    public bool HasAuditEventLogError =>
-        !string.IsNullOrWhiteSpace(AuditEventLogErrorMessage);
-
-    public bool IsLogBusy => IsLoadingRuntimeEventLog || IsLoadingAuditEventLog;
+    public bool IsLogBusy => IsLoadingRuntimeEventLog;
 
     public bool HasTableRefError => !string.IsNullOrWhiteSpace(TableRefErrorMessage);
 
@@ -1077,13 +1062,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string RuntimeText => T("logs.runtime");
 
-    public string AuditText => T("logs.audit");
-
     public string LimitText => T("common.limit");
 
     public string RuntimeEventsSectionText => T("logs.runtime_events");
-
-    public string AuditEventsSectionText => T("logs.audit_events");
 
     public string TableRefsSectionText => T("data.table_refs");
 
@@ -1539,11 +1520,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanRefreshRuntimeEventLog()
     {
         return CanUseEngineActions && !IsLoadingRuntimeEventLog;
-    }
-
-    private bool CanRefreshAuditEvents()
-    {
-        return CanUseEngineActions && !IsLoadingAuditEventLog;
     }
 
     private bool CanRefreshTableRefs()
@@ -2626,52 +2602,6 @@ public partial class MainWindowViewModel : ViewModelBase
             if (requestVersion == runtimeEventLogLoadVersion)
             {
                 IsLoadingRuntimeEventLog = false;
-            }
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshAuditEvents), AllowConcurrentExecutions = true)]
-    private async Task RefreshAuditEventsAsync()
-    {
-        var requestVersion = ++auditEventLogLoadVersion;
-        IsLoadingAuditEventLog = true;
-        AuditEventLogMessage = T("logs.loading_audit_events");
-        AuditEventLogErrorMessage = null;
-
-        try
-        {
-            var response = await _apiClient.ListAuditEventsAsync(
-                BuildSettings(),
-                NormalizeFilter(LogWorkflowRunIdFilter),
-                NormalizeFilter(LogNodeRunIdFilter),
-                NormalizeFilter(LogEventTypeFilter),
-                _shutdown.Token);
-
-            if (requestVersion != auditEventLogLoadVersion)
-            {
-                return;
-            }
-
-            if (response.Ok && response.Data is not null)
-            {
-                AuditEvents.Clear();
-                foreach (var auditEvent in response.Data)
-                {
-                    AuditEvents.Add(new AuditEventListItemViewModel(auditEvent));
-                }
-
-                AuditEventLogMessage = F("format.loaded_audit_events", AuditEvents.Count);
-                return;
-            }
-
-            AuditEventLogMessage = T("logs.audit_refresh_failed");
-            AuditEventLogErrorMessage = DescribeError(response);
-        }
-        finally
-        {
-            if (requestVersion == auditEventLogLoadVersion)
-            {
-                IsLoadingAuditEventLog = false;
             }
         }
     }
@@ -4476,7 +4406,6 @@ public partial class MainWindowViewModel : ViewModelBase
             ["status.no_runs_loaded"] = T("status.no_runs_loaded"),
             ["status.select_run_node_status"] = T("status.select_run_node_status"),
             ["status.no_runtime_events_loaded"] = T("status.no_runtime_events_loaded"),
-            ["status.no_audit_events_loaded"] = T("status.no_audit_events_loaded"),
             ["status.select_run_table_refs"] = T("status.select_run_table_refs"),
             ["status.select_run_and_workflow_node_data_preview"] =
                 T("status.select_run_and_workflow_node_data_preview"),
@@ -4551,14 +4480,6 @@ public partial class MainWindowViewModel : ViewModelBase
             "status.no_runtime_events_loaded"))
         {
             RuntimeEventLogMessage = T("status.no_runtime_events_loaded");
-        }
-
-        if (ShouldRefreshDefault(
-            AuditEventLogMessage,
-            previousDefaults,
-            "status.no_audit_events_loaded"))
-        {
-            AuditEventLogMessage = T("status.no_audit_events_loaded");
         }
 
         if (ShouldRefreshDefault(TableRefMessage, previousDefaults, "status.select_run_table_refs"))
@@ -4708,10 +4629,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(AfterFilterText));
         OnPropertyChanged(nameof(SequenceWatermarkText));
         OnPropertyChanged(nameof(RuntimeText));
-        OnPropertyChanged(nameof(AuditText));
         OnPropertyChanged(nameof(LimitText));
         OnPropertyChanged(nameof(RuntimeEventsSectionText));
-        OnPropertyChanged(nameof(AuditEventsSectionText));
         OnPropertyChanged(nameof(TableRefsSectionText));
         OnPropertyChanged(nameof(ShareText));
         OnPropertyChanged(nameof(ShareNameWatermarkText));
@@ -5221,17 +5140,6 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasRuntimeEventLogError));
     }
 
-    partial void OnIsLoadingAuditEventLogChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsLogBusy));
-        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnAuditEventLogErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasAuditEventLogError));
-    }
-
     partial void OnIsLoadingTableRefsChanged(bool value)
     {
         OnPropertyChanged(nameof(IsDataBusy));
@@ -5300,11 +5208,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private void InvalidateLogLoads()
     {
         runtimeEventLogLoadVersion++;
-        auditEventLogLoadVersion++;
         IsLoadingRuntimeEventLog = false;
-        IsLoadingAuditEventLog = false;
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
-        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSharedPublicationErrorMessageChanged(string? value)
@@ -5367,7 +5272,6 @@ public partial class MainWindowViewModel : ViewModelBase
         DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
-        RefreshAuditEventsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();

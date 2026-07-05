@@ -508,25 +508,3 @@ public sealed record SharedPublicationMemberDto
     [JsonPropertyName("exact_table_version")]
     public int ExactTableVersion { get; init; }
 }
-
-public sealed record AuditEventDto
-{
-    [JsonPropertyName("audit_event_id")]
-    public string AuditEventId { get; init; } = string.Empty;
-
-    [JsonPropertyName("event_type")]
-    public string EventType { get; init; } = string.Empty;
-
-    [JsonPropertyName("decision")]
-    public string Decision { get; init; } = string.Empty;
-
-    [JsonPropertyName("workflow_run_id")]
-    public string? WorkflowRunId { get; init; }
-
-    [JsonPropertyName("node_run_id")]
-    public string? NodeRunId { get; init; }
-
-    [JsonExtensionData]
-    public IDictionary<string, JsonElement> ExtensionData { get; init; } =
-        new Dictionary<string, JsonElement>();
-}

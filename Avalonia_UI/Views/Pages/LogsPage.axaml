@@ -2,15 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
              xmlns:logs="using:Avalonia_UI.Views.Components.Logs"
-             x:Class="Avalonia_UI.Views.Pages.LogsAuditPage"
+             x:Class="Avalonia_UI.Views.Pages.LogsPage"
              x:DataType="vm:MainWindowViewModel">
     <Grid RowDefinitions="Auto,*"
           RowSpacing="12"
           Margin="12">
         <logs:LogFilterBarView />
-        <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="16">
-            <logs:RuntimeEventListView Grid.Column="0" />
-            <logs:AuditEventListView Grid.Column="1" />
-        </Grid>
+        <logs:RuntimeEventListView Grid.Row="1" />
     </Grid>
 </UserControl>
