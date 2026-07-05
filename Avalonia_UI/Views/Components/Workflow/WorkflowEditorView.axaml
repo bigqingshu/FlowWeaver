@@ -5,7 +5,7 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
         <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding DraftJsonSectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
@@ -18,10 +18,14 @@
                              IsIndeterminate="True"
                              IsVisible="{Binding IsWorkflowDefinitionDraftBusy}"/>
                 <Button Grid.Column="2"
+                        Content="{Binding RestoreText}"
+                        Command="{Binding RestoreWorkflowDefinitionDraftCommand}"
+                        MinWidth="78"/>
+                <Button Grid.Column="3"
                         Content="{Binding ValidateText}"
                         Command="{Binding ValidateWorkflowDefinitionDraftCommand}"
                         MinWidth="92"/>
-                <Button Grid.Column="3"
+                <Button Grid.Column="4"
                         Content="{Binding SaveText}"
                         Command="{Binding SaveWorkflowDefinitionDraftCommand}"
                         MinWidth="78"/>

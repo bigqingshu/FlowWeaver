@@ -496,6 +496,31 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowEditorViewShowsRestoreBeforeValidateAndSave()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowEditorView.axaml");
+
+        StringAssert.Contains(xaml, "Content=\"{Binding RestoreText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding RestoreWorkflowDefinitionDraftCommand}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding ValidateText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding ValidateWorkflowDefinitionDraftCommand}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding SaveText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding SaveWorkflowDefinitionDraftCommand}\"");
+
+        var restoreIndex = xaml.IndexOf("Content=\"{Binding RestoreText}\"", StringComparison.Ordinal);
+        var validateIndex = xaml.IndexOf("Content=\"{Binding ValidateText}\"", StringComparison.Ordinal);
+        var saveIndex = xaml.IndexOf("Content=\"{Binding SaveText}\"", StringComparison.Ordinal);
+        Assert.IsTrue(
+            restoreIndex >= 0 && validateIndex > restoreIndex && saveIndex > validateIndex,
+            "The draft restore button should appear before validate and save.");
+    }
+
+    [TestMethod]
     public void WorkflowListViewDoesNotHostRunButton()
     {
         var xaml = ReadSourceFile(

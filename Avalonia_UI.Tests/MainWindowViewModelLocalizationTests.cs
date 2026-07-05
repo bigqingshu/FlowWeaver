@@ -123,6 +123,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("刷新预览", viewModel.DataPreviewRefreshText);
         Assert.AreEqual("预览选中节点", viewModel.PreviewSelectedNodeText);
         Assert.AreEqual("尚未加载数据预览。", viewModel.DataPreviewSourceText);
+        Assert.AreEqual("还原", viewModel.RestoreText);
         Assert.AreEqual("显示名称", viewModel.DisplayNameText);
         Assert.AreEqual("连接 ID", viewModel.ConnectionIdText);
         Assert.AreEqual("源端口", viewModel.SourcePortText);

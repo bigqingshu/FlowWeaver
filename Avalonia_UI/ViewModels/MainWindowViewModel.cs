@@ -1044,6 +1044,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string ValidateText => T("definition.validate");
 
+    public string RestoreText => T("definition.restore");
+
     public string SaveText => T("definition.save");
 
     public string WorkflowRunFilterText => T("logs.workflow_run");
@@ -1157,7 +1159,6 @@ public partial class MainWindowViewModel : ViewModelBase
             && SelectedWorkflow is not null
             && IsActiveWorkflowStatus(SelectedWorkflow.Status)
             && !IsWorkflowBusy
-            && !IsWorkflowDefinitionDraftDirty
             && !HasWorkflowDefinitionRevisionConflict;
     }
 
@@ -1170,7 +1171,6 @@ public partial class MainWindowViewModel : ViewModelBase
             && SelectedWorkflowDefinitionNode is not null
             && !IsWorkflowBusy
             && !IsDataPreviewBusy
-            && !IsWorkflowDefinitionDraftDirty
             && !HasWorkflowDefinitionRevisionConflict;
     }
 
@@ -1196,6 +1196,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanValidateWorkflowDefinitionDraft()
     {
         return CanUseEngineActions && HasWorkflowDefinitionDraft && !IsWorkflowDefinitionDraftBusy;
+    }
+
+    private bool CanRestoreWorkflowDefinitionDraft()
+    {
+        return HasWorkflowDefinitionDraft
+            && IsWorkflowDefinitionDraftDirty
+            && !IsWorkflowDefinitionDraftBusy;
     }
 
     private bool CanApplySelectedNodeConfigDraft()
@@ -1896,6 +1903,28 @@ public partial class MainWindowViewModel : ViewModelBase
         ShowWorkflowDefinitionNotification(
             "workflow.definition.validate",
             UiNotificationKind.Error);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRestoreWorkflowDefinitionDraft))]
+    private void RestoreWorkflowDefinitionDraft()
+    {
+        if (!CanRestoreWorkflowDefinitionDraft())
+        {
+            return;
+        }
+
+        var selectedNodeId = SelectedWorkflowDefinitionNode?.NodeInstanceId;
+        WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
+        if (!string.IsNullOrWhiteSpace(selectedNodeId))
+        {
+            SelectWorkflowDefinitionDraftNode(selectedNodeId);
+        }
+
+        WorkflowDefinitionValidationMessage = T("definition.draft_restored");
+        WorkflowDefinitionValidationErrorMessage = null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.restore",
+            UiNotificationKind.Success);
     }
 
     [RelayCommand(CanExecute = nameof(CanApplySelectedNodeConfigDraft))]
@@ -4592,6 +4621,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewRefreshText));
         OnPropertyChanged(nameof(PreviewSelectedNodeText));
         OnPropertyChanged(nameof(DataPreviewSourceText));
+        OnPropertyChanged(nameof(RestoreText));
+        OnPropertyChanged(nameof(ValidateText));
+        OnPropertyChanged(nameof(SaveText));
         OnPropertyChanged(nameof(NodeInstanceIdText));
         OnPropertyChanged(nameof(NodeTypeText));
         OnPropertyChanged(nameof(NodeVersionText));
@@ -4857,6 +4889,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        RestoreWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
@@ -4882,6 +4915,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnIsWorkflowDefinitionDraftDirtyChanged(bool value)
     {
+        RestoreWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
@@ -4906,6 +4940,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        RestoreWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
@@ -4919,6 +4954,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsWorkflowDefinitionDraftBusy));
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
+        RestoreWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();

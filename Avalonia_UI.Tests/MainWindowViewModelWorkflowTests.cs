@@ -975,6 +975,59 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task RestoreWorkflowDefinitionDraftRevertsUnsavedNodeChanges()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsFalse(viewModel.RestoreWorkflowDefinitionDraftCommand.CanExecute(null));
+
+        viewModel.NewDraftNodeInstanceId = "source";
+        viewModel.NewDraftNodeType = "GenerateTestTableNode";
+        viewModel.NewDraftNodeVersion = "1.0";
+        viewModel.NewDraftNodeDisplayName = "Generate rows";
+        viewModel.NewDraftNodeConfigJson = """{"rows":3}""";
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsTrue(viewModel.RestoreWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.HasCount(1, viewModel.WorkflowDefinitionDraftNodes);
+
+        viewModel.RestoreWorkflowDefinitionDraftCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(0, draft.RootElement.GetProperty("nodes").GetArrayLength());
+        Assert.IsFalse(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsFalse(viewModel.RestoreWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.HasCount(0, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.AreEqual("Restored to the saved version.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+        Assert.AreEqual("workflow.definition.restore", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
+    }
+
+    [TestMethod]
     public async Task AddWorkflowDefinitionDraftNodeCommandInsertsAfterSelectedWorkflowNode()
     {
         var definitionJson =
@@ -3142,7 +3195,7 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
-    public async Task RunCommandsAreDisabledWhenWorkflowDefinitionDraftIsDirtyOrConflicted()
+    public async Task RunCommandsStayEnabledWhenWorkflowDefinitionDraftIsDirty()
     {
         var definitionJson =
             """
@@ -3187,13 +3240,12 @@ public sealed class MainWindowViewModelWorkflowTests
             """;
 
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
-        Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
-        Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
         Assert.AreEqual(
-            "Save the draft before running; unsaved changes are not sent to EngineHost.",
+            "Draft has unsaved changes; run and preview still use the saved revision.",
             viewModel.WorkflowRunGuardText);
 
-        viewModel.IsWorkflowDefinitionDraftDirty = false;
         viewModel.HasWorkflowDefinitionRevisionConflict = true;
 
         Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
