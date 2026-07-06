@@ -1167,6 +1167,126 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task AddWorkflowDefinitionDraftNodeCommandAutoWiresTerminalNodeWithPreferredOutPort()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table", outputPort: "out"),
+                    NodeDefinition(
+                        "SaveMemoryTableNode",
+                        "Save Memory Table",
+                        inputPort: "in",
+                        outputPorts: ["out", "memory"]),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "source");
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single(
+            node => node.NodeType == "SaveMemoryTableNode");
+        viewModel.NewDraftNodeInstanceId = "save_memory";
+        viewModel.NewDraftNodeConfigJson = """{"table_name":"scratch","mode":"overwrite"}""";
+
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(1, connections.GetArrayLength());
+        Assert.AreEqual("source_to_save_memory", connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("out", connections[0].GetProperty("source_port").GetString());
+        Assert.AreEqual("save_memory", connections[0].GetProperty("target_node_id").GetString());
+        Assert.AreEqual("in", connections[0].GetProperty("target_port").GetString());
+    }
+
+    [TestMethod]
+    public async Task AddWorkflowDefinitionDraftNodeCommandUsesOutPortWhenInsertedNodeHasMultipleOutputs()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {"node_instance_id": "source", "node_type": "GenerateTestTableNode", "node_version": "1.0", "config": {}},
+                {"node_instance_id": "sink", "node_type": "AddColumnsNode", "node_version": "1.0", "config": {}}
+              ],
+              "connections": [
+                {"connection_id": "source_to_sink", "source_node_id": "source", "source_port": "out", "target_node_id": "sink", "target_port": "in"}
+              ]
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "SaveMemoryTableNode",
+                        "Save Memory Table",
+                        inputPort: "in",
+                        outputPorts: ["out", "memory"]),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.SelectedWorkflowDefinitionNode =
+            viewModel.WorkflowDefinitionDraftNodes.Single(node =>
+                node.NodeInstanceId == "source");
+        viewModel.SelectedNewDraftNodeDefinition = viewModel.NodeDefinitions.Single();
+        viewModel.NewDraftNodeInstanceId = "save_memory";
+        viewModel.NewDraftNodeConfigJson = """{"table_name":"scratch","mode":"overwrite"}""";
+
+        viewModel.AddWorkflowDefinitionDraftNodeCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var connections = draft.RootElement.GetProperty("connections");
+        Assert.AreEqual(2, connections.GetArrayLength());
+        Assert.AreEqual("source_to_save_memory", connections[0].GetProperty("connection_id").GetString());
+        Assert.AreEqual("source", connections[0].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("out", connections[0].GetProperty("source_port").GetString());
+        Assert.AreEqual("save_memory", connections[0].GetProperty("target_node_id").GetString());
+        Assert.AreEqual("in", connections[0].GetProperty("target_port").GetString());
+        Assert.AreEqual("save_memory_to_sink", connections[1].GetProperty("connection_id").GetString());
+        Assert.AreEqual("save_memory", connections[1].GetProperty("source_node_id").GetString());
+        Assert.AreEqual("out", connections[1].GetProperty("source_port").GetString());
+        Assert.AreEqual("sink", connections[1].GetProperty("target_node_id").GetString());
+        Assert.AreEqual("in", connections[1].GetProperty("target_port").GetString());
+    }
+
+    [TestMethod]
     public async Task AddWorkflowDefinitionDraftNodeCommandRejectsInvalidConfigJson()
     {
         var apiClient = new FakeApiClient
@@ -2502,6 +2622,55 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftNodeCommand.CanExecute(null));
         Assert.IsFalse(viewModel.AddWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
         Assert.IsFalse(viewModel.DeleteWorkflowDefinitionDraftConnectionCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SaveWorkflowDefinitionDraftShowsBackendValidationIssues()
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1)),
+            UpdateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_VALIDATION_FAILED",
+                "Workflow definition is invalid.",
+                details: JsonSerializer.SerializeToElement(
+                    new WorkflowValidationResultDto
+                    {
+                        Valid = false,
+                        Errors =
+                        [
+                            new WorkflowValidationIssueDto
+                            {
+                                Code = "REQUIRED_INPUT_NOT_CONNECTED",
+                                Path = "nodes.save_memory",
+                                Message = "Required input is not connected: in",
+                            },
+                        ],
+                    },
+                    FlowWeaverJson.Options)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"schema_version":"1.0","nodes":[{"node_instance_id":"save_memory","node_type":"SaveMemoryTableNode","node_version":"1.0","config":{}}],"connections":[]}""";
+
+        await viewModel.SaveWorkflowDefinitionDraftCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Workflow draft save failed.", viewModel.WorkflowDefinitionValidationMessage);
+        Assert.AreEqual(
+            "REQUIRED_INPUT_NOT_CONNECTED at nodes.save_memory: Required input is not connected: in",
+            viewModel.WorkflowDefinitionValidationErrorMessage);
+        Assert.AreEqual("workflow.definition.save", viewModel.NotificationKey);
+        Assert.AreEqual(UiNotificationKind.Error, viewModel.NotificationKind);
+        Assert.AreEqual("Workflow draft save failed.", viewModel.NotificationTitle);
+        Assert.AreEqual(
+            "REQUIRED_INPUT_NOT_CONNECTED at nodes.save_memory: Required input is not connected: in",
+            viewModel.NotificationMessage);
     }
 
     [TestMethod]
@@ -4294,6 +4463,7 @@ public sealed class MainWindowViewModelWorkflowTests
         string displayName,
         string? inputPort = null,
         string? outputPort = null,
+        string[]? outputPorts = null,
         string? schemaJson = null)
     {
         return new NodeDefinitionDto
@@ -4304,7 +4474,15 @@ public sealed class MainWindowViewModelWorkflowTests
             InputPorts = inputPort is null
                 ? []
                 : [new NodePortDefinitionDto { Name = inputPort, Required = true }],
-            OutputPorts = outputPort is null
+            OutputPorts = outputPorts is not null
+                ? outputPorts
+                    .Select(port => new NodePortDefinitionDto
+                    {
+                        Name = port,
+                        Required = false,
+                    })
+                    .ToArray()
+                : outputPort is null
                 ? []
                 : [new NodePortDefinitionDto { Name = outputPort, Required = false }],
             ExecutionMode = "PROCESS_POOL",

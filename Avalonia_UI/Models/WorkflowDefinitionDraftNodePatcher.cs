@@ -21,7 +21,8 @@ public static class WorkflowDefinitionDraftNodePatcher
         JsonElement config,
         string? insertAfterNodeInstanceId = null,
         string? autoWireInputPort = null,
-        string? autoWireOutputPort = null)
+        string? autoWireOutputPort = null,
+        string? autoWireSourceOutputPort = null)
     {
         if (string.IsNullOrWhiteSpace(nodeInstanceId))
         {
@@ -114,6 +115,7 @@ public static class WorkflowDefinitionDraftNodePatcher
         var insertIndex = nodes.Count;
         JsonObject? downstreamConnection = null;
         var downstreamConnectionIndex = -1;
+        var canAutoWireTerminalConnection = false;
         if (!string.IsNullOrWhiteSpace(insertAfterNodeInstanceId))
         {
             var anchorIndex = FindNodeIndex(nodes, insertAfterNodeInstanceId);
@@ -125,8 +127,7 @@ public static class WorkflowDefinitionDraftNodePatcher
             }
 
             insertIndex = anchorIndex + 1;
-            if (!string.IsNullOrWhiteSpace(autoWireInputPort) &&
-                !string.IsNullOrWhiteSpace(autoWireOutputPort))
+            if (!string.IsNullOrWhiteSpace(autoWireInputPort))
             {
                 var downstreamConnections = FindOutgoingConnectionIndexes(
                     connections,
@@ -136,6 +137,10 @@ public static class WorkflowDefinitionDraftNodePatcher
                 {
                     downstreamConnection = foundConnection;
                     downstreamConnectionIndex = downstreamConnections[0];
+                }
+                else if (downstreamConnections.Count == 0)
+                {
+                    canAutoWireTerminalConnection = true;
                 }
             }
         }
@@ -179,6 +184,26 @@ public static class WorkflowDefinitionDraftNodePatcher
             connections.Add(CreateConnectionObject(newToDownstream));
             addedConnections.Add(anchorToNew);
             addedConnections.Add(newToDownstream);
+        }
+        else if (canAutoWireTerminalConnection &&
+            !string.IsNullOrWhiteSpace(insertAfterNodeInstanceId) &&
+            !string.IsNullOrWhiteSpace(autoWireInputPort) &&
+            !string.IsNullOrWhiteSpace(autoWireSourceOutputPort))
+        {
+            var anchorToNew = new WorkflowDefinitionDraftConnection
+            {
+                ConnectionId = BuildUniqueConnectionId(
+                    connections,
+                    insertAfterNodeInstanceId,
+                    nodeInstanceId),
+                SourceNodeId = insertAfterNodeInstanceId,
+                SourcePort = autoWireSourceOutputPort,
+                TargetNodeId = nodeInstanceId,
+                TargetPort = autoWireInputPort,
+            };
+
+            connections.Add(CreateConnectionObject(anchorToNew));
+            addedConnections.Add(anchorToNew);
         }
 
         return new WorkflowDefinitionDraftNodePatchResult

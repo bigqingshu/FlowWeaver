@@ -2127,7 +2127,8 @@ public partial class MainWindowViewModel : ViewModelBase
             config,
             SelectedWorkflowDefinitionNode?.NodeInstanceId,
             autoWirePorts.InputPort,
-            autoWirePorts.OutputPort);
+            autoWirePorts.OutputPort,
+            autoWirePorts.SourceOutputPort);
         if (!patchResult.Succeeded)
         {
             WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
@@ -3631,8 +3632,30 @@ public partial class MainWindowViewModel : ViewModelBase
             "REQUEST_FAILED" => F(
                 "format.diagnostics.request_failed",
                 response.Error.Message),
+            "WORKFLOW_VALIDATION_FAILED" =>
+                FormatWorkflowValidationErrorDetails(response.Error)
+                ?? $"{response.Error.ErrorCode}: {response.Error.Message}",
             _ => $"{response.Error.ErrorCode}: {response.Error.Message}",
         };
+    }
+
+    private static string? FormatWorkflowValidationErrorDetails(ApiErrorDto error)
+    {
+        if (error.Details.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var validation = error.Details.Deserialize<WorkflowValidationResultDto>(
+                FlowWeaverJson.Options);
+            return validation is null ? null : FormatValidationIssues(validation);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private string LocalizeHealthStatusMessage(EngineHostHealthCheckResult result)
@@ -4315,17 +4338,61 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private (string? InputPort, string? OutputPort) TryGetAutoWirePorts()
+    private (string? InputPort, string? OutputPort, string? SourceOutputPort) TryGetAutoWirePorts()
     {
         var definition = SelectedNewDraftNodeDefinition;
-        if (definition is null ||
-            definition.InputPorts.Length != 1 ||
-            definition.OutputPorts.Length != 1)
+        if (definition is null)
         {
-            return (null, null);
+            return (null, null, null);
         }
 
-        return (definition.InputPorts[0].Name, definition.OutputPorts[0].Name);
+        var inputPort = TryGetSingleInputPort(definition.InputPorts);
+        if (inputPort is null)
+        {
+            return (null, null, null);
+        }
+
+        return (
+            inputPort,
+            TryGetPreferredOutputPort(definition.OutputPorts),
+            TryGetSourceAutoWireOutputPort());
+    }
+
+    private string? TryGetSourceAutoWireOutputPort()
+    {
+        if (SelectedWorkflowDefinitionNode is null)
+        {
+            return null;
+        }
+
+        var sourceDefinition = FindNodeDefinition(SelectedWorkflowDefinitionNode);
+        return sourceDefinition is null
+            ? null
+            : TryGetPreferredOutputPort(sourceDefinition.OutputPorts);
+    }
+
+    private static string? TryGetSingleInputPort(
+        IReadOnlyList<NodePortDefinitionDto> inputPorts)
+    {
+        return inputPorts.Count == 1 ? inputPorts[0].Name : null;
+    }
+
+    private static string? TryGetPreferredOutputPort(
+        IReadOnlyList<NodePortDefinitionDto> outputPorts)
+    {
+        if (outputPorts.Count == 0)
+        {
+            return null;
+        }
+
+        var outPort = outputPorts.FirstOrDefault(port =>
+            string.Equals(port.Name, "out", StringComparison.Ordinal));
+        if (outPort is not null)
+        {
+            return outPort.Name;
+        }
+
+        return outputPorts.Count == 1 ? outputPorts[0].Name : null;
     }
 
     private bool ShouldApplySuggestedNewDraftNodeInstanceId()

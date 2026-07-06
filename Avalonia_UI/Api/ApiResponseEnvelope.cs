@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace Avalonia_UI.Api;
 
@@ -20,7 +21,8 @@ public sealed record ApiResponseEnvelope<TData>
         string errorCode,
         string message,
         string requestId = "client",
-        bool retryable = false)
+        bool retryable = false,
+        JsonElement details = default)
     {
         return new ApiResponseEnvelope<TData>
         {
@@ -30,6 +32,7 @@ public sealed record ApiResponseEnvelope<TData>
                 ErrorCode = errorCode,
                 Message = message,
                 Retryable = retryable,
+                Details = details,
             },
             RequestId = requestId,
         };
