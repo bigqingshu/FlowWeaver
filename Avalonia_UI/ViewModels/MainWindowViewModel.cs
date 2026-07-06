@@ -976,20 +976,20 @@ public partial class MainWindowViewModel : ViewModelBase
         : T("data_preview.clean");
 
     public bool CanSaveDataPreviewWorkbenchAsDraft =>
-        SelectedDataPreviewTableRef?.HasCapability("SAVE_AS") == true;
+        LoadedDataPreviewTableRef?.HasCapability("SAVE_AS") == true;
 
     public string DataPreviewWorkbenchSavePolicyText =>
-        SelectedDataPreviewTableRef is null
+        LoadedDataPreviewTableRef is not { } tableRef
             ? T("data_preview.save_policy_local_draft")
             : CanSaveDataPreviewWorkbenchAsDraft
                 ? F(
                     "format.data_preview_save_policy_save_as",
-                    SelectedDataPreviewTableRef.StorageKind,
-                    SelectedDataPreviewTableRef.CapabilitiesText)
+                    tableRef.StorageKind,
+                    tableRef.CapabilitiesText)
                 : F(
                     "format.data_preview_save_policy_read_only",
-                    SelectedDataPreviewTableRef.StorageKind,
-                    SelectedDataPreviewTableRef.CapabilitiesText);
+                    tableRef.StorageKind,
+                    tableRef.CapabilitiesText);
 
     public string DataPreviewWorkbenchPageText => F(
         "format.data_preview_workbench_page",
@@ -1070,14 +1070,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewWorkbenchSourceText =>
         IsDataPreviewWorkbenchDraft
             ? T("data_preview.workbench_draft_source")
-            : SelectedDataPreviewTableRef is null
+            : LoadedDataPreviewTableRef is not { } tableRef
             ? T("data_preview.workbench_source_not_loaded")
             : F(
                 "format.data_preview_workbench_source",
-                SelectedDataPreviewTableRef.WorkflowRunId,
-                SelectedDataPreviewTableRef.NodeRunId,
-                SelectedDataPreviewTableRef.LogicalTableId,
-                SelectedDataPreviewTableRef.StorageKind);
+                tableRef.WorkflowRunId,
+                tableRef.NodeRunId,
+                tableRef.LogicalTableId,
+                tableRef.StorageKind);
 
     public string DataPreviewTableSelectorText => T("data_preview.table_selector");
 
@@ -1781,19 +1781,23 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanLoadSelectedDataPreviewTable()
     {
         return CanUseEngineActions
-            && SelectedDataPreviewTableRef is not null
+            && SelectedDataPreviewTableOption is not null
             && !IsLoadingDataPreviewWorkbench;
     }
 
     private bool CanLoadPreviousDataPreviewWorkbenchPage()
     {
-        return CanLoadSelectedDataPreviewTable()
+        return CanUseEngineActions
+            && LoadedDataPreviewTableRef is not null
+            && !IsLoadingDataPreviewWorkbench
             && dataPreviewWorkbenchOffset > 0;
     }
 
     private bool CanLoadNextDataPreviewWorkbenchPage()
     {
-        return CanLoadSelectedDataPreviewTable()
+        return CanUseEngineActions
+            && LoadedDataPreviewTableRef is not null
+            && !IsLoadingDataPreviewWorkbench
             && dataPreviewWorkbenchHasMore;
     }
 
@@ -3072,13 +3076,14 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanLoadSelectedDataPreviewTable))]
     private async Task LoadSelectedDataPreviewTableAsync()
     {
-        await LoadDataPreviewWorkbenchTablePageAsync(0);
+        await LoadDataPreviewWorkbenchTablePageAsync(SelectedDataPreviewTableOption, 0);
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadPreviousDataPreviewWorkbenchPage))]
     private async Task LoadPreviousDataPreviewWorkbenchPageAsync()
     {
         await LoadDataPreviewWorkbenchTablePageAsync(
+            LoadedDataPreviewTableRef,
             Math.Max(0, dataPreviewWorkbenchOffset - DataPreviewRowLimit));
     }
 
@@ -3086,6 +3091,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task LoadNextDataPreviewWorkbenchPageAsync()
     {
         await LoadDataPreviewWorkbenchTablePageAsync(
+            LoadedDataPreviewTableRef,
             dataPreviewWorkbenchOffset + DataPreviewRowLimit);
     }
 
@@ -3146,9 +3152,10 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewWorkbenchErrorMessage = null;
     }
 
-    private async Task LoadDataPreviewWorkbenchTablePageAsync(int offset)
+    private async Task LoadDataPreviewWorkbenchTablePageAsync(
+        TableRefListItemViewModel? requestedTableRef,
+        int offset)
     {
-        var requestedTableRef = SelectedDataPreviewTableRef;
         if (requestedTableRef is null)
         {
             return;
@@ -3171,7 +3178,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 limit: DataPreviewRowLimit,
                 cancellationToken: _shutdown.Token);
 
-            if (IsStaleDataPreviewWorkbenchRequest(requestVersion, requestedTableRefId))
+            if (IsStaleDataPreviewWorkbenchRequest(requestVersion))
             {
                 return;
             }
@@ -3222,6 +3229,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     TableRefs.Add(new TableRefListItemViewModel(tableRef));
                 }
 
+                RebuildDataPreviewStates(preferredTableRefId: tableRefId);
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
                 TableRefErrorMessage = null;
                 target = TableRefs.FirstOrDefault(
@@ -3242,6 +3250,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        SelectDataPreviewTableOptionByTableRefId(target.TableRefId);
         SelectedDataPreviewTableRef = target;
         SelectedShellPageKey = ShellPageKey.DataPreview;
         await LoadSelectedDataPreviewTableAsync();
@@ -3503,15 +3512,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 StringComparison.Ordinal);
     }
 
-    private bool IsStaleDataPreviewWorkbenchRequest(
-        int requestVersion,
-        string requestedTableRefId)
+    private bool IsStaleDataPreviewWorkbenchRequest(int requestVersion)
     {
-        return requestVersion != dataPreviewWorkbenchLoadVersion
-            || !string.Equals(
-                SelectedDataPreviewTableRef?.TableRefId,
-                requestedTableRefId,
-                StringComparison.Ordinal);
+        return requestVersion != dataPreviewWorkbenchLoadVersion;
     }
 
     private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
@@ -3564,6 +3567,21 @@ public partial class MainWindowViewModel : ViewModelBase
             : DataPreviewStates.FirstOrDefault(state =>
                 state.TableRefs.Any(tableRef =>
                     string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal)));
+    }
+
+    private void SelectDataPreviewTableOptionByTableRefId(string? tableRefId)
+    {
+        var state = FindDataPreviewStateByTableRefId(tableRefId);
+        if (state is null)
+        {
+            return;
+        }
+
+        SelectedDataPreviewState = state;
+        SelectedDataPreviewTableOption =
+            DataPreviewTableOptions.FirstOrDefault(tableRef =>
+                string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal))
+            ?? SelectedDataPreviewTableOption;
     }
 
     private void ResetDataPreviewSelectionState()
@@ -3919,7 +3937,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void UpdateDataPreviewWorkbenchLoadedMessage()
     {
-        if (SelectedDataPreviewTableRef is null)
+        if (LoadedDataPreviewTableRef is null)
         {
             return;
         }
@@ -3930,7 +3948,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 "format.loaded_data_preview_table_rows",
                 dataPreviewWorkbenchLoadedRows.Length,
                 dataPreviewWorkbenchRowCount,
-                SelectedDataPreviewTableRef.LogicalTableId)
+                LoadedDataPreviewTableRef.LogicalTableId)
             : F(
                 "format.data_preview_search_matches",
                 DataPreviewWorkbenchRows.Count,
@@ -6354,31 +6372,20 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
         OnPropertyChanged(nameof(CanSaveDataPreviewWorkbenchAsDraft));
         OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
+        LoadPreviousDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
+        LoadNextDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
+        SaveDataPreviewWorkbenchAsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
     {
-        dataPreviewWorkbenchLoadVersion++;
         DataPreviewWorkbenchErrorMessage = null;
-        ResetDataPreviewWorkbenchLoadedState();
-        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
-        OnPropertyChanged(nameof(CanSaveDataPreviewWorkbenchAsDraft));
-        OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
-        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
-        if (value is null)
+        if (value is not null)
         {
-            DataPreviewWorkbenchColumns.Clear();
-            DataPreviewWorkbenchRows.Clear();
-            DataPreviewWorkbenchMessage = T("data_preview.workbench_select_table");
-            NotifyDataPreviewWorkbenchRowsChanged();
-            return;
+            SelectDataPreviewTableOptionByTableRefId(value.TableRefId);
         }
 
-        if (SelectedShellPageKey == ShellPageKey.DataPreview
-            && CanLoadSelectedDataPreviewTable())
-        {
-            _ = LoadSelectedDataPreviewTableAsync();
-        }
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsLoadingSharedPublicationsChanged(bool value)

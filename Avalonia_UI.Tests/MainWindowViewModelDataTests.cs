@@ -207,7 +207,7 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
-    public async Task LoadSelectedDataPreviewTableLoadsRowsForSelectedTableRef()
+    public async Task LoadSelectedDataPreviewTableLoadsRowsForSelectedTableOption()
     {
         var apiClient = new FakeApiClient
         {
@@ -236,7 +236,8 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.AreEqual(0, apiClient.LastTableRowsOffset);
         Assert.AreEqual(50, apiClient.LastTableRowsLimit);
-        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableRef?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
         Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
         Assert.AreEqual("row_id", viewModel.DataPreviewWorkbenchColumns[0].Name);
         Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
@@ -250,6 +251,72 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(
             "Source: run run-1, node run node-run-1, table orders, storage RUNTIME_SQL.",
             viewModel.DataPreviewWorkbenchSourceText);
+    }
+
+    [TestMethod]
+    public async Task DataPreviewTableOptionSelectionDoesNotReplaceLoadedTableUntilLoaded()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                    TableRef("table-2", "run-1", "node-run-1", storageKind: "MEMORY"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+
+        viewModel.SelectedDataPreviewTableOption = viewModel.DataPreviewTableOptions[1];
+
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
+        Assert.AreEqual("table-2", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+
+        apiClient.TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                "table-2",
+                ["code"],
+                [
+                    JsonDocument.Parse("""{"code":"A"}""")
+                        .RootElement
+                        .Clone(),
+                ],
+                rowCount: 1));
+
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.GetTableRowsCallCount);
+        Assert.AreEqual("table-2", apiClient.LastTableRowsTableRefId);
+        Assert.AreEqual("table-2", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchColumns);
+        Assert.AreEqual("code", viewModel.DataPreviewWorkbenchColumns[0].Name);
+        CollectionAssert.AreEqual(
+            new[] { "A" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
     }
 
     [TestMethod]
@@ -357,17 +424,35 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
-    public void DataPreviewWorkbenchSaveAsRequiresBackendCapability()
+    public async Task DataPreviewWorkbenchSaveAsRequiresBackendCapability()
     {
-        var viewModel = CreateViewModel(new FakeApiClient());
-        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
-            TableRef(
-                "table-1",
-                "run-1",
-                "node-run-1",
-                capabilities: ["READ"]));
-        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12";
-        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+        var readOnlyApiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef(
+                        "table-1",
+                        "run-1",
+                        "node-run-1",
+                        capabilities: ["READ"]),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["name", "amount"],
+                    [
+                        JsonDocument.Parse("""{"name":"Alice","amount":12}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(readOnlyApiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
         viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text = "99";
 
         Assert.IsFalse(viewModel.CanSaveDataPreviewWorkbenchAsDraft);
@@ -376,14 +461,33 @@ public sealed class MainWindowViewModelDataTests
             "Current table is not saveable: storage RUNTIME_SQL, capabilities READ; backend must declare SAVE_AS.",
             viewModel.DataPreviewWorkbenchSavePolicyText);
 
-        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
-            TableRef(
-                "table-2",
-                "run-1",
-                "node-run-1",
-                capabilities: ["READ", "SAVE_AS"]));
-        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12";
-        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+        var saveableApiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef(
+                        "table-2",
+                        "run-1",
+                        "node-run-1",
+                        capabilities: ["READ", "SAVE_AS"]),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-2",
+                    ["name", "amount"],
+                    [
+                        JsonDocument.Parse("""{"name":"Alice","amount":12}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        viewModel = CreateViewModel(saveableApiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
         viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text = "99";
 
         Assert.IsTrue(viewModel.CanSaveDataPreviewWorkbenchAsDraft);
@@ -537,6 +641,9 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
         Assert.AreEqual(ShellPageContentKey.DataPreview, viewModel.SelectedShellPageContentKey);
         Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableRef?.TableRefId);
+        Assert.AreEqual("run-1:node-run-1", viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
         Assert.HasCount(1, viewModel.DataPreviewWorkbenchColumns);
         Assert.AreEqual("row_id", viewModel.DataPreviewWorkbenchColumns[0].Name);
         Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
@@ -778,7 +885,7 @@ public sealed class MainWindowViewModelDataTests
 
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
         viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
-        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
+        viewModel.SelectedDataPreviewTableOption = new TableRefListItemViewModel(
             TableRef("table-1", "run-1", "node-run-1"));
         viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
 
@@ -947,6 +1054,8 @@ public sealed class MainWindowViewModelDataTests
 
         public string? LastTableRowsTableRefId { get; private set; }
 
+        public int GetTableRowsCallCount { get; private set; }
+
         public int LastTableRowsOffset { get; private set; }
 
         public int LastTableRowsLimit { get; private set; }
@@ -1097,6 +1206,7 @@ public sealed class MainWindowViewModelDataTests
             IReadOnlyCollection<string>? orderBy = null,
             CancellationToken cancellationToken = default)
         {
+            GetTableRowsCallCount++;
             LastTableRowsTableRefId = tableRefId;
             LastTableRowsOffset = offset;
             LastTableRowsLimit = limit;
