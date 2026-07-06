@@ -82,14 +82,6 @@
                         </Button.Flyout>
                     </Button>
                 </Grid>
-                <TextBlock Text="{Binding WorkflowDefinitionBatchSelectedNodeCountText}"
-                           FontSize="12"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding WorkflowLinearChainStatusText}"
-                           FontSize="12"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-
                 <WrapPanel Orientation="Horizontal"
                            HorizontalAlignment="Right">
                     <Panel Background="Transparent"
@@ -132,15 +124,6 @@
                                              MinWidth="128"
                                              Margin="0,0,0,8"/>
                 </WrapPanel>
-
-                <TextBlock Text="{Binding WorkflowDefinitionValidationMessage}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Text="{Binding WorkflowDefinitionValidationErrorMessage}"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextErrorBrush}"
-                           IsVisible="{Binding HasWorkflowDefinitionValidationError}"/>
-
             </StackPanel>
         </Grid>
     </Border>
