@@ -40,6 +40,43 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task RefreshTableRefsBuildsDataPreviewStatesAndTableOptions()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                    TableRef("table-2", "run-1", "node-run-1", storageKind: "MEMORY"),
+                    TableRef("table-3", "run-1", "node-run-2"),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+
+        Assert.HasCount(2, viewModel.DataPreviewStates);
+        Assert.AreEqual("run-1:node-run-1", viewModel.DataPreviewStates[0].StateKey);
+        Assert.AreEqual("run-1:node-run-2", viewModel.DataPreviewStates[1].StateKey);
+        Assert.AreEqual("run-1:node-run-1", viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.HasCount(2, viewModel.DataPreviewTableOptions);
+        CollectionAssert.AreEqual(
+            new[] { "table-1", "table-2" },
+            viewModel.DataPreviewTableOptions.Select(tableRef => tableRef.TableRefId).ToArray());
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
+
+        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates[1];
+
+        Assert.HasCount(1, viewModel.DataPreviewTableOptions);
+        Assert.AreEqual("table-3", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
+        Assert.IsNull(apiClient.LastTableRowsTableRefId);
+    }
+
+    [TestMethod]
     public async Task RefreshSharedPublicationsPassesFilterLimitAndSelectsFirst()
     {
         var apiClient = new FakeApiClient
@@ -787,6 +824,7 @@ public sealed class MainWindowViewModelDataTests
         string tableRefId,
         string workflowRunId,
         string nodeRunId,
+        string storageKind = "RUNTIME_SQL",
         string[]? capabilities = null)
     {
         return new TableRefDto
@@ -795,7 +833,7 @@ public sealed class MainWindowViewModelDataTests
             WorkflowRunId = workflowRunId,
             NodeRunId = nodeRunId,
             Role = "OUTPUT",
-            StorageKind = "RUNTIME_SQL",
+            StorageKind = storageKind,
             Scope = "WORKFLOW_SCOPE",
             Mutability = "IMMUTABLE",
             ProviderId = "runtime",

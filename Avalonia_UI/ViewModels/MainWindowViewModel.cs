@@ -304,6 +304,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private TableRefListItemViewModel? selectedDataPreviewTableRef;
 
     [ObservableProperty]
+    private DataPreviewStateListItemViewModel? selectedDataPreviewState;
+
+    [ObservableProperty]
+    private TableRefListItemViewModel? selectedDataPreviewTableOption;
+
+    [ObservableProperty]
+    private TableRefListItemViewModel? loadedDataPreviewTableRef;
+
+    [ObservableProperty]
     private bool isLoadingDataPreviewWorkbench;
 
     [ObservableProperty]
@@ -795,6 +804,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<RecentEventListItemViewModel> RecentEvents { get; } = new();
 
     public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
+
+    public ObservableCollection<DataPreviewStateListItemViewModel> DataPreviewStates { get; } = new();
+
+    public ObservableCollection<TableRefListItemViewModel> DataPreviewTableOptions { get; } = new();
 
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewColumns { get; } = new();
 
@@ -3017,14 +3030,21 @@ public partial class MainWindowViewModel : ViewModelBase
             if (response.Ok && response.Data is not null)
             {
                 var previousSelectedTableRefId = SelectedDataPreviewTableRef?.TableRefId;
+                var previousSelectedStateKey = SelectedDataPreviewState?.StateKey;
+                var previousSelectedTableOptionId =
+                    SelectedDataPreviewTableOption?.TableRefId ?? previousSelectedTableRefId;
                 TableRefs.Clear();
                 foreach (var tableRef in response.Data)
                 {
                     TableRefs.Add(new TableRefListItemViewModel(tableRef));
                 }
 
+                RebuildDataPreviewStates(
+                    previousSelectedStateKey,
+                    previousSelectedTableOptionId);
                 SelectedDataPreviewTableRef = TableRefs.FirstOrDefault(
                     tableRef => tableRef.TableRefId == previousSelectedTableRefId)
+                    ?? SelectedDataPreviewTableOption
                     ?? TableRefs.FirstOrDefault();
 
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
@@ -3090,6 +3110,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        LoadedDataPreviewTableRef = null;
         LoadDataPreviewWorkbenchRows(
             new TableDataRowsDto
             {
@@ -3163,6 +3184,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             LoadDataPreviewWorkbenchRows(response.Data);
+            LoadedDataPreviewTableRef = requestedTableRef;
             UpdateDataPreviewWorkbenchLoadedMessage();
         }
         finally
@@ -3502,6 +3524,48 @@ public partial class MainWindowViewModel : ViewModelBase
                 string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
     }
 
+    private void RebuildDataPreviewStates(
+        string? preferredStateKey = null,
+        string? preferredTableRefId = null)
+    {
+        DataPreviewStates.Clear();
+        foreach (var state in DataPreviewStateListItemViewModel.FromTableRefs(TableRefs))
+        {
+            DataPreviewStates.Add(state);
+        }
+
+        var selectedState =
+            FindDataPreviewStateByKey(preferredStateKey)
+            ?? FindDataPreviewStateByTableRefId(preferredTableRefId)
+            ?? DataPreviewStates.FirstOrDefault();
+        SelectedDataPreviewState = selectedState;
+
+        if (!string.IsNullOrWhiteSpace(preferredTableRefId))
+        {
+            SelectedDataPreviewTableOption =
+                DataPreviewTableOptions.FirstOrDefault(tableRef =>
+                    string.Equals(tableRef.TableRefId, preferredTableRefId, StringComparison.Ordinal))
+                ?? SelectedDataPreviewTableOption;
+        }
+    }
+
+    private DataPreviewStateListItemViewModel? FindDataPreviewStateByKey(string? stateKey)
+    {
+        return string.IsNullOrWhiteSpace(stateKey)
+            ? null
+            : DataPreviewStates.FirstOrDefault(state =>
+                string.Equals(state.StateKey, stateKey, StringComparison.Ordinal));
+    }
+
+    private DataPreviewStateListItemViewModel? FindDataPreviewStateByTableRefId(string? tableRefId)
+    {
+        return string.IsNullOrWhiteSpace(tableRefId)
+            ? null
+            : DataPreviewStates.FirstOrDefault(state =>
+                state.TableRefs.Any(tableRef =>
+                    string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal)));
+    }
+
     private void ResetDataPreviewSelectionState()
     {
         dataPreviewLoadVersion++;
@@ -3533,6 +3597,10 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         dataPreviewWorkbenchLoadVersion++;
         IsLoadingDataPreviewWorkbench = false;
+        SelectedDataPreviewState = null;
+        DataPreviewStates.Clear();
+        SelectedDataPreviewTableOption = null;
+        DataPreviewTableOptions.Clear();
         SelectedDataPreviewTableRef = null;
         ResetDataPreviewWorkbenchLoadedState();
         DataPreviewWorkbenchColumns.Clear();
@@ -3588,6 +3656,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ResetDataPreviewWorkbenchLoadedState()
     {
+        LoadedDataPreviewTableRef = null;
         dataPreviewWorkbenchLoadedColumns = [];
         dataPreviewWorkbenchLoadedRows = [];
         dataPreviewWorkbenchOriginalCellRows = [];
@@ -6255,6 +6324,36 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnIsDataPreviewWorkbenchDraftChanged(bool value)
     {
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+    }
+
+    partial void OnSelectedDataPreviewStateChanged(DataPreviewStateListItemViewModel? value)
+    {
+        var previousTableRefId = SelectedDataPreviewTableOption?.TableRefId;
+        DataPreviewTableOptions.Clear();
+        if (value is not null)
+        {
+            foreach (var tableRef in value.TableRefs)
+            {
+                DataPreviewTableOptions.Add(tableRef);
+            }
+        }
+
+        SelectedDataPreviewTableOption =
+            DataPreviewTableOptions.FirstOrDefault(tableRef =>
+                string.Equals(tableRef.TableRefId, previousTableRefId, StringComparison.Ordinal))
+            ?? DataPreviewTableOptions.FirstOrDefault();
+    }
+
+    partial void OnSelectedDataPreviewTableOptionChanged(TableRefListItemViewModel? value)
+    {
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnLoadedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
+    {
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        OnPropertyChanged(nameof(CanSaveDataPreviewWorkbenchAsDraft));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
     }
 
     partial void OnSelectedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
