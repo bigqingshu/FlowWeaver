@@ -77,7 +77,7 @@
         </Border>
 
         <Border Grid.Column="1" Classes="Card" Padding="12">
-            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="8">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="8">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
                     <TextBlock Text="{Binding DataPreviewTabText}"
                                FontSize="16"
@@ -133,14 +133,33 @@
                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
 
-                <TextBlock Grid.Row="2"
+                <Grid Grid.Row="2"
+                      ColumnDefinitions="Auto,*,Auto"
+                      ColumnSpacing="8">
+                    <TextBlock Text="{Binding DataPreviewPasteText}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBox Grid.Column="1"
+                             Text="{Binding DataPreviewWorkbenchPasteText, Mode=TwoWay}"
+                             Watermark="{Binding DataPreviewPasteWatermarkText}"
+                             AcceptsReturn="True"
+                             Height="64"
+                             TextWrapping="NoWrap"/>
+                    <Button Grid.Column="2"
+                            Content="{Binding DataPreviewParsePasteText}"
+                            Command="{Binding ParseDataPreviewWorkbenchPasteCommand}"
+                            MinWidth="84"/>
+                </Grid>
+
+                <TextBlock Grid.Row="3"
                            Text="{Binding DataPreviewWorkbenchErrorMessage}"
                            FontSize="12"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasDataPreviewWorkbenchError}"/>
 
-                <Border Grid.Row="3"
+                <Border Grid.Row="4"
                         BorderBrush="{DynamicResource ControlBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="4"
@@ -202,7 +221,7 @@
                     </ScrollViewer>
                 </Border>
 
-                <TextBox Grid.Row="4"
+                <TextBox Grid.Row="5"
                          Text="{Binding DataPreviewWorkbenchClipboardText}"
                          IsReadOnly="True"
                          AcceptsReturn="True"

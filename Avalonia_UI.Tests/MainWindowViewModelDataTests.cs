@@ -264,6 +264,66 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public void DataPreviewWorkbenchParsesPastedTableIntoLocalDraft()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12\nBob\t34";
+
+        Assert.IsTrue(viewModel.ParseDataPreviewWorkbenchPasteCommand.CanExecute(null));
+
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsDataPreviewWorkbenchDraft);
+        Assert.AreEqual(
+            "Source: local temporary draft, not saved yet.",
+            viewModel.DataPreviewWorkbenchSourceText);
+        Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
+        Assert.AreEqual("name", viewModel.DataPreviewWorkbenchColumns[0].Name);
+        Assert.HasCount(2, viewModel.DataPreviewWorkbenchRows);
+        CollectionAssert.AreEqual(
+            new[] { "Alice", "12" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Bob", "34" },
+            viewModel.DataPreviewWorkbenchRows[1].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual(
+            "Parsed a temporary draft table: 2 row(s), 2 column(s).",
+            viewModel.DataPreviewWorkbenchMessage);
+        Assert.IsFalse(viewModel.HasDataPreviewWorkbenchError);
+    }
+
+    [TestMethod]
+    public void DataPreviewWorkbenchParsesQuotedCsvCells()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.DataPreviewWorkbenchPasteText = "name,note\nAlice,\"a,b\"";
+
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+
+        Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        CollectionAssert.AreEqual(
+            new[] { "Alice", "a,b" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+    }
+
+    [TestMethod]
+    public void DataPreviewWorkbenchRejectsPastedHeaderOnlyTable()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.DataPreviewWorkbenchPasteText = "name\tamount";
+
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsDataPreviewWorkbenchDraft);
+        Assert.IsTrue(viewModel.HasDataPreviewWorkbenchError);
+        Assert.AreEqual("Pasted table parse failed.", viewModel.DataPreviewWorkbenchMessage);
+        Assert.AreEqual(
+            "Paste at least one header row and one data row.",
+            viewModel.DataPreviewWorkbenchErrorMessage);
+    }
+
+    [TestMethod]
     public async Task DataPreviewWorkbenchPagingUsesOffsetsAndUpdatesPageState()
     {
         var apiClient = new FakeApiClient

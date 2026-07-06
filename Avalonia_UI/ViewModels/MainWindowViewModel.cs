@@ -319,6 +319,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string dataPreviewWorkbenchClipboardText = string.Empty;
 
+    [ObservableProperty]
+    private string dataPreviewWorkbenchPasteText = string.Empty;
+
+    [ObservableProperty]
+    private bool isDataPreviewWorkbenchDraft;
+
     private string? dataPreviewSourceWorkflowRunId;
 
     private string? dataPreviewSourceNodeInstanceId;
@@ -939,6 +945,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasDataPreviewWorkbenchClipboardText =>
         !string.IsNullOrEmpty(DataPreviewWorkbenchClipboardText);
 
+    public bool HasDataPreviewWorkbenchPasteText =>
+        !string.IsNullOrWhiteSpace(DataPreviewWorkbenchPasteText);
+
     public string DataPreviewWorkbenchPageText => F(
         "format.data_preview_workbench_page",
         dataPreviewWorkbenchLoadedRows.Length == 0 ? 0 : dataPreviewWorkbenchOffset + 1,
@@ -1016,7 +1025,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewWorkbenchPendingText => T("data_preview.workbench_pending");
 
     public string DataPreviewWorkbenchSourceText =>
-        SelectedDataPreviewTableRef is null
+        IsDataPreviewWorkbenchDraft
+            ? T("data_preview.workbench_draft_source")
+            : SelectedDataPreviewTableRef is null
             ? T("data_preview.workbench_source_not_loaded")
             : F(
                 "format.data_preview_workbench_source",
@@ -1034,6 +1045,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewSearchWatermarkText => T("data_preview.search_watermark");
 
     public string DataPreviewCopyTsvText => T("data_preview.copy_tsv");
+
+    public string DataPreviewPasteText => T("data_preview.paste_text");
+
+    public string DataPreviewPasteWatermarkText => T("data_preview.paste_watermark");
+
+    public string DataPreviewParsePasteText => T("data_preview.parse_paste");
 
     public string DataPreviewPreviousPageText => T("data_preview.previous_page");
     public string DataPreviewNextPageText => T("data_preview.next_page");
@@ -1733,6 +1750,12 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         return HasDataPreviewWorkbenchColumns
             && HasDataPreviewWorkbenchRows;
+    }
+
+    private bool CanParseDataPreviewWorkbenchPaste()
+    {
+        return HasDataPreviewWorkbenchPasteText
+            && !IsLoadingDataPreviewWorkbench;
     }
 
     private bool CanShowDataPreviewDetails()
@@ -3001,6 +3024,39 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewWorkbenchClipboardText = BuildDataPreviewWorkbenchTsv();
     }
 
+    [RelayCommand(CanExecute = nameof(CanParseDataPreviewWorkbenchPaste))]
+    private void ParseDataPreviewWorkbenchPaste()
+    {
+        DataPreviewWorkbenchErrorMessage = null;
+        if (!TryParseDelimitedTable(
+                DataPreviewWorkbenchPasteText,
+                out var columns,
+                out var rows,
+                out var errorKey))
+        {
+            DataPreviewWorkbenchMessage = T("data_preview.workbench_parse_failed");
+            DataPreviewWorkbenchErrorMessage = errorKey is null ? null : T(errorKey);
+            return;
+        }
+
+        LoadDataPreviewWorkbenchRows(
+            new TableDataRowsDto
+            {
+                TableRefId = "local-draft",
+                Offset = 0,
+                Limit = rows.Length,
+                RowCount = rows.Length,
+                Columns = columns,
+                Rows = rows,
+                HasMore = false,
+            },
+            isDraft: true);
+        DataPreviewWorkbenchMessage = F(
+            "format.data_preview_imported_rows",
+            rows.Length,
+            columns.Length);
+    }
+
     private async Task LoadDataPreviewWorkbenchTablePageAsync(int offset)
     {
         var requestedTableRef = SelectedDataPreviewTableRef;
@@ -3433,8 +3489,9 @@ public partial class MainWindowViewModel : ViewModelBase
         NotifyDataPreviewRowsChanged();
     }
 
-    private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows)
+    private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows, bool isDraft = false)
     {
+        IsDataPreviewWorkbenchDraft = isDraft;
         dataPreviewWorkbenchLoadedColumns = rows.Columns.ToArray();
         dataPreviewWorkbenchLoadedRows = rows.Rows.Select(row => row.Clone()).ToArray();
         dataPreviewWorkbenchOffset = rows.Offset;
@@ -3443,6 +3500,7 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewWorkbenchClipboardText = string.Empty;
         ApplyDataPreviewWorkbenchSearch();
         NotifyDataPreviewWorkbenchPagingChanged();
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
     }
 
     private void ResetDataPreviewWorkbenchLoadedState()
@@ -3453,6 +3511,7 @@ public partial class MainWindowViewModel : ViewModelBase
         dataPreviewWorkbenchHasMore = false;
         dataPreviewWorkbenchRowCount = 0;
         DataPreviewWorkbenchClipboardText = string.Empty;
+        IsDataPreviewWorkbenchDraft = false;
         NotifyDataPreviewWorkbenchPagingChanged();
     }
 
@@ -3518,6 +3577,129 @@ public partial class MainWindowViewModel : ViewModelBase
             .Replace("\r", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
             .Replace('\t', ' ');
+    }
+
+    private static bool TryParseDelimitedTable(
+        string text,
+        out string[] columns,
+        out JsonElement[] rows,
+        out string? errorMessage)
+    {
+        columns = [];
+        rows = [];
+        errorMessage = null;
+
+        var lines = text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+        if (lines.Length < 2)
+        {
+            errorMessage = "data_preview.paste_requires_rows";
+            return false;
+        }
+
+        var delimiter = lines[0].Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
+        var parsedRows = lines.Select(line => ParseDelimitedLine(line, delimiter)).ToArray();
+        var maxColumnCount = parsedRows.Max(row => row.Length);
+        if (maxColumnCount == 0)
+        {
+            errorMessage = "data_preview.paste_no_columns";
+            return false;
+        }
+
+        var parsedColumns = NormalizeDelimitedHeaders(parsedRows[0], maxColumnCount);
+        var parsedDataRows = parsedRows
+            .Skip(1)
+            .Select(row => CreateDelimitedRowElement(parsedColumns, row))
+            .ToArray();
+        columns = parsedColumns;
+        rows = parsedDataRows;
+        if (rows.Length == 0)
+        {
+            errorMessage = "data_preview.paste_no_rows";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string[] ParseDelimitedLine(string line, char delimiter)
+    {
+        var values = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+
+        for (var index = 0; index < line.Length; index++)
+        {
+            var character = line[index];
+            if (character == '"')
+            {
+                if (inQuotes && index + 1 < line.Length && line[index + 1] == '"')
+                {
+                    current.Append('"');
+                    index++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (!inQuotes && character == delimiter)
+            {
+                values.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(character);
+        }
+
+        values.Add(current.ToString());
+        return values.ToArray();
+    }
+
+    private static string[] NormalizeDelimitedHeaders(string[] headerRow, int columnCount)
+    {
+        var headers = new string[columnCount];
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < columnCount; index++)
+        {
+            var header = index < headerRow.Length ? headerRow[index].Trim() : string.Empty;
+            if (string.IsNullOrWhiteSpace(header))
+            {
+                header = $"Column{index + 1}";
+            }
+
+            if (seen.TryGetValue(header, out var count))
+            {
+                count++;
+                seen[header] = count;
+                header = $"{header}_{count}";
+            }
+            else
+            {
+                seen[header] = 1;
+            }
+
+            headers[index] = header;
+        }
+
+        return headers;
+    }
+
+    private static JsonElement CreateDelimitedRowElement(string[] columns, string[] values)
+    {
+        var row = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var index = 0; index < columns.Length; index++)
+        {
+            row[columns[index]] = index < values.Length ? values[index] : string.Empty;
+        }
+
+        return JsonSerializer.SerializeToElement(row, FlowWeaverJson.Options).Clone();
     }
 
     private void UpdateDataPreviewWorkbenchLoadedMessage()
@@ -5242,6 +5424,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewSearchText));
         OnPropertyChanged(nameof(DataPreviewSearchWatermarkText));
         OnPropertyChanged(nameof(DataPreviewCopyTsvText));
+        OnPropertyChanged(nameof(DataPreviewPasteText));
+        OnPropertyChanged(nameof(DataPreviewPasteWatermarkText));
+        OnPropertyChanged(nameof(DataPreviewParsePasteText));
         OnPropertyChanged(nameof(DataPreviewPreviousPageText));
         OnPropertyChanged(nameof(DataPreviewNextPageText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchPageText));
@@ -5866,6 +6051,7 @@ public partial class MainWindowViewModel : ViewModelBase
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
         LoadPreviousDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
         LoadNextDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
+        ParseDataPreviewWorkbenchPasteCommand.NotifyCanExecuteChanged();
         ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
@@ -5894,6 +6080,17 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnDataPreviewWorkbenchClipboardTextChanged(string value)
     {
         OnPropertyChanged(nameof(HasDataPreviewWorkbenchClipboardText));
+    }
+
+    partial void OnDataPreviewWorkbenchPasteTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasDataPreviewWorkbenchPasteText));
+        ParseDataPreviewWorkbenchPasteCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsDataPreviewWorkbenchDraftChanged(bool value)
+    {
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
     }
 
     partial void OnSelectedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
