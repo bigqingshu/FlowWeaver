@@ -3504,6 +3504,18 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingDataPreview = false;
         DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
         DataPreviewErrorMessage = null;
+        ClearDataPreviewSourceIfNoPreviewRows();
+        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearDataPreviewSourceIfNoPreviewRows()
+    {
+        if (HasDataPreviewColumns || HasDataPreviewRows)
+        {
+            return;
+        }
+
         dataPreviewSourceWorkflowRunId = null;
         dataPreviewSourceNodeInstanceId = null;
         dataPreviewSourceLogicalTableId = null;
@@ -3511,8 +3523,6 @@ public partial class MainWindowViewModel : ViewModelBase
         dataPreviewSourceRunMode = null;
         dataPreviewSourceTargetNodeInstanceId = null;
         OnPropertyChanged(nameof(DataPreviewSourceText));
-        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
     private void ResetDataPreviewWorkbenchState()

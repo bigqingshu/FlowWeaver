@@ -586,6 +586,7 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsTrue(viewModel.HasDataPreviewRows);
         Assert.HasCount(1, viewModel.DataPreviewRows);
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.DataPreviewMessage);
+        Assert.IsTrue(viewModel.ShowDataPreviewDetailsCommand.CanExecute(null));
 
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-2", "wf-1"));
 
@@ -598,6 +599,10 @@ public sealed class MainWindowViewModelDataTests
             new[] { "1", "12.5" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "Source: full run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
+        Assert.IsTrue(viewModel.ShowDataPreviewDetailsCommand.CanExecute(null));
 
         viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("filter");
 
@@ -608,6 +613,10 @@ public sealed class MainWindowViewModelDataTests
             new[] { "1", "12.5" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
         Assert.AreEqual("Select a run and workflow node, then refresh data preview.", viewModel.DataPreviewMessage);
+        Assert.AreEqual(
+            "Source: full run run-1, node generate, table orders.",
+            viewModel.DataPreviewSourceText);
+        Assert.IsTrue(viewModel.ShowDataPreviewDetailsCommand.CanExecute(null));
     }
 
     [TestMethod]
