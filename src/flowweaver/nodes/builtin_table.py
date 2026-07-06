@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from flowweaver.common.time import utc_now
+from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -12,20 +13,22 @@ from flowweaver.nodes.builtin_sql import (
     SqlMappingNodeRunner,
     SqlMappingTaskConfig,
 )
-from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus
+from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
+SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 
 
-def table_node_types() -> tuple[str, str, str, str]:
+def table_node_types() -> tuple[str, ...]:
     return (
         GENERATE_TEST_TABLE_NODE_TYPE,
         FILTER_ROWS_NODE_TYPE,
         ADD_COLUMNS_NODE_TYPE,
+        SAVE_MEMORY_TABLE_NODE_TYPE,
         SQL_MAPPING_NODE_TYPE,
     )
 
@@ -41,10 +44,12 @@ class BuiltinTableNodeRunner:
         store: RuntimeStore,
         registry: RuntimeDataRegistry,
         table_provider: SQLiteRuntimeTableProvider,
+        memory_provider: MemoryTableProvider | None = None,
     ) -> None:
         self._store = store
         self._registry = registry
         self._table_provider = table_provider
+        self._memory_provider = memory_provider or MemoryTableProvider()
         self._sql_mapping_runner = SqlMappingNodeRunner(store=store)
 
     def execute(
@@ -61,6 +66,8 @@ class BuiltinTableNodeRunner:
                 output_refs = self._execute_filter(task)
             elif task.node_type == ADD_COLUMNS_NODE_TYPE:
                 output_refs = self._execute_add_columns(task)
+            elif task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
+                output_refs = self._execute_save_memory(task)
             elif task.node_type == SQL_MAPPING_NODE_TYPE:
                 output_refs = self._execute_sql_mapping(task)
             else:
@@ -116,6 +123,34 @@ class BuiltinTableNodeRunner:
                 rows=rows,
             )
         ]
+
+    def _execute_save_memory(self, task: NodeTaskModel) -> list[TableRefModel]:
+        if len(task.input_refs) != 1:
+            raise _NodeValidationError(
+                "SaveMemoryTableNode requires exactly one input_ref"
+            )
+        input_ref = self._registry.get(task.input_refs[0])
+        table_name = _save_memory_table_name_config(task.config)
+        mode = str(task.config.get("mode", "overwrite"))
+        if mode != "overwrite":
+            raise _NodeValidationError(
+                f"Unsupported SaveMemoryTableNode mode: {mode}"
+            )
+        rows = self._table_provider.read_rows(
+            input_ref,
+            offset=0,
+            limit=self._table_provider.count_rows(input_ref),
+        )
+        memory_ref = self._memory_provider.create_memory_table(
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            logical_table_id=table_name,
+            schema=input_ref.schema,
+            rows=rows,
+            role=TableRole.AUXILIARY,
+        )
+        self._store.register_table_ref(memory_ref)
+        return [input_ref, memory_ref]
 
     def _execute_filter(self, task: NodeTaskModel) -> list[TableRefModel]:
         if len(task.input_refs) != 1:
@@ -282,6 +317,13 @@ def _string_config(config: dict[str, Any], key: str) -> str:
     value = config.get(key)
     if not isinstance(value, str) or not value.strip():
         raise _NodeValidationError(f"AddColumnsNode config.{key} is required")
+    return value.strip()
+
+
+def _save_memory_table_name_config(config: dict[str, Any]) -> str:
+    value = config.get("table_name")
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError("SaveMemoryTableNode config.table_name is required")
     return value.strip()
 
 

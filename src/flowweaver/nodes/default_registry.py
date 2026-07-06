@@ -13,6 +13,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.nodes.registry import (
     NodeConfigFieldSpec,
@@ -54,6 +55,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_add_columns_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
+            node_version="1.0",
+            display_name="Save Memory Table",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"), NodePortSpec("memory")),
+            config_schema=_save_memory_table_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -171,6 +180,26 @@ def _add_columns_schema() -> NodeConfigSchemaSpec:
                 required=True,
                 default="TEXT",
                 enum=("TEXT", "INTEGER", "FLOAT", "BOOLEAN"),
+            ),
+        }
+    )
+
+
+def _save_memory_table_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "table_name": NodeConfigFieldSpec(
+                type="string",
+                title="Table Name",
+                required=True,
+                default="memory_table",
+            ),
+            "mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Mode",
+                required=True,
+                default="overwrite",
+                enum=("overwrite",),
             ),
         }
     )

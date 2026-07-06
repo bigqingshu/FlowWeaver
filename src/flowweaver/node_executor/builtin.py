@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -15,12 +16,14 @@ class BuiltinTableNodeExecutor:
         store: RuntimeStore,
         registry: RuntimeDataRegistry,
         table_provider: SQLiteRuntimeTableProvider,
+        memory_provider: MemoryTableProvider | None = None,
     ) -> None:
         self.executor_id = executor_id
         self._runner = BuiltinTableNodeRunner(
             store=store,
             registry=registry,
             table_provider=table_provider,
+            memory_provider=memory_provider,
         )
 
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:

@@ -5,6 +5,10 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.engine.memory_table_provider import (
+    MEMORY_PROVIDER_ID,
+    MemoryTableProvider,
+)
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -13,10 +17,13 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     NodeResultStatus,
+    TableRole,
+    TableStorageKind,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 
@@ -40,16 +47,31 @@ def make_executor(tmp_path: Path) -> tuple[
     RuntimeDataRegistry,
     SQLiteRuntimeTableProvider,
 ]:
+    executor, store, registry, provider, _memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    return executor, store, registry, provider
+
+
+def make_executor_with_memory_provider(tmp_path: Path) -> tuple[
+    BuiltinTableNodeExecutor,
+    RuntimeStore,
+    RuntimeDataRegistry,
+    SQLiteRuntimeTableProvider,
+    MemoryTableProvider,
+]:
     store = make_store(tmp_path)
     provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    memory_provider = MemoryTableProvider(tables={})
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
         executor_id="builtin-executor-1",
         store=store,
         registry=registry,
         table_provider=provider,
+        memory_provider=memory_provider,
     )
-    return executor, store, registry, provider
+    return executor, store, registry, provider, memory_provider
 
 
 def make_task(
@@ -204,6 +226,56 @@ def test_add_columns_node_publishes_table_with_new_default_column(
     assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
         {"row_id": 1, "amount": 1.0, "status": "new"},
         {"row_id": 2, "amount": 2.0, "status": "new"},
+    ]
+
+
+def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    save_task = make_task(
+        node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
+        node_run_id="node-run-save-memory",
+        node_instance_id="save_memory",
+        input_refs=[input_ref.table_ref_id],
+        config={"table_name": "scratch", "mode": "overwrite"},
+    )
+
+    save_result = executor.execute(save_task)
+
+    assert save_result.status == NodeResultStatus.SUCCEEDED
+    assert save_result.output_refs[0] == input_ref.table_ref_id
+    assert len(save_result.output_refs) == 2
+    memory_ref = registry.get(save_result.output_refs[1])
+    assert memory_ref.provider_id == MEMORY_PROVIDER_ID
+    assert memory_ref.storage_kind == TableStorageKind.MEMORY
+    assert memory_ref.role == TableRole.AUXILIARY
+    assert memory_ref.logical_table_id == "scratch"
+    assert provider.count_rows(input_ref) == 2
+    assert memory_provider.count_rows(memory_ref) == 2
+    assert memory_provider.read_rows(
+        memory_ref,
+        offset=0,
+        limit=10,
+        order_by=["row_id"],
+    ) == [
+        {"row_id": 1, "amount": 1.0},
+        {"row_id": 2, "amount": 2.0},
     ]
 
 
