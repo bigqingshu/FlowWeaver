@@ -65,7 +65,6 @@ class NodeDefinitionSpec:
     execution_mode: str = "PROCESS_POOL"
     default_timeout_seconds: int = 60
     retry_safe: bool = False
-    implementation_path: str | None = None
     config_schema_version: str = "1.0"
     config_schema: NodeConfigSchemaSpec | None = None
 

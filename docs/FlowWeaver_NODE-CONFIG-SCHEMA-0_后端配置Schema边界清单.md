@@ -18,7 +18,6 @@ output_ports
 execution_mode
 default_timeout_seconds
 retry_safe
-implementation_path
 ```
 
 当前 `NodeDefinitionSpec` 不包含：
@@ -50,7 +49,7 @@ ui_visibility
 当前接口明确不返回：
 
 ```text
-implementation_path
+implementation_ref
 config_schema
 Python executor 细节
 ```
@@ -308,7 +307,7 @@ Avalonia DTO 测试
 仍然不返回：
 
 ```text
-implementation_path
+implementation_ref
 Python callable
 executor class
 内部 dataclass 原始序列化
@@ -363,7 +362,7 @@ NODE-CONFIG-SCHEMA-1
 3. 给四个普通可见内置节点补最小 schema。
 4. NodeDefinitionView 显式映射新增字段。
 5. 后端 API 测试确认返回字段。
-6. 后端 API 测试确认不返回 implementation_path。
+6. 后端 API 测试确认不返回 implementation_ref。
 7. Avalonia NodeDefinitionDto 增加只读字段。
 8. Avalonia API Client 测试确认反序列化。
 ```
