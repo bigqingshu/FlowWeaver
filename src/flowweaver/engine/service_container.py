@@ -8,6 +8,7 @@ from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
+from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.nodes.registry import NodeRegistry
 
 
@@ -19,6 +20,7 @@ class ServiceContainer:
     table_lease_manager: TableLeaseManager
     supervisor: Supervisor
     node_registry: NodeRegistry
+    table_provider_registry: TableProviderRegistry | None = None
     instance_lock: InstanceLock | None = None
 
     def close(self) -> None:

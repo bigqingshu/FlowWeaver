@@ -6,6 +6,10 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.engine.supervisor import Supervisor
+from flowweaver.engine.table_provider_registry import (
+    TableProviderRegistry,
+    create_default_table_provider_registry,
+)
 
 
 class APIAuthError(Exception):
@@ -24,6 +28,15 @@ def get_runtime_table_provider(request: Request) -> SQLiteRuntimeTableProvider:
     return SQLiteRuntimeTableProvider(
         get_container(request).config.resolved_runtime_dir()
     )
+
+
+def get_table_provider_registry(request: Request) -> TableProviderRegistry:
+    container = get_container(request)
+    if container.table_provider_registry is None:
+        container.table_provider_registry = create_default_table_provider_registry(
+            container.config.resolved_runtime_dir()
+        )
+    return container.table_provider_registry
 
 
 def get_node_registry(request: Request):

@@ -8,6 +8,10 @@ from flowweaver.engine.shared_table_reader import (
     SharedTableReadResult,
     SharedTableVersionPolicy,
 )
+from flowweaver.engine.table_provider_registry import (
+    TableProviderRegistry,
+    create_default_table_provider_registry,
+)
 
 __all__ = [
     "RuntimeDataRegistry",
@@ -16,4 +20,6 @@ __all__ = [
     "SharedTableReader",
     "SharedTableReadResult",
     "SharedTableVersionPolicy",
+    "TableProviderRegistry",
+    "create_default_table_provider_registry",
 ]
