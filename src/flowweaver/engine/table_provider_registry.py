@@ -4,6 +4,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from flowweaver.engine.external_sql_table_provider import (
+    SQLiteExternalSqlTableProvider,
+)
 from flowweaver.engine.runtime_table_provider import (
     SQLiteRuntimeTableProvider,
     TableProvider,
@@ -69,5 +72,8 @@ def create_default_table_provider_registry(
         SQLiteRuntimeTableProvider(runtime_dir),
         storage_kinds=(TableStorageKind.RUNTIME_SQL,),
     )
+    registry.register(
+        SQLiteExternalSqlTableProvider(),
+        storage_kinds=(TableStorageKind.EXTERNAL_SQL,),
+    )
     return registry
-
