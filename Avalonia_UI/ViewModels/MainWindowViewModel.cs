@@ -1824,7 +1824,8 @@ public partial class MainWindowViewModel : ViewModelBase
             WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
                 workflowResponse.Data,
                 revisionsResponse.Data,
-                DisplayTextFormatter);
+                DisplayTextFormatter,
+                _nodeEditorResolver);
             SelectedWorkflowDefinitionNode =
                 WorkflowDefinitionDetail.Nodes.FirstOrDefault();
             originalWorkflowDefinitionJson = WorkflowDefinitionDetail.RawDefinitionJson;
@@ -1881,8 +1882,10 @@ public partial class MainWindowViewModel : ViewModelBase
                         DisplayTextFormatter));
                 }
 
+                RefreshNodeEditorSchemaFallbackNodes();
                 OnPropertyChanged(nameof(HasNodeDefinitions));
                 OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+                RefreshWorkflowDefinitionDraftStructureState();
                 RefreshSelectedNodeConfigDraftState();
                 NodeDefinitionCatalogMessage =
                     F("format.loaded_node_definitions", NodeDefinitions.Count);
@@ -3700,6 +3703,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 definition.NodeVersion,
                 node.NodeVersion,
                 StringComparison.Ordinal));
+    }
+
+    private void RefreshNodeEditorSchemaFallbackNodes()
+    {
+        _nodeEditorResolver.ReplaceSchemaFallbackNodes(
+            NodeDefinitions
+                .Where(definition => definition.ConfigSchemaDescriptor?.IsSupported == true)
+                .Select(definition => (
+                    definition.NodeType,
+                    string.IsNullOrWhiteSpace(definition.DisplayName)
+                        ? definition.NodeType
+                        : definition.DisplayName)));
     }
 
     private void RefreshWorkflowDefinitionDraftStructureState()

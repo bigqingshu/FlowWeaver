@@ -10,6 +10,7 @@ from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import BuiltinTableNodeExecutor
 from flowweaver.nodes.builtin_table import (
+    ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
@@ -155,6 +156,89 @@ def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
         {"row_id": 4, "amount": 4.0, "label": "label_0_4"},
         {"row_id": 5, "amount": 5.0, "label": "label_0_5"},
     ]
+
+
+def test_add_columns_node_publishes_table_with_new_default_column(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    add_task = make_task(
+        node_type=ADD_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-add-column",
+        node_instance_id="add_column",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "column_name": "status",
+            "default_value": "new",
+            "data_type": "TEXT",
+        },
+    )
+
+    add_result = executor.execute(add_task)
+
+    assert add_result.status == NodeResultStatus.SUCCEEDED
+    assert add_result.output_refs != generate_result.output_refs
+    assert provider.count_rows(input_ref) == 2
+    assert [field.name for field in input_ref.schema] == ["row_id", "amount"]
+    output_ref = registry.get(add_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "add_column_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "amount",
+        "status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0, "status": "new"},
+        {"row_id": 2, "amount": 2.0, "status": "new"},
+    ]
+
+
+def test_add_columns_node_returns_validation_error_for_duplicate_column(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    add_task = make_task(
+        node_type=ADD_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-add-column",
+        node_instance_id="add_column",
+        input_refs=generate_result.output_refs,
+        config={
+            "column_name": "amount",
+            "default_value": "new",
+            "data_type": "TEXT",
+        },
+    )
+
+    result = executor.execute(add_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field already exists" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
 def test_filter_rows_node_returns_validation_error_for_missing_field(

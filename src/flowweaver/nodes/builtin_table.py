@@ -13,10 +13,15 @@ from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
+ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 
 
-def table_node_types() -> tuple[str, str]:
-    return (GENERATE_TEST_TABLE_NODE_TYPE, FILTER_ROWS_NODE_TYPE)
+def table_node_types() -> tuple[str, str, str]:
+    return (
+        GENERATE_TEST_TABLE_NODE_TYPE,
+        FILTER_ROWS_NODE_TYPE,
+        ADD_COLUMNS_NODE_TYPE,
+    )
 
 
 def is_table_node_type(node_type: str) -> bool:
@@ -47,6 +52,8 @@ class BuiltinTableNodeRunner:
                 output_refs = self._execute_generate(task)
             elif task.node_type == FILTER_ROWS_NODE_TYPE:
                 output_refs = self._execute_filter(task)
+            elif task.node_type == ADD_COLUMNS_NODE_TYPE:
+                output_refs = self._execute_add_columns(task)
             else:
                 raise _NodeValidationError(
                     f"Unsupported builtin node type: {task.node_type}"
@@ -132,6 +139,47 @@ class BuiltinTableNodeRunner:
             )
         ]
 
+    def _execute_add_columns(self, task: NodeTaskModel) -> list[TableRefModel]:
+        if len(task.input_refs) != 1:
+            raise _NodeValidationError("AddColumnsNode requires exactly one input_ref")
+        input_ref = self._registry.get(task.input_refs[0])
+        column_name = _string_config(task.config, "column_name")
+        existing_names = {field.name for field in input_ref.schema}
+        if column_name in existing_names:
+            raise _NodeValidationError(f"Field already exists: {column_name}")
+        data_type = _normalize_data_type(task.config.get("data_type", "TEXT"))
+        default_value = _parse_default_value(
+            task.config.get("default_value"),
+            data_type=data_type,
+        )
+        schema = [
+            *input_ref.schema,
+            FieldSchemaModel(
+                field_id=column_name,
+                name=column_name,
+                data_type=data_type,
+                nullable=default_value is None,
+                ordinal=len(input_ref.schema),
+            ),
+        ]
+        rows = self._table_provider.read_rows(
+            input_ref,
+            offset=0,
+            limit=self._table_provider.count_rows(input_ref),
+        )
+        output_rows = [
+            row | {column_name: default_value}
+            for row in rows
+        ]
+        return [
+            self._publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                rows=output_rows,
+            )
+        ]
+
     def _publish_rows(
         self,
         task: NodeTaskModel,
@@ -205,6 +253,13 @@ def _int_config(
     return value
 
 
+def _string_config(config: dict[str, Any], key: str) -> str:
+    value = config.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError(f"AddColumnsNode config.{key} is required")
+    return value.strip()
+
+
 def _infer_data_type(name: str) -> str:
     lowered = name.lower()
     if lowered in {"id", "row_id", "index"} or lowered.endswith("_id"):
@@ -212,6 +267,47 @@ def _infer_data_type(name: str) -> str:
     if lowered in {"amount", "score", "value", "price"}:
         return "FLOAT"
     return "TEXT"
+
+
+def _normalize_data_type(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        raise _NodeValidationError("AddColumnsNode config.data_type is required")
+    data_type = value.upper()
+    if data_type not in {"TEXT", "INTEGER", "FLOAT", "BOOLEAN"}:
+        raise _NodeValidationError(f"Unsupported AddColumnsNode data_type: {value}")
+    return data_type
+
+
+def _parse_default_value(value: Any, *, data_type: str) -> Any:
+    if value is None:
+        return None
+    if data_type == "TEXT":
+        return str(value)
+    if data_type == "INTEGER":
+        if isinstance(value, bool):
+            raise _NodeValidationError("default_value must be an integer")
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise _NodeValidationError("default_value must be an integer") from exc
+    if data_type == "FLOAT":
+        if isinstance(value, bool):
+            raise _NodeValidationError("default_value must be a number")
+        try:
+            return float(value)
+        except (TypeError, ValueError) as exc:
+            raise _NodeValidationError("default_value must be a number") from exc
+    if data_type == "BOOLEAN":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y"}:
+                return True
+            if normalized in {"false", "0", "no", "n"}:
+                return False
+        raise _NodeValidationError("default_value must be a boolean")
+    return value
 
 
 def _generated_value(

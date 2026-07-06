@@ -315,6 +315,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert set(by_type) == {
         "GenerateTestTableNode",
         "FilterRowsNode",
+        "AddColumnsNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
     }
@@ -357,6 +358,22 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "required": True,
         "enum": ["EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"],
     }
+
+    add_columns_properties = by_type["AddColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert add_columns_properties["column_name"] == {
+        "type": "string",
+        "title": "Column Name",
+        "required": True,
+        "default": "new_column",
+    }
+    assert add_columns_properties["data_type"]["enum"] == [
+        "TEXT",
+        "INTEGER",
+        "FLOAT",
+        "BOOLEAN",
+    ]
 
     publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
         "properties"

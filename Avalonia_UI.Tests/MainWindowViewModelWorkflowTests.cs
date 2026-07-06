@@ -246,9 +246,22 @@ public sealed class MainWindowViewModelWorkflowTests
                     Revision("rev-wf-1", "wf-1", 1, definitionJson),
                     Revision("rev-wf-1-2", "wf-1", 2, definitionJson),
                 }),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "GenerateTestTableNode",
+                        "Generate Test Table",
+                        schemaJson: """{"type":"object","properties":{"rows":{"type":"integer"}}}"""),
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson: """{"type":"object","properties":{"field":{"type":"string"}}}"""),
+                }),
         };
         var viewModel = CreateViewModel(apiClient);
 
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
 
@@ -2694,6 +2707,11 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.SelectedNodeConfigDraft.IsSupported);
         Assert.IsNull(viewModel.SelectedNodeConfigEditableDraft);
         Assert.IsFalse(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
+        Assert.IsNotNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.IsFalse(viewModel.SelectedWorkflowDefinitionNode.HasRegisteredNodeEditor);
+        Assert.AreEqual(
+            NodeEditorResolution.UnregisteredJsonFallbackStatusKey,
+            viewModel.SelectedWorkflowDefinitionNode.NodeEditorResolution.StatusKey);
 
         await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
 
@@ -2707,6 +2725,12 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsTrue(viewModel.HasSelectedNodeConfigEditableInputFields);
         Assert.HasCount(2, viewModel.SelectedNodeConfigEditableInputFields);
         Assert.IsTrue(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
+        Assert.IsNotNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.IsTrue(viewModel.SelectedWorkflowDefinitionNode.HasRegisteredNodeEditor);
+        Assert.IsTrue(viewModel.SelectedWorkflowDefinitionNode.UsesJsonFallback);
+        Assert.AreEqual(
+            NodeEditorResolution.JsonFallbackStatusKey,
+            viewModel.SelectedWorkflowDefinitionNode.NodeEditorResolution.StatusKey);
         Assert.AreEqual(
             "amount",
             viewModel.SelectedNodeConfigEditableDraft.Fields

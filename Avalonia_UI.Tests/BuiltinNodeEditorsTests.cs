@@ -8,31 +8,16 @@ namespace Avalonia_UI.Tests;
 public sealed class BuiltinNodeEditorsTests
 {
     [TestMethod]
-    public void AllContainsVisibleBuiltInNodesOnly()
+    public void AllIsEmptyUntilDedicatedEditorsExist()
     {
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "GenerateTestTableNode",
-                "FilterRowsNode",
-                "PublishSharedTablesNode",
-                "ReadSharedTablesNode",
-            },
-            BuiltinNodeEditors.All.Select(editor => editor.NodeType).ToArray());
-
-        Assert.IsFalse(BuiltinNodeEditors.All.Any(editor => editor.NodeType == "DelayTestNode"));
-        Assert.IsFalse(BuiltinNodeEditors.All.Any(editor => editor.NodeType == "FaultTestNode"));
+        Assert.IsEmpty(BuiltinNodeEditors.All);
     }
 
     [TestMethod]
-    public void AllUsesJsonFallbackUntilDedicatedEditorsExist()
+    public void AllDoesNotRegisterJsonFallbackEditors()
     {
-        foreach (var editor in BuiltinNodeEditors.All)
-        {
-            Assert.AreEqual(NodeEditorKind.JsonFallback, editor.Kind);
-            Assert.IsNull(editor.ViewTypeName);
-            Assert.IsTrue(editor.SupportsFallbackToJson);
-        }
+        Assert.IsFalse(BuiltinNodeEditors.All.Any(editor =>
+            editor.Kind == NodeEditorKind.JsonFallback));
     }
 
     [TestMethod]
@@ -45,7 +30,6 @@ public sealed class BuiltinNodeEditorsTests
             Assert.AreEqual(editor, registry.Find(editor.NodeType));
         }
 
-        Assert.IsNull(registry.Find("DelayTestNode"));
-        Assert.IsNull(registry.Find("FaultTestNode"));
+        Assert.IsEmpty(registry.ListEditors());
     }
 }

@@ -454,6 +454,27 @@ public sealed class MainWindowViewModelLocalizationTests
                 new List<WorkflowRunDto> { Run("run-1", "wf-1") }),
             NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
                 new List<NodeRunDto> { NodeRun("node-run-1", "run-1", "source") }),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    new()
+                    {
+                        NodeType = "GenerateTestTableNode",
+                        NodeVersion = "1.0",
+                        DisplayName = "Generate Test Table",
+                        InputPorts = [],
+                        OutputPorts = [new NodePortDefinitionDto { Name = "out" }],
+                        ExecutionMode = "PROCESS_POOL",
+                        DefaultTimeoutSeconds = 60,
+                        RetrySafe = false,
+                        UiVisibility = "visible",
+                        ConfigSchemaVersion = "1.0",
+                        ConfigSchema = JsonDocument.Parse(
+                            """{"type":"object","properties":{"rows":{"type":"integer"}}}""")
+                            .RootElement
+                            .Clone(),
+                    },
+                }),
             SharedPublicationsResponse =
                 ApiResponseEnvelope<List<SharedPublicationDto>>.Success(
                     new List<SharedPublicationDto> { SharedPublication("pub-1", "daily_report") }),
@@ -461,6 +482,7 @@ public sealed class MainWindowViewModelLocalizationTests
         var viewModel = CreateViewModel(uiSettingsStore, apiClient);
 
         await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
         await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
         await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
         await viewModel.RefreshRunsCommand.ExecuteAsync(null);

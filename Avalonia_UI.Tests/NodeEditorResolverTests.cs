@@ -7,9 +7,11 @@ namespace Avalonia_UI.Tests;
 public sealed class NodeEditorResolverTests
 {
     [TestMethod]
-    public void ResolveReturnsRegisteredJsonFallbackEditor()
+    public void ResolveReturnsSchemaBackedJsonFallbackEditor()
     {
         var resolver = new NodeEditorResolver(BuiltinNodeEditors.CreateRegistry());
+        resolver.ReplaceSchemaFallbackNodes(
+            new[] { ("GenerateTestTableNode", "Generate Test Table") });
 
         var resolution = resolver.Resolve("GenerateTestTableNode");
 
@@ -20,6 +22,23 @@ public sealed class NodeEditorResolverTests
         Assert.IsTrue(resolution.UsesJsonFallback);
         Assert.AreEqual(
             NodeEditorResolution.JsonFallbackStatusKey,
+            resolution.StatusKey);
+    }
+
+    [TestMethod]
+    public void ResolveDoesNotTreatStaticBuiltinFallbackListAsRequired()
+    {
+        var resolver = new NodeEditorResolver(BuiltinNodeEditors.CreateRegistry());
+
+        var resolution = resolver.Resolve("GenerateTestTableNode", "Generate rows");
+
+        Assert.AreEqual("GenerateTestTableNode", resolution.NodeType);
+        Assert.AreEqual("Generate rows", resolution.DisplayName);
+        Assert.AreEqual(NodeEditorKind.JsonFallback, resolution.Kind);
+        Assert.IsFalse(resolution.HasRegisteredEditor);
+        Assert.IsTrue(resolution.UsesJsonFallback);
+        Assert.AreEqual(
+            NodeEditorResolution.UnregisteredJsonFallbackStatusKey,
             resolution.StatusKey);
     }
 

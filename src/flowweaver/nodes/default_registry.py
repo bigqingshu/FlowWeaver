@@ -9,6 +9,7 @@ from flowweaver.nodes.builtin_shared_table import (
     READ_SHARED_TABLES_NODE_TYPE,
 )
 from flowweaver.nodes.builtin_table import (
+    ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
@@ -44,6 +45,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_filter_rows_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=ADD_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Add Column",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_add_columns_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -125,6 +134,35 @@ def _filter_rows_schema() -> NodeConfigSchemaSpec:
                 description=(
                     "Optional comparison value; runtime accepts JSON scalar values."
                 ),
+            ),
+        }
+    )
+
+
+def _add_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "column_name": NodeConfigFieldSpec(
+                type="string",
+                title="Column Name",
+                required=True,
+                default="new_column",
+            ),
+            "default_value": NodeConfigFieldSpec(
+                type="string",
+                title="Default Value",
+                default="",
+                description=(
+                    "Runtime parses this value according to data_type for "
+                    "INTEGER, FLOAT, and BOOLEAN columns."
+                ),
+            ),
+            "data_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Data Type",
+                required=True,
+                default="TEXT",
+                enum=("TEXT", "INTEGER", "FLOAT", "BOOLEAN"),
             ),
         }
     )

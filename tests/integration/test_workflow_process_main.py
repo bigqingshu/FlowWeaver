@@ -34,6 +34,7 @@ from flowweaver.nodes.builtin_shared_table import (
     READ_SHARED_TABLES_NODE_TYPE,
 )
 from flowweaver.nodes.builtin_table import (
+    ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
 )
@@ -809,6 +810,43 @@ def table_ref_definition() -> dict:
     }
 
 
+def add_columns_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "generate",
+                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "rows": 2,
+                    "columns": ["row_id", "amount"],
+                    "seed": 0,
+                },
+            },
+            {
+                "node_instance_id": "add_column",
+                "node_type": ADD_COLUMNS_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "column_name": "status",
+                    "default_value": "new",
+                    "data_type": "TEXT",
+                },
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "generate-to-add-column",
+                "source_node_id": "generate",
+                "source_port": "out",
+                "target_node_id": "add_column",
+                "target_port": "in",
+            }
+        ],
+    }
+
+
 def publish_shared_tables_definition() -> dict:
     return {
         "schema_version": "1.0",
@@ -1183,6 +1221,66 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
         "NODE_STARTED",
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_runs_add_columns_node_in_table_chain(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-add-column",
+        store=store,
+        registry=registry,
+        table_provider=provider,
+    )
+    workflow = store.create_workflow_definition(
+        name="Add column workflow",
+        definition=add_columns_definition(),
+        workflow_id="workflow-add-column",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-add-column",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-add-column",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    add_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="add_column",
+    )
+    assert add_run is not None
+    add_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        add_run.node_run_id
+    )
+    assert add_result is not None
+    output_ref = registry.get(add_result.output_refs[0])
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "amount",
+        "status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0, "status": "new"},
+        {"row_id": 2, "amount": 2.0, "status": "new"},
     ]
 
 
