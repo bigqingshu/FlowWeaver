@@ -307,6 +307,8 @@
   "data_preview.workbench_source_not_loaded": "尚未选择数据预览表。",
   "data_preview.workbench_refresh": "刷新表格",
   "data_preview.workbench_load_failed": "数据表加载失败。",
+  "data_preview.workbench_table_not_found": "未找到对应的数据表引用。",
+  "data_preview.details": "显示详情",
   "node_editor.status.builtin": "内置编辑器",
   "node_editor.status.json_fallback": "JSON 回退编辑器",
   "node_editor.status.unregistered_json_fallback": "未注册，使用 JSON 回退",

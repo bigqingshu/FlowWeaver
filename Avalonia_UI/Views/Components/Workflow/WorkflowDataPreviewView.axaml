@@ -6,7 +6,7 @@
     <Border Classes="Card" Padding="12" MinHeight="172">
         <Grid RowDefinitions="Auto,Auto,*"
               RowSpacing="8">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
                   ColumnSpacing="8">
                 <TextBlock Text="{Binding DataPreviewSectionText}"
                            FontSize="16"
@@ -49,6 +49,10 @@
                         Command="{Binding PreviewSelectedWorkflowNodeCommand}"
                         MinWidth="96"/>
                 <Button Grid.Column="5"
+                        Content="{Binding DataPreviewDetailsText}"
+                        Command="{Binding ShowDataPreviewDetailsCommand}"
+                        MinWidth="84"/>
+                <Button Grid.Column="6"
                         Content="{Binding RunText}"
                         Command="{Binding StartSelectedWorkflowCommand}"
                         MinWidth="72"

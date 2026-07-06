@@ -216,6 +216,51 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task ShowDataPreviewDetailsSelectsDataPreviewPageAndLoadsCurrentTable()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-1", "run-1", "generate"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.ShowDataPreviewDetailsCommand.CanExecute(null));
+
+        await viewModel.ShowDataPreviewDetailsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
+        Assert.AreEqual(ShellPageContentKey.DataPreview, viewModel.SelectedShellPageContentKey);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchColumns);
+        Assert.AreEqual("row_id", viewModel.DataPreviewWorkbenchColumns[0].Name);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual("1", viewModel.DataPreviewWorkbenchRows[0].Cells[0].Text);
+        Assert.AreEqual("Loaded 1/1 row(s) for orders.", viewModel.DataPreviewWorkbenchMessage);
+    }
+
+    [TestMethod]
     public async Task RefreshSelectedWorkflowNodeDataPreviewShowsEmptyTableColumns()
     {
         var apiClient = new FakeApiClient
@@ -434,6 +479,7 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsFalse(viewModel.RefreshTableRefsCommand.CanExecute(null));
         Assert.IsFalse(viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.CanExecute(null));
         Assert.IsFalse(viewModel.LoadSelectedDataPreviewTableCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.ShowDataPreviewDetailsCommand.CanExecute(null));
         Assert.IsFalse(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
         Assert.IsTrue(viewModel.RefreshSharedPublicationsCommand.CanExecute(null));
 

@@ -319,6 +319,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private string? dataPreviewSourceLogicalTableId;
 
+    private string? dataPreviewSourceTableRefId;
+
     private string? dataPreviewSourceRunMode;
 
     private string? dataPreviewSourceTargetNodeInstanceId;
@@ -1000,6 +1002,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DataPreviewWorkbenchRefreshText => T("data_preview.workbench_refresh");
 
+    public string DataPreviewDetailsText => T("data_preview.details");
+
     public string WorkflowsSectionText => T("workflow.section");
 
     public string RefreshText => T("common.refresh");
@@ -1676,6 +1680,13 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         return CanUseEngineActions
             && SelectedDataPreviewTableRef is not null
+            && !IsLoadingDataPreviewWorkbench;
+    }
+
+    private bool CanShowDataPreviewDetails()
+    {
+        return CanUseEngineActions
+            && !string.IsNullOrWhiteSpace(dataPreviewSourceTableRefId)
             && !IsLoadingDataPreviewWorkbench;
     }
 
@@ -2966,6 +2977,57 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanShowDataPreviewDetails))]
+    private async Task ShowDataPreviewDetailsAsync()
+    {
+        var tableRefId = dataPreviewSourceTableRefId;
+        var workflowRunId = dataPreviewSourceWorkflowRunId;
+        if (string.IsNullOrWhiteSpace(tableRefId) || string.IsNullOrWhiteSpace(workflowRunId))
+        {
+            return;
+        }
+
+        var target = TableRefs.FirstOrDefault(
+            tableRef => string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal));
+        if (target is null)
+        {
+            var response = await _apiClient.ListTableRefsAsync(
+                BuildSettings(),
+                workflowRunId,
+                _shutdown.Token);
+            if (response.Ok && response.Data is not null)
+            {
+                TableRefs.Clear();
+                foreach (var tableRef in response.Data)
+                {
+                    TableRefs.Add(new TableRefListItemViewModel(tableRef));
+                }
+
+                TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
+                TableRefErrorMessage = null;
+                target = TableRefs.FirstOrDefault(
+                    tableRef => string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal));
+            }
+            else
+            {
+                DataPreviewWorkbenchMessage = T("data_preview.workbench_load_failed");
+                DataPreviewWorkbenchErrorMessage = DescribeError(response);
+                return;
+            }
+        }
+
+        if (target is null)
+        {
+            DataPreviewWorkbenchMessage = T("data_preview.workbench_table_not_found");
+            DataPreviewWorkbenchErrorMessage = null;
+            return;
+        }
+
+        SelectedDataPreviewTableRef = target;
+        SelectedShellPageKey = ShellPageKey.DataPreview;
+        await LoadSelectedDataPreviewTableAsync();
+    }
+
     private async Task<bool> TryRefreshSelectedWorkflowNodeDataPreviewAsync(
         bool notifyResult = true)
     {
@@ -3092,6 +3154,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 requestedRunId,
                 requestedNodeInstanceId,
                 tableRef.LogicalTableId,
+                tableRef.TableRefId,
                 SelectedRun?.RunMode,
                 SelectedRun?.TargetNodeInstanceId);
             DataPreviewMessage = F(
@@ -3248,7 +3311,15 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingDataPreview = false;
         DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
         DataPreviewErrorMessage = null;
+        dataPreviewSourceWorkflowRunId = null;
+        dataPreviewSourceNodeInstanceId = null;
+        dataPreviewSourceLogicalTableId = null;
+        dataPreviewSourceTableRefId = null;
+        dataPreviewSourceRunMode = null;
+        dataPreviewSourceTargetNodeInstanceId = null;
+        OnPropertyChanged(nameof(DataPreviewSourceText));
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
     private void ResetDataPreviewWorkbenchState()
@@ -3316,15 +3387,18 @@ public partial class MainWindowViewModel : ViewModelBase
         string workflowRunId,
         string nodeInstanceId,
         string logicalTableId,
+        string tableRefId,
         string? runMode,
         string? targetNodeInstanceId)
     {
         dataPreviewSourceWorkflowRunId = workflowRunId;
         dataPreviewSourceNodeInstanceId = nodeInstanceId;
         dataPreviewSourceLogicalTableId = logicalTableId;
+        dataPreviewSourceTableRefId = tableRefId;
         dataPreviewSourceRunMode = runMode;
         dataPreviewSourceTargetNodeInstanceId = targetNodeInstanceId;
         OnPropertyChanged(nameof(DataPreviewSourceText));
+        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
     private string FormatDataPreviewSourceText()
@@ -4997,6 +5071,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewWorkbenchPendingText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchRefreshText));
+        OnPropertyChanged(nameof(DataPreviewDetailsText));
         OnPropertyChanged(nameof(WorkflowsSectionText));
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(CloseText));
@@ -5122,12 +5197,6 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedShellNavigationItem));
         OnPropertyChanged(nameof(SelectedShellPageContentKey));
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
-        if (value == ShellPageKey.DataPreview
-            && SelectedDataPreviewTableRef is not null
-            && CanLoadSelectedDataPreviewTable())
-        {
-            _ = LoadSelectedDataPreviewTableAsync();
-        }
     }
 
     partial void OnSelectedShellPageIndexChanging(int value)
@@ -5622,6 +5691,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsDataPreviewWorkbenchBusy));
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnTableRefErrorMessageChanged(string? value)
@@ -5772,6 +5842,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
