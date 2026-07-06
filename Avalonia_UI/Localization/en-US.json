@@ -307,6 +307,7 @@
   "data_preview.workbench_source_not_loaded": "No data preview table selected yet.",
   "data_preview.workbench_refresh": "Refresh table",
   "data_preview.table_selector": "Data table",
+  "data_preview.state_selector": "Processing state",
   "data_preview.load_selected_table": "Load selected table",
   "data_preview.search": "Search",
   "data_preview.search_watermark": "Filter current page",

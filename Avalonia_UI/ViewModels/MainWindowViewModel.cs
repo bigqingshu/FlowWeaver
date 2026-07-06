@@ -1081,6 +1081,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DataPreviewTableSelectorText => T("data_preview.table_selector");
 
+    public string DataPreviewStateSelectorText => T("data_preview.state_selector");
+
     public string DataPreviewLoadSelectedTableText => T("data_preview.load_selected_table");
 
     public string DataPreviewWorkbenchRefreshText => T("data_preview.workbench_refresh");
@@ -5663,6 +5665,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewWorkbenchPendingText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
         OnPropertyChanged(nameof(DataPreviewTableSelectorText));
+        OnPropertyChanged(nameof(DataPreviewStateSelectorText));
         OnPropertyChanged(nameof(DataPreviewLoadSelectedTableText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchRefreshText));
         OnPropertyChanged(nameof(DataPreviewDetailsText));

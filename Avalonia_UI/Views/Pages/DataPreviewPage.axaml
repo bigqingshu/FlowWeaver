@@ -9,7 +9,7 @@
         <Border Classes="Card" Padding="12">
             <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <TextBlock Text="{Binding TableRefsSectionText}"
+                    <TextBlock Text="{Binding DataPreviewStateSelectorText}"
                                FontSize="16"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
@@ -21,44 +21,39 @@
                 </Grid>
 
                 <ListBox Grid.Row="1"
-                         ItemsSource="{Binding TableRefs}"
-                         SelectedItem="{Binding SelectedDataPreviewTableRef, Mode=TwoWay}"
+                         ItemsSource="{Binding DataPreviewStates}"
+                         SelectedItem="{Binding SelectedDataPreviewState, Mode=TwoWay}"
                          BorderBrush="{DynamicResource ControlBorderBrush}"
                          BorderThickness="1">
                     <ListBox.ItemTemplate>
-                        <DataTemplate DataType="vm:TableRefListItemViewModel"
-                                      x:DataType="vm:TableRefListItemViewModel">
+                        <DataTemplate DataType="vm:DataPreviewStateListItemViewModel"
+                                      x:DataType="vm:DataPreviewStateListItemViewModel">
                             <Grid ColumnDefinitions="*,Auto"
                                   RowDefinitions="Auto,Auto,Auto"
                                   ColumnSpacing="10"
                                   Margin="8">
-                                <TextBlock Text="{Binding LogicalTableId}"
+                                <TextBlock Text="{Binding DisplayText}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextPrimaryBrush}"/>
                                 <TextBlock Grid.Column="1"
-                                           Text="{Binding StorageKind}"
+                                           Text="{Binding TableCountText}"
                                            FontSize="12"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="1"
-                                           Text="{Binding TableRefId}"
+                                           Text="{Binding WorkflowRunId}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="1"
                                            Grid.Column="1"
-                                           Text="{Binding VersionText}"
+                                           Text="{Binding ReadableTableCount}"
                                            FontSize="12"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="2"
-                                           Text="{Binding NodeRunId}"
+                                           Text="{Binding SummaryText}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="1"
-                                           Text="{Binding LifecycleStatus}"
-                                           FontSize="12"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                             </Grid>
                         </DataTemplate>
@@ -103,8 +98,8 @@
                                VerticalAlignment="Center"
                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <ComboBox Grid.Column="4"
-                              ItemsSource="{Binding TableRefs}"
-                              SelectedItem="{Binding SelectedDataPreviewTableRef, Mode=TwoWay}"
+                              ItemsSource="{Binding DataPreviewTableOptions}"
+                              SelectedItem="{Binding SelectedDataPreviewTableOption, Mode=TwoWay}"
                               MinWidth="180"
                               MaxWidth="260">
                         <ComboBox.ItemTemplate>
