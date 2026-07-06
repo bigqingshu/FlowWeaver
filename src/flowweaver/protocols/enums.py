@@ -50,6 +50,7 @@ class TableRole(str, Enum):
 class TableStorageKind(str, Enum):
     MEMORY = "MEMORY"
     RUNTIME_SQL = "RUNTIME_SQL"
+    EXTERNAL_SQL = "EXTERNAL_SQL"
 
 
 class TableScope(str, Enum):

@@ -100,6 +100,30 @@ def test_node_result_msgpack_round_trip() -> None:
     assert restored.errors[0].error_code == "VALIDATION_ERROR"
 
 
+def test_external_sql_table_ref_msgpack_round_trip_keeps_provider_handle() -> None:
+    table_ref = make_table_ref().model_copy(
+        update={
+            "storage_kind": TableStorageKind.EXTERNAL_SQL,
+            "provider_id": "external_sql",
+            "logical_table_id": "orders_view",
+            "opaque_handle": {
+                "profile_id": "local-reporting",
+                "query_id": "orders_recent",
+            },
+        }
+    )
+
+    restored = from_msgpack(to_msgpack(table_ref), TableRefModel)
+
+    assert restored.storage_kind == TableStorageKind.EXTERNAL_SQL
+    assert restored.provider_id == "external_sql"
+    assert restored.logical_table_id == "orders_view"
+    assert restored.opaque_handle == {
+        "profile_id": "local-reporting",
+        "query_id": "orders_recent",
+    }
+
+
 def test_node_task_and_result_msgpack_round_trip() -> None:
     task = NodeTaskModel(
         workflow_run_id="run-1",
