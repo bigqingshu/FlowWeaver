@@ -8,6 +8,7 @@ from flowweaver.nodes.builtin_shared_table import (
     PUBLISH_SHARED_TABLES_NODE_TYPE,
     READ_SHARED_TABLES_NODE_TYPE,
 )
+from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
@@ -68,6 +69,13 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Read Shared Tables",
             output_ports=(NodePortSpec("out"),),
             config_schema=_read_shared_tables_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=SQL_MAPPING_NODE_TYPE,
+            node_version="1.0",
+            display_name="SQL Mapping",
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_sql_mapping_schema(),
         ),
         NodeDefinitionSpec(
             node_type=DELAY_TEST_NODE_TYPE,
@@ -163,6 +171,44 @@ def _add_columns_schema() -> NodeConfigSchemaSpec:
                 required=True,
                 default="TEXT",
                 enum=("TEXT", "INTEGER", "FLOAT", "BOOLEAN"),
+            ),
+        }
+    )
+
+
+def _sql_mapping_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "database_path": NodeConfigFieldSpec(
+                type="string",
+                title="Database Path",
+                required=True,
+            ),
+            "table_name": NodeConfigFieldSpec(
+                type="string",
+                title="Table Name",
+                description="Use table_name or query, not both.",
+            ),
+            "query": NodeConfigFieldSpec(
+                type="string",
+                title="Query",
+                description=(
+                    "Read-only SELECT query. Use query or table_name, not both."
+                ),
+            ),
+            "logical_table_id": NodeConfigFieldSpec(
+                type="string",
+                title="Logical Table",
+                description="Optional workflow-facing table name.",
+            ),
+            "schema": NodeConfigFieldSpec(
+                type="array",
+                title="Schema",
+                item_type="object",
+                description=(
+                    "Optional list of field objects. When omitted, runtime infers "
+                    "table schema where possible."
+                ),
             ),
         }
     )

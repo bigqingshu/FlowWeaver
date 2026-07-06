@@ -318,6 +318,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AddColumnsNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
+        "SqlMappingNode",
     }
     assert "DelayTestNode" not in by_type
     assert "FaultTestNode" not in by_type

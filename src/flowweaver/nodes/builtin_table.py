@@ -7,6 +7,11 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.nodes.builtin_sql import (
+    SQL_MAPPING_NODE_TYPE,
+    SqlMappingNodeRunner,
+    SqlMappingTaskConfig,
+)
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -16,11 +21,12 @@ FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 
 
-def table_node_types() -> tuple[str, str, str]:
+def table_node_types() -> tuple[str, str, str, str]:
     return (
         GENERATE_TEST_TABLE_NODE_TYPE,
         FILTER_ROWS_NODE_TYPE,
         ADD_COLUMNS_NODE_TYPE,
+        SQL_MAPPING_NODE_TYPE,
     )
 
 
@@ -39,6 +45,7 @@ class BuiltinTableNodeRunner:
         self._store = store
         self._registry = registry
         self._table_provider = table_provider
+        self._sql_mapping_runner = SqlMappingNodeRunner(store=store)
 
     def execute(
         self,
@@ -54,6 +61,8 @@ class BuiltinTableNodeRunner:
                 output_refs = self._execute_filter(task)
             elif task.node_type == ADD_COLUMNS_NODE_TYPE:
                 output_refs = self._execute_add_columns(task)
+            elif task.node_type == SQL_MAPPING_NODE_TYPE:
+                output_refs = self._execute_sql_mapping(task)
             else:
                 raise _NodeValidationError(
                     f"Unsupported builtin node type: {task.node_type}"
@@ -197,6 +206,22 @@ class BuiltinTableNodeRunner:
         self._table_provider.insert_rows(staging_ref, rows)
         self._registry.register_staging(staging_ref)
         return self._registry.publish(staging_ref.table_ref_id)
+
+    def _execute_sql_mapping(self, task: NodeTaskModel) -> list[TableRefModel]:
+        if task.input_refs:
+            raise _NodeValidationError("SqlMappingNode does not accept inputs")
+        try:
+            table_ref = self._sql_mapping_runner.execute(
+                SqlMappingTaskConfig(
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    node_instance_id=task.node_instance_id,
+                    config=task.config,
+                )
+            )
+        except ValueError as exc:
+            raise _NodeValidationError(str(exc)) from exc
+        return [table_ref]
 
 
 class _NodeValidationError(ValueError):
