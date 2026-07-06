@@ -152,3 +152,31 @@ def test_sql_mapping_workflow_run_exposes_external_sql_rows(
     finally:
         container.close()
 
+
+def test_sql_mapping_node_definition_uses_generic_schema_contract(
+    tmp_path: Path,
+) -> None:
+    client, container = make_client(tmp_path)
+    try:
+        definitions = response_data(
+            client.get("/api/v1/node-definitions", headers=auth_headers())
+        )
+    finally:
+        container.close()
+
+    by_type = {definition["node_type"]: definition for definition in definitions}
+    sql_mapping = by_type[SQL_MAPPING_NODE_TYPE]
+
+    assert sql_mapping["display_name"] == "SQL Mapping"
+    assert sql_mapping["input_ports"] == []
+    assert sql_mapping["output_ports"] == [{"name": "out", "required": False}]
+    assert set(sql_mapping["config_schema"]["properties"]) == {
+        "database_path",
+        "table_name",
+        "query",
+        "logical_table_id",
+        "schema",
+    }
+    assert sql_mapping["config_schema"]["properties"]["database_path"][
+        "required"
+    ] is True
