@@ -4,6 +4,10 @@ from flowweaver.engine.external_sql_table_provider import (
     EXTERNAL_SQL_PROVIDER_ID,
     SQLiteExternalSqlTableProvider,
 )
+from flowweaver.engine.memory_table_provider import (
+    MEMORY_PROVIDER_ID,
+    MemoryTableProvider,
+)
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -23,9 +27,11 @@ __all__ = [
     "RuntimeStore",
     "SQLiteRuntimeTableProvider",
     "SQLiteExternalSqlTableProvider",
+    "MemoryTableProvider",
     "SharedTableReader",
     "SharedTableReadResult",
     "SharedTableVersionPolicy",
     "TableProviderRegistry",
     "create_default_table_provider_registry",
+    "MEMORY_PROVIDER_ID",
 ]
