@@ -9,6 +9,9 @@
         <TabItem Header="{Binding WorkflowsNavigationItem.HeaderText}">
             <pages:WorkflowPage />
         </TabItem>
+        <TabItem Header="{Binding DataPreviewNavigationItem.HeaderText}">
+            <pages:DataPreviewPage />
+        </TabItem>
         <TabItem Header="{Binding RunsNavigationItem.HeaderText}">
             <pages:RunMonitorPage />
         </TabItem>

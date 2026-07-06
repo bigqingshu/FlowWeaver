@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Pages.DataPreviewPage"
+             x:DataType="vm:MainWindowViewModel">
+    <Grid RowDefinitions="Auto,*"
+          RowSpacing="12"
+          Margin="12">
+        <TextBlock Text="{Binding DataPreviewTabText}"
+                   Classes="SectionTitle" />
+        <Border Grid.Row="1"
+                Classes="PanelSurface"
+                Padding="16">
+            <TextBlock Text="{Binding DataPreviewWorkbenchPendingText}"
+                       TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</UserControl>

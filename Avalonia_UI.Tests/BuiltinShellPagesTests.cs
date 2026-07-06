@@ -18,6 +18,7 @@ public sealed class BuiltinShellPagesTests
             new[]
             {
                 ShellPageKey.Workflows,
+                ShellPageKey.DataPreview,
                 ShellPageKey.Runs,
                 ShellPageKey.Data,
                 ShellPageKey.Logs,
@@ -26,13 +27,14 @@ public sealed class BuiltinShellPagesTests
             pages.Select(page => page.Key).ToArray());
 
         CollectionAssert.AreEqual(
-            new[] { 10, 20, 30, 40, 50 },
+            new[] { 10, 20, 30, 40, 50, 60 },
             pages.Select(page => page.SortOrder).ToArray());
 
         CollectionAssert.AreEqual(
             new[]
             {
                 ShellPageContentKey.Workflows,
+                ShellPageContentKey.DataPreview,
                 ShellPageContentKey.Runs,
                 ShellPageContentKey.Data,
                 ShellPageContentKey.Logs,

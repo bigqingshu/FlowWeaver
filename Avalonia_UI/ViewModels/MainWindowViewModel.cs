@@ -710,6 +710,9 @@ public partial class MainWindowViewModel : ViewModelBase
     public ShellNavigationItemViewModel WorkflowsNavigationItem =>
         GetShellNavigationItem(ShellPageKey.Workflows);
 
+    public ShellNavigationItemViewModel DataPreviewNavigationItem =>
+        GetShellNavigationItem(ShellPageKey.DataPreview);
+
     public ShellNavigationItemViewModel RunsNavigationItem =>
         GetShellNavigationItem(ShellPageKey.Runs);
 
@@ -952,6 +955,10 @@ public partial class MainWindowViewModel : ViewModelBase
     public string LogsTabText => T("tab.logs");
 
     public string DataTabText => T("tab.data");
+
+    public string DataPreviewTabText => T("tab.data_preview");
+
+    public string DataPreviewWorkbenchPendingText => T("data_preview.workbench_pending");
 
     public string WorkflowsSectionText => T("workflow.section");
 
@@ -4636,6 +4643,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(ShellNavigationItems));
         OnPropertyChanged(nameof(WorkflowsNavigationItem));
+        OnPropertyChanged(nameof(DataPreviewNavigationItem));
         OnPropertyChanged(nameof(RunsNavigationItem));
         OnPropertyChanged(nameof(DataNavigationItem));
         OnPropertyChanged(nameof(LogsNavigationItem));
@@ -4650,6 +4658,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return descriptor.HeaderPropertyName switch
         {
             nameof(WorkflowsSectionText) => WorkflowsSectionText,
+            nameof(DataPreviewTabText) => DataPreviewTabText,
             nameof(RunsSectionText) => RunsSectionText,
             nameof(DataTabText) => DataTabText,
             nameof(LogsTabText) => LogsTabText,
@@ -4815,6 +4824,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DefinitionTabText));
         OnPropertyChanged(nameof(LogsTabText));
         OnPropertyChanged(nameof(DataTabText));
+        OnPropertyChanged(nameof(DataPreviewTabText));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchPendingText));
         OnPropertyChanged(nameof(WorkflowsSectionText));
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(CloseText));

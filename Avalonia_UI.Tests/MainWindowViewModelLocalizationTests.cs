@@ -95,6 +95,7 @@ public sealed class MainWindowViewModelLocalizationTests
 
         Assert.AreEqual("zh-Hans", viewModel.CurrentLanguageCode);
         Assert.AreEqual("设置", viewModel.SettingsMenuText);
+        Assert.AreEqual("数据预览", viewModel.DataPreviewTabText);
         Assert.AreEqual("服务地址", viewModel.ConnectionBaseUrlText);
         Assert.AreEqual("数据", viewModel.DataTabText);
         Assert.AreEqual("关闭", viewModel.CloseText);
@@ -160,12 +161,13 @@ public sealed class MainWindowViewModelLocalizationTests
             BuiltinShellPages.All.Select(page => page.ViewTypeName).ToArray(),
             viewModel.ShellNavigationItems.Select(item => item.ViewTypeName).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "Workflows", "Runs", "Data", "Logs", "Settings" },
+            new[] { "Workflows", "Data preview", "Runs", "Data", "Logs", "Settings" },
             viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
         CollectionAssert.AreEqual(
             new[]
             {
                 viewModel.WorkflowsNavigationItem.HeaderText,
+                viewModel.DataPreviewNavigationItem.HeaderText,
                 viewModel.RunsNavigationItem.HeaderText,
                 viewModel.DataNavigationItem.HeaderText,
                 viewModel.LogsNavigationItem.HeaderText,
@@ -315,9 +317,10 @@ public sealed class MainWindowViewModelLocalizationTests
         await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
 
         CollectionAssert.AreEqual(
-            new[] { "工作流", "运行", "数据", "日志", "设置" },
+            new[] { "工作流", "数据预览", "运行", "数据", "日志", "设置" },
             viewModel.ShellNavigationItems.Select(item => item.HeaderText).ToArray());
         Assert.AreEqual("工作流", viewModel.WorkflowsNavigationItem.HeaderText);
+        Assert.AreEqual("数据预览", viewModel.DataPreviewNavigationItem.HeaderText);
         Assert.AreEqual("运行", viewModel.RunsNavigationItem.HeaderText);
         Assert.AreEqual("数据", viewModel.DataNavigationItem.HeaderText);
         Assert.AreEqual("日志", viewModel.LogsNavigationItem.HeaderText);
