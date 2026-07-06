@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -12,14 +13,25 @@ public sealed class TableDataPreviewColumnViewModel
     public string Name { get; }
 }
 
-public sealed class TableDataPreviewCellViewModel
+public sealed partial class TableDataPreviewCellViewModel : ObservableObject
 {
-    public TableDataPreviewCellViewModel(string text)
+    private readonly System.Action<string>? textChanged;
+
+    [ObservableProperty]
+    private string text;
+
+    public TableDataPreviewCellViewModel(
+        string text,
+        System.Action<string>? textChanged = null)
     {
-        Text = text;
+        this.text = text;
+        this.textChanged = textChanged;
     }
 
-    public string Text { get; }
+    partial void OnTextChanged(string value)
+    {
+        textChanged?.Invoke(value);
+    }
 }
 
 public sealed class TableDataPreviewRowViewModel

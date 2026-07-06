@@ -104,7 +104,7 @@
                 </Grid>
 
                 <Grid Grid.Row="1"
-                      ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
+                      ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                       ColumnSpacing="8">
                     <TextBlock Text="{Binding DataPreviewSearchText}"
                                FontSize="12"
@@ -126,7 +126,20 @@
                             Content="{Binding DataPreviewCopyTsvText}"
                             Command="{Binding CopyDataPreviewWorkbenchTsvCommand}"
                             MinWidth="86"/>
-                    <TextBlock Grid.Column="5"
+                    <Button Grid.Column="5"
+                            Content="{Binding DataPreviewRestoreDraftText}"
+                            Command="{Binding RestoreDataPreviewWorkbenchDraftCommand}"
+                            MinWidth="68"/>
+                    <Button Grid.Column="6"
+                            Content="{Binding DataPreviewSaveAsText}"
+                            Command="{Binding SaveDataPreviewWorkbenchAsCommand}"
+                            MinWidth="68"/>
+                    <TextBlock Grid.Column="7"
+                               Text="{Binding DataPreviewWorkbenchDirtyStateText}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Column="8"
                                Text="{Binding DataPreviewWorkbenchPageText}"
                                FontSize="12"
                                VerticalAlignment="Center"
@@ -206,10 +219,12 @@
                                                             Padding="6"
                                                             BorderBrush="{DynamicResource ControlBorderBrush}"
                                                             BorderThickness="0,0,1,1">
-                                                        <TextBlock Text="{Binding Text}"
-                                                                   FontSize="12"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                        <TextBox Text="{Binding Text, Mode=TwoWay}"
+                                                                 FontSize="12"
+                                                                 BorderThickness="0"
+                                                                 Padding="0"
+                                                                 MinHeight="22"
+                                                                 Foreground="{DynamicResource TextSecondaryBrush}"/>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

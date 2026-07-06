@@ -293,6 +293,36 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public void DataPreviewWorkbenchTracksCellEditsAndRestoresDraft()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12";
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+
+        viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text = "99";
+
+        Assert.IsTrue(viewModel.IsDataPreviewWorkbenchDirty);
+        Assert.AreEqual("Unsaved", viewModel.DataPreviewWorkbenchDirtyStateText);
+        Assert.IsTrue(viewModel.RestoreDataPreviewWorkbenchDraftCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.SaveDataPreviewWorkbenchAsCommand.CanExecute(null));
+
+        viewModel.SaveDataPreviewWorkbenchAsCommand.Execute(null);
+
+        Assert.AreEqual(
+            "Save-as requires a backend save strategy; this stage marks the boundary and does not write the original table.",
+            viewModel.DataPreviewWorkbenchMessage);
+
+        viewModel.RestoreDataPreviewWorkbenchDraftCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsDataPreviewWorkbenchDirty);
+        Assert.AreEqual("Unmodified", viewModel.DataPreviewWorkbenchDirtyStateText);
+        Assert.AreEqual("12", viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text);
+        Assert.AreEqual(
+            "Restored to the last loaded or parsed table.",
+            viewModel.DataPreviewWorkbenchMessage);
+    }
+
+    [TestMethod]
     public void DataPreviewWorkbenchParsesQuotedCsvCells()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
