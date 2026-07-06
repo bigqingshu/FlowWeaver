@@ -244,3 +244,31 @@ dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -c CodexRestore
 - `SelectedItem="{Binding SelectedDataPreviewTableOption, Mode=TwoWay}"`
 
 并移除下拉变化触发表格自动加载的行为。
+
+## 9. 阶段执行结果
+
+截至本轮收口，`DATA-PREVIEW-STATE-1` 到 `DATA-PREVIEW-STATE-7` 已完成。
+
+已落地内容：
+
+- 新增 `DataPreviewStateListItemViewModel`，按 `WorkflowRunId + NodeRunId` 聚合表引用；
+- `MainWindowViewModel` 已拆分 `SelectedDataPreviewState`、`SelectedDataPreviewTableOption`、`LoadedDataPreviewTableRef`；
+- “载入选中表”读取 `SelectedDataPreviewTableOption`，成功后更新 `LoadedDataPreviewTableRef`；
+- 分页、来源文案、保存能力判断均以 `LoadedDataPreviewTableRef` 为准；
+- 数据预览页左侧已改为“处理状态”，右侧下拉已改为当前状态下的数据表候选；
+- “显示详情”可定位对应处理状态、数据表候选，并载入目标表；
+- 已补充 ViewModel 行为测试、XAML 绑定结构测试和本地化测试。
+
+已验证命令：
+
+```powershell
+dotnet test Avalonia_UI.Tests\Avalonia_UI.Tests.csproj -c CodexRestore
+```
+
+明确仍不做：
+
+- 不实现 SQL 表保存；
+- 不实现 xlsx 直接解析入口；
+- 不新增后端数据状态 API；
+- 不改变 TableRef 协议；
+- 不把右侧下拉选择恢复为自动加载行为。
