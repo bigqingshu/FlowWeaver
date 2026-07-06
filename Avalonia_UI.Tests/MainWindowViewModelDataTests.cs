@@ -216,6 +216,123 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task DataPreviewWorkbenchSearchFiltersCurrentPageAndCopiesTsv()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "name"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"name":"Alice"}""")
+                            .RootElement
+                            .Clone(),
+                        JsonDocument.Parse("""{"row_id":2,"name":"Bob"}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 2)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        viewModel.DataPreviewWorkbenchSearchText = "bob";
+
+        Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        CollectionAssert.AreEqual(
+            new[] { "2", "Bob" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.AreEqual("Filtered 1/2 current-page row(s): bob", viewModel.DataPreviewWorkbenchMessage);
+        Assert.IsTrue(viewModel.CopyDataPreviewWorkbenchTsvCommand.CanExecute(null));
+
+        viewModel.CopyDataPreviewWorkbenchTsvCommand.Execute(null);
+
+        Assert.AreEqual(
+            "row_id\tname\n2\tBob",
+            viewModel.DataPreviewWorkbenchClipboardText.Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.IsTrue(viewModel.HasDataPreviewWorkbenchClipboardText);
+    }
+
+    [TestMethod]
+    public async Task DataPreviewWorkbenchPagingUsesOffsetsAndUpdatesPageState()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 120,
+                    hasMore: true)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("1-1 / 120", viewModel.DataPreviewWorkbenchPageText);
+        Assert.IsFalse(viewModel.LoadPreviousDataPreviewWorkbenchPageCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.LoadNextDataPreviewWorkbenchPageCommand.CanExecute(null));
+
+        apiClient.TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                "table-1",
+                ["row_id"],
+                [
+                    JsonDocument.Parse("""{"row_id":51}""")
+                        .RootElement
+                        .Clone(),
+                ],
+                rowCount: 120,
+                offset: 50,
+                hasMore: true));
+
+        await viewModel.LoadNextDataPreviewWorkbenchPageCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(50, apiClient.LastTableRowsOffset);
+        Assert.AreEqual("51-51 / 120", viewModel.DataPreviewWorkbenchPageText);
+        Assert.IsTrue(viewModel.LoadPreviousDataPreviewWorkbenchPageCommand.CanExecute(null));
+
+        apiClient.TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                "table-1",
+                ["row_id"],
+                [
+                    JsonDocument.Parse("""{"row_id":1}""")
+                        .RootElement
+                        .Clone(),
+                ],
+                rowCount: 120,
+                hasMore: true));
+
+        await viewModel.LoadPreviousDataPreviewWorkbenchPageCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, apiClient.LastTableRowsOffset);
+        Assert.AreEqual("1-1 / 120", viewModel.DataPreviewWorkbenchPageText);
+    }
+
+    [TestMethod]
     public async Task ShowDataPreviewDetailsSelectsDataPreviewPageAndLoadsCurrentTable()
     {
         var apiClient = new FakeApiClient
@@ -556,17 +673,19 @@ public sealed class MainWindowViewModelDataTests
         string tableRefId,
         string[] columns,
         JsonElement[] rows,
-        long rowCount)
+        long rowCount,
+        int offset = 0,
+        bool hasMore = false)
     {
         return new TableDataRowsDto
         {
             TableRefId = tableRefId,
-            Offset = 0,
+            Offset = offset,
             Limit = 50,
             RowCount = rowCount,
             Columns = columns,
             Rows = rows,
-            HasMore = false,
+            HasMore = hasMore,
         };
     }
 

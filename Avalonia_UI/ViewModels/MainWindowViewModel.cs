@@ -313,6 +313,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? dataPreviewWorkbenchErrorMessage;
 
+    [ObservableProperty]
+    private string dataPreviewWorkbenchSearchText = string.Empty;
+
+    [ObservableProperty]
+    private string dataPreviewWorkbenchClipboardText = string.Empty;
+
     private string? dataPreviewSourceWorkflowRunId;
 
     private string? dataPreviewSourceNodeInstanceId;
@@ -324,6 +330,16 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? dataPreviewSourceRunMode;
 
     private string? dataPreviewSourceTargetNodeInstanceId;
+
+    private string[] dataPreviewWorkbenchLoadedColumns = [];
+
+    private JsonElement[] dataPreviewWorkbenchLoadedRows = [];
+
+    private int dataPreviewWorkbenchOffset;
+
+    private bool dataPreviewWorkbenchHasMore;
+
+    private long dataPreviewWorkbenchRowCount;
 
     [ObservableProperty]
     private string sharedPublicationShareNameFilter = string.Empty;
@@ -920,6 +936,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasDataPreviewWorkbenchRows => DataPreviewWorkbenchRows.Count > 0;
 
+    public bool HasDataPreviewWorkbenchClipboardText =>
+        !string.IsNullOrEmpty(DataPreviewWorkbenchClipboardText);
+
+    public string DataPreviewWorkbenchPageText => F(
+        "format.data_preview_workbench_page",
+        dataPreviewWorkbenchLoadedRows.Length == 0 ? 0 : dataPreviewWorkbenchOffset + 1,
+        dataPreviewWorkbenchOffset + dataPreviewWorkbenchLoadedRows.Length,
+        dataPreviewWorkbenchRowCount);
+
     public string DataPreviewSourceText =>
         !string.IsNullOrWhiteSpace(dataPreviewSourceWorkflowRunId)
         && !string.IsNullOrWhiteSpace(dataPreviewSourceNodeInstanceId)
@@ -1003,6 +1028,15 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewWorkbenchRefreshText => T("data_preview.workbench_refresh");
 
     public string DataPreviewDetailsText => T("data_preview.details");
+
+    public string DataPreviewSearchText => T("data_preview.search");
+
+    public string DataPreviewSearchWatermarkText => T("data_preview.search_watermark");
+
+    public string DataPreviewCopyTsvText => T("data_preview.copy_tsv");
+
+    public string DataPreviewPreviousPageText => T("data_preview.previous_page");
+    public string DataPreviewNextPageText => T("data_preview.next_page");
 
     public string WorkflowsSectionText => T("workflow.section");
 
@@ -1681,6 +1715,24 @@ public partial class MainWindowViewModel : ViewModelBase
         return CanUseEngineActions
             && SelectedDataPreviewTableRef is not null
             && !IsLoadingDataPreviewWorkbench;
+    }
+
+    private bool CanLoadPreviousDataPreviewWorkbenchPage()
+    {
+        return CanLoadSelectedDataPreviewTable()
+            && dataPreviewWorkbenchOffset > 0;
+    }
+
+    private bool CanLoadNextDataPreviewWorkbenchPage()
+    {
+        return CanLoadSelectedDataPreviewTable()
+            && dataPreviewWorkbenchHasMore;
+    }
+
+    private bool CanCopyDataPreviewWorkbenchTsv()
+    {
+        return HasDataPreviewWorkbenchColumns
+            && HasDataPreviewWorkbenchRows;
     }
 
     private bool CanShowDataPreviewDetails()
@@ -2926,6 +2978,31 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanLoadSelectedDataPreviewTable))]
     private async Task LoadSelectedDataPreviewTableAsync()
     {
+        await LoadDataPreviewWorkbenchTablePageAsync(0);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadPreviousDataPreviewWorkbenchPage))]
+    private async Task LoadPreviousDataPreviewWorkbenchPageAsync()
+    {
+        await LoadDataPreviewWorkbenchTablePageAsync(
+            Math.Max(0, dataPreviewWorkbenchOffset - DataPreviewRowLimit));
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadNextDataPreviewWorkbenchPage))]
+    private async Task LoadNextDataPreviewWorkbenchPageAsync()
+    {
+        await LoadDataPreviewWorkbenchTablePageAsync(
+            dataPreviewWorkbenchOffset + DataPreviewRowLimit);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCopyDataPreviewWorkbenchTsv))]
+    private void CopyDataPreviewWorkbenchTsv()
+    {
+        DataPreviewWorkbenchClipboardText = BuildDataPreviewWorkbenchTsv();
+    }
+
+    private async Task LoadDataPreviewWorkbenchTablePageAsync(int offset)
+    {
         var requestedTableRef = SelectedDataPreviewTableRef;
         if (requestedTableRef is null)
         {
@@ -2945,7 +3022,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var response = await _apiClient.GetTableDataRowsAsync(
                 BuildSettings(),
                 requestedTableRefId,
-                offset: 0,
+                offset: Math.Max(0, offset),
                 limit: DataPreviewRowLimit,
                 cancellationToken: _shutdown.Token);
 
@@ -2962,11 +3039,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
 
             LoadDataPreviewWorkbenchRows(response.Data);
-            DataPreviewWorkbenchMessage = F(
-                "format.loaded_data_preview_table_rows",
-                response.Data.Rows.Length,
-                response.Data.RowCount,
-                requestedTableRef.LogicalTableId);
+            UpdateDataPreviewWorkbenchLoadedMessage();
         }
         finally
         {
@@ -3327,6 +3400,7 @@ public partial class MainWindowViewModel : ViewModelBase
         dataPreviewWorkbenchLoadVersion++;
         IsLoadingDataPreviewWorkbench = false;
         SelectedDataPreviewTableRef = null;
+        ResetDataPreviewWorkbenchLoadedState();
         DataPreviewWorkbenchColumns.Clear();
         DataPreviewWorkbenchRows.Clear();
         DataPreviewWorkbenchMessage = T("data_preview.workbench_select_table");
@@ -3361,26 +3435,110 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows)
     {
+        dataPreviewWorkbenchLoadedColumns = rows.Columns.ToArray();
+        dataPreviewWorkbenchLoadedRows = rows.Rows.Select(row => row.Clone()).ToArray();
+        dataPreviewWorkbenchOffset = rows.Offset;
+        dataPreviewWorkbenchHasMore = rows.HasMore;
+        dataPreviewWorkbenchRowCount = rows.RowCount;
+        DataPreviewWorkbenchClipboardText = string.Empty;
+        ApplyDataPreviewWorkbenchSearch();
+        NotifyDataPreviewWorkbenchPagingChanged();
+    }
+
+    private void ResetDataPreviewWorkbenchLoadedState()
+    {
+        dataPreviewWorkbenchLoadedColumns = [];
+        dataPreviewWorkbenchLoadedRows = [];
+        dataPreviewWorkbenchOffset = 0;
+        dataPreviewWorkbenchHasMore = false;
+        dataPreviewWorkbenchRowCount = 0;
+        DataPreviewWorkbenchClipboardText = string.Empty;
+        NotifyDataPreviewWorkbenchPagingChanged();
+    }
+
+    private void ApplyDataPreviewWorkbenchSearch()
+    {
+        var filter = NormalizeFilter(DataPreviewWorkbenchSearchText);
+        var visibleRows = filter is null
+            ? dataPreviewWorkbenchLoadedRows
+            : dataPreviewWorkbenchLoadedRows
+                .Where(row => DataPreviewWorkbenchRowMatches(row, filter))
+                .ToArray();
+
         DataPreviewWorkbenchColumns.Clear();
-        foreach (var column in rows.Columns)
+        foreach (var column in dataPreviewWorkbenchLoadedColumns)
         {
             DataPreviewWorkbenchColumns.Add(new TableDataPreviewColumnViewModel(column));
         }
 
         DataPreviewWorkbenchRows.Clear();
-        foreach (var row in rows.Rows)
+        foreach (var row in visibleRows)
         {
-            DataPreviewWorkbenchRows.Add(
-                new TableDataPreviewRowViewModel(
-                    rows.Columns
-                        .Select(
-                            column =>
-                                new TableDataPreviewCellViewModel(
-                                    FormatDataPreviewCell(row, column)))
-                        .ToArray()));
+            DataPreviewWorkbenchRows.Add(CreateDataPreviewWorkbenchRow(row));
         }
 
         NotifyDataPreviewWorkbenchRowsChanged();
+    }
+
+    private TableDataPreviewRowViewModel CreateDataPreviewWorkbenchRow(JsonElement row)
+    {
+        return new TableDataPreviewRowViewModel(
+            dataPreviewWorkbenchLoadedColumns
+                .Select(
+                    column =>
+                        new TableDataPreviewCellViewModel(
+                            FormatDataPreviewCell(row, column)))
+                .ToArray());
+    }
+
+    private bool DataPreviewWorkbenchRowMatches(JsonElement row, string filter)
+    {
+        return dataPreviewWorkbenchLoadedColumns.Any(
+            column => FormatDataPreviewCell(row, column).Contains(
+                filter,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string BuildDataPreviewWorkbenchTsv()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join("\t", DataPreviewWorkbenchColumns.Select(column => EscapeTsv(column.Name))));
+        foreach (var row in DataPreviewWorkbenchRows)
+        {
+            builder.AppendLine(string.Join("\t", row.Cells.Select(cell => EscapeTsv(cell.Text))));
+        }
+
+        return builder.ToString().TrimEnd('\r', '\n');
+    }
+
+    private static string EscapeTsv(string value)
+    {
+        return value
+            .Replace("\r\n", " ", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace('\t', ' ');
+    }
+
+    private void UpdateDataPreviewWorkbenchLoadedMessage()
+    {
+        if (SelectedDataPreviewTableRef is null)
+        {
+            return;
+        }
+
+        var filter = NormalizeFilter(DataPreviewWorkbenchSearchText);
+        DataPreviewWorkbenchMessage = filter is null
+            ? F(
+                "format.loaded_data_preview_table_rows",
+                dataPreviewWorkbenchLoadedRows.Length,
+                dataPreviewWorkbenchRowCount,
+                SelectedDataPreviewTableRef.LogicalTableId)
+            : F(
+                "format.data_preview_search_matches",
+                DataPreviewWorkbenchRows.Count,
+                dataPreviewWorkbenchLoadedRows.Length,
+                filter);
     }
 
     private void UpdateDataPreviewSource(
@@ -3434,6 +3592,15 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasDataPreviewWorkbenchColumns));
         OnPropertyChanged(nameof(HasDataPreviewWorkbenchRows));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchPageText));
+        CopyDataPreviewWorkbenchTsvCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyDataPreviewWorkbenchPagingChanged()
+    {
+        OnPropertyChanged(nameof(DataPreviewWorkbenchPageText));
+        LoadPreviousDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
+        LoadNextDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
     }
 
     private static string FormatDataPreviewCell(JsonElement row, string column)
@@ -5072,6 +5239,12 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchRefreshText));
         OnPropertyChanged(nameof(DataPreviewDetailsText));
+        OnPropertyChanged(nameof(DataPreviewSearchText));
+        OnPropertyChanged(nameof(DataPreviewSearchWatermarkText));
+        OnPropertyChanged(nameof(DataPreviewCopyTsvText));
+        OnPropertyChanged(nameof(DataPreviewPreviousPageText));
+        OnPropertyChanged(nameof(DataPreviewNextPageText));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchPageText));
         OnPropertyChanged(nameof(WorkflowsSectionText));
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(CloseText));
@@ -5691,6 +5864,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsDataPreviewWorkbenchBusy));
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+        LoadPreviousDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
+        LoadNextDataPreviewWorkbenchPageCommand.NotifyCanExecuteChanged();
         ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
@@ -5709,10 +5884,23 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDataPreviewWorkbenchError));
     }
 
+    partial void OnDataPreviewWorkbenchSearchTextChanged(string value)
+    {
+        DataPreviewWorkbenchClipboardText = string.Empty;
+        ApplyDataPreviewWorkbenchSearch();
+        UpdateDataPreviewWorkbenchLoadedMessage();
+    }
+
+    partial void OnDataPreviewWorkbenchClipboardTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasDataPreviewWorkbenchClipboardText));
+    }
+
     partial void OnSelectedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
     {
         dataPreviewWorkbenchLoadVersion++;
         DataPreviewWorkbenchErrorMessage = null;
+        ResetDataPreviewWorkbenchLoadedState();
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
         if (value is null)
