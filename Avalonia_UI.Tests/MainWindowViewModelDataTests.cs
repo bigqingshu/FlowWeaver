@@ -170,6 +170,52 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task LoadSelectedDataPreviewTableLoadsRowsForSelectedTableRef()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-1", "run-1", "node-run-1"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id", "amount"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
+        Assert.AreEqual(0, apiClient.LastTableRowsOffset);
+        Assert.AreEqual(50, apiClient.LastTableRowsLimit);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
+        Assert.AreEqual("row_id", viewModel.DataPreviewWorkbenchColumns[0].Name);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
+        Assert.IsTrue(viewModel.HasDataPreviewWorkbenchColumns);
+        Assert.IsTrue(viewModel.HasDataPreviewWorkbenchRows);
+        Assert.IsFalse(viewModel.HasDataPreviewWorkbenchError);
+        Assert.AreEqual("Loaded 1/1 row(s) for orders.", viewModel.DataPreviewWorkbenchMessage);
+        Assert.AreEqual(
+            "Source: run run-1, node run node-run-1, table orders, storage RUNTIME_SQL.",
+            viewModel.DataPreviewWorkbenchSourceText);
+    }
+
+    [TestMethod]
     public async Task RefreshSelectedWorkflowNodeDataPreviewShowsEmptyTableColumns()
     {
         var apiClient = new FakeApiClient
@@ -387,15 +433,19 @@ public sealed class MainWindowViewModelDataTests
 
         Assert.IsFalse(viewModel.RefreshTableRefsCommand.CanExecute(null));
         Assert.IsFalse(viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.LoadSelectedDataPreviewTableCommand.CanExecute(null));
         Assert.IsFalse(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
         Assert.IsTrue(viewModel.RefreshSharedPublicationsCommand.CanExecute(null));
 
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
         viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
+            TableRef("table-1", "run-1", "node-run-1"));
         viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
 
         Assert.IsTrue(viewModel.RefreshTableRefsCommand.CanExecute(null));
         Assert.IsTrue(viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.LoadSelectedDataPreviewTableCommand.CanExecute(null));
         Assert.IsTrue(viewModel.RefreshSharedPublicationVersionsCommand.CanExecute(null));
 
         viewModel.Token = string.Empty;

@@ -3,16 +3,175 @@
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Pages.DataPreviewPage"
              x:DataType="vm:MainWindowViewModel">
-    <Grid RowDefinitions="Auto,*"
-          RowSpacing="12"
+    <Grid ColumnDefinitions="0.9*,2*"
+          ColumnSpacing="12"
           Margin="12">
-        <TextBlock Text="{Binding DataPreviewTabText}"
-                   Classes="SectionTitle" />
-        <Border Grid.Row="1"
-                Classes="PanelSurface"
-                Padding="16">
-            <TextBlock Text="{Binding DataPreviewWorkbenchPendingText}"
-                       TextWrapping="Wrap" />
+        <Border Classes="Card" Padding="12">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding TableRefsSectionText}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <Button Grid.Column="1"
+                            Content="{Binding RefreshText}"
+                            Command="{Binding RefreshTableRefsCommand}"
+                            MinWidth="76"/>
+                </Grid>
+
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding TableRefs}"
+                         SelectedItem="{Binding SelectedDataPreviewTableRef, Mode=TwoWay}"
+                         BorderBrush="{DynamicResource ControlBorderBrush}"
+                         BorderThickness="1">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:TableRefListItemViewModel"
+                                      x:DataType="vm:TableRefListItemViewModel">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  RowDefinitions="Auto,Auto,Auto"
+                                  ColumnSpacing="10"
+                                  Margin="8">
+                                <TextBlock Text="{Binding LogicalTableId}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding StorageKind}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1"
+                                           Text="{Binding TableRefId}"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="1"
+                                           Text="{Binding VersionText}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2"
+                                           Text="{Binding NodeRunId}"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Grid.Row="2"
+                                           Grid.Column="1"
+                                           Text="{Binding LifecycleStatus}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel Grid.Row="2" Spacing="4">
+                    <TextBlock Text="{Binding TableRefMessage}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Text="{Binding TableRefErrorMessage}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextErrorBrush}"
+                               IsVisible="{Binding HasTableRefError}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Classes="Card" Padding="12">
+            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding DataPreviewTabText}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding DataPreviewWorkbenchMessage}"
+                               FontSize="12"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               ToolTip.Tip="{Binding DataPreviewWorkbenchSourceText}"/>
+                    <ProgressBar Grid.Column="2"
+                                 Width="72"
+                                 Height="8"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsDataPreviewWorkbenchBusy}"/>
+                    <Button Grid.Column="3"
+                            Content="{Binding DataPreviewWorkbenchRefreshText}"
+                            Command="{Binding LoadSelectedDataPreviewTableCommand}"
+                            MinWidth="84"/>
+                </Grid>
+
+                <TextBlock Grid.Row="1"
+                           Text="{Binding DataPreviewWorkbenchErrorMessage}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextErrorBrush}"
+                           IsVisible="{Binding HasDataPreviewWorkbenchError}"/>
+
+                <Border Grid.Row="2"
+                        BorderBrush="{DynamicResource ControlBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        ClipToBounds="True">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding DataPreviewWorkbenchColumns}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:TableDataPreviewColumnViewModel"
+                                                  x:DataType="vm:TableDataPreviewColumnViewModel">
+                                        <Border Width="128"
+                                                Padding="6"
+                                                BorderBrush="{DynamicResource ControlBorderBrush}"
+                                                BorderThickness="0,0,1,1">
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding DataPreviewWorkbenchRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:TableDataPreviewRowViewModel"
+                                                  x:DataType="vm:TableDataPreviewRowViewModel">
+                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:TableDataPreviewCellViewModel"
+                                                              x:DataType="vm:TableDataPreviewCellViewModel">
+                                                    <Border Width="128"
+                                                            Padding="6"
+                                                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                                                            BorderThickness="0,0,1,1">
+                                                        <TextBlock Text="{Binding Text}"
+                                                                   FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

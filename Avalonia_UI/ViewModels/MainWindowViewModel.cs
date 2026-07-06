@@ -48,6 +48,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private int sharedPublicationsLoadVersion;
     private int sharedPublicationVersionsLoadVersion;
     private int dataPreviewLoadVersion;
+    private int dataPreviewWorkbenchLoadVersion;
     private int runtimeEventLogLoadVersion;
     private bool isSynchronizingShellSelection;
     private bool runtimeEventStreamAutoConnect;
@@ -298,6 +299,19 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string? dataPreviewErrorMessage;
+
+    [ObservableProperty]
+    private TableRefListItemViewModel? selectedDataPreviewTableRef;
+
+    [ObservableProperty]
+    private bool isLoadingDataPreviewWorkbench;
+
+    [ObservableProperty]
+    private string dataPreviewWorkbenchMessage =
+        "Select a run, refresh table refs, then select a table to inspect rows.";
+
+    [ObservableProperty]
+    private string? dataPreviewWorkbenchErrorMessage;
 
     private string? dataPreviewSourceWorkflowRunId;
 
@@ -759,6 +773,11 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
 
+    public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
+
+    public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewWorkbenchRows { get; } =
+        new();
+
     public ObservableCollection<SharedPublicationListItemViewModel> SharedPublications { get; } =
         new();
 
@@ -888,9 +907,16 @@ public partial class MainWindowViewModel : ViewModelBase
     public bool HasDataPreviewError =>
         !string.IsNullOrWhiteSpace(DataPreviewErrorMessage);
 
+    public bool HasDataPreviewWorkbenchError =>
+        !string.IsNullOrWhiteSpace(DataPreviewWorkbenchErrorMessage);
+
     public bool HasDataPreviewColumns => DataPreviewColumns.Count > 0;
 
     public bool HasDataPreviewRows => DataPreviewRows.Count > 0;
+
+    public bool HasDataPreviewWorkbenchColumns => DataPreviewWorkbenchColumns.Count > 0;
+
+    public bool HasDataPreviewWorkbenchRows => DataPreviewWorkbenchRows.Count > 0;
 
     public string DataPreviewSourceText =>
         !string.IsNullOrWhiteSpace(dataPreviewSourceWorkflowRunId)
@@ -909,6 +935,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
 
     public bool IsDataPreviewBusy => IsLoadingDataPreview;
+
+    public bool IsDataPreviewWorkbenchBusy => IsLoadingDataPreviewWorkbench;
 
     public string AppTitleText => T("app.title");
 
@@ -959,6 +987,18 @@ public partial class MainWindowViewModel : ViewModelBase
     public string DataPreviewTabText => T("tab.data_preview");
 
     public string DataPreviewWorkbenchPendingText => T("data_preview.workbench_pending");
+
+    public string DataPreviewWorkbenchSourceText =>
+        SelectedDataPreviewTableRef is null
+            ? T("data_preview.workbench_source_not_loaded")
+            : F(
+                "format.data_preview_workbench_source",
+                SelectedDataPreviewTableRef.WorkflowRunId,
+                SelectedDataPreviewTableRef.NodeRunId,
+                SelectedDataPreviewTableRef.LogicalTableId,
+                SelectedDataPreviewTableRef.StorageKind);
+
+    public string DataPreviewWorkbenchRefreshText => T("data_preview.workbench_refresh");
 
     public string WorkflowsSectionText => T("workflow.section");
 
@@ -1630,6 +1670,13 @@ public partial class MainWindowViewModel : ViewModelBase
             && SelectedRun is not null
             && SelectedWorkflowDefinitionNode is not null
             && !IsLoadingDataPreview;
+    }
+
+    private bool CanLoadSelectedDataPreviewTable()
+    {
+        return CanUseEngineActions
+            && SelectedDataPreviewTableRef is not null
+            && !IsLoadingDataPreviewWorkbench;
     }
 
     private bool CanRefreshSharedPublications()
@@ -2832,11 +2879,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
             if (response.Ok && response.Data is not null)
             {
+                var previousSelectedTableRefId = SelectedDataPreviewTableRef?.TableRefId;
                 TableRefs.Clear();
                 foreach (var tableRef in response.Data)
                 {
                     TableRefs.Add(new TableRefListItemViewModel(tableRef));
                 }
+
+                SelectedDataPreviewTableRef = TableRefs.FirstOrDefault(
+                    tableRef => tableRef.TableRefId == previousSelectedTableRefId)
+                    ?? TableRefs.FirstOrDefault();
 
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
                 return;
@@ -2858,6 +2910,60 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task RefreshSelectedWorkflowNodeDataPreviewAsync()
     {
         await TryRefreshSelectedWorkflowNodeDataPreviewAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLoadSelectedDataPreviewTable))]
+    private async Task LoadSelectedDataPreviewTableAsync()
+    {
+        var requestedTableRef = SelectedDataPreviewTableRef;
+        if (requestedTableRef is null)
+        {
+            return;
+        }
+
+        var requestedTableRefId = requestedTableRef.TableRefId;
+        var requestVersion = ++dataPreviewWorkbenchLoadVersion;
+        IsLoadingDataPreviewWorkbench = true;
+        DataPreviewWorkbenchMessage = F(
+            "format.loading_data_preview_table",
+            requestedTableRef.LogicalTableId);
+        DataPreviewWorkbenchErrorMessage = null;
+
+        try
+        {
+            var response = await _apiClient.GetTableDataRowsAsync(
+                BuildSettings(),
+                requestedTableRefId,
+                offset: 0,
+                limit: DataPreviewRowLimit,
+                cancellationToken: _shutdown.Token);
+
+            if (IsStaleDataPreviewWorkbenchRequest(requestVersion, requestedTableRefId))
+            {
+                return;
+            }
+
+            if (!response.Ok || response.Data is null)
+            {
+                DataPreviewWorkbenchMessage = T("data_preview.workbench_load_failed");
+                DataPreviewWorkbenchErrorMessage = DescribeError(response);
+                return;
+            }
+
+            LoadDataPreviewWorkbenchRows(response.Data);
+            DataPreviewWorkbenchMessage = F(
+                "format.loaded_data_preview_table_rows",
+                response.Data.Rows.Length,
+                response.Data.RowCount,
+                requestedTableRef.LogicalTableId);
+        }
+        finally
+        {
+            if (requestVersion == dataPreviewWorkbenchLoadVersion)
+            {
+                IsLoadingDataPreviewWorkbench = false;
+            }
+        }
     }
 
     private async Task<bool> TryRefreshSelectedWorkflowNodeDataPreviewAsync(
@@ -3115,6 +3221,17 @@ public partial class MainWindowViewModel : ViewModelBase
                 StringComparison.Ordinal);
     }
 
+    private bool IsStaleDataPreviewWorkbenchRequest(
+        int requestVersion,
+        string requestedTableRefId)
+    {
+        return requestVersion != dataPreviewWorkbenchLoadVersion
+            || !string.Equals(
+                SelectedDataPreviewTableRef?.TableRefId,
+                requestedTableRefId,
+                StringComparison.Ordinal);
+    }
+
     private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
     {
         return string.Equals(
@@ -3132,6 +3249,19 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
         DataPreviewErrorMessage = null;
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ResetDataPreviewWorkbenchState()
+    {
+        dataPreviewWorkbenchLoadVersion++;
+        IsLoadingDataPreviewWorkbench = false;
+        SelectedDataPreviewTableRef = null;
+        DataPreviewWorkbenchColumns.Clear();
+        DataPreviewWorkbenchRows.Clear();
+        DataPreviewWorkbenchMessage = T("data_preview.workbench_select_table");
+        DataPreviewWorkbenchErrorMessage = null;
+        NotifyDataPreviewWorkbenchRowsChanged();
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
     }
 
     private void LoadDataPreviewRows(TableDataRowsDto rows)
@@ -3156,6 +3286,30 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         NotifyDataPreviewRowsChanged();
+    }
+
+    private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows)
+    {
+        DataPreviewWorkbenchColumns.Clear();
+        foreach (var column in rows.Columns)
+        {
+            DataPreviewWorkbenchColumns.Add(new TableDataPreviewColumnViewModel(column));
+        }
+
+        DataPreviewWorkbenchRows.Clear();
+        foreach (var row in rows.Rows)
+        {
+            DataPreviewWorkbenchRows.Add(
+                new TableDataPreviewRowViewModel(
+                    rows.Columns
+                        .Select(
+                            column =>
+                                new TableDataPreviewCellViewModel(
+                                    FormatDataPreviewCell(row, column)))
+                        .ToArray()));
+        }
+
+        NotifyDataPreviewWorkbenchRowsChanged();
     }
 
     private void UpdateDataPreviewSource(
@@ -3200,6 +3354,12 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(HasDataPreviewColumns));
         OnPropertyChanged(nameof(HasDataPreviewRows));
+    }
+
+    private void NotifyDataPreviewWorkbenchRowsChanged()
+    {
+        OnPropertyChanged(nameof(HasDataPreviewWorkbenchColumns));
+        OnPropertyChanged(nameof(HasDataPreviewWorkbenchRows));
     }
 
     private static string FormatDataPreviewCell(JsonElement row, string column)
@@ -4685,6 +4845,7 @@ public partial class MainWindowViewModel : ViewModelBase
             ["status.select_run_table_refs"] = T("status.select_run_table_refs"),
             ["status.select_run_and_workflow_node_data_preview"] =
                 T("status.select_run_and_workflow_node_data_preview"),
+            ["data_preview.workbench_select_table"] = T("data_preview.workbench_select_table"),
             ["status.no_shared_publications_loaded"] = T("status.no_shared_publications_loaded"),
             ["status.select_share_versions"] = T("status.select_share_versions"),
         };
@@ -4772,6 +4933,14 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         if (ShouldRefreshDefault(
+            DataPreviewWorkbenchMessage,
+            previousDefaults,
+            "data_preview.workbench_select_table"))
+        {
+            DataPreviewWorkbenchMessage = T("data_preview.workbench_select_table");
+        }
+
+        if (ShouldRefreshDefault(
             SharedPublicationMessage,
             previousDefaults,
             "status.no_shared_publications_loaded"))
@@ -4826,6 +4995,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataTabText));
         OnPropertyChanged(nameof(DataPreviewTabText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchPendingText));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchRefreshText));
         OnPropertyChanged(nameof(WorkflowsSectionText));
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(CloseText));
@@ -4950,6 +5121,13 @@ public partial class MainWindowViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(SelectedShellNavigationItem));
         OnPropertyChanged(nameof(SelectedShellPageContentKey));
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+        if (value == ShellPageKey.DataPreview
+            && SelectedDataPreviewTableRef is not null
+            && CanLoadSelectedDataPreviewTable())
+        {
+            _ = LoadSelectedDataPreviewTableAsync();
+        }
     }
 
     partial void OnSelectedShellPageIndexChanging(int value)
@@ -5376,6 +5554,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 : F("format.selected_run_refresh_table_refs", newValue.WorkflowRunId);
             TableRefErrorMessage = null;
             ResetDataPreviewSelectionState();
+            ResetDataPreviewWorkbenchState();
         }
         else
         {
@@ -5385,6 +5564,7 @@ public partial class MainWindowViewModel : ViewModelBase
         NotifyEngineActionStateChanged();
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnRunErrorMessageChanged(string? value)
@@ -5438,6 +5618,12 @@ public partial class MainWindowViewModel : ViewModelBase
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
 
+    partial void OnIsLoadingDataPreviewWorkbenchChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDataPreviewWorkbenchBusy));
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnTableRefErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasTableRefError));
@@ -5446,6 +5632,33 @@ public partial class MainWindowViewModel : ViewModelBase
     partial void OnDataPreviewErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasDataPreviewError));
+    }
+
+    partial void OnDataPreviewWorkbenchErrorMessageChanged(string? value)
+    {
+        OnPropertyChanged(nameof(HasDataPreviewWorkbenchError));
+    }
+
+    partial void OnSelectedDataPreviewTableRefChanged(TableRefListItemViewModel? value)
+    {
+        dataPreviewWorkbenchLoadVersion++;
+        DataPreviewWorkbenchErrorMessage = null;
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
+        if (value is null)
+        {
+            DataPreviewWorkbenchColumns.Clear();
+            DataPreviewWorkbenchRows.Clear();
+            DataPreviewWorkbenchMessage = T("data_preview.workbench_select_table");
+            NotifyDataPreviewWorkbenchRowsChanged();
+            return;
+        }
+
+        if (SelectedShellPageKey == ShellPageKey.DataPreview
+            && CanLoadSelectedDataPreviewTable())
+        {
+            _ = LoadSelectedDataPreviewTableAsync();
+        }
     }
 
     partial void OnIsLoadingSharedPublicationsChanged(bool value)
@@ -5559,6 +5772,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
         RefreshTableRefsCommand.NotifyCanExecuteChanged();
         RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
+        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
