@@ -962,6 +962,22 @@ public partial class MainWindowViewModel : ViewModelBase
         ? T("data_preview.dirty")
         : T("data_preview.clean");
 
+    public bool CanSaveDataPreviewWorkbenchAsDraft =>
+        SelectedDataPreviewTableRef?.HasCapability("SAVE_AS") == true;
+
+    public string DataPreviewWorkbenchSavePolicyText =>
+        SelectedDataPreviewTableRef is null
+            ? T("data_preview.save_policy_local_draft")
+            : CanSaveDataPreviewWorkbenchAsDraft
+                ? F(
+                    "format.data_preview_save_policy_save_as",
+                    SelectedDataPreviewTableRef.StorageKind,
+                    SelectedDataPreviewTableRef.CapabilitiesText)
+                : F(
+                    "format.data_preview_save_policy_read_only",
+                    SelectedDataPreviewTableRef.StorageKind,
+                    SelectedDataPreviewTableRef.CapabilitiesText);
+
     public string DataPreviewWorkbenchPageText => F(
         "format.data_preview_workbench_page",
         dataPreviewWorkbenchLoadedRows.Length == 0 ? 0 : dataPreviewWorkbenchOffset + 1,
@@ -1785,6 +1801,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool CanSaveDataPreviewWorkbenchAs()
     {
         return IsDataPreviewWorkbenchDirty
+            && CanSaveDataPreviewWorkbenchAsDraft
             && !IsLoadingDataPreviewWorkbench;
     }
 
@@ -3100,7 +3117,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSaveDataPreviewWorkbenchAs))]
     private void SaveDataPreviewWorkbenchAs()
     {
-        DataPreviewWorkbenchMessage = T("data_preview.save_as_pending");
+        DataPreviewWorkbenchMessage = T("data_preview.save_as_api_pending");
         DataPreviewWorkbenchErrorMessage = null;
     }
 
@@ -3904,6 +3921,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsDataPreviewWorkbenchDirty));
         OnPropertyChanged(nameof(DataPreviewWorkbenchDirtyStateText));
+        OnPropertyChanged(nameof(CanSaveDataPreviewWorkbenchAsDraft));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
         RestoreDataPreviewWorkbenchDraftCommand.NotifyCanExecuteChanged();
         SaveDataPreviewWorkbenchAsCommand.NotifyCanExecuteChanged();
     }
@@ -5553,6 +5572,7 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewRestoreDraftText));
         OnPropertyChanged(nameof(DataPreviewSaveAsText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchDirtyStateText));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
         OnPropertyChanged(nameof(DataPreviewPreviousPageText));
         OnPropertyChanged(nameof(DataPreviewNextPageText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchPageText));
@@ -6227,6 +6247,8 @@ public partial class MainWindowViewModel : ViewModelBase
         DataPreviewWorkbenchErrorMessage = null;
         ResetDataPreviewWorkbenchLoadedState();
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        OnPropertyChanged(nameof(CanSaveDataPreviewWorkbenchAsDraft));
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
         if (value is null)
         {

@@ -55,4 +55,10 @@ public sealed class TableRefListItemViewModel
 
     public string CapabilitiesText =>
         Capabilities.Length == 0 ? "-" : string.Join(", ", Capabilities.OrderBy(item => item));
+
+    public bool HasCapability(string capability)
+    {
+        return Capabilities.Any(
+            item => string.Equals(item, capability, StringComparison.OrdinalIgnoreCase));
+    }
 }

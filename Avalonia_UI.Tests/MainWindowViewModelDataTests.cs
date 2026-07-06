@@ -304,13 +304,10 @@ public sealed class MainWindowViewModelDataTests
         Assert.IsTrue(viewModel.IsDataPreviewWorkbenchDirty);
         Assert.AreEqual("Unsaved", viewModel.DataPreviewWorkbenchDirtyStateText);
         Assert.IsTrue(viewModel.RestoreDataPreviewWorkbenchDraftCommand.CanExecute(null));
-        Assert.IsTrue(viewModel.SaveDataPreviewWorkbenchAsCommand.CanExecute(null));
-
-        viewModel.SaveDataPreviewWorkbenchAsCommand.Execute(null);
-
+        Assert.IsFalse(viewModel.SaveDataPreviewWorkbenchAsCommand.CanExecute(null));
         Assert.AreEqual(
-            "Save-as requires a backend save strategy; this stage marks the boundary and does not write the original table.",
-            viewModel.DataPreviewWorkbenchMessage);
+            "Local drafts need a backend save-as capable target table first; this stage does not write the original table.",
+            viewModel.DataPreviewWorkbenchSavePolicyText);
 
         viewModel.RestoreDataPreviewWorkbenchDraftCommand.Execute(null);
 
@@ -319,6 +316,49 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual("12", viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text);
         Assert.AreEqual(
             "Restored to the last loaded or parsed table.",
+            viewModel.DataPreviewWorkbenchMessage);
+    }
+
+    [TestMethod]
+    public void DataPreviewWorkbenchSaveAsRequiresBackendCapability()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
+            TableRef(
+                "table-1",
+                "run-1",
+                "node-run-1",
+                capabilities: ["READ"]));
+        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12";
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+        viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text = "99";
+
+        Assert.IsFalse(viewModel.CanSaveDataPreviewWorkbenchAsDraft);
+        Assert.IsFalse(viewModel.SaveDataPreviewWorkbenchAsCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Current table is not saveable: storage RUNTIME_SQL, capabilities READ; backend must declare SAVE_AS.",
+            viewModel.DataPreviewWorkbenchSavePolicyText);
+
+        viewModel.SelectedDataPreviewTableRef = new TableRefListItemViewModel(
+            TableRef(
+                "table-2",
+                "run-1",
+                "node-run-1",
+                capabilities: ["READ", "SAVE_AS"]));
+        viewModel.DataPreviewWorkbenchPasteText = "name\tamount\nAlice\t12";
+        viewModel.ParseDataPreviewWorkbenchPasteCommand.Execute(null);
+        viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text = "99";
+
+        Assert.IsTrue(viewModel.CanSaveDataPreviewWorkbenchAsDraft);
+        Assert.IsTrue(viewModel.SaveDataPreviewWorkbenchAsCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Current table supports controlled save-as: storage RUNTIME_SQL, capabilities READ, SAVE_AS.",
+            viewModel.DataPreviewWorkbenchSavePolicyText);
+
+        viewModel.SaveDataPreviewWorkbenchAsCommand.Execute(null);
+
+        Assert.AreEqual(
+            "The controlled backend save API is not implemented yet; this stage only confirms capability declaration and button boundaries.",
             viewModel.DataPreviewWorkbenchMessage);
     }
 
@@ -737,7 +777,8 @@ public sealed class MainWindowViewModelDataTests
     private static TableRefDto TableRef(
         string tableRefId,
         string workflowRunId,
-        string nodeRunId)
+        string nodeRunId,
+        string[]? capabilities = null)
     {
         return new TableRefDto
         {
@@ -753,7 +794,7 @@ public sealed class MainWindowViewModelDataTests
             Schema = JsonDocument.Parse("""{"fields":[]}""").RootElement.Clone(),
             SchemaFingerprint = "schema-1",
             Version = 2,
-            Capabilities = ["WRITE", "READ"],
+            Capabilities = capabilities ?? ["WRITE", "READ"],
             LifecycleStatus = "PUBLISHED",
             CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
         };

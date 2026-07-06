@@ -133,6 +133,7 @@
                     <Button Grid.Column="6"
                             Content="{Binding DataPreviewSaveAsText}"
                             Command="{Binding SaveDataPreviewWorkbenchAsCommand}"
+                            ToolTip.Tip="{Binding DataPreviewWorkbenchSavePolicyText}"
                             MinWidth="68"/>
                     <TextBlock Grid.Column="7"
                                Text="{Binding DataPreviewWorkbenchDirtyStateText}"
