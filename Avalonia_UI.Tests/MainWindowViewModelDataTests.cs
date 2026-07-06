@@ -652,6 +652,58 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task ShowDataPreviewDetailsSelectsMatchingStateAndTableFromExistingRefs()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeRunsResponse = ApiResponseEnvelope<List<NodeRunDto>>.Success(
+                new List<NodeRunDto>
+                {
+                    NodeRun("node-run-other", "run-1", "other"),
+                    NodeRun("node-run-target", "run-1", "target"),
+                }),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+                new List<TableRefDto>
+                {
+                    TableRef("table-other", "run-1", "node-run-other"),
+                    TableRef("table-target", "run-1", "node-run-target"),
+                    TableRef("table-side", "run-1", "node-run-target", storageKind: "MEMORY"),
+                }),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-target",
+                    ["row_id"],
+                    [
+                        JsonDocument.Parse("""{"row_id":7}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("target");
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        Assert.AreEqual("run-1:node-run-other", viewModel.SelectedDataPreviewState?.StateKey);
+
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+        await viewModel.ShowDataPreviewDetailsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
+        Assert.AreEqual("run-1:node-run-target", viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.HasCount(2, viewModel.DataPreviewTableOptions);
+        CollectionAssert.AreEqual(
+            new[] { "table-target", "table-side" },
+            viewModel.DataPreviewTableOptions.Select(tableRef => tableRef.TableRefId).ToArray());
+        Assert.AreEqual("table-target", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-target", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.AreEqual("table-target", apiClient.LastTableRowsTableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual("7", viewModel.DataPreviewWorkbenchRows[0].Cells[0].Text);
+    }
+
+    [TestMethod]
     public async Task RefreshSelectedWorkflowNodeDataPreviewShowsEmptyTableColumns()
     {
         var apiClient = new FakeApiClient
