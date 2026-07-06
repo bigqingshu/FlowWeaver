@@ -306,6 +306,8 @@
   "data_preview.workbench_select_table": "选择运行并刷新表引用，然后选择一张表查看数据。",
   "data_preview.workbench_source_not_loaded": "尚未选择数据预览表。",
   "data_preview.workbench_refresh": "刷新表格",
+  "data_preview.table_selector": "数据表",
+  "data_preview.load_selected_table": "载入选中表",
   "data_preview.search": "搜索",
   "data_preview.search_watermark": "筛选当前页",
   "data_preview.copy_tsv": "复制TSV",

@@ -306,6 +306,8 @@
   "data_preview.workbench_select_table": "Select a run, refresh table refs, then select a table to inspect rows.",
   "data_preview.workbench_source_not_loaded": "No data preview table selected yet.",
   "data_preview.workbench_refresh": "Refresh table",
+  "data_preview.table_selector": "Data table",
+  "data_preview.load_selected_table": "Load selected table",
   "data_preview.search": "Search",
   "data_preview.search_watermark": "Filter current page",
   "data_preview.copy_tsv": "Copy TSV",

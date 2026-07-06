@@ -1066,6 +1066,10 @@ public partial class MainWindowViewModel : ViewModelBase
                 SelectedDataPreviewTableRef.LogicalTableId,
                 SelectedDataPreviewTableRef.StorageKind);
 
+    public string DataPreviewTableSelectorText => T("data_preview.table_selector");
+
+    public string DataPreviewLoadSelectedTableText => T("data_preview.load_selected_table");
+
     public string DataPreviewWorkbenchRefreshText => T("data_preview.workbench_refresh");
 
     public string DataPreviewDetailsText => T("data_preview.details");
@@ -5571,6 +5575,8 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(DataPreviewTabText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchPendingText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        OnPropertyChanged(nameof(DataPreviewTableSelectorText));
+        OnPropertyChanged(nameof(DataPreviewLoadSelectedTableText));
         OnPropertyChanged(nameof(DataPreviewWorkbenchRefreshText));
         OnPropertyChanged(nameof(DataPreviewDetailsText));
         OnPropertyChanged(nameof(DataPreviewSearchText));

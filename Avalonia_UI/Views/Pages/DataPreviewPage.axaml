@@ -78,7 +78,7 @@
 
         <Border Grid.Column="1" Classes="Card" Padding="12">
             <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="8">
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,240,Auto" ColumnSpacing="8">
                     <TextBlock Text="{Binding DataPreviewTabText}"
                                FontSize="16"
                                FontWeight="SemiBold"
@@ -97,10 +97,42 @@
                                  VerticalAlignment="Center"
                                  IsIndeterminate="True"
                                  IsVisible="{Binding IsDataPreviewWorkbenchBusy}"/>
-                    <Button Grid.Column="3"
-                            Content="{Binding DataPreviewWorkbenchRefreshText}"
+                    <TextBlock Grid.Column="3"
+                               Text="{Binding DataPreviewTableSelectorText}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Grid.Column="4"
+                              ItemsSource="{Binding TableRefs}"
+                              SelectedItem="{Binding SelectedDataPreviewTableRef, Mode=TwoWay}"
+                              MinWidth="180"
+                              MaxWidth="260">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:TableRefListItemViewModel"
+                                          x:DataType="vm:TableRefListItemViewModel">
+                                <Grid ColumnDefinitions="*,Auto,Auto"
+                                      ColumnSpacing="6"
+                                      Width="220">
+                                    <TextBlock Text="{Binding LogicalTableId}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding VersionText}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding StorageKind}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="5"
+                            Content="{Binding DataPreviewLoadSelectedTableText}"
                             Command="{Binding LoadSelectedDataPreviewTableCommand}"
-                            MinWidth="84"/>
+                            MinWidth="96"/>
                 </Grid>
 
                 <Grid Grid.Row="1"
