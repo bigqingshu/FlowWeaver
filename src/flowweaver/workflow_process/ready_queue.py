@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
-from flowweaver.protocols.enums import NodeRunStatus
+from flowweaver.protocols.enums import NodeRunStatus, TableRole
 from flowweaver.workflow_process.dag import DagNode, WorkflowDag
 
 _IN_FLIGHT_NODE_RUN_STATUSES = frozenset(
@@ -84,5 +84,26 @@ def _input_refs_for_ready_node(
         )
         if result is None:
             return None
-        input_refs.extend(result.output_refs)
+        input_refs.extend(
+            _current_input_refs_from_output_refs(
+                store=store,
+                output_refs=result.output_refs,
+            )
+        )
+    return input_refs
+
+
+def _current_input_refs_from_output_refs(
+    *,
+    store: RuntimeStore,
+    output_refs: list[str],
+) -> list[str]:
+    input_refs: list[str] = []
+    for output_ref in output_refs:
+        table_ref = store.get_table_ref(output_ref)
+        if table_ref is None:
+            input_refs.append(output_ref)
+            continue
+        if table_ref.role == TableRole.CURRENT:
+            input_refs.append(output_ref)
     return input_refs

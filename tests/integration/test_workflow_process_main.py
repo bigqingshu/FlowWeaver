@@ -14,6 +14,7 @@ from alembic.config import Config
 
 import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.common.time import utc_now
+from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink, IPCEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -37,6 +38,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
     IPCMessageType,
@@ -847,6 +849,56 @@ def add_columns_definition() -> dict:
     }
 
 
+def save_memory_passthrough_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "generate",
+                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "rows": 2,
+                    "columns": ["row_id", "amount"],
+                    "seed": 0,
+                },
+            },
+            {
+                "node_instance_id": "save_memory",
+                "node_type": SAVE_MEMORY_TABLE_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {"table_name": "scratch", "mode": "overwrite"},
+            },
+            {
+                "node_instance_id": "add_column",
+                "node_type": ADD_COLUMNS_NODE_TYPE,
+                "node_version": "1.0",
+                "config": {
+                    "column_name": "status",
+                    "default_value": "new",
+                    "data_type": "TEXT",
+                },
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "generate-to-save-memory",
+                "source_node_id": "generate",
+                "source_port": "out",
+                "target_node_id": "save_memory",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "save-memory-to-add-column",
+                "source_node_id": "save_memory",
+                "source_port": "out",
+                "target_node_id": "add_column",
+                "target_port": "in",
+            },
+        ],
+    }
+
+
 def publish_shared_tables_definition() -> dict:
     return {
         "schema_version": "1.0",
@@ -1278,6 +1330,95 @@ def test_workflow_process_runs_add_columns_node_in_table_chain(
         "amount",
         "status",
     ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0, "status": "new"},
+        {"row_id": 2, "amount": 2.0, "status": "new"},
+    ]
+
+
+def test_workflow_process_save_memory_auxiliary_ref_does_not_flow_downstream(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
+    memory_provider = MemoryTableProvider(tables={})
+    registry = RuntimeDataRegistry(store=store, table_provider=provider)
+    executor = BuiltinTableNodeExecutor(
+        executor_id="builtin-table-save-memory",
+        store=store,
+        registry=registry,
+        table_provider=provider,
+        memory_provider=memory_provider,
+    )
+    workflow = store.create_workflow_definition(
+        name="Save memory passthrough workflow",
+        definition=save_memory_passthrough_definition(),
+        workflow_id="workflow-save-memory-passthrough",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-save-memory-passthrough",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-save-memory-passthrough",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: executor,
+    )
+
+    events = store.list_runtime_events()
+    queued_events = {
+        event.payload["node_instance_id"]: event
+        for event in events
+        if event.event_type == "NODE_QUEUED"
+    }
+    save_memory_task = store.get_node_task(
+        queued_events["save_memory"].payload["task_id"]
+    )
+    add_column_task = store.get_node_task(
+        queued_events["add_column"].payload["task_id"]
+    )
+    save_memory_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="save_memory",
+    )
+    add_column_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="add_column",
+    )
+    assert save_memory_task is not None
+    assert add_column_task is not None
+    assert save_memory_run is not None
+    assert add_column_run is not None
+    save_memory_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        save_memory_run.node_run_id
+    )
+    add_column_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        add_column_run.node_run_id
+    )
+    assert save_memory_result is not None
+    assert add_column_result is not None
+    assert len(save_memory_result.output_refs) == 2
+    current_ref = registry.get(save_memory_result.output_refs[0])
+    auxiliary_ref = registry.get(save_memory_result.output_refs[1])
+    output_ref = registry.get(add_column_result.output_refs[0])
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert save_memory_task.input_refs == [current_ref.table_ref_id]
+    assert add_column_task.input_refs == [current_ref.table_ref_id]
+    assert current_ref.role == TableRole.CURRENT
+    assert auxiliary_ref.role == TableRole.AUXILIARY
+    assert auxiliary_ref.storage_kind == TableStorageKind.MEMORY
+    assert memory_provider.count_rows(auxiliary_ref) == 2
     assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
         {"row_id": 1, "amount": 1.0, "status": "new"},
         {"row_id": 2, "amount": 2.0, "status": "new"},

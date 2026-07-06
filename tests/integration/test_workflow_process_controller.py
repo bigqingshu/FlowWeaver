@@ -9,11 +9,17 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.protocols.enums import (
+    LifecycleStatus,
     NodeResultStatus,
     NodeRunStatus,
+    TableMutability,
+    TableRole,
+    TableScope,
+    TableStorageKind,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import (
     apply_node_success,
@@ -38,6 +44,57 @@ def make_store(tmp_path: Path) -> RuntimeStore:
     database_path = tmp_path / "metadata.db"
     migrate(database_path)
     return RuntimeStore.from_sqlite_path(database_path)
+
+
+def make_ready_queue_table_ref(
+    *,
+    table_ref_id: str,
+    workflow_run_id: str,
+    node_run_id: str,
+    role: TableRole,
+) -> TableRefModel:
+    is_memory = role == TableRole.AUXILIARY
+    return TableRefModel(
+        table_ref_id=table_ref_id,
+        role=role,
+        storage_kind=(
+            TableStorageKind.MEMORY if is_memory else TableStorageKind.RUNTIME_SQL
+        ),
+        scope=TableScope.WORKFLOW_SCOPE,
+        mutability=(
+            TableMutability.WORKING_MUTABLE
+            if is_memory
+            else TableMutability.PUBLISHED_IMMUTABLE
+        ),
+        provider_id="memory" if is_memory else "sqlite_runtime",
+        logical_table_id=table_ref_id,
+        opaque_handle=(
+            {"memory_table_id": f"{table_ref_id}-memory"}
+            if is_memory
+            else {
+                "database_path": "runtime/run.db",
+                "table_name": f"{table_ref_id}_v1",
+            }
+        ),
+        schema=[
+            FieldSchemaModel(
+                field_id="amount",
+                name="amount",
+                data_type="FLOAT",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+        schema_fingerprint=f"{table_ref_id}-fingerprint",
+        version=1,
+        capabilities={"READ"},
+        lifecycle_status=(
+            LifecycleStatus.ACTIVE if is_memory else LifecycleStatus.PUBLISHED
+        ),
+        created_by_workflow_run_id=workflow_run_id,
+        created_by_node_run_id=node_run_id,
+        created_at=utc_now(),
+    )
 
 
 def definition() -> dict:
@@ -520,6 +577,75 @@ def test_ready_queue_passes_upstream_result_refs(tmp_path: Path) -> None:
     assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
     assert candidates[0].input_refs == ("table-source-1", "table-source-2")
     assert candidates[0].dependency_count == 1
+
+
+def test_ready_queue_passes_only_current_table_refs_to_downstream_inputs(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    assert source is not None
+    assert transform is not None
+    current_ref = make_ready_queue_table_ref(
+        table_ref_id="table-current",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+    )
+    auxiliary_ref = make_ready_queue_table_ref(
+        table_ref_id="table-auxiliary",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+        role=TableRole.AUXILIARY,
+    )
+    store.register_table_ref(current_ref)
+    store.register_table_ref(auxiliary_ref)
+    record_successful_node_result(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        output_refs=[current_ref.table_ref_id, auxiliary_ref.table_ref_id],
+    )
+    source_result = store.get_latest_succeeded_node_task_result_for_node_run(
+        source.node_run_id
+    )
+    ready_transform = store.update_node_run_status(
+        transform.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=transform.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert source_result is not None
+    assert ready_transform is not None
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert source_result.output_refs == [
+        current_ref.table_ref_id,
+        auxiliary_ref.table_ref_id,
+    ]
+    assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
+    assert candidates[0].input_refs == (current_ref.table_ref_id,)
 
 
 def test_ready_queue_counts_in_flight_node_runs(tmp_path: Path) -> None:
