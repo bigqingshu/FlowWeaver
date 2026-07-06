@@ -316,6 +316,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "GenerateTestTableNode",
         "FilterRowsNode",
         "AddColumnsNode",
+        "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
         "SqlMappingNode",
@@ -328,8 +329,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["FilterRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
+    assert by_type["SaveMemoryTableNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["SaveMemoryTableNode"]["output_ports"] == [
+        {"name": "out", "required": False},
+        {"name": "memory", "required": False},
+    ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
-    assert all("implementation_path" not in definition for definition in definitions)
+    assert all("implementation_ref" not in definition for definition in definitions)
     assert all(
         definition["config_schema_version"] == "1.0"
         for definition in definitions
@@ -375,6 +383,17 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "FLOAT",
         "BOOLEAN",
     ]
+
+    save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
+        "properties"
+    ]
+    assert save_memory_properties["table_name"] == {
+        "type": "string",
+        "title": "Table Name",
+        "required": True,
+        "default": "memory_table",
+    }
+    assert save_memory_properties["mode"]["enum"] == ["overwrite"]
 
     publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
         "properties"
