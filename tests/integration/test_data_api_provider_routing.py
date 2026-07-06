@@ -140,6 +140,8 @@ def seed_table_ref(
     *,
     provider_id: str = "fake_provider",
     storage_kind: TableStorageKind = TableStorageKind.MEMORY,
+    capabilities: set[str] | None = None,
+    lifecycle_status: LifecycleStatus = LifecycleStatus.PUBLISHED,
 ) -> TableRefModel:
     workflow = store.create_workflow_definition(
         name="Provider routing",
@@ -177,8 +179,8 @@ def seed_table_ref(
         ],
         schema_fingerprint="orders-fingerprint",
         version=1,
-        capabilities={"READ"},
-        lifecycle_status=LifecycleStatus.PUBLISHED,
+        capabilities={"READ"} if capabilities is None else capabilities,
+        lifecycle_status=lifecycle_status,
         created_by_workflow_run_id=run.workflow_run_id,
         created_by_node_run_id=node.node_run_id,
         created_at=utc_now(),
@@ -260,3 +262,45 @@ def test_data_api_rejects_unsupported_storage_kind(tmp_path: Path) -> None:
 
     assert error["error_code"] == "DATA_STORAGE_UNSUPPORTED"
 
+
+def test_data_api_rejects_table_ref_without_read_capability(
+    tmp_path: Path,
+) -> None:
+    provider_registry = TableProviderRegistry()
+    provider_registry.register(
+        FakeTableProvider(),
+        storage_kinds=(TableStorageKind.MEMORY,),
+    )
+    client, store = make_client(tmp_path, provider_registry=provider_registry)
+    table_ref = seed_table_ref(store, capabilities={"APPEND"})
+
+    error = response_error(
+        client.get(
+            f"/api/v1/data/{table_ref.table_ref_id}/rows",
+            headers=auth_headers(),
+        )
+    )
+
+    assert error["error_code"] == "TABLE_REF_NOT_READABLE"
+
+
+def test_data_api_rejects_unavailable_table_ref(tmp_path: Path) -> None:
+    provider_registry = TableProviderRegistry()
+    provider_registry.register(
+        FakeTableProvider(),
+        storage_kinds=(TableStorageKind.MEMORY,),
+    )
+    client, store = make_client(tmp_path, provider_registry=provider_registry)
+    table_ref = seed_table_ref(
+        store,
+        lifecycle_status=LifecycleStatus.RELEASED,
+    )
+
+    error = response_error(
+        client.get(
+            f"/api/v1/data/{table_ref.table_ref_id}/rows",
+            headers=auth_headers(),
+        )
+    )
+
+    assert error["error_code"] == "TABLE_REF_NOT_AVAILABLE"
