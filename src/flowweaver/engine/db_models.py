@@ -277,6 +277,32 @@ class LoopIterationTableRefRecord(Base):
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class LoopIterationNodeRunRecord(Base):
+    __tablename__ = "loop_iteration_node_runs"
+    __table_args__ = (
+        Index(
+            "ix_loop_iteration_node_runs_iteration_instance",
+            "loop_iteration_id",
+            "node_instance_id",
+        ),
+        Index("ix_loop_iteration_node_runs_node_run_id", "node_run_id"),
+    )
+
+    loop_iteration_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("loop_iteration_runs.loop_iteration_id"),
+        primary_key=True,
+    )
+    node_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_runs.node_run_id"),
+        primary_key=True,
+    )
+    node_instance_id: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class DataRefRecord(Base):
     __tablename__ = "data_refs"
 

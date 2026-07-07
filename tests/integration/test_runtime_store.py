@@ -178,6 +178,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "loop_runs",
         "loop_iteration_runs",
         "loop_iteration_table_refs",
+        "loop_iteration_node_runs",
     }.issubset(table_names(database_path))
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
@@ -275,6 +276,13 @@ def test_loop_run_storage_schema_is_available(tmp_path: Path) -> None:
         "role",
         "created_at",
     }
+    assert column_names(database_path, "loop_iteration_node_runs") == {
+        "loop_iteration_id",
+        "node_run_id",
+        "node_instance_id",
+        "role",
+        "created_at",
+    }
     assert {
         ("workflow_run_id", "workflow_runs", "workflow_run_id"),
     }.issubset(foreign_keys(database_path, "loop_runs"))
@@ -288,6 +296,10 @@ def test_loop_run_storage_schema_is_available(tmp_path: Path) -> None:
         ("loop_iteration_id", "loop_iteration_runs", "loop_iteration_id"),
         ("table_ref_id", "data_refs", "table_ref_id"),
     }.issubset(foreign_keys(database_path, "loop_iteration_table_refs"))
+    assert {
+        ("loop_iteration_id", "loop_iteration_runs", "loop_iteration_id"),
+        ("node_run_id", "node_runs", "node_run_id"),
+    }.issubset(foreign_keys(database_path, "loop_iteration_node_runs"))
     assert ["workflow_run_id", "status"] in indexes(
         database_path,
         "loop_runs",
@@ -299,6 +311,14 @@ def test_loop_run_storage_schema_is_available(tmp_path: Path) -> None:
     assert ["loop_iteration_id", "role"] in indexes(
         database_path,
         "loop_iteration_table_refs",
+    ).values()
+    assert ["loop_iteration_id", "node_instance_id"] in indexes(
+        database_path,
+        "loop_iteration_node_runs",
+    ).values()
+    assert ["node_run_id"] in indexes(
+        database_path,
+        "loop_iteration_node_runs",
     ).values()
 
 
@@ -1150,6 +1170,12 @@ def test_runtime_store_loop_run_round_trip_and_idempotency(
     )
     store.register_table_ref(input_ref)
     store.register_table_ref(output_ref)
+    body_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="loop-body",
+        node_type="builtin.transform",
+        node_run_id="node-loop-body-1",
+    )
 
     loop = store.create_loop_run(
         loop_run_id="loop-run-1",
@@ -1250,6 +1276,36 @@ def test_runtime_store_loop_run_round_trip_and_idempotency(
         role=LoopIterationTableRefRole.INPUT,
     ) == [input_link]
 
+    body_link = store.add_loop_iteration_node_run(
+        loop_iteration_id=iteration.loop_iteration_id,
+        node_run_id=body_node.node_run_id,
+        role="BODY",
+    )
+    duplicate_body_link = store.add_loop_iteration_node_run(
+        loop_iteration_id=iteration.loop_iteration_id,
+        node_run_id=body_node.node_run_id,
+        role="BODY",
+    )
+
+    assert body_link is not None
+    assert duplicate_body_link == body_link
+    assert body_link.node_instance_id == "loop-body"
+    assert row_count(database_path, "loop_iteration_node_runs") == 1
+    assert (
+        store.get_loop_iteration_node_run(
+            loop_iteration_id=iteration.loop_iteration_id,
+            node_run_id=body_node.node_run_id,
+        )
+        == body_link
+    )
+    assert store.list_loop_iteration_node_runs(
+        iteration.loop_iteration_id,
+        role="BODY",
+    ) == [body_link]
+    assert store.list_loop_iteration_node_runs_by_node_run(
+        body_node.node_run_id,
+    ) == [body_link]
+
     running_iteration = store.update_loop_iteration_run_status(
         iteration.loop_iteration_id,
         LoopIterationRunStatus.RUNNING,
@@ -1312,6 +1368,73 @@ def test_runtime_store_loop_run_round_trip_and_idempotency(
     assert revived_loop is None
 
 
+def test_runtime_store_loop_iteration_node_runs_keep_iterations_distinct(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, _node = create_producer_context(store)
+    first_body_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="loop-body",
+        node_type="builtin.transform",
+        node_run_id="node-loop-body-1",
+    )
+    second_body_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="loop-body",
+        node_type="builtin.transform",
+        node_run_id="node-loop-body-2",
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-1",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="loop-orders",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+    )
+
+    assert loop is not None
+    first_iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-1",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+    )
+    second_iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-2",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=1,
+    )
+
+    assert first_iteration is not None
+    assert second_iteration is not None
+    first_link = store.add_loop_iteration_node_run(
+        loop_iteration_id=first_iteration.loop_iteration_id,
+        node_run_id=first_body_node.node_run_id,
+        role="BODY",
+    )
+    second_link = store.add_loop_iteration_node_run(
+        loop_iteration_id=second_iteration.loop_iteration_id,
+        node_run_id=second_body_node.node_run_id,
+        role="BODY",
+    )
+
+    assert first_link is not None
+    assert second_link is not None
+    assert first_link.node_instance_id == second_link.node_instance_id == "loop-body"
+    assert first_link.node_run_id != second_link.node_run_id
+    assert store.list_loop_iteration_node_runs(
+        first_iteration.loop_iteration_id,
+        node_instance_id="loop-body",
+    ) == [first_link]
+    assert store.list_loop_iteration_node_runs(
+        second_iteration.loop_iteration_id,
+        node_instance_id="loop-body",
+    ) == [second_link]
+
+
 def test_runtime_store_loop_run_rejects_cross_run_refs(tmp_path: Path) -> None:
     database_path = tmp_path / "metadata.db"
     migrate(database_path)
@@ -1363,6 +1486,17 @@ def test_runtime_store_loop_run_rejects_cross_run_refs(tmp_path: Path) -> None:
             role=LoopIterationTableRefRole.INPUT,
         )
     with pytest.raises(ValueError, match="does not belong to workflow run"):
+        store.add_loop_iteration_node_run(
+            loop_iteration_id=iteration.loop_iteration_id,
+            node_run_id=second_node.node_run_id,
+        )
+    with pytest.raises(ValueError, match="does not match node run"):
+        store.add_loop_iteration_node_run(
+            loop_iteration_id=iteration.loop_iteration_id,
+            node_run_id=first_node.node_run_id,
+            node_instance_id="wrong-node-instance",
+        )
+    with pytest.raises(ValueError, match="does not belong to workflow run"):
         store.update_loop_iteration_run_status(
             iteration.loop_iteration_id,
             LoopIterationRunStatus.RUNNING,
@@ -1371,6 +1505,7 @@ def test_runtime_store_loop_run_rejects_cross_run_refs(tmp_path: Path) -> None:
         )
 
     assert row_count(database_path, "loop_iteration_table_refs") == 0
+    assert row_count(database_path, "loop_iteration_node_runs") == 0
 
 
 def test_runtime_store_shared_publication_round_trip_and_latest(
