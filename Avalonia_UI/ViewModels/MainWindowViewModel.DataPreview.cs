@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -144,7 +142,7 @@ public partial class MainWindowViewModel
 
     public bool IsDataPreviewWorkbenchDirty =>
         dataPreviewWorkbenchEditableCellRows.Length > 0
-        && !DataPreviewWorkbenchCellRowsEqual(
+        && !DataPreviewTableGridBuilder.CellRowsEqual(
             dataPreviewWorkbenchOriginalCellRows,
             dataPreviewWorkbenchEditableCellRows);
 
@@ -410,7 +408,7 @@ public partial class MainWindowViewModel
     private void ParseDataPreviewWorkbenchPaste()
     {
         DataPreviewWorkbenchErrorMessage = null;
-        if (!TryParseDelimitedTable(
+        if (!DataPreviewTableGridBuilder.TryParseDelimitedTable(
                 DataPreviewWorkbenchPasteText,
                 out var columns,
                 out var rows,
@@ -443,7 +441,8 @@ public partial class MainWindowViewModel
     [RelayCommand(CanExecute = nameof(CanRestoreDataPreviewWorkbenchDraft))]
     private void RestoreDataPreviewWorkbenchDraft()
     {
-        dataPreviewWorkbenchEditableCellRows = CloneCellRows(dataPreviewWorkbenchOriginalCellRows);
+        dataPreviewWorkbenchEditableCellRows =
+            DataPreviewTableGridBuilder.CloneCellRows(dataPreviewWorkbenchOriginalCellRows);
         ApplyDataPreviewWorkbenchSearch();
         NotifyDataPreviewWorkbenchDirtyStateChanged();
         DataPreviewWorkbenchClipboardText = string.Empty;
@@ -919,22 +918,21 @@ public partial class MainWindowViewModel
 
     private void LoadDataPreviewRows(TableDataRowsDto rows)
     {
+        var grid = DataPreviewTableGridBuilder.BuildGrid(rows);
+
         DataPreviewColumns.Clear();
-        foreach (var column in rows.Columns)
+        foreach (var column in grid.Columns)
         {
             DataPreviewColumns.Add(new TableDataPreviewColumnViewModel(column));
         }
 
         DataPreviewRows.Clear();
-        foreach (var row in rows.Rows)
+        foreach (var row in grid.CellRows)
         {
             DataPreviewRows.Add(
                 new TableDataPreviewRowViewModel(
-                    rows.Columns
-                        .Select(
-                            column =>
-                                new TableDataPreviewCellViewModel(
-                                    FormatDataPreviewCell(row, column)))
+                    row
+                        .Select(value => new TableDataPreviewCellViewModel(value))
                         .ToArray()));
         }
 
@@ -943,16 +941,16 @@ public partial class MainWindowViewModel
 
     private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows, bool isDraft = false)
     {
+        var gridState = DataPreviewTableGridBuilder.BuildWorkbenchState(rows);
+
         IsDataPreviewWorkbenchDraft = isDraft;
-        dataPreviewWorkbenchLoadedColumns = rows.Columns.ToArray();
-        dataPreviewWorkbenchLoadedRows = rows.Rows.Select(row => row.Clone()).ToArray();
-        dataPreviewWorkbenchOriginalCellRows = dataPreviewWorkbenchLoadedRows
-            .Select(row => CreateCellRow(row, dataPreviewWorkbenchLoadedColumns))
-            .ToArray();
-        dataPreviewWorkbenchEditableCellRows = CloneCellRows(dataPreviewWorkbenchOriginalCellRows);
-        dataPreviewWorkbenchOffset = rows.Offset;
-        dataPreviewWorkbenchHasMore = rows.HasMore;
-        dataPreviewWorkbenchRowCount = rows.RowCount;
+        dataPreviewWorkbenchLoadedColumns = gridState.Columns;
+        dataPreviewWorkbenchLoadedRows = gridState.Rows;
+        dataPreviewWorkbenchOriginalCellRows = gridState.OriginalCellRows;
+        dataPreviewWorkbenchEditableCellRows = gridState.EditableCellRows;
+        dataPreviewWorkbenchOffset = gridState.Offset;
+        dataPreviewWorkbenchHasMore = gridState.HasMore;
+        dataPreviewWorkbenchRowCount = gridState.RowCount;
         DataPreviewWorkbenchClipboardText = string.Empty;
         ApplyDataPreviewWorkbenchSearch();
         NotifyDataPreviewWorkbenchPagingChanged();
@@ -978,14 +976,9 @@ public partial class MainWindowViewModel
 
     private void ApplyDataPreviewWorkbenchSearch()
     {
-        var filter = NormalizeFilter(DataPreviewWorkbenchSearchText);
-        var visibleRowIndexes = Enumerable.Range(0, dataPreviewWorkbenchEditableCellRows.Length);
-        if (filter is not null)
-        {
-            visibleRowIndexes = visibleRowIndexes
-                .Where(rowIndex => DataPreviewWorkbenchRowMatches(rowIndex, filter))
-                .ToArray();
-        }
+        var visibleRowIndexes = DataPreviewTableGridBuilder.GetVisibleRowIndexes(
+            dataPreviewWorkbenchEditableCellRows,
+            DataPreviewWorkbenchSearchText);
 
         DataPreviewWorkbenchColumns.Clear();
         foreach (var column in dataPreviewWorkbenchLoadedColumns)
@@ -1017,24 +1010,6 @@ public partial class MainWindowViewModel
                 .ToArray());
     }
 
-    private bool DataPreviewWorkbenchRowMatches(int rowIndex, string filter)
-    {
-        return dataPreviewWorkbenchEditableCellRows[rowIndex].Any(
-            value => value.Contains(
-                filter,
-                StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string[] CreateCellRow(JsonElement row, string[] columns)
-    {
-        return columns.Select(column => FormatDataPreviewCell(row, column)).ToArray();
-    }
-
-    private static string[][] CloneCellRows(string[][] rows)
-    {
-        return rows.Select(row => row.ToArray()).ToArray();
-    }
-
     private void UpdateDataPreviewWorkbenchCell(
         int rowIndex,
         int columnIndex,
@@ -1061,166 +1036,12 @@ public partial class MainWindowViewModel
         NotifyDataPreviewWorkbenchDirtyStateChanged();
     }
 
-    private static bool DataPreviewWorkbenchCellRowsEqual(string[][] left, string[][] right)
-    {
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (var rowIndex = 0; rowIndex < left.Length; rowIndex++)
-        {
-            if (!left[rowIndex].SequenceEqual(right[rowIndex], StringComparer.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private string BuildDataPreviewWorkbenchTsv()
     {
-        var builder = new StringBuilder();
-        builder.AppendLine(string.Join("\t", DataPreviewWorkbenchColumns.Select(column => EscapeTsv(column.Name))));
-        foreach (var row in DataPreviewWorkbenchRows)
-        {
-            builder.AppendLine(string.Join("\t", row.Cells.Select(cell => EscapeTsv(cell.Text))));
-        }
-
-        return builder.ToString().TrimEnd('\r', '\n');
-    }
-
-    private static string EscapeTsv(string value)
-    {
-        return value
-            .Replace("\r\n", " ", StringComparison.Ordinal)
-            .Replace("\r", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal)
-            .Replace('\t', ' ');
-    }
-
-    private static bool TryParseDelimitedTable(
-        string text,
-        out string[] columns,
-        out JsonElement[] rows,
-        out string? errorMessage)
-    {
-        columns = [];
-        rows = [];
-        errorMessage = null;
-
-        var lines = text
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Split('\n')
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToArray();
-        if (lines.Length < 2)
-        {
-            errorMessage = "data_preview.paste_requires_rows";
-            return false;
-        }
-
-        var delimiter = lines[0].Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
-        var parsedRows = lines.Select(line => ParseDelimitedLine(line, delimiter)).ToArray();
-        var maxColumnCount = parsedRows.Max(row => row.Length);
-        if (maxColumnCount == 0)
-        {
-            errorMessage = "data_preview.paste_no_columns";
-            return false;
-        }
-
-        var parsedColumns = NormalizeDelimitedHeaders(parsedRows[0], maxColumnCount);
-        var parsedDataRows = parsedRows
-            .Skip(1)
-            .Select(row => CreateDelimitedRowElement(parsedColumns, row))
-            .ToArray();
-        columns = parsedColumns;
-        rows = parsedDataRows;
-        if (rows.Length == 0)
-        {
-            errorMessage = "data_preview.paste_no_rows";
-            return false;
-        }
-
-        return true;
-    }
-
-    private static string[] ParseDelimitedLine(string line, char delimiter)
-    {
-        var values = new List<string>();
-        var current = new StringBuilder();
-        var inQuotes = false;
-
-        for (var index = 0; index < line.Length; index++)
-        {
-            var character = line[index];
-            if (character == '"')
-            {
-                if (inQuotes && index + 1 < line.Length && line[index + 1] == '"')
-                {
-                    current.Append('"');
-                    index++;
-                    continue;
-                }
-
-                inQuotes = !inQuotes;
-                continue;
-            }
-
-            if (!inQuotes && character == delimiter)
-            {
-                values.Add(current.ToString());
-                current.Clear();
-                continue;
-            }
-
-            current.Append(character);
-        }
-
-        values.Add(current.ToString());
-        return values.ToArray();
-    }
-
-    private static string[] NormalizeDelimitedHeaders(string[] headerRow, int columnCount)
-    {
-        var headers = new string[columnCount];
-        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (var index = 0; index < columnCount; index++)
-        {
-            var header = index < headerRow.Length ? headerRow[index].Trim() : string.Empty;
-            if (string.IsNullOrWhiteSpace(header))
-            {
-                header = $"Column{index + 1}";
-            }
-
-            if (seen.TryGetValue(header, out var count))
-            {
-                count++;
-                seen[header] = count;
-                header = $"{header}_{count}";
-            }
-            else
-            {
-                seen[header] = 1;
-            }
-
-            headers[index] = header;
-        }
-
-        return headers;
-    }
-
-    private static JsonElement CreateDelimitedRowElement(string[] columns, string[] values)
-    {
-        var row = new Dictionary<string, string>(StringComparer.Ordinal);
-        for (var index = 0; index < columns.Length; index++)
-        {
-            row[columns[index]] = index < values.Length ? values[index] : string.Empty;
-        }
-
-        return JsonSerializer.SerializeToElement(row, FlowWeaverJson.Options).Clone();
+        return DataPreviewTableGridBuilder.BuildTsv(
+            DataPreviewWorkbenchColumns.Select(column => column.Name),
+            DataPreviewWorkbenchRows.Select(
+                row => row.Cells.Select(cell => cell.Text)));
     }
 
     private void UpdateDataPreviewWorkbenchLoadedMessage()
@@ -1314,24 +1135,6 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(DataPreviewWorkbenchSavePolicyText));
         RestoreDataPreviewWorkbenchDraftCommand.NotifyCanExecuteChanged();
         SaveDataPreviewWorkbenchAsCommand.NotifyCanExecuteChanged();
-    }
-
-    private static string FormatDataPreviewCell(JsonElement row, string column)
-    {
-        if (row.ValueKind != JsonValueKind.Object
-            || !row.TryGetProperty(column, out var value))
-        {
-            return string.Empty;
-        }
-
-        return value.ValueKind switch
-        {
-            JsonValueKind.Null or JsonValueKind.Undefined => string.Empty,
-            JsonValueKind.String => value.GetString() ?? string.Empty,
-            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False =>
-                value.GetRawText(),
-            _ => value.GetRawText(),
-        };
     }
 
     partial void OnIsLoadingTableRefsChanged(bool value)
