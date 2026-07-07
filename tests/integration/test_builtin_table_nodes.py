@@ -15,6 +15,7 @@ from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import BuiltinTableNodeExecutor
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
@@ -2335,6 +2336,81 @@ def test_numeric_column_operation_node_limits_changes_to_row_range(
     ]
 
 
+def test_add_current_datetime_column_node_uses_fixed_time_for_run(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    datetime_task = make_task(
+        node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
+        node_run_id="node-run-current-datetime",
+        node_instance_id="current_datetime",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "new_field": "run_time",
+            "time_mode": "fixed",
+            "format_mode": "strftime",
+            "strftime_template": "%Y%m%d%H%M%S",
+        },
+    )
+
+    datetime_result = executor.execute(datetime_task)
+
+    assert datetime_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(datetime_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "current_datetime_output"
+    rows = provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"])
+    run_time_values = {row["run_time"] for row in rows}
+    assert len(run_time_values) == 1
+    run_time = run_time_values.pop()
+    assert len(run_time) == 14
+    assert run_time.isdigit()
+
+
+def test_add_current_datetime_column_node_can_overwrite_target_with_template(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    datetime_task = make_task(
+        node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
+        node_run_id="node-run-current-datetime",
+        node_instance_id="current_datetime",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "output_mode": "overwrite",
+            "target_field": "label",
+            "format_mode": "template",
+            "template": "{year}-{month}-{day}",
+        },
+    )
+
+    datetime_result = executor.execute(datetime_task)
+
+    assert datetime_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(datetime_result.output_refs[0])
+    rows = provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"])
+    assert len(rows[0]["label"]) == 10
+    assert rows[0]["label"].count("-") == 2
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2831,6 +2907,36 @@ def test_numeric_column_operation_node_returns_validation_error_for_missing_fiel
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_add_current_datetime_column_node_returns_validation_error_for_conflict(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    datetime_task = make_task(
+        node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
+        node_run_id="node-run-current-datetime",
+        node_instance_id="current_datetime",
+        input_refs=generate_result.output_refs,
+        config={"new_field": "amount"},
+    )
+
+    result = executor.execute(datetime_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field already exists" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

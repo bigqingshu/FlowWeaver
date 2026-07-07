@@ -370,6 +370,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "LookupMatchedFieldNameNode",
         "MergeColumnsNode",
         "NumericColumnOperationNode",
+        "AddCurrentDateTimeColumnNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -424,6 +425,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["NumericColumnOperationNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["AddCurrentDateTimeColumnNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -741,6 +745,22 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "row_range",
         "reference_non_empty",
     ]
+
+    current_datetime_properties = by_type["AddCurrentDateTimeColumnNode"][
+        "config_schema"
+    ]["properties"]
+    assert current_datetime_properties["output_mode"]["enum"] == [
+        "new_field",
+        "overwrite",
+    ]
+    assert current_datetime_properties["new_field"]["default"] == "current_datetime"
+    assert current_datetime_properties["time_mode"]["enum"] == ["fixed", "per_row"]
+    assert current_datetime_properties["format_mode"]["enum"] == [
+        "iso",
+        "strftime",
+        "template",
+    ]
+    assert current_datetime_properties["template"]["default"] == "{datetime}"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

@@ -11,6 +11,7 @@ from flowweaver.nodes.builtin_shared_table import (
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
@@ -184,6 +185,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_numeric_column_operation_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
+            node_version="1.0",
+            display_name="Add Current DateTime Column",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_add_current_datetime_column_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1126,6 +1135,51 @@ def _numeric_column_operation_schema() -> NodeConfigSchemaSpec:
                 type="object",
                 title="Sequence Step",
                 default=1,
+            ),
+        }
+    )
+
+
+def _add_current_datetime_column_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "output_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Output Mode",
+                required=True,
+                default="new_field",
+                enum=("new_field", "overwrite"),
+            ),
+            "new_field": NodeConfigFieldSpec(
+                type="string",
+                title="New Field",
+                default="current_datetime",
+            ),
+            "target_field": NodeConfigFieldSpec(
+                type="string",
+                title="Target Field",
+            ),
+            "time_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Time Mode",
+                default="fixed",
+                enum=("fixed", "per_row"),
+            ),
+            "format_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Format Mode",
+                default="iso",
+                enum=("iso", "strftime", "template"),
+            ),
+            "template": NodeConfigFieldSpec(
+                type="string",
+                title="Template",
+                default="{datetime}",
+            ),
+            "strftime_template": NodeConfigFieldSpec(
+                type="string",
+                title="Strftime Template",
+                default="%Y-%m-%d %H:%M:%S",
             ),
         }
     )
