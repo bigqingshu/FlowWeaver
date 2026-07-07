@@ -10,6 +10,7 @@ from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    LoopRunStatus,
     NodeResultStatus,
     NodeRunStatus,
     TableMutability,
@@ -193,6 +194,51 @@ def diamond_definition() -> dict:
     }
 
 
+def loop_exit_definition() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "source",
+                "node_type": "core.source",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "loop_start",
+                "node_type": "core.loop_start",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "loop_exit",
+                "node_type": "core.after_loop",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "source-to-exit",
+                "source_node_id": "source",
+                "source_port": "out",
+                "target_node_id": "loop_exit",
+                "target_port": "in",
+            }
+        ],
+        "control_protocol": {
+            "mode": "enabled",
+            "loop_regions": [
+                {
+                    "loop_id": "orders_loop",
+                    "start_node_id": "loop_start",
+                    "judge_node_id": "loop_start",
+                    "body_node_ids": ["loop_start"],
+                    "end_node_id": "loop_exit",
+                    "enabled": True,
+                }
+            ],
+        },
+    }
+
+
 def create_run(store: RuntimeStore):
     workflow = store.create_workflow_definition(
         name="Controller workflow",
@@ -373,9 +419,7 @@ def test_node_success_advances_downstream_to_ready(tmp_path: Path) -> None:
 
     assert result.completed_node is not None
     assert result.completed_node.status == NodeRunStatus.SUCCEEDED.value
-    assert [node.node_instance_id for node in result.newly_ready_nodes] == [
-        "transform"
-    ]
+    assert [node.node_instance_id for node in result.newly_ready_nodes] == ["transform"]
     node_runs = store.list_node_runs(run.workflow_run_id)
     assert {node.node_instance_id: node.status for node in node_runs} == {
         "source": NodeRunStatus.SUCCEEDED.value,
@@ -417,6 +461,134 @@ def test_recover_ready_nodes_uses_persisted_state(tmp_path: Path) -> None:
 
     assert [node.node_instance_id for node in recovered] == ["transform"]
     assert recovered[0].status == NodeRunStatus.READY.value
+
+
+def test_recover_ready_nodes_releases_loop_exit_after_loop_terminal(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=loop_exit_definition(),
+        workflow_id="workflow-loop-exit",
+        workflow_run_id="run-loop-exit",
+        process_id="process-loop-exit",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-1",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="loop_start",
+        judge_node_instance_id="loop_start",
+        max_iterations=3,
+        status=LoopRunStatus.RUNNING,
+    )
+    assert loop is not None
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    loop_exit = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="loop_exit",
+    )
+    assert source is not None
+    assert loop_exit is not None
+    assert loop_exit.status == NodeRunStatus.WAITING_DEPENDENCY.value
+    source_done = store.update_node_run_status(
+        source.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        expected_state_version=source.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    assert source_done is not None
+
+    before_terminal = recover_ready_nodes(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    ended = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.ENDED,
+        expected_state_version=loop.state_version,
+        allowed_source_statuses=[LoopRunStatus.RUNNING],
+    )
+    after_terminal = recover_ready_nodes(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+
+    assert before_terminal == ()
+    assert ended is not None
+    assert [node.node_instance_id for node in after_terminal] == ["loop_exit"]
+    assert after_terminal[0].status == NodeRunStatus.READY.value
+
+
+def test_recover_ready_nodes_releases_loop_exit_at_max_iterations(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=loop_exit_definition(),
+        workflow_id="workflow-loop-max-exit",
+        workflow_run_id="run-loop-max-exit",
+        process_id="process-loop-max-exit",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-max-1",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="loop_start",
+        judge_node_instance_id="loop_start",
+        max_iterations=1,
+        status=LoopRunStatus.RUNNING,
+    )
+    assert loop is not None
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    assert source is not None
+    source_done = store.update_node_run_status(
+        source.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+        expected_state_version=source.state_version,
+        allowed_source_statuses=[NodeRunStatus.READY],
+    )
+    assert source_done is not None
+    capped = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.MAX_ITERATIONS_REACHED,
+        expected_state_version=loop.state_version,
+        allowed_source_statuses=[LoopRunStatus.RUNNING],
+    )
+
+    recovered = recover_ready_nodes(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+
+    assert capped is not None
+    assert [node.node_instance_id for node in recovered] == ["loop_exit"]
 
 
 def test_ready_queue_uses_dag_order_for_ready_nodes(tmp_path: Path) -> None:
@@ -690,10 +862,13 @@ def test_ready_queue_counts_in_flight_node_runs(tmp_path: Path) -> None:
         )
         assert updated is not None
 
-    assert count_in_flight_node_runs(
-        store=store,
-        workflow_run_id=run.workflow_run_id,
-    ) == 3
+    assert (
+        count_in_flight_node_runs(
+            store=store,
+            workflow_run_id=run.workflow_run_id,
+        )
+        == 3
+    )
 
 
 def test_ready_queue_exposes_fork_candidates_after_source_success(

@@ -145,9 +145,7 @@ def test_workflow_definition_parses_runtime_options() -> None:
     assert definition.runtime_options is not None
     assert definition.runtime_options.workflow.profile == "normal"
     assert definition.runtime_options.workflow.telemetry.progress_enabled is True
-    assert (
-        definition.runtime_options.node_overrides["source"].telemetry is not None
-    )
+    assert definition.runtime_options.node_overrides["source"].telemetry is not None
     assert (
         definition.runtime_options.node_overrides["source"].telemetry.log_level
         == "DEBUG"
@@ -157,9 +155,10 @@ def test_workflow_definition_parses_runtime_options() -> None:
 
     assert dag.ready_node_ids == ("source",)
     dumped = definition.model_dump(mode="json")
-    assert dumped["runtime_options"]["node_overrides"]["source"]["telemetry"][
-        "log_level"
-    ] == "DEBUG"
+    assert (
+        dumped["runtime_options"]["node_overrides"]["source"]["telemetry"]["log_level"]
+        == "DEBUG"
+    )
 
 
 def test_workflow_definition_parses_preview_control_protocol_without_cycle() -> None:
@@ -219,9 +218,63 @@ def test_workflow_definition_parses_preview_control_protocol_without_cycle() -> 
     assert definition.control_protocol is not None
     assert definition.control_protocol.loop_regions[0].loop_id == "orders_loop"
     assert definition.control_protocol.loop_regions[0].enabled is False
-    assert definition.model_dump(mode="json")["control_protocol"][
-        "loop_regions"
-    ][0]["max_iterations"] == 3
+    assert (
+        definition.model_dump(mode="json")["control_protocol"]["loop_regions"][0][
+            "max_iterations"
+        ]
+        == 3
+    )
+
+
+def test_enabled_loop_region_adds_exit_dependency_without_preview_side_effect() -> None:
+    base = {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "loop_start",
+                "node_type": "core.loop_start",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "loop_exit",
+                "node_type": "core.after_loop",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [],
+        "control_protocol": {
+            "loop_regions": [
+                {
+                    "loop_id": "orders_loop",
+                    "start_node_id": "loop_start",
+                    "judge_node_id": "loop_start",
+                    "body_node_ids": ["loop_start"],
+                    "end_node_id": "loop_exit",
+                    "enabled": True,
+                }
+            ],
+        },
+    }
+    preview = WorkflowDefinitionModel.model_validate(base)
+    enabled = WorkflowDefinitionModel.model_validate(
+        {
+            **base,
+            "control_protocol": {
+                **base["control_protocol"],
+                "mode": "enabled",
+            },
+        }
+    )
+
+    preview_dag = build_workflow_dag(preview)
+    enabled_dag = build_workflow_dag(enabled)
+
+    assert preview_dag.loop_exit_dependencies == ()
+    assert preview_dag.ready_node_ids == ("loop_start", "loop_exit")
+    assert [
+        dependency.node_instance_id for dependency in enabled_dag.loop_exit_dependencies
+    ] == ["loop_exit"]
+    assert enabled_dag.ready_node_ids == ("loop_start",)
 
 
 def test_workflow_definition_rejects_invalid_runtime_options() -> None:

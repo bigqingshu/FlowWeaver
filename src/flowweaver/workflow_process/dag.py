@@ -4,7 +4,10 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any
 
-from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow.definition import (
+    ControlProtocolMode,
+    WorkflowDefinitionModel,
+)
 
 
 @dataclass(frozen=True)
@@ -18,10 +21,17 @@ class DagNode:
 
 
 @dataclass(frozen=True)
+class LoopExitDependency:
+    node_instance_id: str
+    loop_id: str
+
+
+@dataclass(frozen=True)
 class WorkflowDag:
     nodes: tuple[DagNode, ...]
     topological_order: tuple[str, ...]
     ready_node_ids: tuple[str, ...]
+    loop_exit_dependencies: tuple[LoopExitDependency, ...] = ()
 
 
 def build_workflow_dag(definition: WorkflowDefinitionModel) -> WorkflowDag:
@@ -51,10 +61,19 @@ def build_workflow_dag(definition: WorkflowDefinitionModel) -> WorkflowDag:
         )
         for node_id in order
     )
+    loop_exit_dependencies = _loop_exit_dependencies(definition, node_id_set)
+    loop_exit_node_ids = {
+        dependency.node_instance_id for dependency in loop_exit_dependencies
+    }
     return WorkflowDag(
         nodes=dag_nodes,
         topological_order=tuple(order),
-        ready_node_ids=tuple(node_id for node_id in order if not upstream[node_id]),
+        ready_node_ids=tuple(
+            node_id
+            for node_id in order
+            if not upstream[node_id] and node_id not in loop_exit_node_ids
+        ),
+        loop_exit_dependencies=loop_exit_dependencies,
     )
 
 
@@ -103,8 +122,60 @@ def restrict_workflow_dag_to_upstream_closure(
         nodes=nodes,
         topological_order=ordered_ids,
         ready_node_ids=tuple(
-            node.node_instance_id for node in nodes if not node.upstream_node_ids
+            node.node_instance_id
+            for node in nodes
+            if not node.upstream_node_ids
+            and not _node_has_loop_exit_dependency(
+                dag.loop_exit_dependencies,
+                node.node_instance_id,
+            )
         ),
+        loop_exit_dependencies=tuple(
+            dependency
+            for dependency in dag.loop_exit_dependencies
+            if dependency.node_instance_id in selected
+        ),
+    )
+
+
+def loop_exit_dependencies_for_node(
+    dag: WorkflowDag,
+    node_instance_id: str,
+) -> tuple[LoopExitDependency, ...]:
+    return tuple(
+        dependency
+        for dependency in dag.loop_exit_dependencies
+        if dependency.node_instance_id == node_instance_id
+    )
+
+
+def _loop_exit_dependencies(
+    definition: WorkflowDefinitionModel,
+    node_id_set: set[str],
+) -> tuple[LoopExitDependency, ...]:
+    protocol = definition.control_protocol
+    if protocol is None or protocol.mode != ControlProtocolMode.ENABLED:
+        return ()
+    dependencies: list[LoopExitDependency] = []
+    for region in protocol.loop_regions:
+        if not region.enabled or region.end_node_id is None:
+            continue
+        if region.end_node_id in node_id_set:
+            dependencies.append(
+                LoopExitDependency(
+                    node_instance_id=region.end_node_id,
+                    loop_id=region.loop_id,
+                )
+            )
+    return tuple(dependencies)
+
+
+def _node_has_loop_exit_dependency(
+    dependencies: tuple[LoopExitDependency, ...],
+    node_instance_id: str,
+) -> bool:
+    return any(
+        dependency.node_instance_id == node_instance_id for dependency in dependencies
     )
 
 
