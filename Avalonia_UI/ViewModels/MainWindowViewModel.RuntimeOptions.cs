@@ -371,26 +371,26 @@ public partial class MainWindowViewModel
     {
         var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
         var draft = readResult.Succeeded ? readResult.Draft : new RuntimeOptionsDraft();
+        var workflowFieldState =
+            RuntimeOptionsDraftStateMapper.ToWorkflowFieldState(draft.Workflow);
 
-        RuntimeOptionsProfileDraft = draft.Workflow.Profile;
-        RuntimeOptionsStrictValidationDraft = draft.Workflow.StrictValidation;
-        RuntimeOptionsLogLevelDraft = draft.Workflow.Telemetry.LogLevel;
-        RuntimeOptionsEventLevelDraft = draft.Workflow.Telemetry.EventLevel;
+        RuntimeOptionsProfileDraft = workflowFieldState.Profile;
+        RuntimeOptionsStrictValidationDraft = workflowFieldState.StrictValidation;
+        RuntimeOptionsLogLevelDraft = workflowFieldState.LogLevel;
+        RuntimeOptionsEventLevelDraft = workflowFieldState.EventLevel;
         RuntimeOptionsEventRateLimitPerSecondDraft =
-            FormatInvariant(draft.Workflow.Telemetry.EventRateLimitPerSecond);
-        RuntimeOptionsProgressEnabledDraft = draft.Workflow.Telemetry.ProgressEnabled;
+            workflowFieldState.EventRateLimitPerSecond;
+        RuntimeOptionsProgressEnabledDraft = workflowFieldState.ProgressEnabled;
         RuntimeOptionsProgressIntervalSecondsDraft =
-            FormatInvariant(draft.Workflow.Telemetry.ProgressIntervalSeconds);
+            workflowFieldState.ProgressIntervalSeconds;
         RuntimeOptionsCaptureErrorContextDraft =
-            draft.Workflow.Diagnostics.CaptureErrorContext;
-        RuntimeOptionsIncludeMetricsDraft = draft.Workflow.Diagnostics.IncludeMetrics;
+            workflowFieldState.CaptureErrorContext;
+        RuntimeOptionsIncludeMetricsDraft = workflowFieldState.IncludeMetrics;
         RuntimeOptionsPayloadByteLimitDraft =
-            FormatInvariant(draft.Workflow.Diagnostics.PayloadByteLimit);
-        RuntimeOptionsTtlSecondsDraft =
-            FormatInvariant(draft.Workflow.Diagnostics.TtlSeconds);
-        RuntimeOptionsRedactColumnsDraft =
-            FormatRuntimeOptionsRedactColumns(draft.Workflow.Diagnostics.RedactColumns);
-        RuntimeOptionsMaskPolicyDraft = draft.Workflow.Diagnostics.MaskPolicy;
+            workflowFieldState.PayloadByteLimit;
+        RuntimeOptionsTtlSecondsDraft = workflowFieldState.TtlSeconds;
+        RuntimeOptionsRedactColumnsDraft = workflowFieldState.RedactColumns;
+        RuntimeOptionsMaskPolicyDraft = workflowFieldState.MaskPolicy;
         RuntimeOptionsNodeOverrideCount = draft.NodeOverrides.Count;
         RuntimeOptionsEditorErrorMessage =
             readResult.Succeeded
@@ -418,53 +418,36 @@ public partial class MainWindowViewModel
             draft = readResult.Succeeded ? readResult.Draft : new RuntimeOptionsDraft();
         }
 
-        RuntimeOptionsNodeOverrideDraft? nodeOverride = null;
-        if (SelectedRuntimeOptionsNode is not null)
-        {
-            draft.NodeOverrides.TryGetValue(
-                SelectedRuntimeOptionsNode.NodeInstanceId,
-                out nodeOverride);
-        }
-
+        var selectedNodeFieldState =
+            RuntimeOptionsDraftStateMapper.ToSelectedNodeFieldState(
+                draft,
+                SelectedRuntimeOptionsNode?.NodeInstanceId);
         RuntimeOptionsSelectedNodeProfileDraft =
-            nodeOverride?.Profile ?? draft.Workflow.Profile;
+            selectedNodeFieldState.Profile ?? RuntimeOptionsDefaults.Profile;
         RuntimeOptionsSelectedNodeStrictValidationDraft =
-            nodeOverride?.StrictValidation ?? draft.Workflow.StrictValidation;
+            selectedNodeFieldState.StrictValidation ?? true;
         RuntimeOptionsSelectedNodeLogLevelDraft =
-            nodeOverride?.Telemetry?.LogLevel ?? draft.Workflow.Telemetry.LogLevel;
+            selectedNodeFieldState.LogLevel ?? RuntimeOptionsDefaults.LogLevel;
         RuntimeOptionsSelectedNodeEventLevelDraft =
-            nodeOverride?.Telemetry?.EventLevel ?? draft.Workflow.Telemetry.EventLevel;
+            selectedNodeFieldState.EventLevel ?? RuntimeOptionsDefaults.EventLevel;
         RuntimeOptionsSelectedNodeEventRateLimitPerSecondDraft =
-            FormatInvariant(
-                nodeOverride?.Telemetry?.EventRateLimitPerSecond
-                    ?? draft.Workflow.Telemetry.EventRateLimitPerSecond);
+            selectedNodeFieldState.EventRateLimitPerSecond ?? "0";
         RuntimeOptionsSelectedNodeProgressEnabledDraft =
-            nodeOverride?.Telemetry?.ProgressEnabled
-            ?? draft.Workflow.Telemetry.ProgressEnabled;
+            selectedNodeFieldState.ProgressEnabled ?? true;
         RuntimeOptionsSelectedNodeProgressIntervalSecondsDraft =
-            FormatInvariant(
-                nodeOverride?.Telemetry?.ProgressIntervalSeconds
-                    ?? draft.Workflow.Telemetry.ProgressIntervalSeconds);
+            selectedNodeFieldState.ProgressIntervalSeconds ?? "0";
         RuntimeOptionsSelectedNodeCaptureErrorContextDraft =
-            nodeOverride?.Diagnostics?.CaptureErrorContext
-            ?? draft.Workflow.Diagnostics.CaptureErrorContext;
+            selectedNodeFieldState.CaptureErrorContext ?? true;
         RuntimeOptionsSelectedNodeIncludeMetricsDraft =
-            nodeOverride?.Diagnostics?.IncludeMetrics
-            ?? draft.Workflow.Diagnostics.IncludeMetrics;
+            selectedNodeFieldState.IncludeMetrics ?? true;
         RuntimeOptionsSelectedNodePayloadByteLimitDraft =
-            FormatInvariant(
-                nodeOverride?.Diagnostics?.PayloadByteLimit
-                    ?? draft.Workflow.Diagnostics.PayloadByteLimit);
+            selectedNodeFieldState.PayloadByteLimit ?? "0";
         RuntimeOptionsSelectedNodeTtlSecondsDraft =
-            FormatInvariant(
-                nodeOverride?.Diagnostics?.TtlSeconds
-                    ?? draft.Workflow.Diagnostics.TtlSeconds);
+            selectedNodeFieldState.TtlSeconds ?? "0";
         RuntimeOptionsSelectedNodeRedactColumnsDraft =
-            FormatRuntimeOptionsRedactColumns(
-                nodeOverride?.Diagnostics?.RedactColumns
-                    ?? draft.Workflow.Diagnostics.RedactColumns);
+            selectedNodeFieldState.RedactColumns ?? string.Empty;
         RuntimeOptionsSelectedNodeMaskPolicyDraft =
-            nodeOverride?.Diagnostics?.MaskPolicy ?? draft.Workflow.Diagnostics.MaskPolicy;
+            selectedNodeFieldState.MaskPolicy ?? RuntimeOptionsDefaults.MaskPolicy;
 
         OnPropertyChanged(nameof(HasSelectedRuntimeOptionsNode));
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
@@ -634,7 +617,7 @@ public partial class MainWindowViewModel
                 IncludeMetrics = RuntimeOptionsIncludeMetricsDraft,
                 PayloadByteLimit = payloadByteLimit,
                 TtlSeconds = ttlSeconds,
-                RedactColumns = ParseRuntimeOptionsRedactColumns(
+                RedactColumns = RuntimeOptionsDraftStateMapper.ParseRedactColumns(
                     RuntimeOptionsRedactColumnsDraft),
                 MaskPolicy = RuntimeOptionsMaskPolicyDraft,
             },
@@ -691,7 +674,7 @@ public partial class MainWindowViewModel
                 IncludeMetrics = RuntimeOptionsSelectedNodeIncludeMetricsDraft,
                 PayloadByteLimit = payloadByteLimit,
                 TtlSeconds = ttlSeconds,
-                RedactColumns = ParseRuntimeOptionsRedactColumns(
+                RedactColumns = RuntimeOptionsDraftStateMapper.ParseRedactColumns(
                     RuntimeOptionsSelectedNodeRedactColumnsDraft),
                 MaskPolicy = RuntimeOptionsSelectedNodeMaskPolicyDraft,
             },
@@ -974,31 +957,6 @@ public partial class MainWindowViewModel
 
         errorMessage = F("definition.runtime_options_number_invalid", label);
         return false;
-    }
-
-    private static string FormatInvariant(int value)
-    {
-        return value.ToString(CultureInfo.InvariantCulture);
-    }
-
-    private static string FormatInvariant(double value)
-    {
-        return value.ToString(CultureInfo.InvariantCulture);
-    }
-
-    private static string FormatRuntimeOptionsRedactColumns(
-        IReadOnlyList<string> redactColumns)
-    {
-        return string.Join(", ", redactColumns);
-    }
-
-    private static IReadOnlyList<string> ParseRuntimeOptionsRedactColumns(string input)
-    {
-        return input
-            .Split([',', ';', '\r', '\n'], StringSplitOptions.TrimEntries)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
     }
 
     private void NotifyRuntimeOptionsSummaryChanged()
