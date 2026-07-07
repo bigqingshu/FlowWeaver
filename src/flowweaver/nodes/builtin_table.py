@@ -44,11 +44,14 @@ ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
 COPY_COLUMN_NODE_TYPE = "CopyColumnNode"
 REORDER_COLUMNS_NODE_TYPE = "ReorderColumnsNode"
+RENAME_COLUMNS_NODE_TYPE = "RenameColumnsNode"
 FILL_CELLS_NODE_TYPE = "FillCellsNode"
 FILL_RANGE_NODE_TYPE = "FillRangeNode"
+FILL_SEQUENCE_NODE_TYPE = "FillSequenceNode"
 REPLACE_TEXT_NODE_TYPE = "ReplaceTextNode"
 DELETE_ROWS_NODE_TYPE = "DeleteRowsNode"
 COPY_ROWS_NODE_TYPE = "CopyRowsNode"
+UNPIVOT_ROWS_NODE_TYPE = "UnpivotRowsNode"
 DEDUPLICATE_ROWS_NODE_TYPE = "DeduplicateRowsNode"
 ADVANCED_FILTER_ROWS_NODE_TYPE = "AdvancedFilterRowsNode"
 EXTRACT_TEXT_NODE_TYPE = "ExtractTextNode"
@@ -94,11 +97,14 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             DeleteColumnsNodeHandler(),
             CopyColumnNodeHandler(),
             ReorderColumnsNodeHandler(),
+            RenameColumnsNodeHandler(),
             FillCellsNodeHandler(),
             FillRangeNodeHandler(),
+            FillSequenceNodeHandler(),
             ReplaceTextNodeHandler(),
             DeleteRowsNodeHandler(),
             CopyRowsNodeHandler(),
+            UnpivotRowsNodeHandler(),
             DeduplicateRowsNodeHandler(),
             AdvancedFilterRowsNodeHandler(),
             ExtractTextNodeHandler(),
@@ -435,6 +441,62 @@ class ReorderColumnsNodeHandler:
         ]
 
 
+class RenameColumnsNodeHandler:
+    node_type = RENAME_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        proposed_names = _rename_columns_proposed_names(
+            task.config,
+            input_ref=input_ref,
+        )
+        input_names = [field.name for field in input_ref.schema]
+        output_names = _rename_columns_apply_duplicate_policy(
+            input_names,
+            proposed_names,
+            duplicate_policy=_enum_config(
+                task.config,
+                "duplicate_policy",
+                default="error",
+                allowed={"error", "skip", "append_number"},
+                node_type=self.node_type,
+            ),
+        )
+        schema = _rename_columns_schema(input_ref.schema, output_names)
+        source_to_output = {
+            field.name: output_name
+            for field, output_name in zip(input_ref.schema, output_names, strict=True)
+        }
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    output_rows.append(
+                        {
+                            source_to_output[field.name]: row.get(field.name)
+                            for field in input_ref.schema
+                        }
+                    )
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class FillCellsNodeHandler:
     node_type = FILL_CELLS_NODE_TYPE
 
@@ -616,6 +678,116 @@ class FillRangeNodeHandler:
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=input_ref.schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
+class FillSequenceNodeHandler:
+    node_type = FILL_SEQUENCE_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        target_field = _node_string_config(
+            task.config,
+            "target_field",
+            node_type=self.node_type,
+        )
+        if find_field(input_ref.schema, target_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {target_field}")
+        total_rows = context.count_rows(input_ref)
+        selector = _fill_sequence_selector(
+            task.config,
+            input_ref=input_ref,
+            total_rows=total_rows,
+        )
+        start_value = _number_config(
+            task.config,
+            "start_value",
+            default=1,
+            node_type=self.node_type,
+        )
+        step = _number_config(
+            task.config,
+            "step",
+            default=1,
+            node_type=self.node_type,
+        )
+        overwrite_rule = _enum_config(
+            task.config,
+            "overwrite_rule",
+            default="all",
+            allowed={"all", "empty_only"},
+            node_type=self.node_type,
+        )
+        zero_pad = _non_negative_int_config(
+            task.config,
+            "zero_pad",
+            default=0,
+            node_type=self.node_type,
+        )
+        prefix = _optional_string_config(
+            task.config,
+            "prefix",
+            node_type=self.node_type,
+        )
+        suffix = _optional_string_config(
+            task.config,
+            "suffix",
+            node_type=self.node_type,
+        )
+        output_schema = _fill_sequence_output_schema(
+            input_ref.schema,
+            target_field=target_field,
+            formatted=bool(prefix or suffix or zero_pad),
+        )
+
+        def output_batches():
+            row_number = 1
+            sequence_index = 0
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    selected_index = _fill_sequence_selected_index(
+                        row,
+                        row_number=row_number,
+                        selector=selector,
+                    )
+                    should_fill = selected_index is not None and (
+                        overwrite_rule == "all"
+                        or _is_empty_cell(row.get(target_field))
+                    )
+                    if should_fill:
+                        if selected_index <= 0:
+                            sequence_index += 1
+                            selected_index = sequence_index
+                        output_rows.append(
+                            dict(row) | {
+                                target_field: _format_sequence_value(
+                                    start_value + (selected_index - 1) * step,
+                                    zero_pad=zero_pad,
+                                    prefix=prefix,
+                                    suffix=suffix,
+                                )
+                            }
+                        )
+                    else:
+                        output_rows.append(dict(row))
+                    row_number += 1
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=output_schema,
                 row_batches=output_batches(),
             )
         ]
@@ -879,6 +1051,58 @@ class CopyRowsNodeHandler:
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=input_ref.schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
+class UnpivotRowsNodeHandler:
+    node_type = UNPIVOT_ROWS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        config = _unpivot_rows_config(task.config, input_ref=input_ref)
+        output_schema = _unpivot_rows_output_schema(
+            input_ref.schema,
+            keep_fields=config["keep_fields"],
+            output_value_field=config["output_value_field"],
+            source_field_name=config["source_field_name"],
+            original_row_field=config["original_row_field"],
+            status_field=config["status_field"],
+        )
+        row_selector = _unpivot_row_selector(
+            task.config,
+            total_rows=context.count_rows(input_ref),
+        )
+
+        def output_batches():
+            row_number = 1
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    if _unpivot_row_selected(row_number, row_selector):
+                        output_rows.extend(
+                            _unpivot_output_rows(
+                                row,
+                                row_number=row_number,
+                                config=config,
+                            )
+                        )
+                    row_number += 1
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=output_schema,
                 row_batches=output_batches(),
             )
         ]
@@ -2584,6 +2808,32 @@ def _string_list_config(
     return items
 
 
+def _optional_string_list_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> list[str]:
+    value = config.get(key, [])
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise _NodeValidationError(f"{node_type} config.{key} must be a string list")
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise _NodeValidationError(
+                f"{node_type} config.{key} must be a string list"
+            )
+        normalized = item.strip()
+        if normalized in items:
+            raise _NodeValidationError(
+                f"{node_type} config.{key} contains duplicate field: {normalized}"
+            )
+        items.append(normalized)
+    return items
+
+
 def _optional_string_config(
     config: dict[str, Any],
     key: str,
@@ -3327,6 +3577,231 @@ def _copy_column_value(
     return copied
 
 
+def _rename_columns_proposed_names(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+) -> list[str]:
+    mode = _enum_config(
+        config,
+        "mode",
+        default="mappings",
+        allowed={"mappings", "prefix", "suffix", "replace"},
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+    )
+    trim_names = _bool_config(config, "trim_names", default=True)
+    input_names = [field.name for field in input_ref.schema]
+    missing_policy = _enum_config(
+        config,
+        "missing_policy",
+        default="error",
+        allowed={"error", "skip", "warn"},
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+    )
+    rename_map: dict[str, str] = {}
+    if mode == "mappings":
+        rename_map = _rename_columns_mapping_config(
+            config,
+            input_ref=input_ref,
+            missing_policy=missing_policy,
+            trim_names=trim_names,
+        )
+    else:
+        scope_fields = _rename_columns_scope_fields(
+            config,
+            input_ref=input_ref,
+            missing_policy=missing_policy,
+        )
+        if mode == "prefix":
+            prefix = _optional_string_config(
+                config,
+                "prefix",
+                node_type=RENAME_COLUMNS_NODE_TYPE,
+            )
+            rename_map = {field: f"{prefix}{field}" for field in scope_fields}
+        elif mode == "suffix":
+            suffix = _optional_string_config(
+                config,
+                "suffix",
+                node_type=RENAME_COLUMNS_NODE_TYPE,
+            )
+            rename_map = {field: f"{field}{suffix}" for field in scope_fields}
+        else:
+            match = _node_string_config(
+                config,
+                "replace_match",
+                node_type=RENAME_COLUMNS_NODE_TYPE,
+            )
+            replace_value = _optional_string_config(
+                config,
+                "replace_value",
+                node_type=RENAME_COLUMNS_NODE_TYPE,
+            )
+            rename_map = {
+                field: field.replace(match, replace_value)
+                for field in scope_fields
+            }
+    proposed_names: list[str] = []
+    for field_name in input_names:
+        proposed = rename_map.get(field_name, field_name)
+        if trim_names:
+            proposed = proposed.strip()
+        if not proposed:
+            raise _NodeValidationError("RenameColumnsNode output field name is empty")
+        proposed_names.append(proposed)
+    return proposed_names
+
+
+def _rename_columns_mapping_config(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+    missing_policy: str,
+    trim_names: bool,
+) -> dict[str, str]:
+    value = config.get("mappings")
+    if not isinstance(value, list) or not value:
+        raise _NodeValidationError(
+            "RenameColumnsNode config.mappings must be a non-empty list"
+        )
+    input_names = {field.name for field in input_ref.schema}
+    mappings: dict[str, str] = {}
+    missing_fields: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise _NodeValidationError(
+                "RenameColumnsNode config.mappings must contain objects"
+            )
+        source_field = _rename_mapping_string(
+            item,
+            keys=("source_field", "old_name", "old_field", "source"),
+            message="RenameColumnsNode mappings.source_field is required",
+        )
+        target_field = _rename_mapping_string(
+            item,
+            keys=("target_field", "new_name", "new_field", "target"),
+            message="RenameColumnsNode mappings.target_field is required",
+        )
+        if trim_names:
+            target_field = target_field.strip()
+        if not target_field:
+            raise _NodeValidationError(
+                "RenameColumnsNode mappings.target_field is required"
+            )
+        if source_field in mappings:
+            raise _NodeValidationError(
+                f"RenameColumnsNode duplicate mapping source: {source_field}"
+            )
+        if source_field not in input_names:
+            missing_fields.append(source_field)
+            continue
+        mappings[source_field] = target_field
+    if missing_fields and missing_policy == "error":
+        raise _NodeValidationError(
+            f"Fields do not exist: {', '.join(missing_fields)}"
+        )
+    return mappings
+
+
+def _rename_mapping_string(
+    item: dict[str, Any],
+    *,
+    keys: tuple[str, ...],
+    message: str,
+) -> str:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raise _NodeValidationError(message)
+
+
+def _rename_columns_scope_fields(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+    missing_policy: str,
+) -> list[str]:
+    scope = _enum_config(
+        config,
+        "scope",
+        default="all",
+        allowed={"all", "fields"},
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+    )
+    if scope == "all":
+        return [field.name for field in input_ref.schema]
+    scope_fields = _string_list_config(
+        config,
+        "scope_fields",
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+    )
+    input_names = {field.name for field in input_ref.schema}
+    missing_fields = [
+        field
+        for field in scope_fields
+        if field not in input_names
+    ]
+    if missing_fields and missing_policy == "error":
+        raise _NodeValidationError(
+            f"Fields do not exist: {', '.join(missing_fields)}"
+        )
+    return [
+        field
+        for field in scope_fields
+        if field in input_names
+    ]
+
+
+def _rename_columns_apply_duplicate_policy(
+    input_names: list[str],
+    proposed_names: list[str],
+    *,
+    duplicate_policy: str,
+) -> list[str]:
+    duplicates = {
+        name
+        for name in proposed_names
+        if proposed_names.count(name) > 1
+    }
+    if not duplicates:
+        return proposed_names
+    if duplicate_policy == "error":
+        raise _NodeValidationError(
+            f"RenameColumnsNode output fields are duplicated: "
+            f"{', '.join(sorted(duplicates))}"
+        )
+    if duplicate_policy == "skip":
+        return [
+            input_name if proposed_name in duplicates and proposed_name != input_name
+            else proposed_name
+            for input_name, proposed_name in zip(input_names, proposed_names, strict=True)
+        ]
+    output_names: list[str] = []
+    used_names: set[str] = set()
+    for proposed_name in proposed_names:
+        candidate = proposed_name
+        suffix_index = 2
+        while candidate in used_names:
+            candidate = f"{proposed_name}_{suffix_index}"
+            suffix_index += 1
+        output_names.append(candidate)
+        used_names.add(candidate)
+    return output_names
+
+
+def _rename_columns_schema(
+    schema: list[FieldSchemaModel],
+    output_names: list[str],
+) -> list[FieldSchemaModel]:
+    return [
+        field.model_copy(update={"name": output_name, "ordinal": ordinal})
+        for ordinal, (field, output_name) in enumerate(
+            zip(schema, output_names, strict=True)
+        )
+    ]
+
+
 def _fill_cells_value_source_config(config: dict[str, Any]):
     return _value_source_config(
         config,
@@ -3370,6 +3845,159 @@ def _fill_cells_selected_rows(
 
 def _is_empty_cell(value: Any) -> bool:
     return value is None or value == ""
+
+
+def _fill_sequence_selector(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+    total_rows: int,
+) -> dict[str, Any]:
+    start_row = _positive_int_config(
+        config,
+        "start_row",
+        default=1,
+        node_type=FILL_SEQUENCE_NODE_TYPE,
+    )
+    if total_rows > 0 and start_row > total_rows:
+        raise _NodeValidationError("FillSequenceNode config.start_row is out of range")
+    direction = _enum_config(
+        config,
+        "direction",
+        default="down",
+        allowed={"down", "up"},
+        node_type=FILL_SEQUENCE_NODE_TYPE,
+    )
+    end_mode = _enum_config(
+        config,
+        "end_mode",
+        default="to_end",
+        allowed={"to_end", "count", "end_row", "reference_non_empty"},
+        node_type=FILL_SEQUENCE_NODE_TYPE,
+    )
+    selected_rows = _fill_sequence_selected_rows(
+        config,
+        total_rows=total_rows,
+        start_row=start_row,
+        direction=direction,
+        end_mode=end_mode,
+    )
+    reference_field = None
+    if end_mode == "reference_non_empty":
+        reference_field = _node_string_config(
+            config,
+            "reference_field",
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+        )
+        if find_field(input_ref.schema, reference_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {reference_field}")
+    return {
+        "selected_index_by_row": {
+            row_number: index + 1
+            for index, row_number in enumerate(selected_rows)
+        },
+        "reference_field": reference_field,
+    }
+
+
+def _fill_sequence_selected_rows(
+    config: dict[str, Any],
+    *,
+    total_rows: int,
+    start_row: int,
+    direction: str,
+    end_mode: str,
+) -> list[int]:
+    if total_rows <= 0:
+        return []
+    if end_mode == "count":
+        count = _positive_int_config(
+            config,
+            "count",
+            default=1,
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+        )
+        if direction == "down":
+            end_row = min(total_rows, start_row + count - 1)
+            return list(range(start_row, end_row + 1))
+        end_row = max(1, start_row - count + 1)
+        return list(range(start_row, end_row - 1, -1))
+    if end_mode == "end_row":
+        end_row = _positive_int_config(
+            config,
+            "end_row",
+            default=total_rows if direction == "down" else 1,
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+        )
+        if end_row > total_rows:
+            raise _NodeValidationError("FillSequenceNode config.end_row is out of range")
+        if direction == "down":
+            if start_row > end_row:
+                raise _NodeValidationError(
+                    "FillSequenceNode start_row must be <= end_row"
+                )
+            return list(range(start_row, end_row + 1))
+        if end_row > start_row:
+            raise _NodeValidationError(
+                "FillSequenceNode end_row must be <= start_row when direction is up"
+            )
+        return list(range(start_row, end_row - 1, -1))
+    if direction == "down":
+        return list(range(start_row, total_rows + 1))
+    return list(range(start_row, 0, -1))
+
+
+def _fill_sequence_selected_index(
+    row: dict[str, Any],
+    *,
+    row_number: int,
+    selector: dict[str, Any],
+) -> int | None:
+    selected_index = selector["selected_index_by_row"].get(row_number)
+    if selected_index is None:
+        return None
+    reference_field = selector.get("reference_field")
+    if reference_field is not None and _is_empty_cell(row.get(reference_field)):
+        return None
+    return selected_index
+
+
+def _fill_sequence_output_schema(
+    schema: list[FieldSchemaModel],
+    *,
+    target_field: str,
+    formatted: bool,
+) -> list[FieldSchemaModel]:
+    if not formatted:
+        return schema
+    return replace_field_schema(
+        schema,
+        target_field,
+        data_type="TEXT",
+        nullable=True,
+    )
+
+
+def _format_sequence_value(
+    value: float,
+    *,
+    zero_pad: int,
+    prefix: str,
+    suffix: str,
+) -> Any:
+    normalized = _normalize_sequence_number(value)
+    if not prefix and not suffix and zero_pad <= 0:
+        return normalized
+    text = str(normalized)
+    if zero_pad > 0:
+        text = text.zfill(zero_pad)
+    return f"{prefix}{text}{suffix}"
+
+
+def _normalize_sequence_number(value: float) -> int | float:
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _delete_rows_predicate(
@@ -3580,6 +4208,246 @@ def _copy_row_batches(
             for _ in range(current_batch_size)
         ]
         remaining -= current_batch_size
+
+
+def _unpivot_rows_config(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+) -> dict[str, Any]:
+    value_fields = _string_list_config(
+        config,
+        "value_fields",
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+    )
+    keep_fields = _optional_string_list_config(
+        config,
+        "keep_fields",
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+    )
+    _require_fields(input_ref.schema, value_fields + keep_fields)
+    output_value_field = _optional_node_string_config(
+        config,
+        "output_value_field",
+        default="value",
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+    )
+    output_source_field = _bool_config(
+        config,
+        "output_source_field",
+        default=True,
+    )
+    source_field_name = (
+        _optional_node_string_config(
+            config,
+            "source_field_name",
+            default="source_field",
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        )
+        if output_source_field
+        else None
+    )
+    output_original_row = _bool_config(
+        config,
+        "output_original_row",
+        default=False,
+    )
+    original_row_field = (
+        _optional_node_string_config(
+            config,
+            "original_row_field",
+            default="original_row",
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        )
+        if output_original_row
+        else None
+    )
+    output_status = _bool_config(config, "output_status", default=False)
+    status_field = (
+        _optional_node_string_config(
+            config,
+            "status_field",
+            default="mapping_status",
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        )
+        if output_status
+        else None
+    )
+    output_field_names = [
+        field
+        for field in [
+            output_value_field,
+            source_field_name,
+            original_row_field,
+            status_field,
+        ]
+        if field is not None
+    ]
+    conflicts = sorted(set(keep_fields) & set(output_field_names))
+    if conflicts:
+        raise _NodeValidationError(
+            f"UnpivotRowsNode output fields conflict with keep_fields: "
+            f"{', '.join(conflicts)}"
+        )
+    duplicates = sorted(
+        field
+        for field in set(output_field_names)
+        if output_field_names.count(field) > 1
+    )
+    if duplicates:
+        raise _NodeValidationError(
+            f"UnpivotRowsNode output fields are duplicated: {', '.join(duplicates)}"
+        )
+    return {
+        "value_fields": value_fields,
+        "keep_fields": keep_fields,
+        "output_value_field": output_value_field,
+        "source_field_name": source_field_name,
+        "original_row_field": original_row_field,
+        "status_field": status_field,
+        "empty_mode": _enum_config(
+            config,
+            "empty_mode",
+            default="skip",
+            allowed={"skip", "empty", "fixed"},
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        ),
+        "empty_fixed": config.get("empty_fixed"),
+        "trim_value": _bool_config(config, "trim_value", default=False),
+    }
+
+
+def _unpivot_rows_output_schema(
+    input_schema: list[FieldSchemaModel],
+    *,
+    keep_fields: list[str],
+    output_value_field: str,
+    source_field_name: str | None,
+    original_row_field: str | None,
+    status_field: str | None,
+) -> list[FieldSchemaModel]:
+    schema: list[FieldSchemaModel] = []
+    fields_by_name = {field.name: field for field in input_schema}
+    for field_name in keep_fields:
+        field = fields_by_name[field_name]
+        schema.append(field.model_copy(update={"ordinal": len(schema)}))
+    schema = append_field(
+        schema,
+        name=output_value_field,
+        data_type="TEXT",
+        nullable=True,
+    )
+    if source_field_name is not None:
+        schema = append_field(
+            schema,
+            name=source_field_name,
+            data_type="TEXT",
+            nullable=False,
+        )
+    if original_row_field is not None:
+        schema = append_field(
+            schema,
+            name=original_row_field,
+            data_type="INTEGER",
+            nullable=False,
+        )
+    if status_field is not None:
+        schema = append_field(
+            schema,
+            name=status_field,
+            data_type="TEXT",
+            nullable=False,
+        )
+    return schema
+
+
+def _unpivot_row_selector(
+    config: dict[str, Any],
+    *,
+    total_rows: int,
+) -> dict[str, int]:
+    start_row = _positive_int_config(
+        config,
+        "start_row",
+        default=1,
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+    )
+    if total_rows > 0 and start_row > total_rows:
+        raise _NodeValidationError("UnpivotRowsNode config.start_row is out of range")
+    end_mode = _enum_config(
+        config,
+        "end_mode",
+        default="to_end",
+        allowed={"to_end", "count", "end_row"},
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+    )
+    if total_rows <= 0:
+        return {"start_row": 1, "end_row": 0}
+    if end_mode == "count":
+        count = _positive_int_config(
+            config,
+            "count",
+            default=1,
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        )
+        end_row = min(total_rows, start_row + count - 1)
+    elif end_mode == "end_row":
+        end_row = _positive_int_config(
+            config,
+            "end_row",
+            default=total_rows,
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+        )
+        if end_row > total_rows:
+            raise _NodeValidationError("UnpivotRowsNode config.end_row is out of range")
+        if start_row > end_row:
+            raise _NodeValidationError("UnpivotRowsNode start_row must be <= end_row")
+    else:
+        end_row = total_rows
+    return {"start_row": start_row, "end_row": end_row}
+
+
+def _unpivot_row_selected(
+    row_number: int,
+    row_selector: dict[str, int],
+) -> bool:
+    return row_selector["start_row"] <= row_number <= row_selector["end_row"]
+
+
+def _unpivot_output_rows(
+    row: dict[str, Any],
+    *,
+    row_number: int,
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    output_rows: list[dict[str, Any]] = []
+    base_row = {
+        field: row.get(field)
+        for field in config["keep_fields"]
+    }
+    for value_field in config["value_fields"]:
+        value = row.get(value_field)
+        if config["trim_value"] and isinstance(value, str):
+            value = value.strip()
+        status = "mapped"
+        if _is_empty_cell(value):
+            if config["empty_mode"] == "skip":
+                continue
+            if config["empty_mode"] == "fixed":
+                value = config["empty_fixed"]
+                status = "empty_fixed"
+            else:
+                status = "empty"
+        output_row = dict(base_row)
+        output_row[config["output_value_field"]] = value
+        if config["source_field_name"] is not None:
+            output_row[config["source_field_name"]] = value_field
+        if config["original_row_field"] is not None:
+            output_row[config["original_row_field"]] = row_number
+        if config["status_field"] is not None:
+            output_row[config["status_field"]] = status
+        output_rows.append(output_row)
+    return output_rows
 
 
 def _deduplicate_key_fields(

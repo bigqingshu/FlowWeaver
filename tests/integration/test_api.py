@@ -362,11 +362,14 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "DeleteColumnsNode",
         "CopyColumnNode",
         "ReorderColumnsNode",
+        "RenameColumnsNode",
         "FillCellsNode",
         "FillRangeNode",
+        "FillSequenceNode",
         "ReplaceTextNode",
         "DeleteRowsNode",
         "CopyRowsNode",
+        "UnpivotRowsNode",
         "DeduplicateRowsNode",
         "AdvancedFilterRowsNode",
         "ExtractTextNode",
@@ -415,10 +418,16 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["ReorderColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
+    assert by_type["RenameColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
     assert by_type["FillCellsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["FillRangeNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["FillSequenceNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["ReplaceTextNode"]["input_ports"] == [
@@ -428,6 +437,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["CopyRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["UnpivotRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["DeduplicateRowsNode"]["input_ports"] == [
@@ -617,6 +629,30 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert reorder_columns_properties["unlisted_policy"]["default"] == "append"
 
+    rename_columns_properties = by_type["RenameColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert rename_columns_properties["mode"]["enum"] == [
+        "mappings",
+        "prefix",
+        "suffix",
+        "replace",
+    ]
+    assert rename_columns_properties["mappings"]["items"] == {"type": "object"}
+    assert rename_columns_properties["scope"]["enum"] == ["all", "fields"]
+    assert rename_columns_properties["scope_fields"]["items"] == {"type": "string"}
+    assert rename_columns_properties["duplicate_policy"]["enum"] == [
+        "error",
+        "skip",
+        "append_number",
+    ]
+    assert rename_columns_properties["missing_policy"]["enum"] == [
+        "error",
+        "skip",
+        "warn",
+    ]
+    assert rename_columns_properties["trim_names"]["default"] is True
+
     fill_cells_properties = by_type["FillCellsNode"]["config_schema"]["properties"]
     assert fill_cells_properties["target_field"] == {
         "type": "string",
@@ -634,6 +670,24 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert fill_range_properties["overwrite_rule"]["default"] == "all"
     assert fill_range_properties["max_cells"]["default"] == 100000
+
+    fill_sequence_properties = by_type["FillSequenceNode"]["config_schema"][
+        "properties"
+    ]
+    assert fill_sequence_properties["target_field"] == {
+        "type": "string",
+        "title": "Target Field",
+        "required": True,
+    }
+    assert fill_sequence_properties["direction"]["enum"] == ["down", "up"]
+    assert fill_sequence_properties["end_mode"]["enum"] == [
+        "to_end",
+        "count",
+        "end_row",
+        "reference_non_empty",
+    ]
+    assert fill_sequence_properties["overwrite_rule"]["default"] == "all"
+    assert fill_sequence_properties["zero_pad"]["minimum"] == 0
 
     replace_text_properties = by_type["ReplaceTextNode"]["config_schema"][
         "properties"
@@ -695,6 +749,29 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "after_row",
     ]
     assert copy_rows_properties["max_output_rows"]["default"] == 100000
+
+    unpivot_rows_properties = by_type["UnpivotRowsNode"]["config_schema"][
+        "properties"
+    ]
+    assert unpivot_rows_properties["value_fields"] == {
+        "type": "array",
+        "title": "Value Fields",
+        "required": True,
+        "items": {"type": "string"},
+    }
+    assert unpivot_rows_properties["keep_fields"]["items"] == {"type": "string"}
+    assert unpivot_rows_properties["output_source_field"]["default"] is True
+    assert unpivot_rows_properties["output_status"]["default"] is False
+    assert unpivot_rows_properties["empty_mode"]["enum"] == [
+        "skip",
+        "empty",
+        "fixed",
+    ]
+    assert unpivot_rows_properties["end_mode"]["enum"] == [
+        "to_end",
+        "count",
+        "end_row",
+    ]
 
     deduplicate_rows_properties = by_type["DeduplicateRowsNode"]["config_schema"][
         "properties"

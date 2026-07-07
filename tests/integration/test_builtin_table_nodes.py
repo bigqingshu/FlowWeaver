@@ -26,6 +26,7 @@ from flowweaver.nodes.builtin_table import (
     EXTRACT_TEXT_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
+    FILL_SEQUENCE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
@@ -34,10 +35,12 @@ from flowweaver.nodes.builtin_table import (
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
     PLUGIN_NODE_TYPE,
+    RENAME_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    UNPIVOT_ROWS_NODE_TYPE,
     WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
@@ -825,6 +828,97 @@ def test_reorder_columns_node_can_drop_unlisted_columns(
     ]
 
 
+def test_rename_columns_node_applies_mapping_without_mutating_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rename_task = make_task(
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-rename-columns",
+        node_instance_id="rename_columns",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "mappings": [
+                {"source_field": "amount", "target_field": "total"},
+                {"old_name": "label", "new_name": "name"},
+            ],
+        },
+    )
+
+    rename_result = executor.execute(rename_task)
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    assert rename_result.output_refs != generate_result.output_refs
+    assert [field.name for field in input_ref.schema] == ["row_id", "amount", "label"]
+    output_ref = registry.get(rename_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "rename_columns_output"
+    assert [field.name for field in output_ref.schema] == ["row_id", "total", "name"]
+    assert [field.ordinal for field in output_ref.schema] == [0, 1, 2]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "total": 1.0, "name": "label_0_1"},
+        {"row_id": 2, "total": 2.0, "name": "label_0_2"},
+    ]
+
+
+def test_rename_columns_node_can_prefix_scoped_fields_and_append_duplicate_number(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 1,
+                "columns": ["row_id", "amount", "x_amount"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rename_result = executor.execute(
+        make_task(
+            node_type=RENAME_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-rename-columns",
+            node_instance_id="rename_columns",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "mode": "prefix",
+                "scope": "fields",
+                "scope_fields": ["amount"],
+                "prefix": "x_",
+                "duplicate_policy": "append_number",
+            },
+        )
+    )
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(rename_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "x_amount",
+        "x_amount_2",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "x_amount": 1.0, "x_amount_2": "x_amount_0_1"},
+    ]
+
+
 def test_fill_cells_node_fills_literal_value_down_from_start_row(
     tmp_path: Path,
 ) -> None:
@@ -1072,6 +1166,122 @@ def test_fill_range_node_empty_only_keeps_existing_area_values(
     assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
         {"row_id": 1, "label": "keep", "status": "filled"},
         {"row_id": 2, "label": "filled", "status": "keep"},
+    ]
+
+
+def test_fill_sequence_node_formats_counted_sequence_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 4,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "code", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    fill_result = executor.execute(
+        make_task(
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+            node_run_id="node-run-fill-sequence",
+            node_instance_id="fill_sequence",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_field": "code",
+                "start_row": 2,
+                "end_mode": "count",
+                "count": 2,
+                "start_value": 7,
+                "step": 3,
+                "zero_pad": 3,
+                "prefix": "A-",
+                "suffix": "-Z",
+            },
+        )
+    )
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "fill_sequence_output"
+    assert [field.name for field in output_ref.schema] == ["row_id", "code"]
+    assert output_ref.schema[1].data_type == "TEXT"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "code": "code_0_1"},
+        {"row_id": 2, "code": "A-007-Z"},
+        {"row_id": 3, "code": "A-010-Z"},
+        {"row_id": 4, "code": "code_0_4"},
+    ]
+
+
+def test_fill_sequence_node_can_fill_up_and_keep_existing_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "seq", "data_type": "INTEGER"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["seq"] = None
+    rows[1]["seq"] = 99
+    rows[2]["seq"] = None
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-sequence-input",
+        output_name="sequence_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    fill_result = executor.execute(
+        make_task(
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+            node_run_id="node-run-fill-sequence",
+            node_instance_id="fill_sequence",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "target_field": "seq",
+                "start_row": 3,
+                "direction": "up",
+                "end_mode": "end_row",
+                "end_row": 1,
+                "start_value": 10,
+                "step": 5,
+                "overwrite_rule": "empty_only",
+            },
+        )
+    )
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert output_ref.schema[1].data_type == "INTEGER"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "seq": 20},
+        {"row_id": 2, "seq": 99},
+        {"row_id": 3, "seq": 10},
     ]
 
 
@@ -1568,6 +1778,168 @@ def test_copy_rows_node_can_insert_at_head_and_relative_rows(
         {"row_id": 2, "label": "label_0_2"},
         {"row_id": 1, "label": "label_0_1"},
         {"row_id": 3, "label": "label_0_3"},
+    ]
+
+
+def test_unpivot_rows_node_expands_value_fields_with_metadata(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                    {"name": "jan", "data_type": "FLOAT"},
+                    {"name": "feb", "data_type": "FLOAT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    unpivot_result = executor.execute(
+        make_task(
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+            node_run_id="node-run-unpivot-rows",
+            node_instance_id="unpivot_rows",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "value_fields": ["jan", "feb"],
+                "keep_fields": ["row_id", "category"],
+                "output_value_field": "amount",
+                "source_field_name": "month",
+                "output_original_row": True,
+                "original_row_field": "source_row",
+                "output_status": True,
+                "status_field": "status",
+            },
+        )
+    )
+
+    assert unpivot_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(unpivot_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "unpivot_rows_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "category",
+        "amount",
+        "month",
+        "source_row",
+        "status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {
+            "row_id": 1,
+            "category": "category_0_1",
+            "amount": "1.0",
+            "month": "jan",
+            "source_row": 1,
+            "status": "mapped",
+        },
+        {
+            "row_id": 1,
+            "category": "category_0_1",
+            "amount": "1.0",
+            "month": "feb",
+            "source_row": 1,
+            "status": "mapped",
+        },
+        {
+            "row_id": 2,
+            "category": "category_0_2",
+            "amount": "2.0",
+            "month": "jan",
+            "source_row": 2,
+            "status": "mapped",
+        },
+        {
+            "row_id": 2,
+            "category": "category_0_2",
+            "amount": "2.0",
+            "month": "feb",
+            "source_row": 2,
+            "status": "mapped",
+        },
+    ]
+
+
+def test_unpivot_rows_node_can_fill_empty_values_and_limit_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                    {"name": "left", "data_type": "TEXT"},
+                    {"name": "right", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"left": "keep-out", "right": "keep-out"}
+    rows[1] |= {"left": "  A  ", "right": ""}
+    rows[2] |= {"left": None, "right": "B"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-unpivot-input",
+        output_name="unpivot_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    unpivot_result = executor.execute(
+        make_task(
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+            node_run_id="node-run-unpivot-rows",
+            node_instance_id="unpivot_rows",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "value_fields": ["left", "right"],
+                "keep_fields": ["row_id"],
+                "output_value_field": "mapped_value",
+                "output_source_field": False,
+                "output_status": True,
+                "status_field": "status",
+                "empty_mode": "fixed",
+                "empty_fixed": "N/A",
+                "trim_value": True,
+                "start_row": 2,
+                "end_mode": "count",
+                "count": 2,
+            },
+        )
+    )
+
+    assert unpivot_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(unpivot_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "mapped_value",
+        "status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"row_id": 2, "mapped_value": "A", "status": "mapped"},
+        {"row_id": 2, "mapped_value": "N/A", "status": "empty_fixed"},
+        {"row_id": 3, "mapped_value": "N/A", "status": "empty_fixed"},
+        {"row_id": 3, "mapped_value": "B", "status": "mapped"},
     ]
 
 
@@ -3918,6 +4290,40 @@ def test_reorder_columns_node_returns_validation_error_for_missing_column(
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
+def test_rename_columns_node_returns_validation_error_for_duplicate_output(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    rename_task = make_task(
+        node_type=RENAME_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-rename-columns",
+        node_instance_id="rename_columns",
+        input_refs=generate_result.output_refs,
+        config={
+            "mappings": [
+                {"source_field": "amount", "target_field": "row_id"},
+            ],
+        },
+    )
+
+    result = executor.execute(rename_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "output fields are duplicated" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
 def test_fill_cells_node_returns_validation_error_for_start_row_out_of_range(
     tmp_path: Path,
 ) -> None:
@@ -3988,4 +4394,68 @@ def test_fill_range_node_returns_validation_error_when_range_exceeds_limit(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "target range exceeds max_cells" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_fill_sequence_node_returns_validation_error_for_missing_target_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    fill_task = make_task(
+        node_type=FILL_SEQUENCE_NODE_TYPE,
+        node_run_id="node-run-fill-sequence",
+        node_instance_id="fill_sequence",
+        input_refs=generate_result.output_refs,
+        config={"target_field": "missing"},
+    )
+
+    result = executor.execute(fill_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist: missing" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_unpivot_rows_node_returns_validation_error_for_output_field_conflict(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    unpivot_task = make_task(
+        node_type=UNPIVOT_ROWS_NODE_TYPE,
+        node_run_id="node-run-unpivot-rows",
+        node_instance_id="unpivot_rows",
+        input_refs=generate_result.output_refs,
+        config={
+            "value_fields": ["amount"],
+            "keep_fields": ["row_id"],
+            "output_value_field": "row_id",
+        },
+    )
+
+    result = executor.execute(unpivot_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "output fields conflict with keep_fields" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2

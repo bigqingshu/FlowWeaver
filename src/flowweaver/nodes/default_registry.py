@@ -22,6 +22,7 @@ from flowweaver.nodes.builtin_table import (
     EXTRACT_TEXT_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
+    FILL_SEQUENCE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
@@ -30,10 +31,12 @@ from flowweaver.nodes.builtin_table import (
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
     PLUGIN_NODE_TYPE,
+    RENAME_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    UNPIVOT_ROWS_NODE_TYPE,
     WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
@@ -103,6 +106,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             config_schema=_reorder_columns_schema(),
         ),
         NodeDefinitionSpec(
+            node_type=RENAME_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Rename Columns",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_rename_columns_schema(),
+        ),
+        NodeDefinitionSpec(
             node_type=FILL_CELLS_NODE_TYPE,
             node_version="1.0",
             display_name="Fill Cells",
@@ -117,6 +128,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_fill_range_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=FILL_SEQUENCE_NODE_TYPE,
+            node_version="1.0",
+            display_name="Fill Sequence",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_fill_sequence_schema(),
         ),
         NodeDefinitionSpec(
             node_type=REPLACE_TEXT_NODE_TYPE,
@@ -141,6 +160,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_copy_rows_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=UNPIVOT_ROWS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Unpivot Rows",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_unpivot_rows_schema(),
         ),
         NodeDefinitionSpec(
             node_type=DEDUPLICATE_ROWS_NODE_TYPE,
@@ -464,6 +491,76 @@ def _reorder_columns_schema() -> NodeConfigSchemaSpec:
     )
 
 
+def _rename_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Mode",
+                required=True,
+                default="mappings",
+                enum=("mappings", "prefix", "suffix", "replace"),
+            ),
+            "mappings": NodeConfigFieldSpec(
+                type="array",
+                title="Mappings",
+                item_type="object",
+                description=(
+                    "Objects with source_field and target_field; old_name/new_name "
+                    "aliases are also accepted."
+                ),
+            ),
+            "prefix": NodeConfigFieldSpec(
+                type="string",
+                title="Prefix",
+                default="",
+            ),
+            "suffix": NodeConfigFieldSpec(
+                type="string",
+                title="Suffix",
+                default="",
+            ),
+            "replace_match": NodeConfigFieldSpec(
+                type="string",
+                title="Replace Match",
+            ),
+            "replace_value": NodeConfigFieldSpec(
+                type="string",
+                title="Replace Value",
+                default="",
+            ),
+            "scope": NodeConfigFieldSpec(
+                type="enum",
+                title="Scope",
+                default="all",
+                enum=("all", "fields"),
+            ),
+            "scope_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Scope Fields",
+                item_type="string",
+            ),
+            "duplicate_policy": NodeConfigFieldSpec(
+                type="enum",
+                title="Duplicate Policy",
+                default="error",
+                enum=("error", "skip", "append_number"),
+            ),
+            "missing_policy": NodeConfigFieldSpec(
+                type="enum",
+                title="Missing Policy",
+                default="error",
+                enum=("error", "skip", "warn"),
+            ),
+            "trim_names": NodeConfigFieldSpec(
+                type="boolean",
+                title="Trim Names",
+                default=True,
+            ),
+        }
+    )
+
+
 def _fill_cells_schema() -> NodeConfigSchemaSpec:
     return NodeConfigSchemaSpec(
         properties={
@@ -558,6 +655,82 @@ def _fill_range_schema() -> NodeConfigSchemaSpec:
                 title="Max Cells",
                 default=100000,
                 minimum=1,
+            ),
+        }
+    )
+
+
+def _fill_sequence_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "target_field": NodeConfigFieldSpec(
+                type="string",
+                title="Target Field",
+                required=True,
+            ),
+            "start_row": NodeConfigFieldSpec(
+                type="integer",
+                title="Start Row",
+                default=1,
+                minimum=1,
+            ),
+            "direction": NodeConfigFieldSpec(
+                type="enum",
+                title="Direction",
+                default="down",
+                enum=("down", "up"),
+            ),
+            "start_value": NodeConfigFieldSpec(
+                type="object",
+                title="Start Value",
+                default=1,
+            ),
+            "step": NodeConfigFieldSpec(
+                type="object",
+                title="Step",
+                default=1,
+            ),
+            "end_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="End Mode",
+                default="to_end",
+                enum=("to_end", "count", "end_row", "reference_non_empty"),
+            ),
+            "count": NodeConfigFieldSpec(
+                type="integer",
+                title="Count",
+                minimum=1,
+            ),
+            "end_row": NodeConfigFieldSpec(
+                type="integer",
+                title="End Row",
+                minimum=1,
+            ),
+            "reference_field": NodeConfigFieldSpec(
+                type="string",
+                title="Reference Field",
+            ),
+            "overwrite_rule": NodeConfigFieldSpec(
+                type="enum",
+                title="Overwrite Rule",
+                default="all",
+                enum=("all", "empty_only"),
+            ),
+            "zero_pad": NodeConfigFieldSpec(
+                type="integer",
+                title="Zero Pad",
+                default=0,
+                minimum=0,
+            ),
+            "prefix": NodeConfigFieldSpec(
+                type="string",
+                title="Prefix",
+                default="",
+            ),
+            "suffix": NodeConfigFieldSpec(
+                type="string",
+                title="Suffix",
+                default="",
             ),
         }
     )
@@ -740,6 +913,96 @@ def _copy_rows_schema() -> NodeConfigSchemaSpec:
                 type="integer",
                 title="Max Output Rows",
                 default=100000,
+                minimum=1,
+            ),
+        }
+    )
+
+
+def _unpivot_rows_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "value_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Value Fields",
+                required=True,
+                item_type="string",
+            ),
+            "keep_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Keep Fields",
+                item_type="string",
+            ),
+            "output_value_field": NodeConfigFieldSpec(
+                type="string",
+                title="Output Value Field",
+                default="value",
+            ),
+            "output_source_field": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Source Field",
+                default=True,
+            ),
+            "source_field_name": NodeConfigFieldSpec(
+                type="string",
+                title="Source Field Name",
+                default="source_field",
+            ),
+            "output_original_row": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Original Row",
+                default=False,
+            ),
+            "original_row_field": NodeConfigFieldSpec(
+                type="string",
+                title="Original Row Field",
+                default="original_row",
+            ),
+            "output_status": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Status",
+                default=False,
+            ),
+            "status_field": NodeConfigFieldSpec(
+                type="string",
+                title="Status Field",
+                default="mapping_status",
+            ),
+            "empty_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Empty Mode",
+                default="skip",
+                enum=("skip", "empty", "fixed"),
+            ),
+            "empty_fixed": NodeConfigFieldSpec(
+                type="object",
+                title="Empty Fixed",
+            ),
+            "trim_value": NodeConfigFieldSpec(
+                type="boolean",
+                title="Trim Value",
+                default=False,
+            ),
+            "start_row": NodeConfigFieldSpec(
+                type="integer",
+                title="Start Row",
+                default=1,
+                minimum=1,
+            ),
+            "end_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="End Mode",
+                default="to_end",
+                enum=("to_end", "count", "end_row"),
+            ),
+            "count": NodeConfigFieldSpec(
+                type="integer",
+                title="Count",
+                minimum=1,
+            ),
+            "end_row": NodeConfigFieldSpec(
+                type="integer",
+                title="End Row",
                 minimum=1,
             ),
         }
