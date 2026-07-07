@@ -198,18 +198,6 @@ def _validate_control_protocol(
     protocol = model.control_protocol
     if protocol is None:
         return
-    if protocol.mode == ControlProtocolMode.ENABLED:
-        errors.append(
-            WorkflowValidationIssue(
-                code="CONTROL_PROTOCOL_EXECUTION_UNAVAILABLE",
-                path="control_protocol.mode",
-                message=(
-                    "Real control protocol execution is not available yet; "
-                    "use preview mode until the scheduler is upgraded"
-                ),
-            )
-        )
-
     loop_ids: set[str] = set()
     node_to_loop: dict[str, str] = {}
     for index, region in enumerate(protocol.loop_regions):
@@ -234,14 +222,13 @@ def _validate_control_protocol(
         else:
             loop_ids.add(loop_id)
 
-        if region.enabled:
+        if region.enabled and protocol.mode != ControlProtocolMode.ENABLED:
             errors.append(
                 WorkflowValidationIssue(
-                    code="LOOP_REGION_EXECUTION_UNAVAILABLE",
+                    code="LOOP_REGION_ENABLED_REQUIRES_CONTROL_PROTOCOL",
                     path=f"{path}.enabled",
                     message=(
-                        "Real loop execution is not available yet; "
-                        "keep loop regions disabled for preview metadata"
+                        "Loop region execution requires control_protocol.mode=enabled"
                     ),
                 )
             )

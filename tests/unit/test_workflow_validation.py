@@ -244,7 +244,7 @@ def test_preview_loop_region_protocol_passes_validation() -> None:
     assert result.errors == []
 
 
-def test_real_control_protocol_enable_is_rejected_until_scheduler_exists() -> None:
+def test_real_control_protocol_enabled_loop_passes_validation() -> None:
     result = validate_workflow_definition(
         {
             "schema_version": "1.0",
@@ -297,17 +297,70 @@ def test_real_control_protocol_enable_is_rejected_until_scheduler_exists() -> No
         registry(),
     )
 
+    assert result.valid is True
+    assert result.errors == []
+
+
+def test_loop_region_enabled_requires_enabled_control_protocol() -> None:
+    result = validate_workflow_definition(
+        {
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "loop_start",
+                    "node_type": "core.loop_start",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "body",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "loop_judge",
+                    "node_type": "core.loop_judge",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [
+                {
+                    "connection_id": "start-to-body",
+                    "source_node_id": "loop_start",
+                    "source_port": "status",
+                    "target_node_id": "body",
+                    "target_port": "in",
+                },
+                {
+                    "connection_id": "body-to-judge",
+                    "source_node_id": "body",
+                    "source_port": "out",
+                    "target_node_id": "loop_judge",
+                    "target_port": "in",
+                },
+            ],
+            "control_protocol": {
+                "mode": "preview",
+                "loop_regions": [
+                    {
+                        "loop_id": "orders_loop",
+                        "start_node_id": "loop_start",
+                        "judge_node_id": "loop_judge",
+                        "body_node_ids": ["body"],
+                        "enabled": True,
+                    }
+                ],
+            },
+        },
+        registry(),
+    )
+
     assert result.valid is False
-    assert {
-        (error.code, error.path)
-        for error in result.errors
-    } >= {
-        ("CONTROL_PROTOCOL_EXECUTION_UNAVAILABLE", "control_protocol.mode"),
+    assert [(error.code, error.path) for error in result.errors] == [
         (
-            "LOOP_REGION_EXECUTION_UNAVAILABLE",
+            "LOOP_REGION_ENABLED_REQUIRES_CONTROL_PROTOCOL",
             "control_protocol.loop_regions[0].enabled",
-        ),
-    }
+        )
+    ]
 
 
 def test_invalid_loop_region_protocol_is_rejected() -> None:
@@ -386,3 +439,64 @@ def test_invalid_loop_region_protocol_is_rejected() -> None:
         "LOOP_REGION_BRANCH_REQUIRED",
         "NESTED_LOOP_REGION_UNAVAILABLE",
     }
+
+
+def test_unsupported_loop_input_mode_is_rejected() -> None:
+    result = validate_workflow_definition(
+        {
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "loop_start",
+                    "node_type": "core.loop_start",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "body",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "loop_judge",
+                    "node_type": "core.loop_judge",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [
+                {
+                    "connection_id": "start-to-body",
+                    "source_node_id": "loop_start",
+                    "source_port": "status",
+                    "target_node_id": "body",
+                    "target_port": "in",
+                },
+                {
+                    "connection_id": "body-to-judge",
+                    "source_node_id": "body",
+                    "source_port": "out",
+                    "target_node_id": "loop_judge",
+                    "target_port": "in",
+                },
+            ],
+            "control_protocol": {
+                "mode": "enabled",
+                "loop_regions": [
+                    {
+                        "loop_id": "orders_loop",
+                        "start_node_id": "loop_start",
+                        "judge_node_id": "loop_judge",
+                        "body_node_ids": ["body"],
+                        "input_mode": "table",
+                        "enabled": True,
+                    }
+                ],
+            },
+        },
+        registry(),
+    )
+
+    assert result.valid is False
+    assert [(error.code, error.path) for error in result.errors] == [
+        ("SCHEMA_VALIDATION_ERROR", "definition")
+    ]
+    assert "input_mode" in result.errors[0].message
