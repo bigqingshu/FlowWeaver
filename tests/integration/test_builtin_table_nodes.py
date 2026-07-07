@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
+    DEDUPLICATE_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
@@ -1272,6 +1273,268 @@ def test_copy_rows_node_can_insert_at_head_and_relative_rows(
     ]
 
 
+def test_deduplicate_rows_node_keeps_first_matching_key(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"category": " Alpha ", "label": "first"}
+    rows[1] |= {"category": "alpha", "label": "second"}
+    rows[2] |= {"category": "Beta", "label": "third"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "dedupe_mode": "key_fields",
+            "key_fields": ["category"],
+            "trim": True,
+            "ignore_case": True,
+            "keep_policy": "first",
+        },
+    )
+
+    dedupe_result = executor.execute(dedupe_task)
+
+    assert dedupe_result.status == NodeResultStatus.SUCCEEDED
+    assert dedupe_result.output_refs != generate_result.output_refs
+    assert provider.count_rows(custom_input_ref) == 3
+    output_ref = registry.get(dedupe_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "deduplicate_rows_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "category",
+        "label",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"row_id": 1, "category": " Alpha ", "label": "first"},
+        {"row_id": 3, "category": "Beta", "label": "third"},
+    ]
+
+
+def test_deduplicate_rows_node_can_keep_last_matching_key(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"category": "alpha", "label": "first"}
+    rows[1] |= {"category": "alpha", "label": "second"}
+    rows[2] |= {"category": "beta", "label": "third"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "key_fields": ["category"],
+            "keep_policy": "last",
+        },
+    )
+
+    dedupe_result = executor.execute(dedupe_task)
+
+    assert dedupe_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(dedupe_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"row_id": 2, "category": "alpha", "label": "second"},
+        {"row_id": 3, "category": "beta", "label": "third"},
+    ]
+
+
+def test_deduplicate_rows_node_can_compare_entire_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "category", "data_type": "TEXT"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] |= {"category": "alpha", "label": "same"}
+    rows[1] |= {"category": "alpha", "label": "same"}
+    rows[2] |= {"category": "alpha", "label": "different"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={"dedupe_mode": "entire_row"},
+    )
+
+    dedupe_result = executor.execute(dedupe_task)
+
+    assert dedupe_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(dedupe_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"category": "alpha", "label": "same"},
+        {"category": "alpha", "label": "different"},
+    ]
+
+
+def test_deduplicate_rows_node_mark_mode_keeps_rows_and_adds_markers(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"category": "alpha"}
+    rows[1] |= {"category": "alpha"}
+    rows[2] |= {"category": "beta"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "key_fields": ["category"],
+            "output_mode": "mark",
+            "keep_policy": "first",
+        },
+    )
+
+    dedupe_result = executor.execute(dedupe_task)
+
+    assert dedupe_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(dedupe_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "category",
+        "_duplicate_group",
+        "_duplicate_status",
+        "_duplicate_index",
+        "_duplicate_count",
+        "_keep_row",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {
+            "row_id": 1,
+            "category": "alpha",
+            "_duplicate_group": "group-1",
+            "_duplicate_status": "kept",
+            "_duplicate_index": 1,
+            "_duplicate_count": 2,
+            "_keep_row": 1,
+        },
+        {
+            "row_id": 2,
+            "category": "alpha",
+            "_duplicate_group": "group-1",
+            "_duplicate_status": "duplicate",
+            "_duplicate_index": 2,
+            "_duplicate_count": 2,
+            "_keep_row": 0,
+        },
+        {
+            "row_id": 3,
+            "category": "beta",
+            "_duplicate_group": "group-3",
+            "_duplicate_status": "unique",
+            "_duplicate_index": 1,
+            "_duplicate_count": 1,
+            "_keep_row": 1,
+        },
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -1542,6 +1805,73 @@ def test_copy_rows_node_returns_validation_error_when_output_exceeds_limit(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "max_output_rows" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_deduplicate_rows_node_returns_validation_error_for_missing_key_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=generate_result.output_refs,
+        config={"key_fields": ["missing"]},
+    )
+
+    result = executor.execute(dedupe_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_deduplicate_rows_node_returns_validation_error_for_marker_field_conflict(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "category", "_duplicate_status"],
+                "seed": 0,
+            },
+        )
+    )
+    dedupe_task = make_task(
+        node_type=DEDUPLICATE_ROWS_NODE_TYPE,
+        node_run_id="node-run-deduplicate-rows",
+        node_instance_id="deduplicate_rows",
+        input_refs=generate_result.output_refs,
+        config={
+            "key_fields": ["category"],
+            "output_mode": "mark",
+        },
+    )
+
+    result = executor.execute(dedupe_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields already exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

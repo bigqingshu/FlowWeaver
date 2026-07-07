@@ -364,6 +364,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "ReplaceTextNode",
         "DeleteRowsNode",
         "CopyRowsNode",
+        "DeduplicateRowsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -399,6 +400,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["CopyRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["DeduplicateRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -579,6 +583,32 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "after_row",
     ]
     assert copy_rows_properties["max_output_rows"]["default"] == 100000
+
+    deduplicate_rows_properties = by_type["DeduplicateRowsNode"]["config_schema"][
+        "properties"
+    ]
+    assert deduplicate_rows_properties["dedupe_mode"] == {
+        "type": "enum",
+        "title": "Dedupe Mode",
+        "required": True,
+        "default": "key_fields",
+        "enum": ["key_fields", "entire_row"],
+    }
+    assert deduplicate_rows_properties["key_fields"]["items"] == {"type": "string"}
+    assert deduplicate_rows_properties["empty_key_policy"]["enum"] == [
+        "include",
+        "skip",
+    ]
+    assert deduplicate_rows_properties["keep_policy"]["enum"] == [
+        "first",
+        "last",
+        "all",
+    ]
+    assert deduplicate_rows_properties["output_mode"]["enum"] == ["dedupe", "mark"]
+    assert (
+        deduplicate_rows_properties["duplicate_status_field"]["default"]
+        == "_duplicate_status"
+    )
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
