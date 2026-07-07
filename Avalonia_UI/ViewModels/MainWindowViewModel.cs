@@ -21,7 +21,6 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private const int DataPreviewRowLimit = 50;
     private const int DataPreviewRunRefreshAttemptCount = 8;
-    private const int WorkflowRunTerminalRefreshAttemptCount = 40;
     private static readonly string[] RuntimeOptionsProfileValues =
         ["normal", "background_fast", "diagnostic", "custom"];
     private static readonly string[] RuntimeOptionsLogLevelValues =
@@ -38,7 +37,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
     private readonly CancellationTokenSource _shutdown = new();
-    private int nodeRunsLoadVersion;
     private int nodeDefinitionsLoadVersion;
     private int tableRefsLoadVersion;
     private int sharedPublicationsLoadVersion;
@@ -46,36 +44,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private int dataPreviewLoadVersion;
     private int dataPreviewWorkbenchLoadVersion;
     private int runtimeEventLogLoadVersion;
-
-    [ObservableProperty]
-    private bool isLoadingWorkflows;
-
-    [ObservableProperty]
-    private bool isStartingWorkflow;
-
-    [ObservableProperty]
-    private string newWorkflowName = "Generated table workflow";
-
-    [ObservableProperty]
-    private bool isCreatingWorkflow;
-
-    [ObservableProperty]
-    private bool isDeletingWorkflow;
-
-    [ObservableProperty]
-    private WorkflowListItemViewModel? selectedWorkflow;
-
-    [ObservableProperty]
-    private string workflowMessage = "No workflows loaded.";
-
-    [ObservableProperty]
-    private string? workflowErrorMessage;
-
-    [ObservableProperty]
-    private string? lastStartedRunId;
-
-    [ObservableProperty]
-    private string? lastStartedRunStatus;
 
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
@@ -298,30 +266,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool isSynchronizingRuntimeOptionsJsonDraft;
 
     [ObservableProperty]
-    private bool isLoadingRuns;
-
-    [ObservableProperty]
-    private bool isCancellingRun;
-
-    [ObservableProperty]
-    private WorkflowRunListItemViewModel? selectedRun;
-
-    [ObservableProperty]
-    private string runMessage = "No runs loaded.";
-
-    [ObservableProperty]
-    private string? runErrorMessage;
-
-    [ObservableProperty]
-    private bool isLoadingNodeRuns;
-
-    [ObservableProperty]
-    private string nodeRunMessage = "Select a run to load node status.";
-
-    [ObservableProperty]
-    private string? nodeRunErrorMessage;
-
-    [ObservableProperty]
     private string logWorkflowRunIdFilter = string.Empty;
 
     [ObservableProperty]
@@ -527,12 +471,6 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshSelectedNodeConfigDraftState();
     }
 
-    public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
-
-    public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
-
-    public ObservableCollection<NodeRunListItemViewModel> NodeRuns { get; } = new();
-
     public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
         new();
 
@@ -579,13 +517,6 @@ public partial class MainWindowViewModel : ViewModelBase
         new();
 
     private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
-
-    public bool HasWorkflowError => !string.IsNullOrWhiteSpace(WorkflowErrorMessage);
-
-    public bool IsWorkflowBusy =>
-        IsLoadingWorkflows || IsStartingWorkflow || IsCreatingWorkflow || IsDeletingWorkflow;
-
-    public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
     public bool HasWorkflowDefinition => WorkflowDefinitionDetail is not null;
 
@@ -679,14 +610,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasWorkflowDefinitionDraftStructureWarnings =>
         WorkflowDefinitionDraftStructure?.Warnings.Count > 0;
-
-    public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
-
-    public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
-
-    public bool IsNodeRunBusy => IsLoadingNodeRuns;
-
-    public bool HasNodeRunError => !string.IsNullOrWhiteSpace(NodeRunErrorMessage);
 
     public bool HasRuntimeEventLogError =>
         !string.IsNullOrWhiteSpace(RuntimeEventLogErrorMessage);
@@ -1113,77 +1036,6 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private bool CanRefreshWorkflows()
-    {
-        return CanUseEngineActions && !IsWorkflowBusy;
-    }
-
-    private bool CanStartSelectedWorkflow()
-    {
-        return CanUseEngineActions
-            && SelectedWorkflow is not null
-            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
-            && !IsWorkflowBusy
-            && !HasWorkflowDefinitionRevisionConflict;
-    }
-
-    private bool CanPreviewSelectedWorkflowNode()
-    {
-        return CanUseEngineActions
-            && SelectedWorkflow is not null
-            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
-            && WorkflowDefinitionDetail is not null
-            && SelectedWorkflowDefinitionNode is not null
-            && !IsWorkflowBusy
-            && !IsDataPreviewBusy
-            && !HasWorkflowDefinitionRevisionConflict;
-    }
-
-    private bool CanCreateTemplateWorkflow()
-    {
-        return CanUseEngineActions
-            && !IsWorkflowBusy
-            && !string.IsNullOrWhiteSpace(NewWorkflowName);
-    }
-
-    private bool CanDeleteSelectedWorkflowCore()
-    {
-        return CanUseEngineActions
-            && SelectedWorkflow is not null
-            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
-            && !IsWorkflowBusy;
-    }
-
-    public bool CanUseDeleteSelectedWorkflowAction => CanDeleteSelectedWorkflowCore();
-
-    public string? DeleteSelectedWorkflowDisabledReasonText
-    {
-        get
-        {
-            if (IsWorkflowBusy)
-            {
-                return T("action.disabled.busy");
-            }
-
-            if (!CanUseEngineActions)
-            {
-                return T("action.disabled.engine_not_connected");
-            }
-
-            if (SelectedWorkflow is null)
-            {
-                return T("action.disabled.no_workflow_selected");
-            }
-
-            if (!IsActiveWorkflowStatus(SelectedWorkflow.Status))
-            {
-                return T("action.disabled.workflow_not_active");
-            }
-
-            return null;
-        }
-    }
-
     private bool CanLoadSelectedWorkflowDefinition()
     {
         return CanUseEngineActions
@@ -1457,59 +1309,6 @@ public partial class MainWindowViewModel : ViewModelBase
             && !HasWorkflowDefinitionRevisionConflict;
     }
 
-    private bool CanRefreshRuns()
-    {
-        return CanUseEngineActions && !IsRunBusy;
-    }
-
-    private bool CanCancelSelectedRunCore()
-    {
-        return CanUseEngineActions
-            && SelectedRun is not null
-            && IsCancelableRunStatus(SelectedRun.Status)
-            && !IsRunBusy;
-    }
-
-    public bool CanUseCancelSelectedRunAction => CanCancelSelectedRunCore();
-
-    public string? CancelSelectedRunDisabledReasonText
-    {
-        get
-        {
-            if (IsRunBusy)
-            {
-                return T("action.disabled.busy");
-            }
-
-            if (!CanUseEngineActions)
-            {
-                return T("action.disabled.engine_not_connected");
-            }
-
-            if (SelectedRun is null)
-            {
-                return T("action.disabled.no_run_selected");
-            }
-
-            if (string.IsNullOrWhiteSpace(SelectedRun.Status) || SelectedRun.Status == "UNKNOWN")
-            {
-                return T("action.disabled.run_status_unknown");
-            }
-
-            if (IsTerminalRunStatus(SelectedRun.Status))
-            {
-                return T("action.disabled.run_terminal");
-            }
-
-            if (!IsCancelableRunStatus(SelectedRun.Status))
-            {
-                return T("action.disabled.run_not_running");
-            }
-
-            return null;
-        }
-    }
-
     public string? CopyWorkflowDefinitionDraftNodeDisabledReasonText =>
         GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
 
@@ -1524,11 +1323,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string? MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText =>
         GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: 1);
-
-    private bool CanRefreshNodeRuns()
-    {
-        return CanUseEngineActions && SelectedRun is not null && !IsNodeRunBusy;
-    }
 
     private bool CanRefreshRuntimeEventLog()
     {
@@ -1614,120 +1408,6 @@ public partial class MainWindowViewModel : ViewModelBase
             && !IsLoadingSharedPublicationVersions
             && (NormalizeFilter(SharedPublicationVersionShareNameFilter) is not null
                 || SelectedSharedPublication is not null);
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshWorkflows))]
-    private async Task RefreshWorkflowsAsync()
-    {
-        IsLoadingWorkflows = true;
-        WorkflowMessage = T("workflow.loading");
-        WorkflowErrorMessage = null;
-
-        var response = await _apiClient.ListWorkflowsAsync(
-            BuildSettings(),
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            var previousWorkflowId = SelectedWorkflow?.WorkflowId;
-            Workflows.Clear();
-            foreach (var workflow in response.Data)
-            {
-                Workflows.Add(new WorkflowListItemViewModel(workflow));
-            }
-
-            SelectedWorkflow = Workflows.FirstOrDefault(
-                workflow => workflow.WorkflowId == previousWorkflowId)
-                ?? Workflows.FirstOrDefault();
-            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
-            IsLoadingWorkflows = false;
-            return;
-        }
-
-        WorkflowMessage = T("workflow.refresh_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        IsLoadingWorkflows = false;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanCreateTemplateWorkflow))]
-    private async Task CreateTemplateWorkflowAsync()
-    {
-        var name = NewWorkflowName.Trim();
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            WorkflowMessage = T("workflow.creation_rejected");
-            WorkflowErrorMessage = T("workflow.name_required");
-            return;
-        }
-
-        IsCreatingWorkflow = true;
-        WorkflowMessage = F("format.creating_workflow", name);
-        WorkflowErrorMessage = null;
-
-        using var definition = TemplateWorkflowDefinitions.CreateGeneratedTable(
-            T("workflow.template.generate_rows_display_name"),
-            T("workflow.template.keep_amount_gt_one_display_name"));
-        var response = await _apiClient.CreateWorkflowAsync(
-            BuildSettings(),
-            name,
-            definition.RootElement,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            WorkflowMessage = F("format.created_workflow", response.Data.Name);
-            IsCreatingWorkflow = false;
-            await RefreshWorkflowsSelectingAsync(response.Data.WorkflowId);
-            return;
-        }
-
-        WorkflowMessage = T("workflow.creation_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        IsCreatingWorkflow = false;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowCore))]
-    private async Task DeleteSelectedWorkflowAsync()
-    {
-        if (SelectedWorkflow is null)
-        {
-            return;
-        }
-
-        var workflowId = SelectedWorkflow.WorkflowId;
-        var workflowName = SelectedWorkflow.Name;
-        IsDeletingWorkflow = true;
-        WorkflowMessage = F("format.deleting_workflow", workflowName);
-        WorkflowErrorMessage = null;
-
-        var response = await _apiClient.DeleteWorkflowAsync(
-            BuildSettings(),
-            workflowId,
-            _shutdown.Token);
-
-        IsDeletingWorkflow = false;
-
-        if (response.Ok)
-        {
-            var workflow = Workflows.FirstOrDefault(
-                item => item.WorkflowId == workflowId);
-            if (workflow is not null)
-            {
-                Workflows.Remove(workflow);
-            }
-
-            if (SelectedWorkflow?.WorkflowId == workflowId)
-            {
-                SelectedWorkflow = null;
-            }
-
-            WorkflowMessage = F("format.deleted_workflow", workflowName);
-            WorkflowErrorMessage = null;
-            return;
-        }
-
-        WorkflowMessage = T("workflow.delete_failed");
-        WorkflowErrorMessage = DescribeError(response);
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadSelectedWorkflowDefinition))]
@@ -1881,20 +1561,6 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         await RefreshNodeDefinitionsAsync();
-    }
-
-    private async Task RefreshWorkflowsAfterHealthyConnectionAsync()
-    {
-        if (Workflows.Count > 0 || !CanRefreshWorkflows())
-        {
-            return;
-        }
-
-        await RefreshWorkflowsAsync();
-        if (CanLoadSelectedWorkflowDefinition())
-        {
-            await LoadSelectedWorkflowDefinitionAsync();
-        }
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -2569,214 +2235,6 @@ public partial class MainWindowViewModel : ViewModelBase
             await TrySaveWorkflowDefinitionDraftAsync();
     }
 
-    [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
-    private async Task StartSelectedWorkflowAsync()
-    {
-        if (SelectedWorkflow is null)
-        {
-            return;
-        }
-
-        IsStartingWorkflow = true;
-        WorkflowMessage = F("format.starting_workflow", SelectedWorkflow.Name);
-        WorkflowErrorMessage = null;
-        LastStartedRunId = null;
-        LastStartedRunStatus = null;
-
-        if (IsWorkflowDefinitionDraftDirty)
-        {
-            WorkflowMessage = T("workflow.saving_draft_before_run");
-            if (!await EnsureWorkflowDefinitionDraftSavedForRunAsync())
-            {
-                WorkflowMessage = T("workflow.start_failed");
-                WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
-                ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
-                IsStartingWorkflow = false;
-                return;
-            }
-        }
-
-        if (SelectedWorkflow is null)
-        {
-            WorkflowMessage = T("workflow.start_failed");
-            WorkflowErrorMessage = T("definition.load_before_saving");
-            ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
-            IsStartingWorkflow = false;
-            return;
-        }
-
-        WorkflowMessage = F("format.starting_workflow", SelectedWorkflow.Name);
-        var response = await _apiClient.StartWorkflowRunAsync(
-            BuildSettings(),
-            SelectedWorkflow.WorkflowId,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            LastStartedRunId = response.Data.WorkflowRunId;
-            LastStartedRunStatus = response.Data.Status;
-            WorkflowMessage =
-                F(
-                    "format.started_run_with_status",
-                    response.Data.WorkflowRunId,
-                    response.Data.Status);
-            ShowWorkflowNotification("workflow.run", UiNotificationKind.Success);
-            IsStartingWorkflow = false;
-            await TrackWorkflowRunUntilTerminalAsync(response.Data.WorkflowRunId);
-            await SelectLatestReadableOutputNodeForRunAsync(response.Data.WorkflowRunId);
-            if (CanRefreshSelectedWorkflowNodeDataPreview())
-            {
-                await RefreshSelectedWorkflowNodeDataPreviewAsync();
-            }
-
-            return;
-        }
-
-        WorkflowMessage = T("workflow.start_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
-        IsStartingWorkflow = false;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanPreviewSelectedWorkflowNode))]
-    private async Task PreviewSelectedWorkflowNodeAsync()
-    {
-        if (SelectedWorkflow is null || SelectedWorkflowDefinitionNode is null)
-        {
-            return;
-        }
-
-        var targetNodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
-        IsStartingWorkflow = true;
-        WorkflowMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
-        WorkflowErrorMessage = null;
-        DataPreviewMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
-        DataPreviewErrorMessage = null;
-        LastStartedRunId = null;
-        LastStartedRunStatus = null;
-
-        if (IsWorkflowDefinitionDraftDirty)
-        {
-            WorkflowMessage = T("workflow.saving_draft_before_preview");
-            DataPreviewMessage = T("workflow.saving_draft_before_preview");
-            if (!await EnsureWorkflowDefinitionDraftSavedForRunAsync())
-            {
-                WorkflowMessage = T("workflow.start_failed");
-                WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
-                DataPreviewMessage = T("data_preview.preview_failed");
-                DataPreviewErrorMessage = WorkflowDefinitionValidationErrorMessage;
-                ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
-                ShowDataPreviewNotification(UiNotificationKind.Error);
-                IsStartingWorkflow = false;
-                return;
-            }
-
-            SelectWorkflowDefinitionDraftNode(targetNodeInstanceId);
-        }
-
-        if (SelectedWorkflow is null ||
-            SelectedWorkflowDefinitionNode is null ||
-            !string.Equals(
-                SelectedWorkflowDefinitionNode.NodeInstanceId,
-                targetNodeInstanceId,
-                StringComparison.Ordinal))
-        {
-            WorkflowMessage = T("workflow.start_failed");
-            WorkflowErrorMessage = T("action.disabled.workflow_node_missing");
-            DataPreviewMessage = T("data_preview.preview_failed");
-            DataPreviewErrorMessage = T("action.disabled.workflow_node_missing");
-            ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
-            ShowDataPreviewNotification(UiNotificationKind.Error);
-            IsStartingWorkflow = false;
-            return;
-        }
-
-        WorkflowMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
-        DataPreviewMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);
-        var response = await _apiClient.StartWorkflowRunAsync(
-            BuildSettings(),
-            SelectedWorkflow.WorkflowId,
-            "preview_to_node",
-            targetNodeInstanceId,
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            LastStartedRunId = response.Data.WorkflowRunId;
-            LastStartedRunStatus = response.Data.Status;
-            WorkflowMessage =
-                F(
-                    "format.started_preview_run_with_status",
-                    response.Data.WorkflowRunId,
-                    response.Data.Status,
-                    targetNodeInstanceId);
-            ShowWorkflowNotification("workflow.preview", UiNotificationKind.Success);
-            IsStartingWorkflow = false;
-            await RefreshSelectedWorkflowNodeDataPreviewAfterRunStartAsync(response.Data.WorkflowRunId);
-
-            return;
-        }
-
-        WorkflowMessage = T("workflow.start_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        DataPreviewMessage = T("data_preview.preview_failed");
-        DataPreviewErrorMessage = DescribeError(response);
-        ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
-        ShowDataPreviewNotification(UiNotificationKind.Error);
-        IsStartingWorkflow = false;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshRuns))]
-    private Task RefreshRunsAsync()
-    {
-        return LoadRunsAsync();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanCancelSelectedRunCore))]
-    private async Task CancelSelectedRunAsync()
-    {
-        if (SelectedRun is null)
-        {
-            return;
-        }
-
-        var workflowRunId = SelectedRun.WorkflowRunId;
-        IsCancellingRun = true;
-        RunMessage = F("format.cancelling_run", workflowRunId);
-        RunErrorMessage = null;
-
-        var response = await _apiClient.CancelRunAsync(
-            BuildSettings(),
-            workflowRunId,
-            _shutdown.Token);
-
-        IsCancellingRun = false;
-
-        if (response.Ok)
-        {
-            var processStatus = response.Data?.Status;
-            var cancelMessage = string.IsNullOrWhiteSpace(processStatus)
-                ? F("format.cancel_requested", workflowRunId)
-                : F("format.cancel_requested_with_status", workflowRunId, processStatus);
-            await LoadRunsAsync(workflowRunId);
-            if (!HasRunError)
-            {
-                RunMessage = cancelMessage;
-            }
-
-            return;
-        }
-
-        RunMessage = T("runs.cancel_failed");
-        RunErrorMessage = DescribeError(response);
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshNodeRuns))]
-    private async Task RefreshNodeRunsAsync()
-    {
-        await LoadNodeRunsForSelectedRunAsync();
-    }
-
     [RelayCommand(CanExecute = nameof(CanRefreshRuntimeEventLog), AllowConcurrentExecutions = true)]
     private async Task RefreshRuntimeEventLogAsync()
     {
@@ -3270,23 +2728,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
         ShowDataPreviewNotification(
             HasDataPreviewError ? UiNotificationKind.Error : UiNotificationKind.Warning);
-    }
-
-    private async Task TrackWorkflowRunUntilTerminalAsync(string workflowRunId)
-    {
-        for (var attempt = 0; attempt < WorkflowRunTerminalRefreshAttemptCount; attempt++)
-        {
-            await LoadRunsAsync(workflowRunId);
-            if (SelectedRun is not null && IsTerminalRunStatus(SelectedRun.Status))
-            {
-                return;
-            }
-
-            if (attempt + 1 < WorkflowRunTerminalRefreshAttemptCount)
-            {
-                await _dataPreviewRunRefreshDelay(_shutdown.Token);
-            }
-        }
     }
 
     private async Task SelectLatestReadableOutputNodeForRunAsync(string workflowRunId)
@@ -4007,124 +3448,6 @@ public partial class MainWindowViewModel : ViewModelBase
                 IsLoadingSharedPublicationVersions = false;
             }
         }
-    }
-
-    private async Task LoadNodeRunsForSelectedRunAsync()
-    {
-        if (SelectedRun is null)
-        {
-            return;
-        }
-
-        var requestedRunId = SelectedRun.WorkflowRunId;
-        var requestVersion = ++nodeRunsLoadVersion;
-        IsLoadingNodeRuns = true;
-        NodeRunMessage = F("format.loading_nodes_for", requestedRunId);
-        NodeRunErrorMessage = null;
-
-        try
-        {
-            var response = await _apiClient.ListNodeRunsAsync(
-                BuildSettings(),
-                requestedRunId,
-                _shutdown.Token);
-
-            if (
-                SelectedRun?.WorkflowRunId != requestedRunId
-                || requestVersion != nodeRunsLoadVersion)
-            {
-                return;
-            }
-
-            if (response.Ok && response.Data is not null)
-            {
-                NodeRuns.Clear();
-                foreach (var nodeRun in response.Data)
-                {
-                    NodeRuns.Add(new NodeRunListItemViewModel(nodeRun, DisplayTextFormatter));
-                }
-
-                NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);
-                return;
-            }
-
-            NodeRunMessage = T("node_runs.refresh_failed");
-            NodeRunErrorMessage = DescribeError(response);
-        }
-        finally
-        {
-            if (requestVersion == nodeRunsLoadVersion)
-            {
-                IsLoadingNodeRuns = false;
-            }
-        }
-    }
-
-    private async Task LoadRunsAsync(string? selectWorkflowRunId = null)
-    {
-        IsLoadingRuns = true;
-        RunMessage = SelectedWorkflow is null
-            ? T("runs.loading")
-            : F("format.loading_runs_for", SelectedWorkflow.Name);
-        RunErrorMessage = null;
-
-        var workflowId = SelectedWorkflow?.WorkflowId;
-        var response = await _apiClient.ListRunsAsync(
-            BuildSettings(),
-            workflowId,
-            cancellationToken: _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            var previousRunId = selectWorkflowRunId ?? SelectedRun?.WorkflowRunId;
-            Runs.Clear();
-            foreach (var run in response.Data)
-            {
-                Runs.Add(new WorkflowRunListItemViewModel(run));
-            }
-
-            SelectedRun = Runs.FirstOrDefault(run => run.WorkflowRunId == previousRunId)
-                ?? Runs.FirstOrDefault();
-            RunMessage = workflowId is null
-                ? F("format.loaded_runs", Runs.Count)
-                : F("format.loaded_runs_for", Runs.Count, SelectedWorkflow?.Name);
-            IsLoadingRuns = false;
-            return;
-        }
-
-        RunMessage = T("runs.refresh_failed");
-        RunErrorMessage = DescribeError(response);
-        IsLoadingRuns = false;
-    }
-
-    private async Task RefreshWorkflowsSelectingAsync(string workflowId)
-    {
-        IsLoadingWorkflows = true;
-        WorkflowMessage = T("workflow.refreshing");
-        WorkflowErrorMessage = null;
-
-        var response = await _apiClient.ListWorkflowsAsync(
-            BuildSettings(),
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            Workflows.Clear();
-            foreach (var workflow in response.Data)
-            {
-                Workflows.Add(new WorkflowListItemViewModel(workflow));
-            }
-
-            SelectedWorkflow = Workflows.FirstOrDefault(workflow => workflow.WorkflowId == workflowId)
-                ?? Workflows.FirstOrDefault();
-            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
-            IsLoadingWorkflows = false;
-            return;
-        }
-
-        WorkflowMessage = T("workflow.refresh_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        IsLoadingWorkflows = false;
     }
 
     private static string? FormatValidationIssues(WorkflowValidationResultDto result)
@@ -5610,83 +4933,6 @@ public partial class MainWindowViewModel : ViewModelBase
             : fallback;
     }
 
-    partial void OnIsLoadingWorkflowsChanged(bool value)
-    {
-        NotifyWorkflowCommandStateChanged();
-    }
-
-    partial void OnIsStartingWorkflowChanged(bool value)
-    {
-        NotifyWorkflowCommandStateChanged();
-    }
-
-    partial void OnNewWorkflowNameChanged(string value)
-    {
-        CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnIsCreatingWorkflowChanged(bool value)
-    {
-        NotifyWorkflowCommandStateChanged();
-    }
-
-    partial void OnIsDeletingWorkflowChanged(bool value)
-    {
-        NotifyWorkflowCommandStateChanged();
-    }
-
-    partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
-    {
-        workflowDefinitionLoadVersion++;
-        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
-        DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
-        Runs.Clear();
-        SelectedRun = null;
-        RunMessage = value is null
-            ? T("runs.no_workflow_selected")
-            : F("format.selected_workflow_refresh_runs", value.Name);
-        RunErrorMessage = null;
-        if (WorkflowDefinitionDetail?.WorkflowId != value?.WorkflowId)
-        {
-            WorkflowDefinitionDetail = null;
-            SelectedWorkflowDefinitionNode = null;
-            originalWorkflowDefinitionJson = string.Empty;
-            WorkflowDefinitionDraftJson = string.Empty;
-            IsWorkflowDefinitionDraftDirty = false;
-            HasWorkflowDefinitionRevisionConflict = false;
-            WorkflowDefinitionMessage = value is null
-                ? T("status.select_workflow_definition")
-                : F("format.selected_workflow_load_definition", value.Name);
-        }
-
-        WorkflowDefinitionErrorMessage = null;
-        WorkflowDefinitionValidationMessage = value is null
-            ? T("status.load_definition_to_edit")
-            : T("definition.load_before_editing");
-        WorkflowDefinitionValidationErrorMessage = null;
-        if (value is not null
-            && Workflows.Contains(value)
-            && !IsLoadingWorkflows
-            && CanLoadSelectedWorkflowDefinition())
-        {
-            LoadSelectedWorkflowDefinitionCommand.Execute(null);
-        }
-    }
-
-    partial void OnWorkflowErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasWorkflowError));
-    }
-
-    partial void OnLastStartedRunIdChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasLastStartedRun));
-    }
-
     partial void OnIsLoadingWorkflowDefinitionChanged(bool value)
     {
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
@@ -6151,72 +5397,6 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowConnectionsText));
     }
 
-    partial void OnIsLoadingRunsChanged(bool value)
-    {
-        NotifyRunCommandStateChanged();
-    }
-
-    partial void OnIsCancellingRunChanged(bool value)
-    {
-        NotifyRunCommandStateChanged();
-    }
-
-    partial void OnSelectedRunChanged(
-        WorkflowRunListItemViewModel? oldValue,
-        WorkflowRunListItemViewModel? newValue)
-    {
-        var runChanged = !string.Equals(
-            oldValue?.WorkflowRunId,
-            newValue?.WorkflowRunId,
-            StringComparison.Ordinal);
-        if (runChanged)
-        {
-            nodeRunsLoadVersion++;
-            tableRefsLoadVersion++;
-            IsLoadingNodeRuns = false;
-            IsLoadingTableRefs = false;
-            NodeRuns.Clear();
-            TableRefs.Clear();
-            NodeRunMessage = newValue is null
-                ? T("status.select_run_node_status")
-                : F("format.selected_run_refresh_nodes", newValue.WorkflowRunId);
-            NodeRunErrorMessage = null;
-            TableRefMessage = newValue is null
-                ? T("status.select_run_table_refs")
-                : F("format.selected_run_refresh_table_refs", newValue.WorkflowRunId);
-            TableRefErrorMessage = null;
-            ResetDataPreviewSelectionState();
-            ResetDataPreviewWorkbenchState();
-        }
-        else
-        {
-            RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        }
-
-        NotifyEngineActionStateChanged();
-        OnPropertyChanged(nameof(HasSelectedRunRuntimeOptionsSummary));
-        OnPropertyChanged(nameof(SelectedRunRuntimeOptionsSummaryText));
-        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
-        RefreshTableRefsCommand.NotifyCanExecuteChanged();
-        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnRunErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasRunError));
-    }
-
-    partial void OnIsLoadingNodeRunsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsNodeRunBusy));
-        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnNodeRunErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasNodeRunError));
-    }
-
     partial void OnIsLoadingRuntimeEventLogChanged(bool value)
     {
         OnPropertyChanged(nameof(IsLogBusy));
@@ -6400,25 +5580,6 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSharedPublicationVersionError));
     }
 
-    private void NotifyWorkflowCommandStateChanged()
-    {
-        OnPropertyChanged(nameof(IsWorkflowBusy));
-        RefreshWorkflowsCommand.NotifyCanExecuteChanged();
-        CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
-        DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
-        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-    }
-
-    private void NotifyRunCommandStateChanged()
-    {
-        OnPropertyChanged(nameof(IsRunBusy));
-        NotifyEngineActionStateChanged();
-        RefreshRunsCommand.NotifyCanExecuteChanged();
-    }
-
     private void NotifyEngineActionStateChanged()
     {
         OnPropertyChanged(nameof(CanUseEngineActions));
@@ -6456,73 +5617,4 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
 
-    private static bool IsCancelableRunStatus(string? status)
-    {
-        return status == "RUNNING";
-    }
-
-    private static bool IsTerminalRunStatus(string? status)
-    {
-        return status is "SUCCEEDED" or "FAILED" or "CANCELLED" or "ABORTED";
-    }
-
-    private static bool IsActiveWorkflowStatus(string? status)
-    {
-        return status == "ACTIVE";
-    }
-}
-
-internal static class TemplateWorkflowDefinitions
-{
-    public static JsonDocument CreateGeneratedTable(
-        string generateRowsDisplayName,
-        string keepAmountGreaterThanOneDisplayName)
-    {
-        var definition = new
-        {
-            schema_version = "1.0",
-            nodes = new object[]
-            {
-                new
-                {
-                    node_instance_id = "generate",
-                    node_type = "GenerateTestTableNode",
-                    node_version = "1.0",
-                    display_name = generateRowsDisplayName,
-                    config = new
-                    {
-                        rows = 3,
-                        columns = new[] { "row_id", "amount" },
-                        seed = 0,
-                    },
-                },
-                new
-                {
-                    node_instance_id = "filter",
-                    node_type = "FilterRowsNode",
-                    node_version = "1.0",
-                    display_name = keepAmountGreaterThanOneDisplayName,
-                    config = new
-                    {
-                        field = "amount",
-                        @operator = "GT",
-                        value = 1.0,
-                    },
-                },
-            },
-            connections = new[]
-            {
-                new
-                {
-                    connection_id = "generate_to_filter",
-                    source_node_id = "generate",
-                    source_port = "out",
-                    target_node_id = "filter",
-                    target_port = "in",
-                },
-            },
-        };
-
-        return JsonSerializer.SerializeToDocument(definition, FlowWeaverJson.Options);
-    }
 }
