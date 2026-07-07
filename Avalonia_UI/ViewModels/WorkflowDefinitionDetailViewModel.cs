@@ -305,6 +305,7 @@ public sealed class WorkflowRevisionListItemViewModel
         WorkflowId = revision.WorkflowId;
         Version = revision.Version;
         DefinitionHash = revision.DefinitionHash;
+        RawDefinitionJson = FormatJson(revision.Definition);
         CreatedAt = revision.CreatedAt;
         CreatedBy = revision.CreatedBy;
     }
@@ -317,6 +318,8 @@ public sealed class WorkflowRevisionListItemViewModel
 
     public string DefinitionHash { get; }
 
+    public string RawDefinitionJson { get; }
+
     public DateTimeOffset CreatedAt { get; }
 
     public string? CreatedBy { get; }
@@ -327,4 +330,11 @@ public sealed class WorkflowRevisionListItemViewModel
 
     public string CreatedByText =>
         string.IsNullOrWhiteSpace(CreatedBy) ? "-" : CreatedBy;
+
+    private static string FormatJson(JsonElement element)
+    {
+        return JsonSerializer.Serialize(
+            element,
+            new JsonSerializerOptions { WriteIndented = true });
+    }
 }

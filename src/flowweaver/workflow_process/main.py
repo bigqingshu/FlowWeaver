@@ -55,6 +55,11 @@ from flowweaver.workflow.definition import (
     WorkflowDefinitionModel,
     failure_policy_unavailable_message,
 )
+from flowweaver.workflow.runtime_options import (
+    RuntimeOptionsEventSink,
+    resolve_runtime_options_by_node,
+    resolve_workflow_runtime_options,
+)
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
@@ -326,6 +331,13 @@ def _run_workflow_process_loop(
             process_generation=process_generation,
         )
 
+    runtime_options_by_node = resolve_runtime_options_by_node(definition)
+    event_sink = RuntimeOptionsEventSink(
+        event_sink,
+        workflow_options=resolve_workflow_runtime_options(definition),
+        runtime_options_by_node=runtime_options_by_node,
+    )
+
     store.record_workflow_process_heartbeat(
         process_id,
         process_generation=process_generation,
@@ -403,6 +415,7 @@ def _run_workflow_process_loop(
         event_sink=event_sink,
         dag=dag,
         failure_policy_mode=definition.failure_policy.mode,
+        runtime_options_by_node=runtime_options_by_node,
     )
     if execution_pool is None:
         execute_task = _build_node_task_execute(

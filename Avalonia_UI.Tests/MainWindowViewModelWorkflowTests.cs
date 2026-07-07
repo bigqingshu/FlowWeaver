@@ -3084,6 +3084,201 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public void ApplyRuntimeOptionsDraftPatchesWorkflowDefinitionDraftJson()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {"rows": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        viewModel.RuntimeOptionsProfileDraft = "custom";
+        viewModel.RuntimeOptionsLogLevelDraft = "WARN";
+        viewModel.RuntimeOptionsEventLevelDraft = "basic";
+        viewModel.RuntimeOptionsProgressEnabledDraft = false;
+        viewModel.RuntimeOptionsPayloadByteLimitDraft = "65536";
+        viewModel.RuntimeOptionsRedactColumnsDraft = "password, token";
+        viewModel.SelectedRuntimeOptionsNode = viewModel.WorkflowDefinitionDraftNodes.Single();
+        viewModel.RuntimeOptionsSelectedNodeLogLevelDraft = "DEBUG";
+        viewModel.RuntimeOptionsSelectedNodeEventLevelDraft = "verbose";
+        viewModel.RuntimeOptionsSelectedNodeIncludeMetricsDraft = false;
+
+        Assert.IsTrue(viewModel.ApplyRuntimeOptionsDraftCommand.CanExecute(null));
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var root = draft.RootElement;
+        var runtimeOptions = root.GetProperty("runtime_options");
+        Assert.AreEqual(
+            "custom",
+            runtimeOptions.GetProperty("workflow").GetProperty("profile").GetString());
+        Assert.AreEqual(
+            "WARN",
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("telemetry")
+                .GetProperty("log_level")
+                .GetString());
+        Assert.IsFalse(
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("telemetry")
+                .GetProperty("progress_enabled")
+                .GetBoolean());
+        Assert.AreEqual(
+            "password",
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("diagnostics")
+                .GetProperty("redact_columns")[0]
+                .GetString());
+
+        var sourceOverride = runtimeOptions
+            .GetProperty("node_overrides")
+            .GetProperty("source");
+        Assert.AreEqual(
+            "DEBUG",
+            sourceOverride.GetProperty("telemetry").GetProperty("log_level").GetString());
+        Assert.AreEqual(
+            "verbose",
+            sourceOverride.GetProperty("telemetry").GetProperty("event_level").GetString());
+        Assert.IsFalse(
+            sourceOverride
+                .GetProperty("diagnostics")
+                .GetProperty("include_metrics")
+                .GetBoolean());
+        var nodeConfig = root.GetProperty("nodes")[0].GetProperty("config");
+        Assert.IsFalse(nodeConfig.TryGetProperty("__runtime", out _));
+        Assert.IsFalse(nodeConfig.TryGetProperty("runtime_options", out _));
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+    }
+
+    [TestMethod]
+    public void ResetRuntimeOptionsSelectedNodeOverrideRemovesNodeOverride()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0"
+                }
+              ],
+              "connections": [],
+              "runtime_options": {
+                "version": "1.0",
+                "workflow": {
+                  "profile": "normal"
+                },
+                "node_overrides": {
+                  "source": {
+                    "telemetry": {
+                      "log_level": "DEBUG"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        viewModel.SelectedRuntimeOptionsNode = viewModel.WorkflowDefinitionDraftNodes.Single();
+
+        Assert.AreEqual(1, viewModel.RuntimeOptionsNodeOverrideCount);
+        Assert.IsTrue(viewModel.ResetRuntimeOptionsSelectedNodeOverrideCommand.CanExecute(null));
+        viewModel.ResetRuntimeOptionsSelectedNodeOverrideCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsFalse(
+            draft.RootElement
+                .GetProperty("runtime_options")
+                .GetProperty("node_overrides")
+                .TryGetProperty("source", out _));
+        Assert.AreEqual(0, viewModel.RuntimeOptionsNodeOverrideCount);
+    }
+
+    [TestMethod]
+    public void ApplyRuntimeOptionsDraftRejectsInvalidNumberInput()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"schema_version":"1.0","nodes":[],"connections":[]}""";
+        var originalDraft = viewModel.WorkflowDefinitionDraftJson;
+        viewModel.RuntimeOptionsEventRateLimitPerSecondDraft = "-1";
+
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsTrue(viewModel.HasRuntimeOptionsEditorError);
+        StringAssert.Contains(
+            viewModel.RuntimeOptionsEditorErrorMessage,
+            "Event rate limit");
+    }
+
+    [TestMethod]
+    public void SelectedRunRuntimeOptionsSummaryUsesLoadedWorkflowRevision()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        var revisionDefinition =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [],
+              "connections": [],
+              "runtime_options": {
+                "version": "1.0",
+                "workflow": {
+                  "profile": "custom",
+                  "telemetry": {
+                    "event_level": "basic",
+                    "progress_enabled": false
+                  }
+                },
+                "node_overrides": {
+                  "source": {
+                    "telemetry": {
+                      "event_level": "verbose"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        viewModel.WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
+            Workflow("wf-1", "Daily Load", 2),
+            new[]
+            {
+                Revision("rev-run", "wf-1", 1, revisionDefinition),
+            });
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(
+            new WorkflowRunDto
+            {
+                WorkflowRunId = "run-1",
+                WorkflowId = "wf-1",
+                RevisionId = "rev-run",
+                WorkflowVersion = 1,
+                Status = "SUCCEEDED",
+                StateVersion = 1,
+            });
+
+        Assert.IsTrue(viewModel.HasSelectedRunRuntimeOptionsSummary);
+        Assert.AreEqual(
+            "Run config: profile custom, events basic, progress Off, 1 node override(s)",
+            viewModel.SelectedRunRuntimeOptionsSummaryText);
+    }
+
+    [TestMethod]
     public async Task ApplySelectedNodeConfigDraftPatchesWorkflowDefinitionDraftJson()
     {
         var definitionJson =

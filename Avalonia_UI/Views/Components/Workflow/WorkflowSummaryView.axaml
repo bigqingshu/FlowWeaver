@@ -71,6 +71,8 @@
 
         <workflow:WorkflowSelectedNodeConfigView />
 
+        <workflow:WorkflowRuntimeOptionsSummaryView />
+
         <workflow:WorkflowEditorView IsVisible="{Binding IsWorkflowDraftJsonAdvancedVisible}"/>
 
         <!-- Connections Card -->

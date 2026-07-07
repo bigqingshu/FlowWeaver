@@ -241,6 +241,46 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
     assert deleted == {"workflow_id": workflow_id, "deleted": True}
 
 
+def test_workflow_api_preserves_runtime_options(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+    definition = valid_definition() | {
+        "runtime_options": {
+            "version": "1.0",
+            "workflow": {
+                "profile": "normal",
+                "telemetry": {
+                    "log_level": "INFO",
+                    "event_level": "progress",
+                    "progress_enabled": True,
+                },
+            },
+            "node_overrides": {
+                "source": {
+                    "telemetry": {
+                        "log_level": "DEBUG",
+                    },
+                },
+            },
+        },
+    }
+
+    created = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={"name": "Runtime options workflow", "definition": definition},
+            headers=auth_headers(),
+        )
+    )
+
+    assert created["definition"]["runtime_options"]["workflow"]["profile"] == "normal"
+    assert (
+        created["definition"]["runtime_options"]["node_overrides"]["source"][
+            "telemetry"
+        ]["log_level"]
+        == "DEBUG"
+    )
+
+
 def test_update_workflow_requires_base_revision_id(tmp_path: Path) -> None:
     client, _store, _container = make_client(tmp_path)
     created = response_data(

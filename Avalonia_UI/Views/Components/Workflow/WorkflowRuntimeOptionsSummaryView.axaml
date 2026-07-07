@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowRuntimeOptionsSummaryView"
+             x:DataType="vm:MainWindowViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding RuntimeOptionsSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="{Binding RuntimeOptionsOpenEditorText}"
+                        Click="OpenRuntimeOptionsWindow"
+                        MinWidth="112"/>
+            </Grid>
+
+            <TextBlock Grid.Row="1"
+                       Text="{Binding RuntimeOptionsSummaryText}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+            <TextBlock Grid.Row="2"
+                       Text="{Binding RuntimeOptionsEditorErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextErrorBrush}"
+                       IsVisible="{Binding HasRuntimeOptionsEditorError}"/>
+        </Grid>
+    </Border>
+</UserControl>

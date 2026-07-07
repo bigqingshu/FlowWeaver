@@ -9,6 +9,7 @@ public sealed class WorkflowRunListItemViewModel
     {
         WorkflowRunId = run.WorkflowRunId;
         WorkflowId = run.WorkflowId;
+        RevisionId = run.RevisionId;
         WorkflowVersion = run.WorkflowVersion;
         Status = run.Status;
         RunMode = run.RunMode;
@@ -21,6 +22,8 @@ public sealed class WorkflowRunListItemViewModel
     public string WorkflowRunId { get; }
 
     public string WorkflowId { get; }
+
+    public string? RevisionId { get; }
 
     public int WorkflowVersion { get; }
 

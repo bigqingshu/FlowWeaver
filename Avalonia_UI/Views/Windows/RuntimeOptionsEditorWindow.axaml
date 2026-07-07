@@ -1,0 +1,258 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Avalonia_UI.ViewModels"
+        x:Class="Avalonia_UI.Views.Windows.RuntimeOptionsEditorWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="760"
+        Height="720"
+        MinWidth="640"
+        MinHeight="560"
+        Title="{Binding RuntimeOptionsWindowTitleText}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16" Spacing="12">
+            <Border Padding="14"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding RuntimeOptionsWorkflowSectionText}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <Grid ColumnDefinitions="170,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          ColumnSpacing="12"
+                          RowSpacing="8">
+                        <TextBlock Text="{Binding RuntimeOptionsProfileText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsProfileOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsProfileDraft, Mode=TwoWay}"/>
+
+                        <CheckBox Grid.Row="1"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsStrictValidationText}"
+                                  IsChecked="{Binding RuntimeOptionsStrictValidationDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding RuntimeOptionsLogLevelText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsLogLevelDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="3"
+                                   Text="{Binding RuntimeOptionsEventLevelText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="3"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsEventLevelDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="4"
+                                   Text="{Binding RuntimeOptionsEventRateLimitText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="4"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsEventRateLimitPerSecondDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <CheckBox Grid.Row="5"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsProgressEnabledText}"
+                                  IsChecked="{Binding RuntimeOptionsProgressEnabledDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="6"
+                                   Text="{Binding RuntimeOptionsProgressIntervalText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="6"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsProgressIntervalSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <CheckBox Grid.Row="7"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsCaptureErrorContextText}"
+                                  IsChecked="{Binding RuntimeOptionsCaptureErrorContextDraft, Mode=TwoWay}"/>
+
+                        <CheckBox Grid.Row="8"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsIncludeMetricsText}"
+                                  IsChecked="{Binding RuntimeOptionsIncludeMetricsDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="9"
+                                   Text="{Binding RuntimeOptionsPayloadByteLimitText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="9"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsPayloadByteLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="10"
+                                   Text="{Binding RuntimeOptionsTtlSecondsText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="10"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsTtlSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="11"
+                                   Text="{Binding RuntimeOptionsMaskPolicyText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="11"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsMaskPolicyDraft, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <TextBox Text="{Binding RuntimeOptionsRedactColumnsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding RuntimeOptionsRedactColumnsText}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Padding="14"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{Binding RuntimeOptionsNodeOverrideSectionText}"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+                    <ComboBox ItemsSource="{Binding WorkflowDefinitionDraftNodes}"
+                              SelectedItem="{Binding SelectedRuntimeOptionsNode, Mode=TwoWay}"
+                              PlaceholderText="{Binding RuntimeOptionsSelectNodeText}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowDefinitionNodeListItemViewModel"
+                                          x:DataType="vm:WorkflowDefinitionNodeListItemViewModel">
+                                <TextBlock Text="{Binding NodeSummaryText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <Grid ColumnDefinitions="170,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          ColumnSpacing="12"
+                          RowSpacing="8"
+                          IsEnabled="{Binding HasSelectedRuntimeOptionsNode}">
+                        <TextBlock Text="{Binding RuntimeOptionsProfileText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsProfileOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeProfileDraft, Mode=TwoWay}"/>
+
+                        <CheckBox Grid.Row="1"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsStrictValidationText}"
+                                  IsChecked="{Binding RuntimeOptionsSelectedNodeStrictValidationDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="2"
+                                   Text="{Binding RuntimeOptionsLogLevelText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeLogLevelDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="3"
+                                   Text="{Binding RuntimeOptionsEventLevelText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="3"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeEventLevelDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="4"
+                                   Text="{Binding RuntimeOptionsEventRateLimitText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="4"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsSelectedNodeEventRateLimitPerSecondDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <CheckBox Grid.Row="5"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsProgressEnabledText}"
+                                  IsChecked="{Binding RuntimeOptionsSelectedNodeProgressEnabledDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="6"
+                                   Text="{Binding RuntimeOptionsProgressIntervalText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="6"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsSelectedNodeProgressIntervalSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <CheckBox Grid.Row="7"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsCaptureErrorContextText}"
+                                  IsChecked="{Binding RuntimeOptionsSelectedNodeCaptureErrorContextDraft, Mode=TwoWay}"/>
+
+                        <CheckBox Grid.Row="8"
+                                  Grid.ColumnSpan="2"
+                                  Content="{Binding RuntimeOptionsIncludeMetricsText}"
+                                  IsChecked="{Binding RuntimeOptionsSelectedNodeIncludeMetricsDraft, Mode=TwoWay}"/>
+
+                        <TextBlock Grid.Row="9"
+                                   Text="{Binding RuntimeOptionsPayloadByteLimitText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="9"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsSelectedNodePayloadByteLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="10"
+                                   Text="{Binding RuntimeOptionsTtlSecondsText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="10"
+                                 Grid.Column="1"
+                                 Text="{Binding RuntimeOptionsSelectedNodeTtlSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="11"
+                                   Text="{Binding RuntimeOptionsMaskPolicyText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ComboBox Grid.Row="11"
+                                  Grid.Column="1"
+                                  ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
+                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeMaskPolicyDraft, Mode=TwoWay}"/>
+                    </Grid>
+
+                    <TextBox Text="{Binding RuntimeOptionsSelectedNodeRedactColumnsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding RuntimeOptionsRedactColumnsText}"
+                             IsEnabled="{Binding HasSelectedRuntimeOptionsNode}"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="{Binding RuntimeOptionsEditorErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextErrorBrush}"
+                       IsVisible="{Binding HasRuntimeOptionsEditorError}"/>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8">
+                <Button Content="{Binding RuntimeOptionsResetNodeOverrideText}"
+                        Command="{Binding ResetRuntimeOptionsSelectedNodeOverrideCommand}"/>
+                <Button Content="{Binding RuntimeOptionsApplyText}"
+                        Command="{Binding ApplyRuntimeOptionsDraftCommand}"
+                        MinWidth="96"/>
+                <Button Content="{Binding CloseText}"
+                        Click="CloseWindow"
+                        MinWidth="80"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Window>
