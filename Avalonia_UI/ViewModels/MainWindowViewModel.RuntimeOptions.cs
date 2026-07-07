@@ -204,15 +204,6 @@ public partial class MainWindowViewModel
     public string RuntimeOptionsMaskPolicyText =>
         T("definition.runtime_options_mask_policy");
 
-    public string RuntimeOptionsJsonSectionText =>
-        T("definition.runtime_options_json_section");
-
-    public string RuntimeOptionsJsonRegenerateText =>
-        T("definition.runtime_options_json_regenerate");
-
-    public string RuntimeOptionsJsonWatermarkText =>
-        T("definition.runtime_options_json_watermark");
-
     public string RuntimeOptionsSelectNodeText =>
         T("definition.runtime_options_select_node");
 
@@ -246,25 +237,6 @@ public partial class MainWindowViewModel
         ApplyRuntimeOptionsStructuredDraft();
     }
 
-    [RelayCommand(CanExecute = nameof(CanApplyRuntimeOptionsDraft))]
-    private void RegenerateRuntimeOptionsJsonDraft()
-    {
-        if (!TryBuildRuntimeOptionsDraftFromStructuredInputs(
-            out var draft,
-            out var errorMessage))
-        {
-            RuntimeOptionsEditorErrorMessage = errorMessage;
-            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-            return;
-        }
-
-        SetRuntimeOptionsJsonDraft(
-            WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(draft),
-            isDirty: false);
-        RuntimeOptionsEditorErrorMessage = null;
-        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-    }
-
     private void ApplyRuntimeOptionsStructuredDraft()
     {
         var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
@@ -287,36 +259,6 @@ public partial class MainWindowViewModel
         }
 
         ApplyRuntimeOptionsDraftToWorkflow(draft);
-    }
-
-    private void ApplyRuntimeOptionsJsonDraft()
-    {
-        var readResult = RuntimeOptionsDraftReader.ReadRuntimeOptionsJson(
-            RuntimeOptionsJsonDraft);
-        if (!readResult.Succeeded)
-        {
-            RuntimeOptionsEditorErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(readResult.Warning);
-            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-            return;
-        }
-
-        if (!TryValidateRuntimeOptionsDraft(
-            readResult.Draft,
-            out var errorMessage))
-        {
-            RuntimeOptionsEditorErrorMessage = errorMessage;
-            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-            return;
-        }
-
-        if (ApplyRuntimeOptionsDraftToWorkflow(readResult.Draft))
-        {
-            SetRuntimeOptionsJsonDraft(
-                WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(
-                    readResult.Draft),
-                isDirty: false);
-        }
     }
 
     [RelayCommand(CanExecute = nameof(CanResetRuntimeOptionsSelectedNodeOverride))]
@@ -542,33 +484,6 @@ public partial class MainWindowViewModel
         return true;
     }
 
-    private void RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean()
-    {
-        if (!IsRuntimeOptionsJsonEditorExpanded || IsRuntimeOptionsJsonDraftDirty)
-        {
-            return;
-        }
-
-        if (!TryBuildRuntimeOptionsDraftFromStructuredInputs(
-            out var draft,
-            out _))
-        {
-            return;
-        }
-
-        SetRuntimeOptionsJsonDraft(
-            WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(draft),
-            isDirty: false);
-    }
-
-    private void SetRuntimeOptionsJsonDraft(string value, bool isDirty)
-    {
-        isSynchronizingRuntimeOptionsJsonDraft = true;
-        RuntimeOptionsJsonDraft = value;
-        isSynchronizingRuntimeOptionsJsonDraft = false;
-        IsRuntimeOptionsJsonDraftDirty = isDirty;
-    }
-
     private bool TryBuildRuntimeOptionsWorkflowDraft(
         out RuntimeOptionsWorkflowDraft draft,
         out string errorMessage)
@@ -771,22 +686,6 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(HasSelectedRuntimeOptionsNode));
         RefreshSelectedRuntimeOptionsNodeDraftState();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnIsRuntimeOptionsJsonEditorExpandedChanged(bool value)
-    {
-        if (value && !IsRuntimeOptionsJsonDraftDirty)
-        {
-            RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
-        }
-    }
-
-    partial void OnRuntimeOptionsJsonDraftChanged(string value)
-    {
-        if (!isSynchronizingRuntimeOptionsJsonDraft)
-        {
-            IsRuntimeOptionsJsonDraftDirty = true;
-        }
     }
 
     partial void OnRuntimeOptionsProfileDraftChanged(string value)
