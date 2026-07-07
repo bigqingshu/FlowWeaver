@@ -99,6 +99,8 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmTitleText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmMessageText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding DeleteSelectedWorkflowCommand}\"");
+        StringAssert.Contains(xaml, "x:Name=\"DeleteWorkflowButton\"");
+        StringAssert.Contains(xaml, "Click=\"CloseDeleteWorkflowConfirmFlyout\"");
     }
 
     [TestMethod]

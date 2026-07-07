@@ -88,7 +88,8 @@
                     </Panel>
                     <Panel Background="Transparent"
                            ToolTip.Tip="{Binding DeleteSelectedWorkflowDisabledReasonText}">
-                        <Button Content="{Binding DeleteWorkflowText}"
+                        <Button x:Name="DeleteWorkflowButton"
+                                Content="{Binding DeleteWorkflowText}"
                                 IsEnabled="{Binding CanUseDeleteSelectedWorkflowAction}"
                                 MinWidth="84">
                             <Button.Flyout>
@@ -101,6 +102,7 @@
                                                    TextWrapping="Wrap"/>
                                         <Button Content="{Binding DeleteWorkflowText}"
                                                 Command="{Binding DeleteSelectedWorkflowCommand}"
+                                                Click="CloseDeleteWorkflowConfirmFlyout"
                                                 HorizontalAlignment="Right"/>
                                     </StackPanel>
                                 </Flyout>
