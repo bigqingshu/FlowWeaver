@@ -21,7 +21,6 @@ public partial class MainWindowViewModel
         nodeDefinitionByKey = new();
     private readonly Dictionary<string, NodeConfigSchemaParseResult> nodeConfigSchemaByKey =
         new(StringComparer.Ordinal);
-    private readonly WorkflowDefinitionDraftParseCache workflowDefinitionDraftParseCache = new();
 
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
@@ -1474,32 +1473,6 @@ public partial class MainWindowViewModel
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
         ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
         ClearSelectedNewDraftConnectionNodesIfMissing();
-    }
-
-    private WorkflowDefinitionDraftStructure? ReadWorkflowDefinitionDraftStructureFromCache()
-    {
-        return workflowDefinitionDraftParseCache.GetStructure(
-            WorkflowDefinitionDraftJson,
-            DisplayTextFormatter);
-    }
-
-    private WorkflowDefinitionLinearChainAnalysis?
-        ReadWorkflowDefinitionLinearChainAnalysisFromCache()
-    {
-        return workflowDefinitionDraftParseCache.GetLinearChainAnalysis(
-            WorkflowDefinitionDraftJson);
-    }
-
-    private RuntimeOptionsDraftReadResult
-        ReadWorkflowDefinitionDraftRuntimeOptionsFromCache()
-    {
-        return workflowDefinitionDraftParseCache.GetRuntimeOptions(
-            WorkflowDefinitionDraftJson);
-    }
-
-    private void InvalidateWorkflowDefinitionDraftParseCache()
-    {
-        workflowDefinitionDraftParseCache.Invalidate();
     }
 
     private void RefreshWorkflowDefinitionDraftNodes()
