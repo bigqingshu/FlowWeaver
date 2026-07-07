@@ -30,6 +30,7 @@ from flowweaver.nodes.builtin_table import (
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
+    SAVE_RUN_TABLE_NODE_TYPE,
 )
 from flowweaver.nodes.registry import (
     NodeConfigFieldSpec,
@@ -210,6 +211,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"), NodePortSpec("memory")),
             config_schema=_save_memory_table_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=SAVE_RUN_TABLE_NODE_TYPE,
+            node_version="1.0",
+            display_name="Save Run Table",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"), NodePortSpec("transit")),
+            config_schema=_save_run_table_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -1295,6 +1304,34 @@ def _save_memory_table_schema() -> NodeConfigSchemaSpec:
                 title="Table Name",
                 required=True,
                 default="memory_table",
+            ),
+            "mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Mode",
+                required=True,
+                default="overwrite",
+                enum=("overwrite",),
+            ),
+        }
+    )
+
+
+def _save_run_table_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "transit_name": NodeConfigFieldSpec(
+                type="string",
+                title="Transit Name",
+                default="run_table",
+                description="Workflow-run local name for this intermediate table.",
+            ),
+            "save_memory": NodeConfigFieldSpec(
+                type="boolean",
+                title="Save Memory",
+                default=True,
+                description=(
+                    "When false, runtime only passes the current input table through."
+                ),
             ),
             "mode": NodeConfigFieldSpec(
                 type="enum",

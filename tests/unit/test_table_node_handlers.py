@@ -25,6 +25,7 @@ from flowweaver.nodes.builtin_table import (
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
+    SAVE_RUN_TABLE_NODE_TYPE,
     create_builtin_table_node_handler_registry,
     table_node_types,
 )
@@ -111,6 +112,7 @@ def test_default_builtin_table_handler_registry_covers_table_node_types() -> Non
         NUMERIC_COLUMN_OPERATION_NODE_TYPE,
         PARSE_DATETIME_NODE_TYPE,
         SAVE_MEMORY_TABLE_NODE_TYPE,
+        SAVE_RUN_TABLE_NODE_TYPE,
         SQL_MAPPING_NODE_TYPE,
     }
 

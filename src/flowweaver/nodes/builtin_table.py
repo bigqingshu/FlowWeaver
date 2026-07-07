@@ -56,6 +56,7 @@ NUMERIC_COLUMN_OPERATION_NODE_TYPE = "NumericColumnOperationNode"
 ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE = "AddCurrentDateTimeColumnNode"
 PARSE_DATETIME_NODE_TYPE = "ParseDateTimeNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
+SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
@@ -93,6 +94,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             AddCurrentDateTimeColumnNodeHandler(),
             ParseDateTimeNodeHandler(),
             SaveMemoryTableNodeHandler(),
+            SaveRunTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
     )
@@ -1670,11 +1672,55 @@ class SaveMemoryTableNodeHandler:
             task,
             node_type=self.node_type,
         )
-        table_name = _save_memory_table_name_config(task.config)
+        table_name = _named_output_config(
+            task.config,
+            node_type=self.node_type,
+            keys=("table_name",),
+        )
         mode = str(task.config.get("mode", "overwrite"))
         if mode != "overwrite":
             raise _NodeValidationError(
                 f"Unsupported SaveMemoryTableNode mode: {mode}"
+            )
+        rows = context.read_all_rows(input_ref)
+        memory_ref = context.create_memory_table(
+            task,
+            logical_table_id=table_name,
+            schema=input_ref.schema,
+            rows=rows,
+            role=TableRole.AUXILIARY,
+        )
+        return [input_ref, memory_ref]
+
+
+class SaveRunTableNodeHandler:
+    node_type = SAVE_RUN_TABLE_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        save_memory = _bool_config(
+            task.config,
+            "save_memory",
+            default=True,
+        )
+        if not save_memory:
+            return [input_ref]
+        table_name = _named_output_config(
+            task.config,
+            node_type=self.node_type,
+            keys=("transit_name", "table_name"),
+        )
+        mode = str(task.config.get("mode", "overwrite"))
+        if mode != "overwrite":
+            raise _NodeValidationError(
+                f"Unsupported SaveRunTableNode mode: {mode}"
             )
         rows = context.read_all_rows(input_ref)
         memory_ref = context.create_memory_table(
@@ -1951,11 +1997,18 @@ def _enum_config(
     return normalized
 
 
-def _save_memory_table_name_config(config: dict[str, Any]) -> str:
-    value = config.get("table_name")
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError("SaveMemoryTableNode config.table_name is required")
-    return value.strip()
+def _named_output_config(
+    config: dict[str, Any],
+    *,
+    node_type: str,
+    keys: tuple[str, ...],
+) -> str:
+    for key in keys:
+        value = config.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    joined_keys = " or ".join(f"config.{key}" for key in keys)
+    raise _NodeValidationError(f"{node_type} {joined_keys} is required")
 
 
 def _string_list_config(

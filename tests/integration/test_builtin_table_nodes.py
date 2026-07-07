@@ -34,6 +34,7 @@ from flowweaver.nodes.builtin_table import (
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
+    SAVE_RUN_TABLE_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
@@ -2579,6 +2580,89 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
         {"row_id": 1, "amount": 1.0},
         {"row_id": 2, "amount": 2.0},
     ]
+
+
+def test_save_run_table_node_outputs_current_ref_and_named_transit_ref(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    save_task = make_task(
+        node_type=SAVE_RUN_TABLE_NODE_TYPE,
+        node_run_id="node-run-save-run",
+        node_instance_id="save_run",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "transit_name": "daily_scratch",
+            "save_memory": True,
+            "mode": "overwrite",
+        },
+    )
+
+    save_result = executor.execute(save_task)
+
+    assert save_result.status == NodeResultStatus.SUCCEEDED
+    assert save_result.output_refs[0] == input_ref.table_ref_id
+    assert len(save_result.output_refs) == 2
+    transit_ref = registry.get(save_result.output_refs[1])
+    assert transit_ref.provider_id == MEMORY_PROVIDER_ID
+    assert transit_ref.storage_kind == TableStorageKind.MEMORY
+    assert transit_ref.role == TableRole.AUXILIARY
+    assert transit_ref.logical_table_id == "daily_scratch"
+    assert provider.count_rows(input_ref) == 2
+    assert memory_provider.read_rows(
+        transit_ref,
+        offset=0,
+        limit=10,
+        order_by=["row_id"],
+    ) == [
+        {"row_id": 1, "amount": 1.0},
+        {"row_id": 2, "amount": 2.0},
+    ]
+
+
+def test_save_run_table_node_can_pass_through_without_memory_save(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider, _memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    save_result = executor.execute(
+        make_task(
+            node_type=SAVE_RUN_TABLE_NODE_TYPE,
+            node_run_id="node-run-save-run",
+            node_instance_id="save_run",
+            input_refs=[input_ref.table_ref_id],
+            config={"save_memory": False},
+        )
+    )
+
+    assert save_result.status == NodeResultStatus.SUCCEEDED
+    assert save_result.output_refs == [input_ref.table_ref_id]
 
 
 def test_add_columns_node_returns_validation_error_for_duplicate_column(

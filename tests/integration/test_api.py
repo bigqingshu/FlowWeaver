@@ -373,6 +373,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AddCurrentDateTimeColumnNode",
         "ParseDateTimeNode",
         "SaveMemoryTableNode",
+        "SaveRunTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
         "SqlMappingNode",
@@ -440,6 +441,13 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["SaveMemoryTableNode"]["output_ports"] == [
         {"name": "out", "required": False},
         {"name": "memory", "required": False},
+    ]
+    assert by_type["SaveRunTableNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["SaveRunTableNode"]["output_ports"] == [
+        {"name": "out", "required": False},
+        {"name": "transit", "required": False},
     ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
     assert all("implementation_ref" not in definition for definition in definitions)
@@ -801,6 +809,13 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "default": "memory_table",
     }
     assert save_memory_properties["mode"]["enum"] == ["overwrite"]
+
+    save_run_properties = by_type["SaveRunTableNode"]["config_schema"][
+        "properties"
+    ]
+    assert save_run_properties["transit_name"]["default"] == "run_table"
+    assert save_run_properties["save_memory"]["default"] is True
+    assert save_run_properties["mode"]["enum"] == ["overwrite"]
 
     publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
         "properties"
