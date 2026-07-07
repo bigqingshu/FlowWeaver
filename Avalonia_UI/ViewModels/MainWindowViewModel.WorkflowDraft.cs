@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -16,6 +17,10 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     private int nodeDefinitionsLoadVersion;
+    private bool hasLoadedNodeDefinitionCatalog;
+    private string? loadedNodeDefinitionCatalogConnectionKey;
+    private string? loadedNodeDefinitionCatalogHash;
+    private string? loadedNodeDefinitionCatalogProgramHash;
 
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
@@ -707,15 +712,38 @@ public partial class MainWindowViewModel
     [RelayCommand(CanExecute = nameof(CanRefreshNodeDefinitions))]
     private async Task RefreshNodeDefinitionsAsync()
     {
+        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: false);
+    }
+
+    private async Task RefreshNodeDefinitionsCoreAsync(bool allowStateCacheHit)
+    {
         var requestVersion = ++nodeDefinitionsLoadVersion;
         IsLoadingNodeDefinitions = true;
         NodeDefinitionCatalogMessage = T("node_catalog.loading");
         NodeDefinitionCatalogErrorMessage = null;
+        var settings = BuildSettings();
+        var connectionKey = BuildNodeDefinitionConnectionKey(settings);
 
         try
         {
+            var catalogState = await TryGetNodeDefinitionCatalogStateAsync(settings);
+            if (requestVersion != nodeDefinitionsLoadVersion)
+            {
+                return;
+            }
+
+            if (allowStateCacheHit
+                && IsNodeDefinitionCatalogCacheHit(connectionKey, catalogState))
+            {
+                NodeDefinitionCatalogMessage =
+                    F("format.loaded_node_definitions", NodeDefinitions.Count);
+                OnPropertyChanged(nameof(HasNodeDefinitions));
+                OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+                return;
+            }
+
             var response = await _apiClient.ListNodeDefinitionsAsync(
-                BuildSettings(),
+                settings,
                 _shutdown.Token);
 
             if (requestVersion != nodeDefinitionsLoadVersion)
@@ -737,6 +765,7 @@ public partial class MainWindowViewModel
                         DisplayTextFormatter));
                 }
 
+                RecordNodeDefinitionCatalogCacheState(connectionKey, catalogState);
                 RefreshNodeEditorSchemaFallbackNodes();
                 OnPropertyChanged(nameof(HasNodeDefinitions));
                 OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
@@ -765,12 +794,112 @@ public partial class MainWindowViewModel
 
     private async Task RefreshNodeDefinitionsAfterHealthyConnectionAsync()
     {
-        if (HasNodeDefinitions || !CanRefreshNodeDefinitions())
+        if (!CanRefreshNodeDefinitions())
         {
             return;
         }
 
-        await RefreshNodeDefinitionsAsync();
+        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: true);
+    }
+
+    private async Task<NodeDefinitionCatalogStateDto?> TryGetNodeDefinitionCatalogStateAsync(
+        EngineHostConnectionSettings settings)
+    {
+        try
+        {
+            var response = await _apiClient.GetNodeDefinitionCatalogStateAsync(
+                settings,
+                _shutdown.Token);
+            if (response.Ok
+                && response.Data is { } state
+                && !string.IsNullOrWhiteSpace(state.CatalogHash))
+            {
+                return state;
+            }
+        }
+        catch (NotSupportedException)
+        {
+        }
+
+        return null;
+    }
+
+    private bool IsNodeDefinitionCatalogCacheHit(
+        string connectionKey,
+        NodeDefinitionCatalogStateDto? catalogState)
+    {
+        var catalogHash = NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
+        if (!hasLoadedNodeDefinitionCatalog || catalogHash is null)
+        {
+            return false;
+        }
+
+        return string.Equals(
+                loadedNodeDefinitionCatalogConnectionKey,
+                connectionKey,
+                StringComparison.Ordinal)
+            && string.Equals(
+                loadedNodeDefinitionCatalogHash,
+                catalogHash,
+                StringComparison.Ordinal)
+            && string.Equals(
+                loadedNodeDefinitionCatalogProgramHash,
+                NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash),
+                StringComparison.Ordinal);
+    }
+
+    private void RecordNodeDefinitionCatalogCacheState(
+        string connectionKey,
+        NodeDefinitionCatalogStateDto? catalogState)
+    {
+        hasLoadedNodeDefinitionCatalog = true;
+        loadedNodeDefinitionCatalogConnectionKey = connectionKey;
+        loadedNodeDefinitionCatalogHash =
+            NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
+        loadedNodeDefinitionCatalogProgramHash =
+            NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash);
+    }
+
+    private void InvalidateNodeDefinitionCatalogCacheState()
+    {
+        hasLoadedNodeDefinitionCatalog = false;
+        loadedNodeDefinitionCatalogConnectionKey = null;
+        loadedNodeDefinitionCatalogHash = null;
+        loadedNodeDefinitionCatalogProgramHash = null;
+    }
+
+    private static string BuildNodeDefinitionConnectionKey(
+        EngineHostConnectionSettings settings)
+    {
+        return string.Concat(
+            NormalizeNodeDefinitionBaseUrl(settings.BaseUrl),
+            "|token:",
+            ComputeNodeDefinitionTokenFingerprint(settings.Token));
+    }
+
+    private static string NormalizeNodeDefinitionBaseUrl(string baseUrl)
+    {
+        var trimmed = baseUrl.Trim();
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            return uri.GetLeftPart(UriPartial.Authority)
+                .TrimEnd('/')
+                .ToLowerInvariant();
+        }
+
+        return trimmed.ToLowerInvariant();
+    }
+
+    private static string ComputeNodeDefinitionTokenFingerprint(string token)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
+    }
+
+    private static string? NormalizeNodeDefinitionCatalogToken(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]

@@ -481,12 +481,14 @@ public partial class MainWindowViewModel
     partial void OnTokenChanged(string value)
     {
         IsAuthenticationFailed = false;
+        InvalidateNodeDefinitionCatalogCacheState();
         NotifyEngineActionStateChanged();
     }
 
     partial void OnBaseUrlChanged(string value)
     {
         IsAuthenticationFailed = false;
+        InvalidateNodeDefinitionCatalogCacheState();
         NotifyEngineActionStateChanged();
         CheckConnectionCommand.NotifyCanExecuteChanged();
         StartRuntimeEventStreamCommand.NotifyCanExecuteChanged();

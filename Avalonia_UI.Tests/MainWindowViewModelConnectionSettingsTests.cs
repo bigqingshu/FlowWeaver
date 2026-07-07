@@ -216,6 +216,93 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public async Task CheckConnectionReusesNodeDefinitionsWhenCatalogStateMatches()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+            NodeDefinitionCatalogStateResponse =
+                ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Success(
+                    new NodeDefinitionCatalogStateDto
+                    {
+                        CatalogHash = "catalog-1",
+                        NodeCount = 1,
+                    }),
+            NodeDefinitionsResponse =
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>
+                    {
+                        NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.BaseUrl = "http://127.0.0.1:8012/";
+        viewModel.Token = "secret";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        apiClient.NodeDefinitionsResponse =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("ChangedNode", "Changed"),
+                });
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.GetNodeDefinitionCatalogStateCallCount);
+        Assert.AreEqual(1, apiClient.ListNodeDefinitionsCallCount);
+        Assert.HasCount(1, viewModel.NodeDefinitions);
+        Assert.AreEqual("GenerateTestTableNode", viewModel.NodeDefinitions[0].NodeType);
+        Assert.AreEqual("Loaded 1 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
+    }
+
+    [TestMethod]
+    public async Task CheckConnectionRefreshesNodeDefinitionsWhenTokenChanges()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+            NodeDefinitionCatalogStateResponse =
+                ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Success(
+                    new NodeDefinitionCatalogStateDto
+                    {
+                        CatalogHash = "catalog-1",
+                        NodeCount = 1,
+                    }),
+            NodeDefinitionsResponse =
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>
+                    {
+                        NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.BaseUrl = "http://127.0.0.1:8012/";
+        viewModel.Token = "secret";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        apiClient.NodeDefinitionsResponse =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("FilterRowsNode", "Filter Rows"),
+                });
+        viewModel.Token = "rotated";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.GetNodeDefinitionCatalogStateCallCount);
+        Assert.AreEqual(2, apiClient.ListNodeDefinitionsCallCount);
+        Assert.HasCount(1, viewModel.NodeDefinitions);
+        Assert.AreEqual("FilterRowsNode", viewModel.NodeDefinitions[0].NodeType);
+        Assert.AreEqual("rotated", apiClient.LastSettings?.Token);
+    }
+
+    [TestMethod]
     public async Task CheckConnectionLoadsWorkflowsWhenHealthyAndListIsEmpty()
     {
         var apiClient = new FakeApiClient
@@ -413,6 +500,14 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
 
+        public ApiResponseEnvelope<NodeDefinitionCatalogStateDto> NodeDefinitionCatalogStateResponse { get; set; } =
+            ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Failure(
+                "NOT_CONFIGURED",
+                "No node definition catalog state response configured.");
+
+        public Queue<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> NodeDefinitionCatalogStateResponses { get; } =
+            new();
+
         public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; set; } =
             ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
                 "NOT_CONFIGURED",
@@ -424,6 +519,8 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public EngineHostConnectionSettings? LastSettings { get; private set; }
 
         public int ListNodeDefinitionsCallCount { get; private set; }
+
+        public int GetNodeDefinitionCatalogStateCallCount { get; private set; }
 
         public int ListWorkflowsCallCount { get; private set; }
 
@@ -446,6 +543,18 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             ListNodeDefinitionsCallCount++;
             LastSettings = settings;
             return Task.FromResult(NodeDefinitionsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> GetNodeDefinitionCatalogStateAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            GetNodeDefinitionCatalogStateCallCount++;
+            LastSettings = settings;
+            return Task.FromResult(
+                NodeDefinitionCatalogStateResponses.Count > 0
+                    ? NodeDefinitionCatalogStateResponses.Dequeue()
+                    : NodeDefinitionCatalogStateResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
@@ -601,6 +710,21 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             DefinitionHash = $"hash-{workflowId}",
             CreatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
             UpdatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+        };
+    }
+
+    private static NodeDefinitionDto NodeDefinition(string nodeType, string displayName)
+    {
+        return new NodeDefinitionDto
+        {
+            NodeType = nodeType,
+            NodeVersion = "1.0",
+            DisplayName = displayName,
+            ExecutionMode = "PROCESS_POOL",
+            DefaultTimeoutSeconds = 60,
+            RetrySafe = false,
+            UiVisibility = "visible",
+            ConfigSchemaVersion = string.Empty,
         };
     }
 }

@@ -17,6 +17,13 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> GetNodeDefinitionCatalogStateAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Node definition catalog state API is not implemented.");
+    }
+
     Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);

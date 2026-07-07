@@ -56,6 +56,18 @@ public sealed record NodeDefinitionDto
     public JsonElement? ConfigSchema { get; init; }
 }
 
+public sealed record NodeDefinitionCatalogStateDto
+{
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_count")]
+    public int NodeCount { get; init; }
+
+    [JsonPropertyName("program_hash")]
+    public string? ProgramHash { get; init; }
+}
+
 public sealed record WorkflowDefinitionDto
 {
     [JsonPropertyName("workflow_id")]

@@ -84,6 +84,28 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetNodeDefinitionCatalogStateAsyncUsesStatePath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"catalog_hash":"hash-1","node_count":2,"program_hash":"build-1"},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetNodeDefinitionCatalogStateAsync(new EngineHostConnectionSettings
+        {
+            Token = "secret",
+        });
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual("Bearer", handler.Authorization?.Scheme);
+        Assert.AreEqual(new Uri("http://127.0.0.1:8000/api/v1/node-definitions/state"), handler.RequestUri);
+        Assert.AreEqual("hash-1", result.Data?.CatalogHash);
+        Assert.AreEqual(2, result.Data?.NodeCount);
+        Assert.AreEqual("build-1", result.Data?.ProgramHash);
+    }
+
+    [TestMethod]
     public async Task GetWorkflowAsyncUsesDetailPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
