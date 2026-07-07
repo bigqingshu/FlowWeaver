@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -17,16 +16,12 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     private int nodeDefinitionsLoadVersion;
-    private bool hasLoadedNodeDefinitionCatalog;
-    private string? loadedNodeDefinitionCatalogConnectionKey;
-    private string? loadedNodeDefinitionCatalogHash;
-    private string? loadedNodeDefinitionCatalogProgramHash;
+    private readonly NodeDefinitionCatalogCacheState nodeDefinitionCatalogCacheState = new();
     private readonly Dictionary<(string NodeType, string NodeVersion), NodeDefinitionListItemViewModel>
         nodeDefinitionByKey = new();
     private readonly Dictionary<string, NodeConfigSchemaParseResult> nodeConfigSchemaByKey =
         new(StringComparer.Ordinal);
     private readonly WorkflowDefinitionDraftParseCache workflowDefinitionDraftParseCache = new();
-    private string? nodeConfigSchemaCacheCatalogKey;
 
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
@@ -732,7 +727,7 @@ public partial class MainWindowViewModel
         NodeDefinitionCatalogMessage = T("node_catalog.loading");
         NodeDefinitionCatalogErrorMessage = null;
         var settings = BuildSettings();
-        var connectionKey = BuildNodeDefinitionConnectionKey(settings);
+        var connectionKey = NodeDefinitionCatalogCacheState.BuildConnectionKey(settings);
 
         try
         {
@@ -743,7 +738,7 @@ public partial class MainWindowViewModel
             }
 
             if (allowStateCacheHit
-                && IsNodeDefinitionCatalogCacheHit(connectionKey, catalogState))
+                && nodeDefinitionCatalogCacheState.IsCatalogHit(connectionKey, catalogState))
             {
                 NodeDefinitionCatalogMessage =
                     F("format.loaded_node_definitions", NodeDefinitions.Count);
@@ -779,11 +774,13 @@ public partial class MainWindowViewModel
                         DisplayTextFormatter,
                         GetOrParseNodeConfigSchema(definition, schemaCatalogKey));
                     NodeDefinitions.Add(item);
-                    nodeDefinitionByKey[BuildNodeDefinitionLookupKey(item.NodeType, item.NodeVersion)] =
+                    nodeDefinitionByKey[NodeDefinitionCatalogCacheState.BuildLookupKey(
+                            item.NodeType,
+                            item.NodeVersion)] =
                         item;
                 }
 
-                RecordNodeDefinitionCatalogCacheState(connectionKey, catalogState);
+                nodeDefinitionCatalogCacheState.RecordLoadedCatalog(connectionKey, catalogState);
                 RefreshNodeEditorSchemaFallbackNodes();
                 OnPropertyChanged(nameof(HasNodeDefinitions));
                 OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
@@ -842,62 +839,22 @@ public partial class MainWindowViewModel
         return null;
     }
 
-    private bool IsNodeDefinitionCatalogCacheHit(
-        string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
-    {
-        var catalogHash = NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
-        if (!hasLoadedNodeDefinitionCatalog || catalogHash is null)
-        {
-            return false;
-        }
-
-        return string.Equals(
-                loadedNodeDefinitionCatalogConnectionKey,
-                connectionKey,
-                StringComparison.Ordinal)
-            && string.Equals(
-                loadedNodeDefinitionCatalogHash,
-                catalogHash,
-                StringComparison.Ordinal)
-            && string.Equals(
-                loadedNodeDefinitionCatalogProgramHash,
-                NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash),
-                StringComparison.Ordinal);
-    }
-
-    private void RecordNodeDefinitionCatalogCacheState(
-        string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
-    {
-        hasLoadedNodeDefinitionCatalog = true;
-        loadedNodeDefinitionCatalogConnectionKey = connectionKey;
-        loadedNodeDefinitionCatalogHash =
-            NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
-        loadedNodeDefinitionCatalogProgramHash =
-            NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash);
-    }
-
     private void InvalidateNodeDefinitionCatalogCacheState()
     {
-        hasLoadedNodeDefinitionCatalog = false;
-        loadedNodeDefinitionCatalogConnectionKey = null;
-        loadedNodeDefinitionCatalogHash = null;
-        loadedNodeDefinitionCatalogProgramHash = null;
+        nodeDefinitionCatalogCacheState.InvalidateCatalog();
     }
 
     private string? PrepareNodeConfigSchemaCache(
         string connectionKey,
         NodeDefinitionCatalogStateDto? catalogState)
     {
-        var catalogKey = BuildNodeConfigSchemaCatalogKey(connectionKey, catalogState);
-        if (!string.Equals(
-            nodeConfigSchemaCacheCatalogKey,
-            catalogKey,
-            StringComparison.Ordinal))
+        var catalogKey = nodeDefinitionCatalogCacheState.PrepareSchemaCatalogKey(
+            connectionKey,
+            catalogState,
+            out var changed);
+        if (changed)
         {
             nodeConfigSchemaByKey.Clear();
-            nodeConfigSchemaCacheCatalogKey = catalogKey;
         }
 
         return catalogKey;
@@ -914,7 +871,7 @@ public partial class MainWindowViewModel
                 definition.ConfigSchema);
         }
 
-        var schemaCacheKey = BuildNodeConfigSchemaCacheKey(definition);
+        var schemaCacheKey = NodeDefinitionCatalogCacheState.BuildSchemaCacheKey(definition);
         if (nodeConfigSchemaByKey.TryGetValue(schemaCacheKey, out var cached))
         {
             return cached;
@@ -925,75 +882,6 @@ public partial class MainWindowViewModel
             definition.ConfigSchema);
         nodeConfigSchemaByKey[schemaCacheKey] = parsed;
         return parsed;
-    }
-
-    private static string? BuildNodeConfigSchemaCatalogKey(
-        string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
-    {
-        var catalogHash = NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
-        if (catalogHash is null)
-        {
-            return null;
-        }
-
-        return string.Concat(
-            connectionKey,
-            "|program:",
-            NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash) ?? string.Empty,
-            "|catalog:",
-            catalogHash);
-    }
-
-    private static string BuildNodeConfigSchemaCacheKey(NodeDefinitionDto definition)
-    {
-        return string.Concat(
-            definition.NodeType,
-            "@",
-            definition.NodeVersion,
-            "|schema:",
-            definition.ConfigSchemaVersion);
-    }
-
-    private static (string NodeType, string NodeVersion) BuildNodeDefinitionLookupKey(
-        string nodeType,
-        string nodeVersion)
-    {
-        return (nodeType, nodeVersion);
-    }
-
-    private static string BuildNodeDefinitionConnectionKey(
-        EngineHostConnectionSettings settings)
-    {
-        return string.Concat(
-            NormalizeNodeDefinitionBaseUrl(settings.BaseUrl),
-            "|token:",
-            ComputeNodeDefinitionTokenFingerprint(settings.Token));
-    }
-
-    private static string NormalizeNodeDefinitionBaseUrl(string baseUrl)
-    {
-        var trimmed = baseUrl.Trim();
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
-        {
-            return uri.GetLeftPart(UriPartial.Authority)
-                .TrimEnd('/')
-                .ToLowerInvariant();
-        }
-
-        return trimmed.ToLowerInvariant();
-    }
-
-    private static string ComputeNodeDefinitionTokenFingerprint(string token)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
-    }
-
-    private static string? NormalizeNodeDefinitionCatalogToken(string? value)
-    {
-        var trimmed = value?.Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -1558,7 +1446,9 @@ public partial class MainWindowViewModel
         WorkflowDefinitionNodeListItemViewModel node)
     {
         return nodeDefinitionByKey.TryGetValue(
-            BuildNodeDefinitionLookupKey(node.NodeType, node.NodeVersion),
+            NodeDefinitionCatalogCacheState.BuildLookupKey(
+                node.NodeType,
+                node.NodeVersion),
             out var definition)
                 ? definition
                 : null;
