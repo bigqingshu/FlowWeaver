@@ -23,8 +23,8 @@
 | 类型 | 数量 | 状态说明 |
 |---|---:|---|
 | DataFlowKit 规划节点中已真实处理 | 22 | 已注册、已有 `config_schema`、已有 handler，并能产出真实表处理结果 |
-| DataFlowKit 规划节点中部分真实执行 | 2 | 已支持低风险运行内写入或显式开关外部动作，默认仍保持预览或跳过 |
-| DataFlowKit 规划节点中预览占位 | 2 | 已注册、已有 `config_schema`、已有 handler，但真实副作用暂未执行；插件节点已先补执行前校验 |
+| DataFlowKit 规划节点中部分真实执行 | 3 | 已支持低风险运行内写入或显式开关外部动作，默认仍保持预览或跳过 |
+| DataFlowKit 规划节点中预览占位 | 1 | 已注册、已有 `config_schema`、已有 handler，但真实副作用暂未执行；插件节点已先补执行前校验 |
 | DataFlowKit 规划节点中未实现 | 7 | 已有方案文档，尚未进入默认注册表和后端 handler |
 | 既有基础节点 | 8 | 生成测试表、筛选行、保存内存表、共享表、SQL 映射、测试节点等 |
 
@@ -64,6 +64,7 @@
 | 节点方案 | 后端节点类型 | 当前状态 |
 |---|---|---|
 | 选定列写入指定表 | `WriteSelectedColumnsNode` | `target_type=run_table/memory_table` 且 `enable_write=true` 时可真实生成辅助目标表；支持 `create`、`overwrite`、`append`，状态表输出 `actual_write`、`affected_rows`、`skipped_rows`、`warning_count`、`warnings` 和 `target_table_ref_id`；`sqlite` 目标仍跳过真实写入 |
+| 字段映射写入表 | `WriteBackTableNode` | `target_type=run_table/memory_table` 且 `enable_write=true` 时可按字段映射真实生成辅助目标表；支持 `create`、`overwrite`、`append`、空值跳过和状态摘要；`sqlite` 目标仍跳过真实写入 |
 | 批量重命名 | `BatchRenameFilesNode` | 默认只输出计划；`actual_rename=true` 时可真实重命名文件，支持目标目录创建、冲突跳过/覆盖/自动追加序号和 JSONL 日志 |
 
 ## 已注册但处于预览占位的节点
@@ -72,7 +73,6 @@
 
 | 节点方案 | 后端节点类型 | 当前状态 |
 |---|---|---|
-| 字段映射写入表 | `WriteBackTableNode` | 校验匹配规则和字段映射，输出写回计划状态表，`actual_write=false` |
 | 插件节点 | `PluginNode` | 支持 `plugin_manifest` 执行前校验，输出清单状态、ID/版本匹配、输入输出绑定、必填参数、外部动作门控、执行就绪和错误结构；当前不实际执行插件 |
 
 ## 既有基础节点
@@ -164,8 +164,8 @@ NodeTaskModel 当前仍保持业务任务模型，不额外携带配置字字段
 | 顺序 | 节点 | 交付内容 |
 |---:|---|---|
 | 1 | 选定列写入指定表 | 已部分完成：运行中转表和内存表目标真实写入，外部 SQLite 仍保持跳过 |
-| 2 | 字段映射写入表 | 先支持可控目标表写回和结果摘要 |
-| 3 | 写入结果统一 | 已部分完成：`WriteSelectedColumnsNode` 和 `WriteBackTableNode` 状态表均包含 affected_rows、skipped_rows、warnings、actual_write |
+| 2 | 字段映射写入表 | 已部分完成：运行中转表和内存表目标真实写入，外部 SQLite 仍保持跳过 |
+| 3 | 写入结果统一 | 已部分完成：`WriteSelectedColumnsNode` 和 `WriteBackTableNode` 状态表均包含 affected_rows、skipped_rows、warnings、actual_write 和 target_table_ref_id |
 
 ### 第三批：完善外部资源类节点
 

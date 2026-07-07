@@ -1000,6 +1000,17 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "source_to_target",
         "target_to_source",
     ]
+    assert write_back_properties["target_type"]["enum"] == [
+        "run_table",
+        "memory_table",
+        "sqlite",
+    ]
+    assert write_back_properties["target_type"]["default"] == "sqlite"
+    assert write_back_properties["write_mode"]["enum"] == [
+        "create",
+        "overwrite",
+        "append",
+    ]
     assert write_back_properties["target_table"]["required"] is True
     assert write_back_properties["match_rules"]["items"] == {"type": "object"}
     assert write_back_properties["field_mappings"]["items"] == {"type": "object"}

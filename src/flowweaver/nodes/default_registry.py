@@ -1751,6 +1751,18 @@ def _write_back_table_schema() -> NodeConfigSchemaSpec:
                 title="Source Table",
                 description="Defaults to the input table logical name.",
             ),
+            "target_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Target Type",
+                default="sqlite",
+                enum=("run_table", "memory_table", "sqlite"),
+            ),
+            "write_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Write Mode",
+                default="overwrite",
+                enum=("create", "overwrite", "append"),
+            ),
             "use_match_rules": NodeConfigFieldSpec(
                 type="boolean",
                 title="Use Match Rules",

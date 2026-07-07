@@ -1,6 +1,6 @@
 # 节点方案：WriteBackTableNode
 
-更新时间：2026-07-05
+更新时间：2026-07-07
 
 ## 基本信息
 
@@ -12,7 +12,7 @@ FlowWeaver 暂定类型名：`WriteBackTableNode`
 
 优先级：P3
 
-当前状态：规划中，代码未实现
+当前状态：已部分实现。当前后端已注册 `WriteBackTableNode`，支持状态表输出；当 `target_type=run_table/memory_table` 且 `enable_write=true` 时，可按字段映射生成运行内辅助目标表。外部 SQLite 或数据库目标仍只输出状态，不执行真实写库。
 
 ## 要解决的问题
 
@@ -33,8 +33,10 @@ FlowWeaver 暂定类型名：`WriteBackTableNode`
 | 字段 | 含义 |
 |---|---|
 | `writeback_direction` | 写回方向 |
+| `target_type` | 目标类型，当前支持 `run_table`、`memory_table`、`sqlite`；只有运行内目标真实写入 |
 | `target_table` | 目标表 |
 | `source_table` | 源表 |
+| `write_mode` | 写入模式，当前运行内目标支持 `create`、`overwrite`、`append` |
 | `use_match_rules` / `match_rules` | 是否使用匹配规则和规则列表 |
 | `field_mappings` | 源字段到目标字段映射 |
 | `overwrite_policy` | 覆盖策略 |
@@ -49,13 +51,13 @@ FlowWeaver 暂定类型名：`WriteBackTableNode`
 
 预览运行必须只生成动作计划，不修改目标表。
 
-正式写入必须同时满足用户确认、正式运行和 `enable_write=true`。
+正式写入必须同时满足目标类型受支持和 `enable_write=true`。当前阶段真实写入只生成 FlowWeaver 运行内辅助表或内存表；外部 SQLite / 数据库写入继续保持跳过状态。
 
 ## 执行模式
 
 支持预览运行：必须支持。
 
-正式写回：后置实现。
+正式写回：当前已支持运行内辅助表和内存表目标；外部数据库写回后置实现。
 
 支持取消：必须支持。
 
@@ -105,7 +107,7 @@ FlowWeaver 暂定类型名：`WriteBackTableNode`
 
 优先级：P3。
 
-当前状态：规划中，代码未实现。
+当前状态：已部分实现，运行内辅助表和内存表目标可控真实写入，外部数据库目标仍为状态表占位。
 
 要解决的问题：见上文“要解决的问题”章节。
 

@@ -3809,7 +3809,9 @@ def test_write_back_table_node_outputs_writeback_status_table(
             "status": "skipped",
             "writeback_direction": "source_to_target",
             "source_table": "generate_output",
+            "target_type": "sqlite",
             "target_table": "orders",
+            "write_mode": "overwrite",
             "use_match_rules": "true",
             "match_rule_count": 1,
             "field_mapping_count": 2,
@@ -3881,7 +3883,163 @@ def test_write_back_table_node_outputs_preview_only_when_write_enabled(
     assert rows[0]["warning_count"] == 0
     assert rows[0]["warnings"] == ""
     assert rows[0]["target_table_ref_id"] == ""
-    assert rows[0]["skipped_reason"] == "writeback execution is not implemented"
+    assert rows[0]["skipped_reason"] == "sqlite target writes are not implemented"
+
+
+def test_write_back_table_node_writes_run_table_when_enabled(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    writeback_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback",
+            node_instance_id="writeback",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "row_id", "target_field": "id"},
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert writeback_result.status == NodeResultStatus.SUCCEEDED
+    assert len(writeback_result.output_refs) == 2
+    status_ref = registry.get(writeback_result.output_refs[0])
+    target_ref = registry.get(writeback_result.output_refs[1])
+    assert target_ref.logical_table_id == "orders_projection"
+    assert target_ref.role == TableRole.AUXILIARY
+    assert target_ref.storage_kind == TableStorageKind.RUNTIME_SQL
+    assert provider.read_rows(status_ref, offset=0, limit=10) == [
+        {
+            "status": "written",
+            "writeback_direction": "source_to_target",
+            "source_table": "generate_output",
+            "target_type": "run_table",
+            "target_table": "orders_projection",
+            "write_mode": "overwrite",
+            "use_match_rules": "false",
+            "match_rule_count": 0,
+            "field_mapping_count": 2,
+            "source_row_count": 2,
+            "enable_write": "true",
+            "backup_before_write": "false",
+            "output_preview_table": "true",
+            "actual_write": "true",
+            "affected_rows": 2,
+            "skipped_rows": 0,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": target_ref.table_ref_id,
+            "overwrite_policy": "overwrite",
+            "source_empty_policy": "skip",
+            "no_match_policy": "skip",
+            "multi_match_policy": "error",
+            "duplicate_target_policy": "error",
+            "match_fields": "",
+            "mapped_fields": "row_id->id,amount->total",
+            "skipped_reason": "",
+        }
+    ]
+    assert provider.read_rows(target_ref, offset=0, limit=10) == [
+        {"id": 1, "total": 1.0},
+        {"id": 2, "total": 2.0},
+    ]
+
+
+def test_write_back_table_node_can_append_to_memory_table_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-first",
+            node_instance_id="writeback_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "memory_table",
+                "target_table": "orders_memory",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-second",
+            node_instance_id="writeback_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "memory_table",
+                "target_table": "orders_memory",
+                "write_mode": "append",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.SUCCEEDED
+    first_target_ref = registry.get(first_result.output_refs[1])
+    second_status_ref = registry.get(second_result.output_refs[0])
+    second_target_ref = registry.get(second_result.output_refs[1])
+    assert first_target_ref.storage_kind == TableStorageKind.MEMORY
+    assert second_target_ref.storage_kind == TableStorageKind.MEMORY
+    assert memory_provider.read_rows(
+        second_target_ref,
+        offset=0,
+        limit=10,
+    ) == [
+        {"total": 1.0},
+        {"total": 2.0},
+        {"total": 1.0},
+        {"total": 2.0},
+    ]
+    rows = _provider.read_rows(second_status_ref, offset=0, limit=10)
+    assert rows[0]["status"] == "written"
+    assert rows[0]["target_type"] == "memory_table"
+    assert rows[0]["write_mode"] == "append"
+    assert rows[0]["actual_write"] == "true"
+    assert rows[0]["affected_rows"] == 2
+    assert rows[0]["skipped_rows"] == 0
+    assert rows[0]["target_table_ref_id"] == second_target_ref.table_ref_id
 
 
 def test_write_back_table_node_returns_validation_error_for_missing_mapping_field(
