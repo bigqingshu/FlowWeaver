@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 
 from flowweaver.api.api_models import (
     APIResponseModel,
+    NodeDefinitionCatalogStateView,
     NodeDefinitionView,
     NodePortDefinitionView,
 )
@@ -38,6 +39,21 @@ def list_node_definitions(
     return ok_response(
         request,
         [definition.model_dump(mode="json") for definition in definitions],
+    )
+
+
+@router.get("/state", response_model=APIResponseModel)
+def get_node_definition_catalog_state(
+    request: Request,
+    registry: Annotated[NodeRegistry, Depends(get_node_registry)],
+):
+    state = registry.catalog_state(excluded_node_types=BUILTIN_FAULT_NODE_TYPES)
+    return ok_response(
+        request,
+        NodeDefinitionCatalogStateView(
+            catalog_hash=state.catalog_hash,
+            node_count=state.node_count,
+        ).model_dump(mode="json"),
     )
 
 

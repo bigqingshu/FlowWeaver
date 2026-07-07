@@ -80,6 +80,12 @@ class NodeDefinitionView(StrictModel):
     config_schema: dict[str, Any] | None = None
 
 
+class NodeDefinitionCatalogStateView(StrictModel):
+    catalog_hash: str
+    node_count: int
+    program_hash: str | None = None
+
+
 class WorkflowDetailView(WorkflowDefinitionData):
     pass
 

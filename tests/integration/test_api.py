@@ -1242,6 +1242,32 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert read_properties["exact_version"]["minimum"] == 1
 
 
+def test_node_definitions_state_api_returns_visible_catalog_hash(
+    tmp_path: Path,
+) -> None:
+    client, container = make_default_registry_client(tmp_path)
+    try:
+        definitions = response_data(
+            client.get("/api/v1/node-definitions", headers=auth_headers())
+        )
+        state = response_data(
+            client.get("/api/v1/node-definitions/state", headers=auth_headers())
+        )
+        repeated_state = response_data(
+            client.get("/api/v1/node-definitions/state", headers=auth_headers())
+        )
+    finally:
+        container.close()
+
+    assert state == repeated_state
+    assert state["node_count"] == len(definitions)
+    assert len(state["catalog_hash"]) == 64
+    assert "config_schema" not in state
+    assert "DelayTestNode" not in {
+        definition["node_type"] for definition in definitions
+    }
+
+
 def test_node_definitions_api_rejects_missing_token(tmp_path: Path) -> None:
     client, _store, _container = make_client(tmp_path)
 
