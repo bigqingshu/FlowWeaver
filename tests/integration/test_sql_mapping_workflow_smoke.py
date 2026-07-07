@@ -12,6 +12,12 @@ from flowweaver.engine.bootstrap import EngineHostBootstrap
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowRun
 from flowweaver.engine.service_container import ServiceContainer
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
+from flowweaver.nodes.builtin_table import (
+    CONDITION_FLAG_NODE_TYPE,
+    CONDITIONAL_JUMP_NODE_TYPE,
+    GENERATE_TEST_TABLE_NODE_TYPE,
+    SAVE_RUN_TABLE_NODE_TYPE,
+)
 from flowweaver.protocols.enums import WorkflowProcessStatus, WorkflowRunStatus
 
 TOKEN = "test-token"
@@ -149,6 +155,152 @@ def test_sql_mapping_workflow_run_exposes_external_sql_rows(
             {"row_id": 1, "amount": 8.0},
             {"row_id": 2, "amount": 12.5},
         ]
+    finally:
+        container.close()
+
+
+def test_control_preview_nodes_run_as_plain_dag(
+    tmp_path: Path,
+) -> None:
+    client, container = make_client(tmp_path)
+    store = container.runtime_store
+    try:
+        workflow = response_data(
+            client.post(
+                "/api/v1/workflows",
+                json={
+                    "name": "Control preview DAG workflow",
+                    "definition": {
+                        "schema_version": "1.0",
+                        "nodes": [
+                            {
+                                "node_instance_id": "generate",
+                                "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                                "node_version": "1.0",
+                                "config": {
+                                    "rows": 2,
+                                    "columns": ["row_id", "amount"],
+                                    "seed": 0,
+                                },
+                            },
+                            {
+                                "node_instance_id": "condition",
+                                "node_type": CONDITION_FLAG_NODE_TYPE,
+                                "node_version": "1.0",
+                                "config": {
+                                    "condition_type": "row_count",
+                                    "operator": "GE",
+                                    "value": 1,
+                                },
+                            },
+                            {
+                                "node_instance_id": "conditional-jump",
+                                "node_type": CONDITIONAL_JUMP_NODE_TYPE,
+                                "node_version": "1.0",
+                                "config": {
+                                    "true_target_mode": "anchor",
+                                    "true_target_anchor": "complete",
+                                },
+                            },
+                            {
+                                "node_instance_id": "save-status",
+                                "node_type": SAVE_RUN_TABLE_NODE_TYPE,
+                                "node_version": "1.0",
+                                "config": {
+                                    "transit_name": "control_status_transit",
+                                },
+                            },
+                        ],
+                        "connections": [
+                            {
+                                "connection_id": "generate-to-condition",
+                                "source_node_id": "generate",
+                                "source_port": "out",
+                                "target_node_id": "condition",
+                                "target_port": "in",
+                            },
+                            {
+                                "connection_id": "condition-to-jump",
+                                "source_node_id": "condition",
+                                "source_port": "status",
+                                "target_node_id": "conditional-jump",
+                                "target_port": "condition",
+                            },
+                            {
+                                "connection_id": "jump-to-save",
+                                "source_node_id": "conditional-jump",
+                                "source_port": "status",
+                                "target_node_id": "save-status",
+                                "target_port": "in",
+                            },
+                        ],
+                    },
+                },
+                headers=auth_headers(),
+            )
+        )
+        started = response_data(
+            client.post(
+                f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+                headers=auth_headers(),
+            )
+        )
+
+        run = wait_for_terminal_run(
+            container=container,
+            store=store,
+            workflow_run_id=started["workflow_run_id"],
+        )
+        node_runs = response_data(
+            client.get(
+                f"/api/v1/runs/{run.workflow_run_id}/nodes",
+                headers=auth_headers(),
+            )
+        )
+        table_refs = response_data(
+            client.get(
+                f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+                headers=auth_headers(),
+            )
+        )
+        table_refs_by_name = {
+            table_ref["logical_table_id"]: table_ref
+            for table_ref in table_refs
+        }
+        control_status_ref = table_refs_by_name["conditional-jump_output"]
+        control_rows = response_data(
+            client.get(
+                f"/api/v1/data/{control_status_ref['table_ref_id']}/rows",
+                headers=auth_headers(),
+            )
+        )
+
+        assert run.status == WorkflowRunStatus.SUCCEEDED.value
+        assert {
+            node_run["node_instance_id"]: node_run["status"]
+            for node_run in node_runs
+        } == {
+            "generate": "SUCCEEDED",
+            "condition": "SUCCEEDED",
+            "conditional-jump": "SUCCEEDED",
+            "save-status": "SUCCEEDED",
+        }
+        assert control_rows["rows"] == [
+            {
+                "signal_type": "conditional_jump",
+                "signal_status": "matched",
+                "source_node_id": "conditional-jump",
+                "target_node_id": "",
+                "target_anchor": "complete",
+                "condition_result": "true",
+                "selected_branch": "true",
+                "action": "jump_to_anchor",
+                "actual_control": "false",
+                "reason": "condition result is true",
+                "details": control_rows["rows"][0]["details"],
+            }
+        ]
+        assert "control_status_transit" in table_refs_by_name
     finally:
         container.close()
 
