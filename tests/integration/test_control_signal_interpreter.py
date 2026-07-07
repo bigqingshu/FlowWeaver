@@ -74,10 +74,15 @@ def single_judge_definition() -> dict:
         "schema_version": "1.0",
         "nodes": [
             {
+                "node_instance_id": "loop-start",
+                "node_type": "core.loop_start",
+                "node_version": "1.0",
+            },
+            {
                 "node_instance_id": "judge",
                 "node_type": "core.loop_judge",
                 "node_version": "1.0",
-            }
+            },
         ],
         "connections": [],
     }
@@ -273,6 +278,15 @@ def test_node_success_control_output_creates_next_iteration(
     assert iterations[0].status == LoopIterationRunStatus.SUCCEEDED.value
     assert iterations[1].status == LoopIterationRunStatus.RUNNING.value
     assert iterations[1].input_selector == {"row_index": 1}
+    entry_links = store.list_loop_iteration_node_runs(
+        iterations[1].loop_iteration_id,
+        node_instance_id="loop-start",
+        role="ENTRY",
+    )
+    assert len(entry_links) == 1
+    entry_node = store.get_node_run(entry_links[0].node_run_id)
+    assert entry_node is not None
+    assert entry_node.status == "READY"
 
 
 def test_control_output_preview_signal_has_no_loop_side_effect(

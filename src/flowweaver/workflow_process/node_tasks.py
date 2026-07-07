@@ -26,6 +26,9 @@ from flowweaver.workflow_process.control_signal_interpreter import (
 )
 from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
+from flowweaver.workflow_process.loop_iteration_nodes import (
+    ensure_loop_iteration_entry_node_run,
+)
 
 
 class NodeTaskApplyStatus(str, Enum):
@@ -419,13 +422,26 @@ class NodeTaskManager:
         if updated is None:
             return self._result_already_applied_or_terminal(result)
         if self._table_provider_registry is not None:
-            interpret_control_outputs_after_node_success(
+            control_result = interpret_control_outputs_after_node_success(
                 self._store,
                 self._table_provider_registry,
                 workflow_run_id=task.workflow_run_id,
                 completed_node=updated,
                 output_refs=result.output_refs,
             )
+            if (
+                control_result.advance_result is not None
+                and control_result.advance_result.next_iteration is not None
+            ):
+                ensure_loop_iteration_entry_node_run(
+                    self._store,
+                    dag=self._dag,
+                    loop_iteration_id=(
+                        control_result.advance_result.next_iteration.loop_iteration_id
+                    ),
+                    owner_process_id=task.workflow_process_id,
+                    process_generation=task.process_generation,
+                )
         advance_after_node_success(
             self._store,
             workflow_run_id=task.workflow_run_id,
