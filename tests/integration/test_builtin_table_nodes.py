@@ -5013,6 +5013,33 @@ def test_list_files_node_returns_validation_error_for_missing_directory(
     assert registry.list_by_workflow_run("run-1") == []
 
 
+def test_list_files_node_returns_validation_error_when_nothing_included(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    source_dir = tmp_path / "files"
+    source_dir.mkdir()
+    task = make_task(
+        node_type=LIST_FILES_NODE_TYPE,
+        node_run_id="node-run-list-files",
+        node_instance_id="list_files",
+        config={
+            "directory": str(source_dir),
+            "include_files": False,
+            "include_dirs": False,
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "must include files or directories" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
+
+
 def test_batch_rename_files_node_returns_validation_error_for_missing_field(
     tmp_path: Path,
 ) -> None:
@@ -5095,6 +5122,36 @@ def test_delete_columns_node_returns_validation_error_for_missing_column(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_delete_columns_node_returns_validation_error_when_deleting_all_fields(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    delete_task = make_task(
+        node_type=DELETE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-delete-columns",
+        node_instance_id="delete_columns",
+        input_refs=generate_result.output_refs,
+        config={"columns": ["row_id", "amount"]},
+    )
+
+    result = executor.execute(delete_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "cannot delete all fields" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
@@ -5363,6 +5420,42 @@ def test_extract_text_node_returns_validation_error_for_missing_source_field(
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
+def test_replace_text_node_returns_validation_error_for_invalid_regex(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=REPLACE_TEXT_NODE_TYPE,
+            node_run_id="node-run-replace-text",
+            node_instance_id="replace_text",
+            input_refs=generate_result.output_refs,
+            config={
+                "target_field": "label",
+                "match_mode": "regex",
+                "match_value": "[",
+                "replace_value": "x",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "unterminated" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
 def test_lookup_matched_field_name_node_requires_lookup_input_ref(
     tmp_path: Path,
 ) -> None:
@@ -5390,6 +5483,43 @@ def test_lookup_matched_field_name_node_requires_lookup_input_ref(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "requires main and lookup input_refs" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_lookup_matched_field_name_node_rejects_duplicate_output_fields(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+            node_run_id="node-run-lookup-matched-field",
+            node_instance_id="lookup_matched_field",
+            input_refs=[generate_result.output_refs[0], generate_result.output_refs[0]],
+            config={
+                "source_field": "source",
+                "lookup_fields": ["source"],
+                "output_field": "matched",
+                "output_match_value": True,
+                "match_value_field": "matched",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "output fields are duplicated" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
@@ -5453,6 +5583,50 @@ def test_numeric_column_operation_node_returns_validation_error_for_missing_fiel
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
+def test_numeric_column_operation_node_returns_validation_error_for_non_number(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0]["amount"] = "not-a-number"
+    custom_input_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=input_ref.schema,
+        rows=rows,
+        output_name="numeric_non_number_input",
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+            node_run_id="node-run-numeric-column",
+            node_instance_id="numeric_column",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "target_field": "amount",
+                "operation": "add",
+                "operand_value": 1,
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "target value is not a number" in result.error["message"]
+
+
 def test_add_current_datetime_column_node_returns_validation_error_for_conflict(
     tmp_path: Path,
 ) -> None:
@@ -5510,6 +5684,40 @@ def test_parse_datetime_node_returns_validation_error_for_missing_source_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_parse_datetime_node_returns_validation_error_for_missing_time_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "raw_date"], "seed": 0},
+        )
+    )
+    parse_task = make_task(
+        node_type=PARSE_DATETIME_NODE_TYPE,
+        node_run_id="node-run-parse-datetime",
+        node_instance_id="parse_datetime",
+        input_refs=generate_result.output_refs,
+        config={
+            "source_field": "raw_date",
+            "use_separate_time_field": True,
+            "time_source_field": "missing_time",
+        },
+    )
+
+    result = executor.execute(parse_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist: missing_time" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
@@ -5634,6 +5842,39 @@ def test_reorder_columns_node_returns_validation_error_for_missing_column(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_reorder_columns_node_returns_validation_error_for_unlisted_columns(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    reorder_task = make_task(
+        node_type=REORDER_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-reorder-columns",
+        node_instance_id="reorder_columns",
+        input_refs=generate_result.output_refs,
+        config={
+            "order": ["row_id"],
+            "unlisted_policy": "error",
+        },
+    )
+
+    result = executor.execute(reorder_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields are not listed: amount" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
