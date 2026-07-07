@@ -46,6 +46,7 @@ REPLACE_TEXT_NODE_TYPE = "ReplaceTextNode"
 DELETE_ROWS_NODE_TYPE = "DeleteRowsNode"
 COPY_ROWS_NODE_TYPE = "CopyRowsNode"
 DEDUPLICATE_ROWS_NODE_TYPE = "DeduplicateRowsNode"
+ADVANCED_FILTER_ROWS_NODE_TYPE = "AdvancedFilterRowsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
@@ -75,6 +76,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             DeleteRowsNodeHandler(),
             CopyRowsNodeHandler(),
             DeduplicateRowsNodeHandler(),
+            AdvancedFilterRowsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -953,6 +955,104 @@ class DeduplicateRowsNodeHandler:
         ]
 
 
+class AdvancedFilterRowsNodeHandler:
+    node_type = ADVANCED_FILTER_ROWS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        logic = _enum_config(
+            task.config,
+            "logic",
+            default="and",
+            allowed={"and", "or"},
+            node_type=self.node_type,
+        )
+        conditions = _advanced_filter_conditions(task.config, input_ref)
+        output_fields = _advanced_filter_output_fields(task.config, input_ref)
+        output_schema = reorder_fields(
+            input_ref.schema,
+            output_fields,
+            include_unlisted=False,
+        )
+        result_limit = _optional_non_negative_int_config(
+            task.config,
+            "result_limit",
+            node_type=self.node_type,
+        )
+        max_intermediate = _optional_positive_int_config(
+            task.config,
+            "max_intermediate",
+            node_type=self.node_type,
+        )
+        remove_duplicates = _bool_config(
+            task.config,
+            "remove_duplicates",
+            default=False,
+        )
+
+        def output_batches():
+            output_count = 0
+            matched_count = 0
+            seen_rows: set[tuple[Any, ...]] = set()
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    try:
+                        if not _advanced_filter_row_matches(
+                            row,
+                            conditions=conditions,
+                            logic=logic,
+                        ):
+                            continue
+                    except ValueSourceError as exc:
+                        raise _NodeValidationError(str(exc)) from exc
+                    output_row = {
+                        field_name: row.get(field_name)
+                        for field_name in output_fields
+                    }
+                    if remove_duplicates:
+                        output_key = tuple(
+                            output_row.get(field)
+                            for field in output_fields
+                        )
+                        if output_key in seen_rows:
+                            continue
+                        seen_rows.add(output_key)
+                    matched_count += 1
+                    if (
+                        max_intermediate is not None
+                        and matched_count > max_intermediate
+                    ):
+                        raise _NodeValidationError(
+                            "AdvancedFilterRowsNode matched rows exceed "
+                            "max_intermediate"
+                        )
+                    if result_limit is not None and output_count >= result_limit:
+                        if output_rows:
+                            yield output_rows
+                        return
+                    output_rows.append(output_row)
+                    output_count += 1
+                if output_rows:
+                    yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=output_schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SaveMemoryTableNodeHandler:
     node_type = SAVE_MEMORY_TABLE_NODE_TYPE
 
@@ -1164,6 +1264,22 @@ def _optional_positive_int_config(
         raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
     if value < 1:
         raise _NodeValidationError(f"{node_type} config.{key} must be positive")
+    return value
+
+
+def _optional_non_negative_int_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> int | None:
+    value = config.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
+    if value < 0:
+        raise _NodeValidationError(f"{node_type} config.{key} must be non-negative")
     return value
 
 
@@ -1828,6 +1944,146 @@ def _deduplicate_marker_values(
         marker_fields["count"]: group_count,
         marker_fields["keep"]: keep_row,
     }
+
+
+def _advanced_filter_conditions(
+    config: dict[str, Any],
+    input_ref: TableRefModel,
+) -> list[dict[str, Any]]:
+    raw_conditions = config.get("conditions", [])
+    if raw_conditions is None:
+        raw_conditions = []
+    if not isinstance(raw_conditions, list):
+        raise _NodeValidationError(
+            "AdvancedFilterRowsNode config.conditions must be a list"
+        )
+    conditions: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_conditions):
+        if not isinstance(item, dict):
+            raise _NodeValidationError(
+                "AdvancedFilterRowsNode config.conditions must contain objects"
+            )
+        field = item.get("field")
+        if not isinstance(field, str) or not field.strip():
+            raise _NodeValidationError(
+                f"AdvancedFilterRowsNode conditions[{index}].field is required"
+            )
+        field = field.strip()
+        if find_field(input_ref.schema, field) is None:
+            raise _NodeValidationError(f"Field does not exist: {field}")
+        operator = _normalize_condition_operator(
+            item.get("operator", item.get("op")),
+            node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+            key=f"conditions[{index}].operator",
+        )
+        value_source = _value_source_from_mapping(
+            item,
+            value_key="value",
+            value_source_key="value_source",
+            value_field_key="value_field",
+            node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+        )
+        if (
+            value_source.field is not None
+            and find_field(input_ref.schema, value_source.field) is None
+        ):
+            raise _NodeValidationError(f"Field does not exist: {value_source.field}")
+        case_sensitive = item.get("case_sensitive", True)
+        if not isinstance(case_sensitive, bool):
+            raise _NodeValidationError(
+                "AdvancedFilterRowsNode condition.case_sensitive must be a boolean"
+            )
+        conditions.append(
+            {
+                "field": field,
+                "operator": operator,
+                "value_source": value_source,
+                "case_sensitive": case_sensitive,
+            }
+        )
+    return conditions
+
+
+def _value_source_from_mapping(
+    mapping: dict[str, Any],
+    *,
+    value_key: str,
+    value_source_key: str,
+    value_field_key: str,
+    node_type: str,
+):
+    if value_source_key in mapping:
+        raw_value_source = mapping.get(value_source_key)
+    elif mapping.get(value_field_key) is not None:
+        value_field = mapping.get(value_field_key)
+        if not isinstance(value_field, str) or not value_field.strip():
+            raise _NodeValidationError(f"{node_type} {value_field_key} is required")
+        raw_value_source = {
+            "mode": "row_field",
+            "field": value_field.strip(),
+        }
+    else:
+        raw_value_source = mapping.get(value_key)
+    try:
+        return parse_value_source(raw_value_source)
+    except ValueSourceError as exc:
+        raise _NodeValidationError(str(exc)) from exc
+
+
+def _advanced_filter_output_fields(
+    config: dict[str, Any],
+    input_ref: TableRefModel,
+) -> list[str]:
+    raw_output_fields = config.get("output_fields")
+    if raw_output_fields is None or raw_output_fields == []:
+        return [field.name for field in input_ref.schema]
+    output_fields = _string_list_config(
+        config,
+        "output_fields",
+        node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+    )
+    missing_fields = [
+        field_name
+        for field_name in output_fields
+        if not has_field(input_ref.schema, field_name)
+    ]
+    if missing_fields:
+        raise _NodeValidationError(
+            f"Fields do not exist: {', '.join(missing_fields)}"
+        )
+    return output_fields
+
+
+def _advanced_filter_row_matches(
+    row: dict[str, Any],
+    *,
+    conditions: list[dict[str, Any]],
+    logic: str,
+) -> bool:
+    if not conditions:
+        return True
+    if logic == "and":
+        for condition in conditions:
+            if not _advanced_filter_condition_matches(row, condition):
+                return False
+        return True
+    for condition in conditions:
+        if _advanced_filter_condition_matches(row, condition):
+            return True
+    return False
+
+
+def _advanced_filter_condition_matches(
+    row: dict[str, Any],
+    condition: dict[str, Any],
+) -> bool:
+    value = condition["value_source"].resolve(row)
+    return _condition_cell_matches(
+        row.get(condition["field"]),
+        operator=condition["operator"],
+        value=value,
+        case_sensitive=condition["case_sensitive"],
+    )
 
 
 def _replace_text_value(

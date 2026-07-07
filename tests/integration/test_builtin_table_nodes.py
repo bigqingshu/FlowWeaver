@@ -15,6 +15,7 @@ from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import BuiltinTableNodeExecutor
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    ADVANCED_FILTER_ROWS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -1535,6 +1536,187 @@ def test_deduplicate_rows_node_mark_mode_keeps_rows_and_adds_markers(
     ]
 
 
+def test_advanced_filter_rows_node_filters_with_and_field_value_source(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "amount", "data_type": "FLOAT"},
+                    {"name": "threshold", "data_type": "FLOAT"},
+                    {"name": "category", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"amount": 1.0, "threshold": 2.0, "category": "keep"}
+    rows[1] |= {"amount": 3.0, "threshold": 2.0, "category": "drop"}
+    rows[2] |= {"amount": 4.0, "threshold": 3.0, "category": "keep"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    filter_task = make_task(
+        node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-advanced-filter",
+        node_instance_id="advanced_filter",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "logic": "and",
+            "conditions": [
+                {
+                    "field": "amount",
+                    "operator": "GT",
+                    "value_source": {"mode": "row_field", "field": "threshold"},
+                },
+                {"field": "category", "operator": "EQ", "value": "keep"},
+            ],
+        },
+    )
+
+    filter_result = executor.execute(filter_task)
+
+    assert filter_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(filter_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "advanced_filter_output"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 3, "amount": 4.0, "threshold": 3.0, "category": "keep"},
+    ]
+
+
+def test_advanced_filter_rows_node_applies_or_output_fields_and_limit(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 4,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "amount", "data_type": "FLOAT"},
+                    {"name": "category", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"amount": 1.0, "category": "keep"}
+    rows[1] |= {"amount": 2.0, "category": "drop"}
+    rows[2] |= {"amount": 3.0, "category": "drop"}
+    rows[3] |= {"amount": 4.0, "category": "keep"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    filter_task = make_task(
+        node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-advanced-filter",
+        node_instance_id="advanced_filter",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "logic": "or",
+            "conditions": [
+                {"field": "category", "operator": "EQ", "value": "keep"},
+                {"field": "amount", "operator": "GE", "value": 3.0},
+            ],
+            "output_fields": ["row_id", "category"],
+            "result_limit": 2,
+        },
+    )
+
+    filter_result = executor.execute(filter_task)
+
+    assert filter_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(filter_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == ["row_id", "category"]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"row_id": 1, "category": "keep"},
+        {"row_id": 3, "category": "drop"},
+    ]
+
+
+def test_advanced_filter_rows_node_can_remove_duplicate_output_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "category", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"category": "same"}
+    rows[1] |= {"category": "same"}
+    rows[2] |= {"category": "other"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    filter_task = make_task(
+        node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-advanced-filter",
+        node_instance_id="advanced_filter",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "conditions": [],
+            "output_fields": ["category"],
+            "remove_duplicates": True,
+        },
+    )
+
+    filter_result = executor.execute(filter_task)
+
+    assert filter_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(filter_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"category": "same"},
+        {"category": "other"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -1872,6 +2054,40 @@ def test_deduplicate_rows_node_returns_validation_error_for_marker_field_conflic
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields already exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_advanced_filter_rows_node_returns_validation_error_for_missing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    filter_task = make_task(
+        node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-advanced-filter",
+        node_instance_id="advanced_filter",
+        input_refs=generate_result.output_refs,
+        config={
+            "conditions": [
+                {"field": "missing", "operator": "EQ", "value": 1},
+            ],
+        },
+    )
+
+    result = executor.execute(filter_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

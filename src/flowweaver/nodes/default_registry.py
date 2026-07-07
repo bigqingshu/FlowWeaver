@@ -11,6 +11,7 @@ from flowweaver.nodes.builtin_shared_table import (
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    ADVANCED_FILTER_ROWS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -136,6 +137,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_deduplicate_rows_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Advanced Filter Rows",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_advanced_filter_rows_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -700,6 +709,48 @@ def _deduplicate_rows_schema() -> NodeConfigSchemaSpec:
                 type="string",
                 title="Keep Flag Field",
                 default="_keep_row",
+            ),
+        }
+    )
+
+
+def _advanced_filter_rows_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "logic": NodeConfigFieldSpec(
+                type="enum",
+                title="Logic",
+                default="and",
+                enum=("and", "or"),
+            ),
+            "conditions": NodeConfigFieldSpec(
+                type="array",
+                title="Conditions",
+                item_type="object",
+                description=(
+                    "Each condition supports field, operator, value, "
+                    "value_source, value_field, and case_sensitive."
+                ),
+            ),
+            "output_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Output Fields",
+                item_type="string",
+            ),
+            "result_limit": NodeConfigFieldSpec(
+                type="integer",
+                title="Result Limit",
+                minimum=0,
+            ),
+            "max_intermediate": NodeConfigFieldSpec(
+                type="integer",
+                title="Max Intermediate",
+                minimum=1,
+            ),
+            "remove_duplicates": NodeConfigFieldSpec(
+                type="boolean",
+                title="Remove Duplicates",
+                default=False,
             ),
         }
     )

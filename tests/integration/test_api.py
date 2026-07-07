@@ -365,6 +365,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "DeleteRowsNode",
         "CopyRowsNode",
         "DeduplicateRowsNode",
+        "AdvancedFilterRowsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -403,6 +404,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["DeduplicateRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["AdvancedFilterRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -609,6 +613,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         deduplicate_rows_properties["duplicate_status_field"]["default"]
         == "_duplicate_status"
     )
+
+    advanced_filter_properties = by_type["AdvancedFilterRowsNode"]["config_schema"][
+        "properties"
+    ]
+    assert advanced_filter_properties["logic"]["enum"] == ["and", "or"]
+    assert advanced_filter_properties["conditions"]["items"] == {"type": "object"}
+    assert advanced_filter_properties["output_fields"]["items"] == {"type": "string"}
+    assert advanced_filter_properties["result_limit"]["minimum"] == 0
+    assert advanced_filter_properties["remove_duplicates"]["default"] is False
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
