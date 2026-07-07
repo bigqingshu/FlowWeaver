@@ -82,6 +82,9 @@ from flowweaver.workflow_process.executor_pool import (
 from flowweaver.workflow_process.loop_recovery import (
     recover_serial_loop_runtime_state,
 )
+from flowweaver.workflow_process.loop_runtime_initialization import (
+    initialize_enabled_loop_runtime_state,
+)
 from flowweaver.workflow_process.loop_terminal_state import (
     cancel_active_loop_runs_for_workflow,
 )
@@ -413,6 +416,12 @@ def _run_workflow_process_loop(
         workflow_run_id=workflow_run_id,
         process_id=process_id,
         process_generation=process_generation,
+        dag=dag,
+    )
+    initialize_enabled_loop_runtime_state(
+        store,
+        definition=definition,
+        workflow_run_id=workflow_run_id,
         dag=dag,
     )
     recover_ready_nodes(
