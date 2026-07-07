@@ -50,6 +50,7 @@ class MemoryTableProvider:
         schema: Sequence[FieldSchemaModel],
         rows: Sequence[dict[str, Any]],
         role: TableRole = TableRole.AUXILIARY,
+        version: int = 1,
     ) -> TableRefModel:
         schema_copy = list(schema)
         memory_table_id = new_id()
@@ -64,7 +65,7 @@ class MemoryTableProvider:
             opaque_handle={"memory_table_id": memory_table_id},
             schema=schema_copy,
             schema_fingerprint=schema_fingerprint(schema_copy),
-            version=1,
+            version=version,
             capabilities={"READ"},
             lifecycle_status=LifecycleStatus.ACTIVE,
             created_by_workflow_run_id=workflow_run_id,

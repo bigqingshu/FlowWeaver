@@ -3386,6 +3386,11 @@ def test_write_selected_columns_node_outputs_write_plan_status_table(
             "enable_write": "false",
             "backup_before_write": "true",
             "actual_write": "false",
+            "affected_rows": 0,
+            "skipped_rows": 3,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": "",
             "selected_fields": "row_id,amount",
             "target_fields": "target_id,target_amount",
             "skipped_reason": "enable_write is false",
@@ -3394,7 +3399,7 @@ def test_write_selected_columns_node_outputs_write_plan_status_table(
     assert provider.count_rows(input_ref) == 3
 
 
-def test_write_selected_columns_node_outputs_preview_only_when_write_enabled(
+def test_write_selected_columns_node_writes_run_table_when_enabled(
     tmp_path: Path,
 ) -> None:
     executor, _store, registry, provider = make_executor(tmp_path)
@@ -3424,9 +3429,14 @@ def test_write_selected_columns_node_outputs_preview_only_when_write_enabled(
 
     assert write_result.status == NodeResultStatus.SUCCEEDED
     status_ref = registry.get(write_result.output_refs[0])
+    written_ref = registry.get(write_result.output_refs[1])
+    assert len(write_result.output_refs) == 2
+    assert written_ref.logical_table_id == "target_scratch"
+    assert written_ref.role == TableRole.AUXILIARY
+    assert written_ref.storage_kind == TableStorageKind.RUNTIME_SQL
     assert provider.read_rows(status_ref, offset=0, limit=10) == [
         {
-            "status": "skipped",
+            "status": "written",
             "source_type": "current_table",
             "target_type": "run_table",
             "target_table": "target_scratch",
@@ -3437,10 +3447,116 @@ def test_write_selected_columns_node_outputs_preview_only_when_write_enabled(
             "source_row_count": 1,
             "enable_write": "true",
             "backup_before_write": "false",
-            "actual_write": "false",
+            "actual_write": "true",
+            "affected_rows": 1,
+            "skipped_rows": 0,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": written_ref.table_ref_id,
             "selected_fields": "row_id",
             "target_fields": "row_id",
-            "skipped_reason": "write execution is not implemented",
+            "skipped_reason": "",
+        }
+    ]
+    assert provider.read_rows(written_ref, offset=0, limit=10) == [
+        {"row_id": 1},
+    ]
+
+
+def test_write_selected_columns_node_can_append_to_memory_table_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-first",
+            node_instance_id="write_selected_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_type": "memory_table",
+                "target_table": "target_memory",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-second",
+            node_instance_id="write_selected_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_type": "memory_table",
+                "target_table": "target_memory",
+                "write_mode": "append",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.SUCCEEDED
+    first_written_ref = registry.get(first_result.output_refs[1])
+    second_status_ref = registry.get(second_result.output_refs[0])
+    second_written_ref = registry.get(second_result.output_refs[1])
+    assert first_written_ref.storage_kind == TableStorageKind.MEMORY
+    assert second_written_ref.storage_kind == TableStorageKind.MEMORY
+    assert second_written_ref.role == TableRole.AUXILIARY
+    assert memory_provider.read_rows(
+        second_written_ref,
+        offset=0,
+        limit=10,
+    ) == [
+        {"total": 1.0},
+        {"total": 2.0},
+        {"total": 1.0},
+        {"total": 2.0},
+    ]
+    assert provider.read_rows(second_status_ref, offset=0, limit=10) == [
+        {
+            "status": "written",
+            "source_type": "current_table",
+            "target_type": "memory_table",
+            "target_table": "target_memory",
+            "write_mode": "append",
+            "overwrite_rule": "all",
+            "selected_field_count": 1,
+            "mapping_count": 1,
+            "source_row_count": 2,
+            "enable_write": "true",
+            "backup_before_write": "false",
+            "actual_write": "true",
+            "affected_rows": 2,
+            "skipped_rows": 0,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": second_written_ref.table_ref_id,
+            "selected_fields": "amount",
+            "target_fields": "total",
+            "skipped_reason": "",
         }
     ]
 
@@ -3546,6 +3662,11 @@ def test_write_back_table_node_outputs_writeback_status_table(
             "backup_before_write": "true",
             "output_preview_table": "true",
             "actual_write": "false",
+            "affected_rows": 0,
+            "skipped_rows": 3,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": "",
             "overwrite_policy": "empty_only",
             "source_empty_policy": "skip",
             "no_match_policy": "insert",
@@ -3599,6 +3720,11 @@ def test_write_back_table_node_outputs_preview_only_when_write_enabled(
     assert rows[0]["enable_write"] == "true"
     assert rows[0]["output_preview_table"] == "false"
     assert rows[0]["actual_write"] == "false"
+    assert rows[0]["affected_rows"] == 0
+    assert rows[0]["skipped_rows"] == 1
+    assert rows[0]["warning_count"] == 0
+    assert rows[0]["warnings"] == ""
+    assert rows[0]["target_table_ref_id"] == ""
     assert rows[0]["skipped_reason"] == "writeback execution is not implemented"
 
 

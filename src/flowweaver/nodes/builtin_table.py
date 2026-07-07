@@ -34,7 +34,13 @@ from flowweaver.nodes.value_sources import (
     ValueSourceError,
     parse_value_source,
 )
-from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
+from flowweaver.protocols.enums import (
+    ErrorOrigin,
+    LifecycleStatus,
+    NodeResultStatus,
+    TableRole,
+    TableStorageKind,
+)
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -2057,13 +2063,44 @@ class WriteSelectedColumnsNodeHandler:
             "backup_before_write",
             default=False,
         )
-        skipped_reason = (
-            "enable_write is false"
-            if not enable_write
-            else "write execution is not implemented"
-        )
+        source_row_count = context.count_rows(input_ref)
+        target_ref: TableRefModel | None = None
+        status = "skipped"
+        actual_write = False
+        affected_rows = 0
+        skipped_rows = source_row_count
+        skipped_reason = "enable_write is false"
+        warnings: list[str] = []
+        if enable_write:
+            if source_type != "current_table":
+                raise _NodeValidationError(
+                    "WriteSelectedColumnsNode real writes currently require "
+                    "source_type=current_table"
+                )
+            if target_type in {"run_table", "memory_table"}:
+                target_ref = _write_selected_runtime_target(
+                    task,
+                    context,
+                    input_ref=input_ref,
+                    target_type=target_type,
+                    target_table=target_table,
+                    write_mode=write_mode,
+                    selected_fields=selected_fields,
+                    target_fields=target_fields,
+                )
+                status = "written"
+                actual_write = True
+                affected_rows = source_row_count
+                skipped_rows = 0
+                skipped_reason = ""
+                if backup_before_write:
+                    warnings.append(
+                        "backup_before_write is ignored for runtime targets"
+                    )
+            else:
+                skipped_reason = "sqlite target writes are not implemented"
         status_row = {
-            "status": "skipped",
+            "status": status,
             "source_type": source_type,
             "target_type": target_type,
             "target_table": target_table,
@@ -2071,22 +2108,26 @@ class WriteSelectedColumnsNodeHandler:
             "overwrite_rule": overwrite_rule,
             "selected_field_count": len(selected_fields),
             "mapping_count": len(field_mappings),
-            "source_row_count": context.count_rows(input_ref),
+            "source_row_count": source_row_count,
             "enable_write": _bool_status(enable_write),
             "backup_before_write": _bool_status(backup_before_write),
-            "actual_write": "false",
+            "actual_write": _bool_status(actual_write),
+            "affected_rows": affected_rows,
+            "skipped_rows": skipped_rows,
+            "warning_count": len(warnings),
+            "warnings": "; ".join(warnings),
+            "target_table_ref_id": target_ref.table_ref_id if target_ref else "",
             "selected_fields": ",".join(selected_fields),
             "target_fields": ",".join(target_fields),
             "skipped_reason": skipped_reason,
         }
-        return [
-            context.publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=_write_selected_columns_status_schema(),
-                rows=[status_row],
-            )
-        ]
+        status_ref = context.publish_rows(
+            task,
+            output_name=f"{task.node_instance_id}_output",
+            schema=_write_selected_columns_status_schema(),
+            rows=[status_row],
+        )
+        return [status_ref] if target_ref is None else [status_ref, target_ref]
 
 
 class WriteBackTableNodeHandler:
@@ -2192,6 +2233,7 @@ class WriteBackTableNodeHandler:
             "output_preview_table",
             default=True,
         )
+        source_row_count = context.count_rows(input_ref)
         skipped_reason = (
             "enable_write is false"
             if not enable_write
@@ -2205,11 +2247,16 @@ class WriteBackTableNodeHandler:
             "use_match_rules": _bool_status(use_match_rules),
             "match_rule_count": match_rule_count,
             "field_mapping_count": len(field_mappings),
-            "source_row_count": context.count_rows(input_ref),
+            "source_row_count": source_row_count,
             "enable_write": _bool_status(enable_write),
             "backup_before_write": _bool_status(backup_before_write),
             "output_preview_table": _bool_status(output_preview_table),
             "actual_write": "false",
+            "affected_rows": 0,
+            "skipped_rows": source_row_count,
+            "warning_count": 0,
+            "warnings": "",
+            "target_table_ref_id": "",
             "overwrite_policy": overwrite_policy,
             "source_empty_policy": source_empty_policy,
             "no_match_policy": no_match_policy,
@@ -2971,6 +3018,159 @@ def _write_selected_target_fields(
     return target_fields
 
 
+def _write_selected_runtime_target(
+    task: NodeTaskModel,
+    context: BuiltinTableNodeContext,
+    *,
+    input_ref: TableRefModel,
+    target_type: str,
+    target_table: str,
+    write_mode: str,
+    selected_fields: list[str],
+    target_fields: list[str],
+) -> TableRefModel:
+    if write_mode == "upsert":
+        raise _NodeValidationError(
+            "WriteSelectedColumnsNode write_mode=upsert is not supported for "
+            "runtime targets yet"
+        )
+    target_schema = _write_selected_target_schema(
+        input_ref.schema,
+        selected_fields=selected_fields,
+        target_fields=target_fields,
+    )
+    existing_ref = _find_latest_write_selected_target_ref(
+        context,
+        workflow_run_id=task.workflow_run_id,
+        target_type=target_type,
+        target_table=target_table,
+    )
+    if write_mode == "create" and existing_ref is not None:
+        raise _NodeValidationError(
+            f"WriteSelectedColumnsNode target table already exists: {target_table}"
+        )
+    source_rows = context.read_all_rows(input_ref)
+    target_rows = _write_selected_project_rows(
+        source_rows,
+        selected_fields=selected_fields,
+        target_fields=target_fields,
+    )
+    if write_mode == "append" and existing_ref is not None:
+        _validate_write_selected_append_schema(
+            existing_ref.schema,
+            target_schema,
+        )
+        target_rows = context.read_all_rows(existing_ref) + target_rows
+    if target_type == "memory_table":
+        return context.create_memory_table(
+            task,
+            logical_table_id=target_table,
+            schema=target_schema,
+            rows=target_rows,
+            role=TableRole.AUXILIARY,
+            version=_next_write_selected_target_version(existing_ref),
+        )
+    return context.publish_rows(
+        task,
+        output_name=target_table,
+        schema=target_schema,
+        rows=target_rows,
+        role=TableRole.AUXILIARY,
+        version=_next_write_selected_target_version(existing_ref),
+    )
+
+
+def _write_selected_target_schema(
+    input_schema: list[FieldSchemaModel],
+    *,
+    selected_fields: list[str],
+    target_fields: list[str],
+) -> list[FieldSchemaModel]:
+    fields_by_name = {field.name: field for field in input_schema}
+    return [
+        FieldSchemaModel(
+            field_id=target_field,
+            name=target_field,
+            data_type=fields_by_name[source_field].data_type,
+            nullable=fields_by_name[source_field].nullable,
+            ordinal=index,
+        )
+        for index, (source_field, target_field) in enumerate(
+            zip(selected_fields, target_fields, strict=True)
+        )
+    ]
+
+
+def _write_selected_project_rows(
+    source_rows: list[dict[str, Any]],
+    *,
+    selected_fields: list[str],
+    target_fields: list[str],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            target_field: row.get(source_field)
+            for source_field, target_field in zip(
+                selected_fields,
+                target_fields,
+                strict=True,
+            )
+        }
+        for row in source_rows
+    ]
+
+
+def _find_latest_write_selected_target_ref(
+    context: BuiltinTableNodeContext,
+    *,
+    workflow_run_id: str,
+    target_type: str,
+    target_table: str,
+) -> TableRefModel | None:
+    storage_kind = (
+        TableStorageKind.MEMORY
+        if target_type == "memory_table"
+        else TableStorageKind.RUNTIME_SQL
+    )
+    candidates = [
+        table_ref
+        for table_ref in context.registry.list_by_workflow_run(workflow_run_id)
+        if table_ref.logical_table_id == target_table
+        and table_ref.storage_kind == storage_kind
+        and table_ref.lifecycle_status in {
+            LifecycleStatus.ACTIVE,
+            LifecycleStatus.PUBLISHED,
+        }
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda table_ref: table_ref.created_at)
+
+
+def _next_write_selected_target_version(existing_ref: TableRefModel | None) -> int:
+    if existing_ref is None:
+        return 1
+    return existing_ref.version + 1
+
+
+def _validate_write_selected_append_schema(
+    existing_schema: list[FieldSchemaModel],
+    target_schema: list[FieldSchemaModel],
+) -> None:
+    existing = [
+        (field.name, field.data_type.upper())
+        for field in sorted(existing_schema, key=lambda item: item.ordinal)
+    ]
+    target = [
+        (field.name, field.data_type.upper())
+        for field in sorted(target_schema, key=lambda item: item.ordinal)
+    ]
+    if existing != target:
+        raise _NodeValidationError(
+            "WriteSelectedColumnsNode append target schema does not match"
+        )
+
+
 def _write_selected_columns_status_schema() -> list[FieldSchemaModel]:
     return _simple_schema(
         [
@@ -2986,6 +3186,11 @@ def _write_selected_columns_status_schema() -> list[FieldSchemaModel]:
             ("enable_write", "TEXT", False),
             ("backup_before_write", "TEXT", False),
             ("actual_write", "TEXT", False),
+            ("affected_rows", "INTEGER", False),
+            ("skipped_rows", "INTEGER", False),
+            ("warning_count", "INTEGER", False),
+            ("warnings", "TEXT", False),
+            ("target_table_ref_id", "TEXT", False),
             ("selected_fields", "TEXT", False),
             ("target_fields", "TEXT", False),
             ("skipped_reason", "TEXT", False),
@@ -3126,6 +3331,11 @@ def _writeback_status_schema() -> list[FieldSchemaModel]:
             ("backup_before_write", "TEXT", False),
             ("output_preview_table", "TEXT", False),
             ("actual_write", "TEXT", False),
+            ("affected_rows", "INTEGER", False),
+            ("skipped_rows", "INTEGER", False),
+            ("warning_count", "INTEGER", False),
+            ("warnings", "TEXT", False),
+            ("target_table_ref_id", "TEXT", False),
             ("overwrite_policy", "TEXT", False),
             ("source_empty_policy", "TEXT", False),
             ("no_match_policy", "TEXT", False),
@@ -3775,7 +3985,11 @@ def _rename_columns_apply_duplicate_policy(
         return [
             input_name if proposed_name in duplicates and proposed_name != input_name
             else proposed_name
-            for input_name, proposed_name in zip(input_names, proposed_names, strict=True)
+            for input_name, proposed_name in zip(
+                input_names,
+                proposed_names,
+                strict=True,
+            )
         ]
     output_names: list[str] = []
     used_names: set[str] = set()
@@ -3930,7 +4144,9 @@ def _fill_sequence_selected_rows(
             node_type=FILL_SEQUENCE_NODE_TYPE,
         )
         if end_row > total_rows:
-            raise _NodeValidationError("FillSequenceNode config.end_row is out of range")
+            raise _NodeValidationError(
+                "FillSequenceNode config.end_row is out of range"
+            )
         if direction == "down":
             if start_row > end_row:
                 raise _NodeValidationError(

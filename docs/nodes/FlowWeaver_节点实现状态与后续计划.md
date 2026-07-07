@@ -23,7 +23,8 @@
 | 类型 | 数量 | 状态说明 |
 |---|---:|---|
 | DataFlowKit 规划节点中已真实处理 | 22 | 已注册、已有 `config_schema`、已有 handler，并能产出真实表处理结果 |
-| DataFlowKit 规划节点中预览占位 | 4 | 已注册、已有 `config_schema`、已有 handler，但真实副作用暂未执行 |
+| DataFlowKit 规划节点中部分真实执行 | 1 | 已支持低风险运行内目标真实写入，外部副作用仍保持跳过或预览 |
+| DataFlowKit 规划节点中预览占位 | 3 | 已注册、已有 `config_schema`、已有 handler，但真实副作用暂未执行 |
 | DataFlowKit 规划节点中未实现 | 7 | 已有方案文档，尚未进入默认注册表和后端 handler |
 | 既有基础节点 | 8 | 生成测试表、筛选行、保存内存表、共享表、SQL 映射、测试节点等 |
 
@@ -56,13 +57,20 @@
 | 保存中转数据 | `SaveRunTableNode` | 保存运行内中转表，同时输出当前表和辅助中转表引用 |
 | 获取文件列表 | `ListFilesNode` | 读取目录文件元数据，支持递归、隐藏项、扩展名、glob 和数量限制 |
 
+## 已注册且部分真实执行的节点
+
+这些节点已经开始具备真实写入能力，但只覆盖低风险运行内目标；外部数据库或文件类副作用仍保持可控边界。
+
+| 节点方案 | 后端节点类型 | 当前状态 |
+|---|---|---|
+| 选定列写入指定表 | `WriteSelectedColumnsNode` | `target_type=run_table/memory_table` 且 `enable_write=true` 时可真实生成辅助目标表；支持 `create`、`overwrite`、`append`，状态表输出 `actual_write`、`affected_rows`、`skipped_rows`、`warning_count`、`warnings` 和 `target_table_ref_id`；`sqlite` 目标仍跳过真实写入 |
+
 ## 已注册但处于预览占位的节点
 
 这些节点已经可以在后端注册表和前端节点目录中出现，也有配置 schema 和状态表输出。当前为了保持外部副作用边界可控，只产出计划或状态，不执行真实写入或外部动作。
 
 | 节点方案 | 后端节点类型 | 当前状态 |
 |---|---|---|
-| 选定列写入指定表 | `WriteSelectedColumnsNode` | 校验选定字段和写入配置，输出写入计划状态表，`actual_write=false` |
 | 字段映射写入表 | `WriteBackTableNode` | 校验匹配规则和字段映射，输出写回计划状态表，`actual_write=false` |
 | 批量重命名 | `BatchRenameFilesNode` | 输出重命名计划、目标路径、状态和跳过原因，当前不实际改文件 |
 | 插件节点 | `PluginNode` | 输出插件执行计划状态，当前不实际执行插件 |
@@ -155,9 +163,9 @@ NodeTaskModel 当前仍保持业务任务模型，不额外携带配置字字段
 
 | 顺序 | 节点 | 交付内容 |
 |---:|---|---|
-| 1 | 选定列写入指定表 | 先支持运行中转表和内存表目标 |
+| 1 | 选定列写入指定表 | 已部分完成：运行中转表和内存表目标真实写入，外部 SQLite 仍保持跳过 |
 | 2 | 字段映射写入表 | 先支持可控目标表写回和结果摘要 |
-| 3 | 写入结果统一 | 统一 affected_rows、skipped_rows、warnings、actual_write |
+| 3 | 写入结果统一 | 已部分完成：`WriteSelectedColumnsNode` 和 `WriteBackTableNode` 状态表均包含 affected_rows、skipped_rows、warnings、actual_write |
 
 ### 第三批：完善外部资源类节点
 
@@ -181,14 +189,14 @@ NodeTaskModel 当前仍保持业务任务模型，不额外携带配置字字段
 
 ## 下一步最小目标
 
-建议下一次进入写入类节点真实执行收口，优先从 `WriteSelectedColumnsNode` 开始：
+建议下一次继续写入类节点真实执行收口，优先进入 `WriteBackTableNode`：
 
 ```text
 1. 继续保留 enable_write 开关和状态表输出。
-2. 先支持写入运行中转表和内存表目标。
-3. 补目标表存在性、字段匹配、覆盖策略和错误状态测试。
-4. 明确 actual_write、affected_rows、skipped_rows、warnings 的统一状态结构。
-5. 暂不扩大到外部文件或插件执行，避免把副作用边界一次性拉大。
+2. 先明确目标表来源，避免直接扩大到任意外部 SQLite。
+3. 复用运行内目标表版本递增和辅助表输出方式。
+4. 补匹配规则、无匹配、多匹配、字段映射和覆盖策略测试。
+5. 外部 SQLite 真实写回继续等待确认机制和目标表抽象稳定后再打开。
 ```
 
-低耦合纯表节点已经完成，下一步可以把预览占位的写入类节点逐步升级为可控真实执行。
+低耦合纯表节点已经完成，写入类节点已开始从运行内目标逐步升级为可控真实执行。

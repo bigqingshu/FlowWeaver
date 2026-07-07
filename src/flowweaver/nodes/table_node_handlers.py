@@ -8,7 +8,7 @@ from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
-from flowweaver.protocols.enums import TableRole
+from flowweaver.protocols.enums import TableRole, TableStorageKind
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -47,14 +47,15 @@ class BuiltinTableNodeContext:
         return self.input_ref(task.input_refs[0])
 
     def read_all_rows(self, table_ref: TableRefModel) -> list[dict[str, Any]]:
-        return self.table_provider.read_rows(
+        provider = self._reader_for(table_ref)
+        return provider.read_rows(
             table_ref,
             offset=0,
-            limit=self.table_provider.count_rows(table_ref),
+            limit=provider.count_rows(table_ref),
         )
 
     def count_rows(self, table_ref: TableRefModel) -> int:
-        return self.table_provider.count_rows(table_ref)
+        return self._reader_for(table_ref).count_rows(table_ref)
 
     def iter_row_batches(
         self,
@@ -65,10 +66,11 @@ class BuiltinTableNodeContext:
         limit = self.row_batch_size if batch_size is None else batch_size
         if limit <= 0:
             raise BuiltinTableNodeValidationError("row batch size must be positive")
-        total_rows = self.table_provider.count_rows(table_ref)
+        provider = self._reader_for(table_ref)
+        total_rows = provider.count_rows(table_ref)
         offset = 0
         while offset < total_rows:
-            rows = self.table_provider.read_rows(
+            rows = provider.read_rows(
                 table_ref,
                 offset=offset,
                 limit=limit,
@@ -85,12 +87,16 @@ class BuiltinTableNodeContext:
         output_name: str,
         schema: Sequence[FieldSchemaModel],
         rows: Sequence[dict[str, Any]],
+        role: TableRole = TableRole.CURRENT,
+        version: int = 1,
     ) -> TableRefModel:
         return self.publish_row_batches(
             task,
             output_name=output_name,
             schema=schema,
             row_batches=(rows,),
+            role=role,
+            version=version,
         )
 
     def publish_row_batches(
@@ -100,12 +106,16 @@ class BuiltinTableNodeContext:
         output_name: str,
         schema: Sequence[FieldSchemaModel],
         row_batches: Iterable[Sequence[dict[str, Any]]],
+        role: TableRole = TableRole.CURRENT,
+        version: int = 1,
     ) -> TableRefModel:
         staging_ref = self.table_provider.create_staging_table(
             workflow_run_id=task.workflow_run_id,
             node_run_id=task.node_run_id,
             output_name=output_name,
             schema=schema,
+            role=role,
+            version=version,
         )
         for rows in row_batches:
             self.table_provider.insert_rows(staging_ref, rows)
@@ -120,6 +130,7 @@ class BuiltinTableNodeContext:
         schema: Sequence[FieldSchemaModel],
         rows: Sequence[dict[str, Any]],
         role: TableRole = TableRole.AUXILIARY,
+        version: int = 1,
     ) -> TableRefModel:
         memory_ref = self.memory_provider.create_memory_table(
             workflow_run_id=task.workflow_run_id,
@@ -128,9 +139,19 @@ class BuiltinTableNodeContext:
             schema=schema,
             rows=rows,
             role=role,
+            version=version,
         )
         self.store.register_table_ref(memory_ref)
         return memory_ref
+
+    def _reader_for(self, table_ref: TableRefModel):
+        if table_ref.storage_kind == TableStorageKind.MEMORY:
+            return self.memory_provider
+        if table_ref.storage_kind == TableStorageKind.RUNTIME_SQL:
+            return self.table_provider
+        raise BuiltinTableNodeValidationError(
+            f"Unsupported table storage kind: {table_ref.storage_kind.value}"
+        )
 
 
 class BuiltinTableNodeHandler(Protocol):

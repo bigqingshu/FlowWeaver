@@ -78,13 +78,15 @@ class SQLiteRuntimeTableProvider:
         node_run_id: str,
         output_name: str,
         schema: Sequence[FieldSchemaModel],
+        role: TableRole = TableRole.CURRENT,
+        version: int = 1,
     ) -> TableRefModel:
         table_name = (
             f"stg_{_identifier_token(node_run_id)}_{_identifier_token(output_name)}"
         )
         table_ref = TableRefModel(
             table_ref_id=new_id(),
-            role=TableRole.CURRENT,
+            role=role,
             storage_kind=TableStorageKind.RUNTIME_SQL,
             scope=TableScope.WORKFLOW_SCOPE,
             mutability=TableMutability.WORKING_MUTABLE,
@@ -96,7 +98,7 @@ class SQLiteRuntimeTableProvider:
             },
             schema=list(schema),
             schema_fingerprint=schema_fingerprint(schema),
-            version=1,
+            version=version,
             capabilities={"READ", "APPEND"},
             lifecycle_status=LifecycleStatus.STAGING,
             created_by_workflow_run_id=workflow_run_id,
