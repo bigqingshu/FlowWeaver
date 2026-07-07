@@ -363,6 +363,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "FillRangeNode",
         "ReplaceTextNode",
         "DeleteRowsNode",
+        "CopyRowsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -395,6 +396,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["DeleteRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["CopyRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -557,6 +561,24 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "IS_NULL",
     ]
     assert delete_rows_properties["empty_mode"]["default"] == "all_fields"
+
+    copy_rows_properties = by_type["CopyRowsNode"]["config_schema"]["properties"]
+    assert copy_rows_properties["source_row"] == {
+        "type": "integer",
+        "title": "Source Row",
+        "required": True,
+        "default": 1,
+        "minimum": 1,
+    }
+    assert copy_rows_properties["copy_count"]["default"] == 1
+    assert copy_rows_properties["copy_count"]["minimum"] == 0
+    assert copy_rows_properties["insert_mode"]["enum"] == [
+        "append",
+        "prepend",
+        "before_row",
+        "after_row",
+    ]
+    assert copy_rows_properties["max_output_rows"]["default"] == 100000
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

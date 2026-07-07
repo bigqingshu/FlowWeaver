@@ -16,6 +16,7 @@ from flowweaver.node_executor import BuiltinTableNodeExecutor
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
+    COPY_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
@@ -1152,6 +1153,125 @@ def test_delete_rows_node_deletes_all_empty_rows(
     ]
 
 
+def test_copy_rows_node_appends_copies_to_table_tail(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    copy_task = make_task(
+        node_type=COPY_ROWS_NODE_TYPE,
+        node_run_id="node-run-copy-rows",
+        node_instance_id="copy_rows",
+        input_refs=[input_ref.table_ref_id],
+        config={"source_row": 2, "copy_count": 2, "insert_mode": "append"},
+    )
+
+    copy_result = executor.execute(copy_task)
+
+    assert copy_result.status == NodeResultStatus.SUCCEEDED
+    assert copy_result.output_refs != generate_result.output_refs
+    assert provider.count_rows(input_ref) == 3
+    output_ref = registry.get(copy_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "copy_rows_output"
+    assert [field.name for field in output_ref.schema] == ["row_id", "label"]
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 2, "label": "label_0_2"},
+        {"row_id": 3, "label": "label_0_3"},
+        {"row_id": 2, "label": "label_0_2"},
+        {"row_id": 2, "label": "label_0_2"},
+    ]
+
+
+def test_copy_rows_node_can_insert_at_head_and_relative_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    prepend_result = executor.execute(
+        make_task(
+            node_type=COPY_ROWS_NODE_TYPE,
+            node_run_id="node-run-copy-rows-prepend",
+            node_instance_id="copy_rows_prepend",
+            input_refs=[input_ref.table_ref_id],
+            config={"source_row": 3, "copy_count": 1, "insert_mode": "prepend"},
+        )
+    )
+    before_result = executor.execute(
+        make_task(
+            node_type=COPY_ROWS_NODE_TYPE,
+            node_run_id="node-run-copy-rows-before",
+            node_instance_id="copy_rows_before",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "source_row": 1,
+                "copy_count": 1,
+                "insert_mode": "before_row",
+                "insert_row": 2,
+            },
+        )
+    )
+    after_result = executor.execute(
+        make_task(
+            node_type=COPY_ROWS_NODE_TYPE,
+            node_run_id="node-run-copy-rows-after",
+            node_instance_id="copy_rows_after",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "source_row": 1,
+                "copy_count": 1,
+                "insert_mode": "after_row",
+                "insert_row": 2,
+            },
+        )
+    )
+
+    assert prepend_result.status == NodeResultStatus.SUCCEEDED
+    prepend_ref = registry.get(prepend_result.output_refs[0])
+    assert provider.read_rows(prepend_ref, offset=0, limit=10) == [
+        {"row_id": 3, "label": "label_0_3"},
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 2, "label": "label_0_2"},
+        {"row_id": 3, "label": "label_0_3"},
+    ]
+
+    assert before_result.status == NodeResultStatus.SUCCEEDED
+    before_ref = registry.get(before_result.output_refs[0])
+    assert provider.read_rows(before_ref, offset=0, limit=10) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 2, "label": "label_0_2"},
+        {"row_id": 3, "label": "label_0_3"},
+    ]
+
+    assert after_result.status == NodeResultStatus.SUCCEEDED
+    after_ref = registry.get(after_result.output_refs[0])
+    assert provider.read_rows(after_ref, offset=0, limit=10) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 2, "label": "label_0_2"},
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 3, "label": "label_0_3"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -1358,6 +1478,70 @@ def test_delete_rows_node_returns_validation_error_for_missing_condition_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_copy_rows_node_returns_validation_error_for_source_row_out_of_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    copy_task = make_task(
+        node_type=COPY_ROWS_NODE_TYPE,
+        node_run_id="node-run-copy-rows",
+        node_instance_id="copy_rows",
+        input_refs=generate_result.output_refs,
+        config={"source_row": 3, "copy_count": 1},
+    )
+
+    result = executor.execute(copy_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "source_row is out of range" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_copy_rows_node_returns_validation_error_when_output_exceeds_limit(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    copy_task = make_task(
+        node_type=COPY_ROWS_NODE_TYPE,
+        node_run_id="node-run-copy-rows",
+        node_instance_id="copy_rows",
+        input_refs=generate_result.output_refs,
+        config={
+            "source_row": 1,
+            "copy_count": 2,
+            "max_output_rows": 3,
+        },
+    )
+
+    result = executor.execute(copy_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "max_output_rows" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

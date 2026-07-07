@@ -7,6 +7,7 @@ from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
+    COPY_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
@@ -87,6 +88,7 @@ def test_default_builtin_table_handler_registry_covers_table_node_types() -> Non
         ADD_COLUMNS_NODE_TYPE,
         DELETE_COLUMNS_NODE_TYPE,
         COPY_COLUMN_NODE_TYPE,
+        COPY_ROWS_NODE_TYPE,
         REORDER_COLUMNS_NODE_TYPE,
         FILL_CELLS_NODE_TYPE,
         FILL_RANGE_NODE_TYPE,

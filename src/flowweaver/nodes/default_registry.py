@@ -12,6 +12,7 @@ from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
+    COPY_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
@@ -118,6 +119,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_delete_rows_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=COPY_ROWS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Copy Rows",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_copy_rows_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -564,6 +573,46 @@ def _delete_rows_schema() -> NodeConfigSchemaSpec:
             "empty_field": NodeConfigFieldSpec(
                 type="string",
                 title="Empty Field",
+            ),
+        }
+    )
+
+
+def _copy_rows_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "source_row": NodeConfigFieldSpec(
+                type="integer",
+                title="Source Row",
+                required=True,
+                default=1,
+                minimum=1,
+            ),
+            "copy_count": NodeConfigFieldSpec(
+                type="integer",
+                title="Copy Count",
+                required=True,
+                default=1,
+                minimum=0,
+            ),
+            "insert_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Insert Mode",
+                required=True,
+                default="append",
+                enum=("append", "prepend", "before_row", "after_row"),
+            ),
+            "insert_row": NodeConfigFieldSpec(
+                type="integer",
+                title="Insert Row",
+                default=1,
+                minimum=1,
+            ),
+            "max_output_rows": NodeConfigFieldSpec(
+                type="integer",
+                title="Max Output Rows",
+                default=100000,
+                minimum=1,
             ),
         }
     )
