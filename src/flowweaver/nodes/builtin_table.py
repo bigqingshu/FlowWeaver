@@ -27,13 +27,7 @@ SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 
 
 def table_node_types() -> tuple[str, ...]:
-    return (
-        *create_builtin_table_node_handler_registry().node_types(),
-        FILTER_ROWS_NODE_TYPE,
-        ADD_COLUMNS_NODE_TYPE,
-        SAVE_MEMORY_TABLE_NODE_TYPE,
-        SQL_MAPPING_NODE_TYPE,
-    )
+    return create_builtin_table_node_handler_registry().node_types()
 
 
 def is_table_node_type(node_type: str) -> bool:
@@ -44,6 +38,10 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
     return BuiltinTableNodeHandlerRegistry(
         handlers=(
             GenerateTestTableNodeHandler(),
+            FilterRowsNodeHandler(),
+            AddColumnsNodeHandler(),
+            SaveMemoryTableNodeHandler(),
+            SqlMappingNodeHandler(),
         )
     )
 
@@ -78,6 +76,156 @@ class GenerateTestTableNodeHandler:
         ]
 
 
+class FilterRowsNodeHandler:
+    node_type = FILTER_ROWS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if len(task.input_refs) != 1:
+            raise _NodeValidationError("FilterRowsNode requires exactly one input_ref")
+        input_ref = context.input_ref(task.input_refs[0])
+        field = task.config.get("field")
+        if not isinstance(field, str) or not field:
+            raise _NodeValidationError("FilterRowsNode config.field is required")
+        schema_field_names = {item.name for item in input_ref.schema}
+        if field not in schema_field_names:
+            raise _NodeValidationError(f"Field does not exist: {field}")
+        operator = _normalize_operator(task.config.get("operator"))
+        value = task.config.get("value")
+        rows = context.table_provider.read_rows(
+            input_ref,
+            offset=0,
+            limit=context.table_provider.count_rows(input_ref),
+        )
+        filtered_rows = [
+            row
+            for row in rows
+            if _row_matches(row.get(field), operator=operator, value=value)
+        ]
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=input_ref.schema,
+                rows=filtered_rows,
+            )
+        ]
+
+
+class AddColumnsNodeHandler:
+    node_type = ADD_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if len(task.input_refs) != 1:
+            raise _NodeValidationError("AddColumnsNode requires exactly one input_ref")
+        input_ref = context.input_ref(task.input_refs[0])
+        column_name = _string_config(task.config, "column_name")
+        existing_names = {field.name for field in input_ref.schema}
+        if column_name in existing_names:
+            raise _NodeValidationError(f"Field already exists: {column_name}")
+        data_type = _normalize_data_type(task.config.get("data_type", "TEXT"))
+        default_value = _parse_default_value(
+            task.config.get("default_value"),
+            data_type=data_type,
+        )
+        schema = [
+            *input_ref.schema,
+            FieldSchemaModel(
+                field_id=column_name,
+                name=column_name,
+                data_type=data_type,
+                nullable=default_value is None,
+                ordinal=len(input_ref.schema),
+            ),
+        ]
+        rows = context.table_provider.read_rows(
+            input_ref,
+            offset=0,
+            limit=context.table_provider.count_rows(input_ref),
+        )
+        output_rows = [
+            row | {column_name: default_value}
+            for row in rows
+        ]
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                rows=output_rows,
+            )
+        ]
+
+
+class SaveMemoryTableNodeHandler:
+    node_type = SAVE_MEMORY_TABLE_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if len(task.input_refs) != 1:
+            raise _NodeValidationError(
+                "SaveMemoryTableNode requires exactly one input_ref"
+            )
+        input_ref = context.input_ref(task.input_refs[0])
+        table_name = _save_memory_table_name_config(task.config)
+        mode = str(task.config.get("mode", "overwrite"))
+        if mode != "overwrite":
+            raise _NodeValidationError(
+                f"Unsupported SaveMemoryTableNode mode: {mode}"
+            )
+        rows = context.table_provider.read_rows(
+            input_ref,
+            offset=0,
+            limit=context.table_provider.count_rows(input_ref),
+        )
+        memory_ref = context.memory_provider.create_memory_table(
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            logical_table_id=table_name,
+            schema=input_ref.schema,
+            rows=rows,
+            role=TableRole.AUXILIARY,
+        )
+        context.store.register_table_ref(memory_ref)
+        return [input_ref, memory_ref]
+
+
+class SqlMappingNodeHandler:
+    node_type = SQL_MAPPING_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if task.input_refs:
+            raise _NodeValidationError("SqlMappingNode does not accept inputs")
+        if context.sql_mapping_runner is None:
+            raise _NodeValidationError("SqlMappingNode runner is not configured")
+        try:
+            table_ref = context.sql_mapping_runner.execute(
+                SqlMappingTaskConfig(
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    node_instance_id=task.node_instance_id,
+                    config=task.config,
+                )
+            )
+        except ValueError as exc:
+            raise _NodeValidationError(str(exc)) from exc
+        return [table_ref]
+
+
 class BuiltinTableNodeRunner:
     def __init__(
         self,
@@ -87,16 +235,13 @@ class BuiltinTableNodeRunner:
         table_provider: SQLiteRuntimeTableProvider,
         memory_provider: MemoryTableProvider | None = None,
     ) -> None:
-        self._store = store
-        self._registry = registry
-        self._table_provider = table_provider
-        self._memory_provider = memory_provider or MemoryTableProvider()
-        self._sql_mapping_runner = SqlMappingNodeRunner(store=store)
+        memory_provider = memory_provider or MemoryTableProvider()
         self._context = BuiltinTableNodeContext(
             store=store,
             registry=registry,
             table_provider=table_provider,
-            memory_provider=self._memory_provider,
+            memory_provider=memory_provider,
+            sql_mapping_runner=SqlMappingNodeRunner(store=store),
         )
         self._handler_registry = create_builtin_table_node_handler_registry()
 
@@ -141,134 +286,7 @@ class BuiltinTableNodeRunner:
         handler = self._handler_registry.get(task.node_type)
         if handler is not None:
             return handler.execute(task, self._context)
-        return self._execute_legacy_node(task)
-
-    def _execute_legacy_node(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if task.node_type == FILTER_ROWS_NODE_TYPE:
-            return self._execute_filter(task)
-        if task.node_type == ADD_COLUMNS_NODE_TYPE:
-            return self._execute_add_columns(task)
-        if task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
-            return self._execute_save_memory(task)
-        if task.node_type == SQL_MAPPING_NODE_TYPE:
-            return self._execute_sql_mapping(task)
         raise _NodeValidationError(f"Unsupported builtin node type: {task.node_type}")
-
-    def _execute_save_memory(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError(
-                "SaveMemoryTableNode requires exactly one input_ref"
-            )
-        input_ref = self._registry.get(task.input_refs[0])
-        table_name = _save_memory_table_name_config(task.config)
-        mode = str(task.config.get("mode", "overwrite"))
-        if mode != "overwrite":
-            raise _NodeValidationError(
-                f"Unsupported SaveMemoryTableNode mode: {mode}"
-            )
-        rows = self._table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=self._table_provider.count_rows(input_ref),
-        )
-        memory_ref = self._memory_provider.create_memory_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            logical_table_id=table_name,
-            schema=input_ref.schema,
-            rows=rows,
-            role=TableRole.AUXILIARY,
-        )
-        self._store.register_table_ref(memory_ref)
-        return [input_ref, memory_ref]
-
-    def _execute_filter(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError("FilterRowsNode requires exactly one input_ref")
-        input_ref = self._registry.get(task.input_refs[0])
-        field = task.config.get("field")
-        if not isinstance(field, str) or not field:
-            raise _NodeValidationError("FilterRowsNode config.field is required")
-        schema_field_names = {item.name for item in input_ref.schema}
-        if field not in schema_field_names:
-            raise _NodeValidationError(f"Field does not exist: {field}")
-        operator = _normalize_operator(task.config.get("operator"))
-        value = task.config.get("value")
-        rows = self._table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=self._table_provider.count_rows(input_ref),
-        )
-        filtered_rows = [
-            row
-            for row in rows
-            if _row_matches(row.get(field), operator=operator, value=value)
-        ]
-        return [
-            self._context.publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                rows=filtered_rows,
-            )
-        ]
-
-    def _execute_add_columns(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError("AddColumnsNode requires exactly one input_ref")
-        input_ref = self._registry.get(task.input_refs[0])
-        column_name = _string_config(task.config, "column_name")
-        existing_names = {field.name for field in input_ref.schema}
-        if column_name in existing_names:
-            raise _NodeValidationError(f"Field already exists: {column_name}")
-        data_type = _normalize_data_type(task.config.get("data_type", "TEXT"))
-        default_value = _parse_default_value(
-            task.config.get("default_value"),
-            data_type=data_type,
-        )
-        schema = [
-            *input_ref.schema,
-            FieldSchemaModel(
-                field_id=column_name,
-                name=column_name,
-                data_type=data_type,
-                nullable=default_value is None,
-                ordinal=len(input_ref.schema),
-            ),
-        ]
-        rows = self._table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=self._table_provider.count_rows(input_ref),
-        )
-        output_rows = [
-            row | {column_name: default_value}
-            for row in rows
-        ]
-        return [
-            self._context.publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                rows=output_rows,
-            )
-        ]
-
-    def _execute_sql_mapping(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if task.input_refs:
-            raise _NodeValidationError("SqlMappingNode does not accept inputs")
-        try:
-            table_ref = self._sql_mapping_runner.execute(
-                SqlMappingTaskConfig(
-                    workflow_run_id=task.workflow_run_id,
-                    node_run_id=task.node_run_id,
-                    node_instance_id=task.node_instance_id,
-                    config=task.config,
-                )
-            )
-        except ValueError as exc:
-            raise _NodeValidationError(str(exc)) from exc
-        return [table_ref]
 
 
 class _NodeValidationError(ValueError):

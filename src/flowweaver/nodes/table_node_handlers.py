@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
@@ -11,6 +11,9 @@ from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
+if TYPE_CHECKING:
+    from flowweaver.nodes.builtin_sql import SqlMappingNodeRunner
+
 
 @dataclass(frozen=True)
 class BuiltinTableNodeContext:
@@ -18,6 +21,7 @@ class BuiltinTableNodeContext:
     registry: RuntimeDataRegistry
     table_provider: SQLiteRuntimeTableProvider
     memory_provider: MemoryTableProvider
+    sql_mapping_runner: SqlMappingNodeRunner | None = None
 
     def input_ref(self, table_ref_id: str) -> TableRefModel:
         return self.registry.get(table_ref_id)
