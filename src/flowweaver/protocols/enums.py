@@ -41,6 +41,31 @@ class NodeRunStatus(str, Enum):
     SKIPPED = "SKIPPED"
 
 
+class LoopRunStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    ENDED = "ENDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    MAX_ITERATIONS_REACHED = "MAX_ITERATIONS_REACHED"
+
+
+class LoopIterationRunStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    SKIPPED = "SKIPPED"
+
+
+class LoopIterationTableRefRole(str, Enum):
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
+    SUMMARY = "SUMMARY"
+    FAILED_SNAPSHOT = "FAILED_SNAPSHOT"
+
+
 class TableRole(str, Enum):
     CURRENT = "CURRENT"
     AUXILIARY = "AUXILIARY"

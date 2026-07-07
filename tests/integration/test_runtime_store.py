@@ -20,6 +20,9 @@ from flowweaver.engine.runtime_store import (
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    LoopIterationRunStatus,
+    LoopIterationTableRefRole,
+    LoopRunStatus,
     NodeResultStatus,
     NodeRunStatus,
     TableMutability,
@@ -172,6 +175,9 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "table_leases",
         "workflow_processes",
         "runtime_events",
+        "loop_runs",
+        "loop_iteration_runs",
+        "loop_iteration_table_refs",
     }.issubset(table_names(database_path))
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
@@ -224,6 +230,75 @@ def test_shared_publication_prerequisite_schema_is_available(
     assert ["share_name", "publication_version"] in indexes(
         database_path,
         "shared_publications",
+    ).values()
+
+
+def test_loop_run_storage_schema_is_available(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+
+    migrate(database_path)
+
+    assert column_names(database_path, "loop_runs") == {
+        "loop_run_id",
+        "workflow_run_id",
+        "loop_id",
+        "start_node_instance_id",
+        "judge_node_instance_id",
+        "status",
+        "state_version",
+        "current_iteration",
+        "max_iterations",
+        "exit_reason",
+        "started_at",
+        "finished_at",
+        "error_json",
+        "created_at",
+    }
+    assert column_names(database_path, "loop_iteration_runs") == {
+        "loop_iteration_id",
+        "loop_run_id",
+        "iteration_index",
+        "status",
+        "state_version",
+        "input_table_ref_id",
+        "input_selector_json",
+        "output_table_ref_id",
+        "failed_node_run_id",
+        "started_at",
+        "finished_at",
+        "error_json",
+        "created_at",
+    }
+    assert column_names(database_path, "loop_iteration_table_refs") == {
+        "loop_iteration_id",
+        "table_ref_id",
+        "role",
+        "created_at",
+    }
+    assert {
+        ("workflow_run_id", "workflow_runs", "workflow_run_id"),
+    }.issubset(foreign_keys(database_path, "loop_runs"))
+    assert {
+        ("loop_run_id", "loop_runs", "loop_run_id"),
+        ("input_table_ref_id", "data_refs", "table_ref_id"),
+        ("output_table_ref_id", "data_refs", "table_ref_id"),
+        ("failed_node_run_id", "node_runs", "node_run_id"),
+    }.issubset(foreign_keys(database_path, "loop_iteration_runs"))
+    assert {
+        ("loop_iteration_id", "loop_iteration_runs", "loop_iteration_id"),
+        ("table_ref_id", "data_refs", "table_ref_id"),
+    }.issubset(foreign_keys(database_path, "loop_iteration_table_refs"))
+    assert ["workflow_run_id", "status"] in indexes(
+        database_path,
+        "loop_runs",
+    ).values()
+    assert ["loop_run_id", "status"] in indexes(
+        database_path,
+        "loop_iteration_runs",
+    ).values()
+    assert ["loop_iteration_id", "role"] in indexes(
+        database_path,
+        "loop_iteration_table_refs",
     ).values()
 
 
@@ -334,12 +409,16 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
     assert updated.status == WorkflowRunStatus.SUCCEEDED.value
     assert updated.state_version == 2
     assert updated.completion_reason is None
-    assert store.list_workflow_runs(workflow_id=definition.workflow_id)[
-        0
-    ].workflow_run_id == "run-1"
-    assert store.list_workflow_runs(statuses=[WorkflowRunStatus.SUCCEEDED])[
-        0
-    ].workflow_run_id == "run-1"
+    assert (
+        store.list_workflow_runs(workflow_id=definition.workflow_id)[0].workflow_run_id
+        == "run-1"
+    )
+    assert (
+        store.list_workflow_runs(statuses=[WorkflowRunStatus.SUCCEEDED])[
+            0
+        ].workflow_run_id
+        == "run-1"
+    )
 
 
 def test_runtime_store_persists_workflow_run_completion_reason(
@@ -770,10 +849,13 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
     assert updated is not None
     assert updated.status == NodeRunStatus.SUCCEEDED.value
     assert updated.state_version == node.state_version + 1
-    assert store.get_node_task_result(
-        task_id=result.task_id,
-        result_id=result.result_id,
-    ) == result
+    assert (
+        store.get_node_task_result(
+            task_id=result.task_id,
+            result_id=result.result_id,
+        )
+        == result
+    )
 
 
 def test_runtime_store_records_cancelled_result_from_cancel_requested_node(
@@ -840,10 +922,13 @@ def test_runtime_store_records_cancelled_result_from_cancel_requested_node(
 
     assert updated is not None
     assert updated.status == NodeRunStatus.CANCELLED.value
-    assert store.get_node_task_result(
-        task_id=result.task_id,
-        result_id=result.result_id,
-    ) == result
+    assert (
+        store.get_node_task_result(
+            task_id=result.task_id,
+            result_id=result.result_id,
+        )
+        == result
+    )
 
 
 def test_runtime_store_rolls_back_node_task_result_when_terminal_update_rejected(
@@ -913,10 +998,13 @@ def test_runtime_store_rolls_back_node_task_result_when_terminal_update_rejected
     )
 
     assert rejected is None
-    assert store.get_node_task_result(
-        task_id=result.task_id,
-        result_id=result.result_id,
-    ) is None
+    assert (
+        store.get_node_task_result(
+            task_id=result.task_id,
+            result_id=result.result_id,
+        )
+        is None
+    )
     loaded_node = store.get_node_run(node.node_run_id)
     assert loaded_node is not None
     assert loaded_node.status == NodeRunStatus.FAILED.value
@@ -1039,6 +1127,252 @@ def test_runtime_store_table_ref_round_trip(tmp_path: Path) -> None:
     assert loaded == table_ref
 
 
+def test_runtime_store_loop_run_round_trip_and_idempotency(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    input_ref = make_table_ref(
+        table_ref_id="table-loop-input",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="loop_input",
+        version=1,
+    )
+    output_ref = make_table_ref(
+        table_ref_id="table-loop-output",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="loop_output",
+        version=2,
+    )
+    store.register_table_ref(input_ref)
+    store.register_table_ref(output_ref)
+
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-1",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="loop-orders",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+    )
+    duplicate_loop = store.create_loop_run(
+        loop_run_id="loop-run-duplicate",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="loop-orders",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+    )
+
+    assert loop is not None
+    assert duplicate_loop == loop
+    assert row_count(database_path, "loop_runs") == 1
+    assert store.get_loop_run("loop-run-1") == loop
+    assert (
+        store.get_loop_run_for_workflow_loop(
+            workflow_run_id=run.workflow_run_id,
+            loop_id="loop-orders",
+        )
+        == loop
+    )
+    assert store.list_loop_runs(
+        run.workflow_run_id,
+        statuses=[LoopRunStatus.PENDING],
+    ) == [loop]
+
+    running_loop = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.RUNNING,
+        current_iteration=1,
+        started_at=utc_now(),
+        expected_state_version=loop.state_version,
+    )
+    stale_loop = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.FAILED,
+        expected_state_version=loop.state_version,
+    )
+
+    assert running_loop is not None
+    assert running_loop.status == LoopRunStatus.RUNNING.value
+    assert running_loop.current_iteration == 1
+    assert running_loop.state_version == 1
+    assert stale_loop is None
+
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-1",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        input_table_ref_id=input_ref.table_ref_id,
+        input_selector={"row_index": 0},
+    )
+    duplicate_iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-duplicate",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        input_table_ref_id=input_ref.table_ref_id,
+        input_selector={"row_index": 0},
+    )
+
+    assert iteration is not None
+    assert duplicate_iteration == iteration
+    assert iteration.input_selector == {"row_index": 0}
+    assert row_count(database_path, "loop_iteration_runs") == 1
+    assert store.get_loop_iteration_run("loop-iteration-1") == iteration
+    assert (
+        store.get_loop_iteration_run_for_index(
+            loop_run_id=loop.loop_run_id,
+            iteration_index=0,
+        )
+        == iteration
+    )
+
+    input_link = store.add_loop_iteration_table_ref(
+        loop_iteration_id=iteration.loop_iteration_id,
+        table_ref_id=input_ref.table_ref_id,
+        role=LoopIterationTableRefRole.INPUT,
+    )
+    duplicate_input_link = store.add_loop_iteration_table_ref(
+        loop_iteration_id=iteration.loop_iteration_id,
+        table_ref_id=input_ref.table_ref_id,
+        role=LoopIterationTableRefRole.INPUT,
+    )
+
+    assert input_link is not None
+    assert duplicate_input_link == input_link
+    assert row_count(database_path, "loop_iteration_table_refs") == 1
+    assert store.list_loop_iteration_table_refs(
+        iteration.loop_iteration_id,
+        role=LoopIterationTableRefRole.INPUT,
+    ) == [input_link]
+
+    running_iteration = store.update_loop_iteration_run_status(
+        iteration.loop_iteration_id,
+        LoopIterationRunStatus.RUNNING,
+        started_at=utc_now(),
+        expected_state_version=iteration.state_version,
+    )
+    stale_iteration = store.update_loop_iteration_run_status(
+        iteration.loop_iteration_id,
+        LoopIterationRunStatus.FAILED,
+        expected_state_version=iteration.state_version,
+    )
+    succeeded_iteration = store.update_loop_iteration_run_status(
+        iteration.loop_iteration_id,
+        LoopIterationRunStatus.SUCCEEDED,
+        output_table_ref_id=output_ref.table_ref_id,
+        finished_at=utc_now(),
+        expected_state_version=(
+            running_iteration.state_version if running_iteration is not None else 1
+        ),
+    )
+    revived_iteration = store.update_loop_iteration_run_status(
+        iteration.loop_iteration_id,
+        LoopIterationRunStatus.RUNNING,
+        expected_state_version=(
+            succeeded_iteration.state_version if succeeded_iteration is not None else 2
+        ),
+        allowed_source_statuses=[LoopIterationRunStatus.SUCCEEDED],
+    )
+
+    assert running_iteration is not None
+    assert stale_iteration is None
+    assert succeeded_iteration is not None
+    assert succeeded_iteration.output_table_ref_id == output_ref.table_ref_id
+    assert succeeded_iteration.status == LoopIterationRunStatus.SUCCEEDED.value
+    assert revived_iteration is None
+    assert store.list_loop_iteration_runs(
+        loop.loop_run_id,
+        statuses=[LoopIterationRunStatus.SUCCEEDED],
+    ) == [succeeded_iteration]
+
+    ended_loop = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.ENDED,
+        exit_reason="judge_end_branch",
+        finished_at=utc_now(),
+        expected_state_version=running_loop.state_version,
+    )
+    revived_loop = store.update_loop_run_status(
+        loop.loop_run_id,
+        LoopRunStatus.RUNNING,
+        expected_state_version=ended_loop.state_version
+        if ended_loop is not None
+        else 2,
+        allowed_source_statuses=[LoopRunStatus.ENDED],
+    )
+
+    assert ended_loop is not None
+    assert ended_loop.status == LoopRunStatus.ENDED.value
+    assert ended_loop.exit_reason == "judge_end_branch"
+    assert revived_loop is None
+
+
+def test_runtime_store_loop_run_rejects_cross_run_refs(tmp_path: Path) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    first_run, first_node = create_producer_context(store)
+    second_run, second_node = create_producer_context(
+        store,
+        workflow_id="workflow-2",
+        workflow_run_id="run-2",
+        node_run_id="node-2",
+    )
+    foreign_table = make_table_ref(
+        table_ref_id="table-foreign",
+        workflow_run_id=second_run.workflow_run_id,
+        node_run_id=second_node.node_run_id,
+        logical_table_id="foreign",
+        version=1,
+    )
+    store.register_table_ref(foreign_table)
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-1",
+        workflow_run_id=first_run.workflow_run_id,
+        loop_id="loop-orders",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+    )
+
+    assert loop is not None
+    with pytest.raises(ValueError, match="does not belong to workflow run"):
+        store.create_loop_iteration_run(
+            loop_iteration_id="loop-iteration-1",
+            loop_run_id=loop.loop_run_id,
+            iteration_index=0,
+            input_table_ref_id=foreign_table.table_ref_id,
+        )
+
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-1",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+    )
+    assert iteration is not None
+
+    with pytest.raises(ValueError, match="does not belong to workflow run"):
+        store.add_loop_iteration_table_ref(
+            loop_iteration_id=iteration.loop_iteration_id,
+            table_ref_id=foreign_table.table_ref_id,
+            role=LoopIterationTableRefRole.INPUT,
+        )
+    with pytest.raises(ValueError, match="does not belong to workflow run"):
+        store.update_loop_iteration_run_status(
+            iteration.loop_iteration_id,
+            LoopIterationRunStatus.RUNNING,
+            failed_node_run_id=second_node.node_run_id,
+            expected_state_version=iteration.state_version,
+        )
+
+    assert row_count(database_path, "loop_iteration_table_refs") == 0
+
+
 def test_runtime_store_shared_publication_round_trip_and_latest(
     tmp_path: Path,
 ) -> None:
@@ -1108,10 +1442,13 @@ def test_runtime_store_shared_publication_round_trip_and_latest(
     ]
     assert second.publication_version == 2
     assert store.get_shared_publication("publication-1") == first
-    assert store.get_shared_publication_version(
-        share_name="daily_report",
-        publication_version=1,
-    ) == first
+    assert (
+        store.get_shared_publication_version(
+            share_name="daily_report",
+            publication_version=1,
+        )
+        == first
+    )
     assert store.get_latest_shared_publication("daily_report") == second
 
 
@@ -1194,10 +1531,7 @@ def test_runtime_store_shared_publication_rejects_mutable_member_atomically(
 
     with pytest.raises(
         ValueError,
-        match=(
-            "Shared publication member must be PUBLISHED_IMMUTABLE: "
-            "table-mutable"
-        ),
+        match=("Shared publication member must be PUBLISHED_IMMUTABLE: table-mutable"),
     ):
         store.create_shared_publication(
             publication_id="publication-1",
@@ -1237,8 +1571,7 @@ def test_runtime_store_shared_publication_rejects_cross_run_member_atomically(
     with pytest.raises(
         ValueError,
         match=(
-            "Shared publication member does not belong to producer run: "
-            "table-other-run"
+            "Shared publication member does not belong to producer run: table-other-run"
         ),
     ):
         store.create_shared_publication(
@@ -1520,10 +1853,13 @@ def test_runtime_store_read_lease_round_trip_and_release(tmp_path: Path) -> None
     assert released is not None
     assert released.released_at is not None
     assert store.get_read_lease("lease-1") == released
-    assert store.list_read_leases_by_workflow_run(
-        consumer_run.workflow_run_id,
-        active_only=True,
-    ) == []
+    assert (
+        store.list_read_leases_by_workflow_run(
+            consumer_run.workflow_run_id,
+            active_only=True,
+        )
+        == []
+    )
     assert store.list_read_leases_by_workflow_run(
         consumer_run.workflow_run_id,
         active_only=False,
@@ -1678,10 +2014,13 @@ def test_runtime_store_read_lease_excludes_expired_from_active_list(
         expires_at=utc_now() - timedelta(seconds=1),
     )
 
-    assert store.list_read_leases_by_workflow_run(
-        consumer_run.workflow_run_id,
-        active_only=True,
-    ) == []
+    assert (
+        store.list_read_leases_by_workflow_run(
+            consumer_run.workflow_run_id,
+            active_only=True,
+        )
+        == []
+    )
     assert store.list_read_leases_by_workflow_run(
         consumer_run.workflow_run_id,
         active_only=False,
@@ -1745,13 +2084,19 @@ def test_runtime_store_releases_unreleased_read_leases_for_workflow_run(
     assert released[1].released_at is not None
     assert store.get_read_lease(active.lease_id).released_at is not None
     assert store.get_read_lease(expired.lease_id).released_at is not None
-    assert store.list_read_leases_by_workflow_run(
-        consumer_run.workflow_run_id,
-        active_only=True,
-    ) == []
-    assert store.release_unreleased_read_leases_for_workflow_run(
-        consumer_run.workflow_run_id
-    ) == []
+    assert (
+        store.list_read_leases_by_workflow_run(
+            consumer_run.workflow_run_id,
+            active_only=True,
+        )
+        == []
+    )
+    assert (
+        store.release_unreleased_read_leases_for_workflow_run(
+            consumer_run.workflow_run_id
+        )
+        == []
+    )
 
 
 def test_runtime_event_sequence_numbers_are_persisted(tmp_path: Path) -> None:
