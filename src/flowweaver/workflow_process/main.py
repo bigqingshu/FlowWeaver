@@ -24,6 +24,9 @@ from flowweaver.engine.runtime_event_sink import (
 )
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.engine.table_provider_registry import (
+    create_default_table_provider_registry,
+)
 from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
     BuiltinTableNodeExecutor,
@@ -242,12 +245,13 @@ def run_workflow_process(
     resolved_max_concurrent_node_tasks = (
         resolve_workflow_process_max_concurrent_node_tasks(max_concurrent_node_tasks)
     )
+    resolved_runtime_dir = Path(runtime_dir or Path("runtime") / "workflow_runs")
     reusable_executor_owner: _DefaultWorkflowProcessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
         reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(
             store=store,
-            runtime_dir=Path(runtime_dir or Path("runtime") / "workflow_runs"),
+            runtime_dir=resolved_runtime_dir,
         )
         executor_factory = reusable_executor_owner.executor_for_task
         close_executor_after_task = False
@@ -259,6 +263,7 @@ def run_workflow_process(
             heartbeat_interval_seconds=heartbeat_interval_seconds,
             process_generation=process_generation,
             event_sink=event_sink,
+            runtime_dir=resolved_runtime_dir,
             executor_factory=executor_factory,
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,
@@ -283,6 +288,7 @@ def _run_workflow_process_loop(
     heartbeat_interval_seconds: float,
     process_generation: int | None,
     event_sink: RuntimeEventSink,
+    runtime_dir: Path,
     executor_factory: NodeExecutorFactory,
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
@@ -416,6 +422,7 @@ def _run_workflow_process_loop(
         dag=dag,
         failure_policy_mode=definition.failure_policy.mode,
         runtime_options_by_node=runtime_options_by_node,
+        table_provider_registry=create_default_table_provider_registry(runtime_dir),
     )
     if execution_pool is None:
         execute_task = _build_node_task_execute(

@@ -8,6 +8,7 @@ from typing import Any
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
+from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.protocols.enums import (
     EventType,
     NodeResultStatus,
@@ -19,6 +20,9 @@ from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow.definition import (
     FailurePolicyMode,
     RuntimeOptionsWorkflowModel,
+)
+from flowweaver.workflow_process.control_signal_interpreter import (
+    interpret_control_outputs_after_node_success,
 )
 from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
@@ -65,6 +69,7 @@ class NodeTaskManager:
         dag: WorkflowDag,
         failure_policy_mode: FailurePolicyMode | str | None = None,
         runtime_options_by_node: dict[str, RuntimeOptionsWorkflowModel] | None = None,
+        table_provider_registry: TableProviderRegistry | None = None,
     ) -> None:
         self._store = store
         self._event_sink = event_sink
@@ -73,6 +78,7 @@ class NodeTaskManager:
             failure_policy_mode or FailurePolicyMode.FAIL_FAST
         )
         self._runtime_options_by_node = dict(runtime_options_by_node or {})
+        self._table_provider_registry = table_provider_registry
 
     @property
     def failure_policy_mode(self) -> FailurePolicyMode:
@@ -412,6 +418,14 @@ class NodeTaskManager:
         )
         if updated is None:
             return self._result_already_applied_or_terminal(result)
+        if self._table_provider_registry is not None:
+            interpret_control_outputs_after_node_success(
+                self._store,
+                self._table_provider_registry,
+                workflow_run_id=task.workflow_run_id,
+                completed_node=updated,
+                output_refs=result.output_refs,
+            )
         advance_after_node_success(
             self._store,
             workflow_run_id=task.workflow_run_id,
