@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -69,6 +70,20 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
 
     public IReadOnlyList<string> BooleanValues => BooleanInputValues;
 
+    public IReadOnlyList<NodeConfigOptionItemViewModel> EnumOptions =>
+        EnumValues
+            .Select(value => new NodeConfigOptionItemViewModel(
+                value,
+                DisplayTextFormatter.FormatNodeConfigOptionValue(NodeType, Name, value)))
+            .ToArray();
+
+    public IReadOnlyList<NodeConfigOptionItemViewModel> BooleanOptions =>
+        BooleanInputValues
+            .Select(value => new NodeConfigOptionItemViewModel(
+                value,
+                DisplayTextFormatter.FormatNodeConfigOptionValue(NodeType, Name, value)))
+            .ToArray();
+
     public bool HasWarnings => Warnings.Count > 0;
 
     public string WarningText => string.Join(", ", Warnings);
@@ -113,5 +128,7 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(DisplayLabel));
         OnPropertyChanged(nameof(TypeText));
+        OnPropertyChanged(nameof(EnumOptions));
+        OnPropertyChanged(nameof(BooleanOptions));
     }
 }

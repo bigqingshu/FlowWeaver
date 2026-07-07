@@ -120,7 +120,8 @@ public sealed class WorkflowSummaryViewStructureTests
             xaml,
             "x:DataType=\"vm:NodeConfigEditableFieldInputViewModel\"");
         StringAssert.Contains(xaml, "Text=\"{Binding InputValue, Mode=TwoWay");
-        StringAssert.Contains(xaml, "SelectedItem=\"{Binding InputValue, Mode=TwoWay}\"");
+        StringAssert.Contains(xaml, "SelectedValue=\"{Binding InputValue, Mode=TwoWay}\"");
+        StringAssert.Contains(xaml, "SelectedValueBinding=\"{Binding Value}\"");
     }
 
     [TestMethod]
@@ -142,7 +143,9 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsTextInput}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsEnumInput}\"");
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsBooleanInput}\"");
-        StringAssert.Contains(xaml, "ItemsSource=\"{Binding BooleanValues}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding EnumOptions}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding BooleanOptions}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DisplayText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WarningText}\"");
         Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
     }

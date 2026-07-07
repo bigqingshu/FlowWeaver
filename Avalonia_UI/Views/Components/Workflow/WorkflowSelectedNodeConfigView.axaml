@@ -106,13 +106,29 @@
                                      Text="{Binding InputValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                      IsVisible="{Binding IsTextInput}"/>
                             <ComboBox Grid.Column="1"
-                                      ItemsSource="{Binding EnumValues}"
-                                      SelectedItem="{Binding InputValue, Mode=TwoWay}"
-                                      IsVisible="{Binding IsEnumInput}"/>
+                                      ItemsSource="{Binding EnumOptions}"
+                                      SelectedValue="{Binding InputValue, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      IsVisible="{Binding IsEnumInput}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                                  x:DataType="vm:NodeConfigOptionItemViewModel">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <ComboBox Grid.Column="1"
-                                      ItemsSource="{Binding BooleanValues}"
-                                      SelectedItem="{Binding InputValue, Mode=TwoWay}"
-                                      IsVisible="{Binding IsBooleanInput}"/>
+                                      ItemsSource="{Binding BooleanOptions}"
+                                      SelectedValue="{Binding InputValue, Mode=TwoWay}"
+                                      SelectedValueBinding="{Binding Value}"
+                                      IsVisible="{Binding IsBooleanInput}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                                  x:DataType="vm:NodeConfigOptionItemViewModel">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
 
                             <TextBlock Grid.Row="1"
                                        Grid.Column="1"

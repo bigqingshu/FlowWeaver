@@ -106,6 +106,39 @@ public sealed class NodeDefinitionListItemViewModelTests
     }
 
     [TestMethod]
+    public async Task LocalizesNewBuiltInNodeDisplayNameAndConfigSchemaSummary()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var formatter = new DisplayTextFormatter(localizationService);
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "SqlMappingNode",
+                NodeVersion = "1.0",
+                DisplayName = "SQL Mapping",
+                InputPorts = [],
+                OutputPorts = [],
+                ConfigSchemaVersion = "1.0",
+                ConfigSchema = JsonDocument.Parse(
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "database_path": {"type": "string", "title": "Database Path"},
+                        "table_name": {"type": "string", "title": "Table Name"},
+                        "query": {"type": "string", "title": "Query"}
+                      }
+                    }
+                    """).RootElement.Clone(),
+            },
+            formatter);
+
+        Assert.AreEqual("SQL 映射", item.DisplayNameText);
+        Assert.AreEqual("3 个配置字段：数据库路径, 表名, 查询语句", item.ConfigSchemaSummaryText);
+    }
+
+    [TestMethod]
     public async Task LocalizedDisplayFallsBackToBackendTextForUnknownNodeDefinition()
     {
         var localizationService = new JsonLocalizationService();

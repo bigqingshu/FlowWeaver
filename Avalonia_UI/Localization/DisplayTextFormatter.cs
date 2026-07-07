@@ -107,6 +107,31 @@ public sealed class DisplayTextFormatter
             typeName);
     }
 
+    public string FormatNodeConfigOptionValue(
+        string nodeType,
+        string fieldName,
+        string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nodeType)
+            && !string.IsNullOrWhiteSpace(fieldName))
+        {
+            var fieldSpecificText = TextOrFallback(
+                $"node_config.{nodeType}.{fieldName}.option.{value}",
+                value);
+            if (!string.Equals(fieldSpecificText, value, System.StringComparison.Ordinal))
+            {
+                return fieldSpecificText;
+            }
+        }
+
+        return TextOrFallback($"node_config.option.{value}", value);
+    }
+
     public string FormatSelectedNodeConfigDraftMissingSelection()
     {
         return Text("node_config_draft.no_node_selected");

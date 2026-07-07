@@ -34,6 +34,12 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         Assert.IsTrue(input.IsEnumInput);
         Assert.IsFalse(input.IsTextInput);
         Assert.IsFalse(input.IsBooleanInput);
+        CollectionAssert.AreEqual(
+            new[] { "GT", "LT" },
+            input.EnumOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "GT", "LT" },
+            input.EnumOptions.Select(option => option.DisplayText).ToArray());
         Assert.IsTrue(input.HasWarnings);
         Assert.AreEqual("CONFIG_DRAFT_FIELD_REQUIRED_MISSING", input.WarningText);
         Assert.AreEqual("GT", input.InputValue);
@@ -90,6 +96,12 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         CollectionAssert.AreEqual(
             new[] { "true", "false" },
             booleanInput.BooleanValues.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "true", "false" },
+            booleanInput.BooleanOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "true", "false" },
+            booleanInput.BooleanOptions.Select(option => option.DisplayText).ToArray());
     }
 
     [TestMethod]
@@ -117,6 +129,56 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         var draftField = input.ToEditableDraftField();
         Assert.AreEqual("Rows", draftField.Title);
         Assert.AreEqual("rows", draftField.Name);
+    }
+
+    [TestMethod]
+    public async Task LocalizesBuiltInEnumAndBooleanOptionDisplayTextWithoutChangingValues()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "operator",
+                Type = NodeConfigFieldType.Enum,
+                Title = "Operator",
+                Required = true,
+                InputValue = "GT",
+                HasInputValue = true,
+                EnumValues = ["EQ", "GT", "IS_NULL"],
+            },
+            "FilterRowsNode",
+            new DisplayTextFormatter(localizationService));
+
+        CollectionAssert.AreEqual(
+            new[] { "EQ", "GT", "IS_NULL" },
+            input.EnumOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "等于", "大于", "为空" },
+            input.EnumOptions.Select(option => option.DisplayText).ToArray());
+
+        input.InputValue = "IS_NULL";
+        var draftField = input.ToEditableDraftField();
+
+        Assert.AreEqual("IS_NULL", draftField.InputValue);
+
+        var booleanInput = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "enabled",
+                Type = NodeConfigFieldType.Boolean,
+                InputValue = "true",
+                HasInputValue = true,
+            },
+            "FilterRowsNode",
+            new DisplayTextFormatter(localizationService));
+
+        CollectionAssert.AreEqual(
+            new[] { "true", "false" },
+            booleanInput.BooleanOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "是", "否" },
+            booleanInput.BooleanOptions.Select(option => option.DisplayText).ToArray());
     }
 
     [TestMethod]
