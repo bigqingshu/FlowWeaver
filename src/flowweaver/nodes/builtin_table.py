@@ -2633,7 +2633,6 @@ class PluginNodeHandler:
                 rows=[status_row],
             )
         ]
-        return [status_ref] if target_ref is None else [status_ref, target_ref]
 
 
 def _plugin_status_row(
