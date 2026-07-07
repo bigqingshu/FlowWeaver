@@ -18,6 +18,14 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeHandlerRegistry,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.value_sources import (
+    VALUE_SOURCE_LITERAL,
+    VALUE_SOURCE_ROW_FIELD,
+    ValueSource,
+    ValueSourceError,
+    parse_value_source,
+    resolve_value_source,
+)
 
 __all__ = [
     "BuiltinSharedTableNodeRunner",
@@ -32,6 +40,12 @@ __all__ = [
     "default_node_definitions",
     "NodeDefinitionSpec",
     "NodeRegistry",
+    "parse_value_source",
     "PUBLISH_SHARED_TABLES_NODE_TYPE",
     "READ_SHARED_TABLES_NODE_TYPE",
+    "resolve_value_source",
+    "VALUE_SOURCE_LITERAL",
+    "VALUE_SOURCE_ROW_FIELD",
+    "ValueSource",
+    "ValueSourceError",
 ]
