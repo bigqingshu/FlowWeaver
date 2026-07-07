@@ -63,6 +63,7 @@ WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
 WRITE_BACK_TABLE_NODE_TYPE = "WriteBackTableNode"
 LIST_FILES_NODE_TYPE = "ListFilesNode"
 BATCH_RENAME_FILES_NODE_TYPE = "BatchRenameFilesNode"
+PLUGIN_NODE_TYPE = "PluginNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
@@ -105,6 +106,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             WriteBackTableNodeHandler(),
             ListFilesNodeHandler(),
             BatchRenameFilesNodeHandler(),
+            PluginNodeHandler(),
             SqlMappingNodeHandler(),
         )
     )
@@ -2167,6 +2169,81 @@ class BatchRenameFilesNodeHandler:
         ]
 
 
+class PluginNodeHandler:
+    node_type = PLUGIN_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        plugin_id = _node_string_config(
+            task.config,
+            "plugin_id",
+            node_type=self.node_type,
+        )
+        plugin_version = _optional_string_config(
+            task.config,
+            "plugin_version",
+            node_type=self.node_type,
+        )
+        params = _object_config(task.config, "params", node_type=self.node_type)
+        input_bindings = _object_config(
+            task.config,
+            "input_bindings",
+            node_type=self.node_type,
+        )
+        output_bindings = _object_config(
+            task.config,
+            "output_bindings",
+            node_type=self.node_type,
+        )
+        execution_mode = _enum_config(
+            task.config,
+            "execution_mode",
+            default="external_process",
+            allowed={"in_process", "external_process"},
+            node_type=self.node_type,
+        )
+        allow_external_actions = _bool_config(
+            task.config,
+            "allow_external_actions",
+            default=False,
+        )
+        enable_execute = _bool_config(
+            task.config,
+            "enable_execute",
+            default=False,
+        )
+        skipped_reason = (
+            "enable_execute is false"
+            if not enable_execute
+            else "plugin execution is not implemented"
+        )
+        status_row = {
+            "status": "skipped",
+            "plugin_id": plugin_id,
+            "plugin_version": plugin_version,
+            "execution_mode": execution_mode,
+            "input_ref_count": len(task.input_refs),
+            "param_count": len(params),
+            "input_binding_count": len(input_bindings),
+            "output_binding_count": len(output_bindings),
+            "allow_external_actions": _bool_status(allow_external_actions),
+            "enable_execute": _bool_status(enable_execute),
+            "actual_execute": "false",
+            "skipped_reason": skipped_reason,
+        }
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=_plugin_status_schema(),
+                rows=[status_row],
+            )
+        ]
+
+
 class SqlMappingNodeHandler:
     node_type = SQL_MAPPING_NODE_TYPE
 
@@ -2510,6 +2587,20 @@ def _optional_string_config(
     value = config.get(key, default)
     if not isinstance(value, str):
         raise _NodeValidationError(f"{node_type} config.{key} must be a string")
+    return value
+
+
+def _object_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> dict[str, Any]:
+    value = config.get(key, {})
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise _NodeValidationError(f"{node_type} config.{key} must be an object")
     return value
 
 
@@ -3147,6 +3238,25 @@ def _batch_rename_status_schema(
             ("actual_rename", "TEXT", False),
             ("write_log", "TEXT", False),
             ("log_path", "TEXT", False),
+            ("skipped_reason", "TEXT", False),
+        ]
+    )
+
+
+def _plugin_status_schema() -> list[FieldSchemaModel]:
+    return _simple_schema(
+        [
+            ("status", "TEXT", False),
+            ("plugin_id", "TEXT", False),
+            ("plugin_version", "TEXT", False),
+            ("execution_mode", "TEXT", False),
+            ("input_ref_count", "INTEGER", False),
+            ("param_count", "INTEGER", False),
+            ("input_binding_count", "INTEGER", False),
+            ("output_binding_count", "INTEGER", False),
+            ("allow_external_actions", "TEXT", False),
+            ("enable_execute", "TEXT", False),
+            ("actual_execute", "TEXT", False),
             ("skipped_reason", "TEXT", False),
         ]
     )

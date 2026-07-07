@@ -33,6 +33,7 @@ from flowweaver.nodes.builtin_table import (
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
+    PLUGIN_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -394,6 +395,49 @@ def test_batch_rename_files_node_skips_actual_rename_until_write_is_supported(
     assert output_rows[0]["skipped_reason"] == "rename execution is not implemented"
     assert source_file.exists()
     assert not (source_dir / "renamed.txt").exists()
+
+
+def test_plugin_node_outputs_status_table_without_executing_plugin(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    plugin_task = make_task(
+        node_type=PLUGIN_NODE_TYPE,
+        node_run_id="node-run-plugin",
+        node_instance_id="plugin",
+        config={
+            "plugin_id": "example.plugin",
+            "plugin_version": "1.2.3",
+            "params": {"threshold": 3},
+            "input_bindings": {"input": "in"},
+            "output_bindings": {"status": "status"},
+            "execution_mode": "external_process",
+            "allow_external_actions": True,
+            "enable_execute": True,
+        },
+    )
+
+    plugin_result = executor.execute(plugin_task)
+
+    assert plugin_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(plugin_result.output_refs[0])
+    assert output_ref.logical_table_id == "plugin_output"
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {
+            "status": "skipped",
+            "plugin_id": "example.plugin",
+            "plugin_version": "1.2.3",
+            "execution_mode": "external_process",
+            "input_ref_count": 0,
+            "param_count": 1,
+            "input_binding_count": 1,
+            "output_binding_count": 1,
+            "allow_external_actions": "true",
+            "enable_execute": "true",
+            "actual_execute": "false",
+            "skipped_reason": "plugin execution is not implemented",
+        }
+    ]
 
 
 def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
@@ -3342,6 +3386,27 @@ def test_batch_rename_files_node_returns_validation_error_for_missing_field(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist: missing" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_plugin_node_returns_validation_error_for_missing_plugin_id(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    task = make_task(
+        node_type=PLUGIN_NODE_TYPE,
+        node_run_id="node-run-plugin",
+        node_instance_id="plugin",
+        config={},
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "PluginNode config.plugin_id is required" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
 
 
 def test_delete_columns_node_returns_validation_error_for_missing_column(

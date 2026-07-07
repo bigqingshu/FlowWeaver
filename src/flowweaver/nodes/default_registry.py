@@ -29,6 +29,7 @@ from flowweaver.nodes.builtin_table import (
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
+    PLUGIN_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -254,6 +255,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("status"),),
             config_schema=_batch_rename_files_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=PLUGIN_NODE_TYPE,
+            node_version="1.0",
+            display_name="Plugin Node",
+            input_ports=(NodePortSpec("in"),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_plugin_node_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -1663,6 +1672,53 @@ def _batch_rename_files_schema() -> NodeConfigSchemaSpec:
             "log_path": NodeConfigFieldSpec(
                 type="string",
                 title="Log Path",
+            ),
+        }
+    )
+
+
+def _plugin_node_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "plugin_id": NodeConfigFieldSpec(
+                type="string",
+                title="Plugin ID",
+                required=True,
+            ),
+            "plugin_version": NodeConfigFieldSpec(
+                type="string",
+                title="Plugin Version",
+            ),
+            "params": NodeConfigFieldSpec(
+                type="object",
+                title="Params",
+                description="Plugin parameter object.",
+            ),
+            "input_bindings": NodeConfigFieldSpec(
+                type="object",
+                title="Input Bindings",
+                description="Plugin input binding object.",
+            ),
+            "output_bindings": NodeConfigFieldSpec(
+                type="object",
+                title="Output Bindings",
+                description="Plugin output binding object.",
+            ),
+            "execution_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Execution Mode",
+                default="external_process",
+                enum=("in_process", "external_process"),
+            ),
+            "allow_external_actions": NodeConfigFieldSpec(
+                type="boolean",
+                title="Allow External Actions",
+                default=False,
+            ),
+            "enable_execute": NodeConfigFieldSpec(
+                type="boolean",
+                title="Enable Execute",
+                default=False,
             ),
         }
     )

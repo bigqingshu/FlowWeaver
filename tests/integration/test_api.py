@@ -356,6 +356,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "GenerateTestTableNode",
         "ListFilesNode",
         "BatchRenameFilesNode",
+        "PluginNode",
         "FilterRowsNode",
         "AddColumnsNode",
         "DeleteColumnsNode",
@@ -394,6 +395,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["BatchRenameFilesNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["PluginNode"]["input_ports"] == [
+        {"name": "in", "required": False}
+    ]
+    assert by_type["PluginNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["FilterRowsNode"]["input_ports"] == [
@@ -528,6 +535,18 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "append_number",
     ]
     assert batch_rename_properties["actual_rename"]["default"] is False
+
+    plugin_properties = by_type["PluginNode"]["config_schema"]["properties"]
+    assert plugin_properties["plugin_id"]["required"] is True
+    assert plugin_properties["params"]["type"] == "object"
+    assert plugin_properties["input_bindings"]["type"] == "object"
+    assert plugin_properties["output_bindings"]["type"] == "object"
+    assert plugin_properties["execution_mode"]["enum"] == [
+        "in_process",
+        "external_process",
+    ]
+    assert plugin_properties["allow_external_actions"]["default"] is False
+    assert plugin_properties["enable_execute"]["default"] is False
 
     filter_properties = by_type["FilterRowsNode"]["config_schema"]["properties"]
     assert filter_properties["operator"] == {
