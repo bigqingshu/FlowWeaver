@@ -35,6 +35,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
@@ -2815,6 +2816,166 @@ def test_write_selected_columns_node_returns_validation_error_for_missing_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist: missing" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_write_back_table_node_outputs_writeback_status_table(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    writeback_task = make_task(
+        node_type=WRITE_BACK_TABLE_NODE_TYPE,
+        node_run_id="node-run-writeback",
+        node_instance_id="writeback",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_table": "orders",
+            "match_rules": [
+                {
+                    "source_field": "row_id",
+                    "target_field": "id",
+                    "operator": "equals",
+                }
+            ],
+            "field_mappings": [
+                {"source_field": "amount", "target_field": "total"},
+                {"source_field": "label", "target_field": "caption"},
+            ],
+            "overwrite_policy": "empty_only",
+            "source_empty_policy": "skip",
+            "no_match_policy": "insert",
+            "multi_match_policy": "skip",
+            "duplicate_target_policy": "first",
+            "enable_write": False,
+            "backup_before_write": True,
+            "output_preview_table": True,
+        },
+    )
+
+    writeback_result = executor.execute(writeback_task)
+
+    assert writeback_result.status == NodeResultStatus.SUCCEEDED
+    assert len(writeback_result.output_refs) == 1
+    status_ref = registry.get(writeback_result.output_refs[0])
+    assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert status_ref.logical_table_id == "writeback_output"
+    assert provider.read_rows(status_ref, offset=0, limit=10) == [
+        {
+            "status": "skipped",
+            "writeback_direction": "source_to_target",
+            "source_table": "generate_output",
+            "target_table": "orders",
+            "use_match_rules": "true",
+            "match_rule_count": 1,
+            "field_mapping_count": 2,
+            "source_row_count": 3,
+            "enable_write": "false",
+            "backup_before_write": "true",
+            "output_preview_table": "true",
+            "actual_write": "false",
+            "overwrite_policy": "empty_only",
+            "source_empty_policy": "skip",
+            "no_match_policy": "insert",
+            "multi_match_policy": "skip",
+            "duplicate_target_policy": "first",
+            "match_fields": "row_id->id",
+            "mapped_fields": "amount->total,label->caption",
+            "skipped_reason": "enable_write is false",
+        }
+    ]
+    assert provider.count_rows(input_ref) == 3
+
+
+def test_write_back_table_node_outputs_preview_only_when_write_enabled(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    writeback_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback",
+            node_instance_id="writeback",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_table": "orders",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+                "output_preview_table": False,
+            },
+        )
+    )
+
+    assert writeback_result.status == NodeResultStatus.SUCCEEDED
+    status_ref = registry.get(writeback_result.output_refs[0])
+    rows = provider.read_rows(status_ref, offset=0, limit=10)
+    assert rows[0]["use_match_rules"] == "false"
+    assert rows[0]["match_rule_count"] == 0
+    assert rows[0]["enable_write"] == "true"
+    assert rows[0]["output_preview_table"] == "false"
+    assert rows[0]["actual_write"] == "false"
+    assert rows[0]["skipped_reason"] == "writeback execution is not implemented"
+
+
+def test_write_back_table_node_returns_validation_error_for_missing_mapping_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback",
+            node_instance_id="writeback",
+            input_refs=generate_result.output_refs,
+            config={
+                "target_table": "orders",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "missing", "target_field": "total"},
+                ],
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist: missing" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

@@ -375,6 +375,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
+        "WriteBackTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
         "SqlMappingNode",
@@ -454,6 +455,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["WriteSelectedColumnsNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["WriteBackTableNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["WriteBackTableNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
@@ -846,6 +853,25 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert write_selected_properties["enable_write"]["default"] is False
     assert write_selected_properties["backup_before_write"]["default"] is False
+
+    write_back_properties = by_type["WriteBackTableNode"]["config_schema"][
+        "properties"
+    ]
+    assert write_back_properties["writeback_direction"]["enum"] == [
+        "source_to_target",
+        "target_to_source",
+    ]
+    assert write_back_properties["target_table"]["required"] is True
+    assert write_back_properties["match_rules"]["items"] == {"type": "object"}
+    assert write_back_properties["field_mappings"]["items"] == {"type": "object"}
+    assert write_back_properties["field_mappings"]["required"] is True
+    assert write_back_properties["overwrite_policy"]["enum"] == [
+        "overwrite",
+        "empty_only",
+        "skip_existing",
+    ]
+    assert write_back_properties["enable_write"]["default"] is False
+    assert write_back_properties["output_preview_table"]["default"] is True
 
     publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
         "properties"

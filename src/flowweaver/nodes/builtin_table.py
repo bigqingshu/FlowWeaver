@@ -58,6 +58,7 @@ PARSE_DATETIME_NODE_TYPE = "ParseDateTimeNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
 WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
+WRITE_BACK_TABLE_NODE_TYPE = "WriteBackTableNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
@@ -97,6 +98,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             SaveMemoryTableNodeHandler(),
             SaveRunTableNodeHandler(),
             WriteSelectedColumnsNodeHandler(),
+            WriteBackTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
     )
@@ -1848,6 +1850,146 @@ class WriteSelectedColumnsNodeHandler:
         ]
 
 
+class WriteBackTableNodeHandler:
+    node_type = WRITE_BACK_TABLE_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        direction = _enum_config(
+            task.config,
+            "writeback_direction",
+            default="source_to_target",
+            allowed={"source_to_target", "target_to_source"},
+            node_type=self.node_type,
+        )
+        source_table = _optional_string_config(
+            task.config,
+            "source_table",
+            default=input_ref.logical_table_id,
+            node_type=self.node_type,
+        ).strip()
+        if not source_table:
+            source_table = input_ref.logical_table_id
+        target_table = _named_output_config(
+            task.config,
+            node_type=self.node_type,
+            keys=("target_table",),
+        )
+        use_match_rules = _bool_config(
+            task.config,
+            "use_match_rules",
+            default=True,
+        )
+        match_rule_count = 0
+        match_fields = ""
+        if use_match_rules:
+            match_rules = _writeback_match_rules_config(
+                task.config,
+                input_ref=input_ref,
+            )
+            match_rule_count = len(match_rules)
+            match_fields = ",".join(
+                f"{rule['source_field']}->{rule['target_field']}"
+                for rule in match_rules
+            )
+        field_mappings = _writeback_field_mappings_config(
+            task.config,
+            input_ref=input_ref,
+        )
+        mapped_fields = ",".join(
+            f"{mapping['source_field']}->{mapping['target_field']}"
+            for mapping in field_mappings
+        )
+        overwrite_policy = _enum_config(
+            task.config,
+            "overwrite_policy",
+            default="overwrite",
+            allowed={"overwrite", "empty_only", "skip_existing"},
+            node_type=self.node_type,
+        )
+        source_empty_policy = _enum_config(
+            task.config,
+            "source_empty_policy",
+            default="skip",
+            allowed={"skip", "write_empty", "clear_target"},
+            node_type=self.node_type,
+        )
+        no_match_policy = _enum_config(
+            task.config,
+            "no_match_policy",
+            default="skip",
+            allowed={"skip", "insert", "error"},
+            node_type=self.node_type,
+        )
+        multi_match_policy = _enum_config(
+            task.config,
+            "multi_match_policy",
+            default="error",
+            allowed={"first", "skip", "error"},
+            node_type=self.node_type,
+        )
+        duplicate_target_policy = _enum_config(
+            task.config,
+            "duplicate_target_policy",
+            default="error",
+            allowed={"first", "skip", "error"},
+            node_type=self.node_type,
+        )
+        enable_write = _bool_config(task.config, "enable_write", default=False)
+        backup_before_write = _bool_config(
+            task.config,
+            "backup_before_write",
+            default=False,
+        )
+        output_preview_table = _bool_config(
+            task.config,
+            "output_preview_table",
+            default=True,
+        )
+        skipped_reason = (
+            "enable_write is false"
+            if not enable_write
+            else "writeback execution is not implemented"
+        )
+        status_row = {
+            "status": "skipped",
+            "writeback_direction": direction,
+            "source_table": source_table,
+            "target_table": target_table,
+            "use_match_rules": _bool_status(use_match_rules),
+            "match_rule_count": match_rule_count,
+            "field_mapping_count": len(field_mappings),
+            "source_row_count": context.count_rows(input_ref),
+            "enable_write": _bool_status(enable_write),
+            "backup_before_write": _bool_status(backup_before_write),
+            "output_preview_table": _bool_status(output_preview_table),
+            "actual_write": "false",
+            "overwrite_policy": overwrite_policy,
+            "source_empty_policy": source_empty_policy,
+            "no_match_policy": no_match_policy,
+            "multi_match_policy": multi_match_policy,
+            "duplicate_target_policy": duplicate_target_policy,
+            "match_fields": match_fields,
+            "mapped_fields": mapped_fields,
+            "skipped_reason": skipped_reason,
+        }
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=_writeback_status_schema(),
+                rows=[status_row],
+            )
+        ]
+
+
 class SqlMappingNodeHandler:
     node_type = SQL_MAPPING_NODE_TYPE
 
@@ -2312,6 +2454,147 @@ def _write_selected_columns_status_schema() -> list[FieldSchemaModel]:
 
 def _bool_status(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _writeback_match_rules_config(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+) -> list[dict[str, str]]:
+    value = config.get("match_rules")
+    if not isinstance(value, list) or not value:
+        raise _NodeValidationError(
+            "WriteBackTableNode config.match_rules must be a non-empty list"
+        )
+    rules: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise _NodeValidationError(
+                "WriteBackTableNode config.match_rules must contain objects"
+            )
+        source_field = _mapping_string(
+            item,
+            "source_field",
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+        )
+        target_field = _mapping_string(
+            item,
+            "target_field",
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+        )
+        if find_field(input_ref.schema, source_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {source_field}")
+        operator = item.get("operator", "equals")
+        if not isinstance(operator, str) or not operator.strip():
+            raise _NodeValidationError(
+                "WriteBackTableNode match rule operator is required"
+            )
+        normalized_operator = operator.strip().lower()
+        if normalized_operator not in {
+            "equals",
+            "contains",
+            "starts_with",
+            "ends_with",
+        }:
+            raise _NodeValidationError(
+                f"Unsupported WriteBackTableNode match rule operator: {operator}"
+            )
+        rules.append(
+            {
+                "source_field": source_field,
+                "target_field": target_field,
+                "operator": normalized_operator,
+            }
+        )
+    return rules
+
+
+def _writeback_field_mappings_config(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+) -> list[dict[str, str]]:
+    value = config.get("field_mappings")
+    if not isinstance(value, list) or not value:
+        raise _NodeValidationError(
+            "WriteBackTableNode config.field_mappings must be a non-empty list"
+        )
+    mappings: list[dict[str, str]] = []
+    source_fields: set[str] = set()
+    target_fields: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise _NodeValidationError(
+                "WriteBackTableNode config.field_mappings must contain objects"
+            )
+        source_field = _mapping_string(
+            item,
+            "source_field",
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+        )
+        target_field = _mapping_string(
+            item,
+            "target_field",
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+        )
+        if find_field(input_ref.schema, source_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {source_field}")
+        if source_field in source_fields:
+            raise _NodeValidationError(
+                f"WriteBackTableNode duplicate mapping source: {source_field}"
+            )
+        if target_field in target_fields:
+            raise _NodeValidationError(
+                f"WriteBackTableNode duplicate mapping target: {target_field}"
+            )
+        source_fields.add(source_field)
+        target_fields.add(target_field)
+        mappings.append(
+            {
+                "source_field": source_field,
+                "target_field": target_field,
+            }
+        )
+    return mappings
+
+
+def _mapping_string(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> str:
+    value = config.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError(f"{node_type} {key} is required")
+    return value.strip()
+
+
+def _writeback_status_schema() -> list[FieldSchemaModel]:
+    return _simple_schema(
+        [
+            ("status", "TEXT", False),
+            ("writeback_direction", "TEXT", False),
+            ("source_table", "TEXT", False),
+            ("target_table", "TEXT", False),
+            ("use_match_rules", "TEXT", False),
+            ("match_rule_count", "INTEGER", False),
+            ("field_mapping_count", "INTEGER", False),
+            ("source_row_count", "INTEGER", False),
+            ("enable_write", "TEXT", False),
+            ("backup_before_write", "TEXT", False),
+            ("output_preview_table", "TEXT", False),
+            ("actual_write", "TEXT", False),
+            ("overwrite_policy", "TEXT", False),
+            ("source_empty_policy", "TEXT", False),
+            ("no_match_policy", "TEXT", False),
+            ("multi_match_policy", "TEXT", False),
+            ("duplicate_target_policy", "TEXT", False),
+            ("match_fields", "TEXT", False),
+            ("mapped_fields", "TEXT", False),
+            ("skipped_reason", "TEXT", False),
+        ]
+    )
 
 
 def _field_range(
