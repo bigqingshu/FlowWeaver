@@ -139,6 +139,39 @@ public sealed class NodeDefinitionListItemViewModelTests
     }
 
     [TestMethod]
+    public async Task LocalizesAddedBackendNodeDisplayNameAndConfigSchemaSummary()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var formatter = new DisplayTextFormatter(localizationService);
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "WriteSelectedColumnsNode",
+                NodeVersion = "1.0",
+                DisplayName = "Write Selected Columns",
+                InputPorts = [],
+                OutputPorts = [],
+                ConfigSchemaVersion = "1.0",
+                ConfigSchema = JsonDocument.Parse(
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "selected_fields": {"type": "array", "title": "Selected Fields"},
+                        "target_type": {"type": "enum", "title": "Target Type", "enum": ["run_table", "memory_table"]},
+                        "write_mode": {"type": "enum", "title": "Write Mode", "enum": ["overwrite", "append"]}
+                      }
+                    }
+                    """).RootElement.Clone(),
+            },
+            formatter);
+
+        Assert.AreEqual("选定列写入指定表", item.DisplayNameText);
+        Assert.AreEqual("3 个配置字段：选定字段, 目标类型, 写入模式", item.ConfigSchemaSummaryText);
+    }
+
+    [TestMethod]
     public async Task LocalizedDisplayFallsBackToBackendTextForUnknownNodeDefinition()
     {
         var localizationService = new JsonLocalizationService();
