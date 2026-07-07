@@ -19,6 +19,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     BATCH_RENAME_FILES_NODE_TYPE,
+    CONDITION_FLAG_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -121,6 +122,32 @@ def make_task(
         config=config,
         timeout_seconds=60,
     )
+
+
+def publish_runtime_rows(
+    *,
+    registry,
+    provider,
+    schema,
+    rows: list[dict],
+    output_name: str,
+):
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id=f"node-run-{output_name}",
+        output_name=output_name,
+        schema=schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    return registry.publish(staged_ref.table_ref_id)
+
+
+def read_single_output_row(*, registry, provider, result):
+    output_ref = registry.get(result.output_refs[0])
+    rows = provider.read_rows(output_ref, offset=0, limit=10)
+    assert len(rows) == 1
+    return output_ref, rows[0]
 
 
 def test_generate_test_table_node_publishes_runtime_sql_table_ref(
@@ -3350,6 +3377,278 @@ def test_parse_datetime_node_combines_separate_time_field_with_strptime(
     ]
 
 
+def test_condition_flag_node_evaluates_row_count_true_and_false(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    true_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-row-count-true",
+            node_instance_id="condition_row_count_true",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "flag_name": "enough_rows",
+                "condition_type": "row_count",
+                "operator": "GE",
+                "value": 3,
+                "true_value": "yes",
+                "false_value": "no",
+            },
+        )
+    )
+    false_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-row-count-false",
+            node_instance_id="condition_row_count_false",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "flag_name": "too_few_rows",
+                "condition_type": "row_count",
+                "operator": "LT",
+                "value": 3,
+                "true_value": "yes",
+                "false_value": "no",
+            },
+        )
+    )
+
+    assert true_result.status == NodeResultStatus.SUCCEEDED
+    _true_ref, true_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=true_result,
+    )
+    assert true_row["flag_name"] == "enough_rows"
+    assert true_row["condition_type"] == "row_count"
+    assert true_row["result"] == "true"
+    assert true_row["output_value"] == "yes"
+    assert true_row["matched_count"] == 3
+    assert true_row["total_rows"] == 3
+    assert json.loads(true_row["details"])["row_count"] == 3
+
+    assert false_result.status == NodeResultStatus.SUCCEEDED
+    _false_ref, false_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=false_result,
+    )
+    assert false_row["result"] == "false"
+    assert false_row["output_value"] == "no"
+    assert false_row["matched_count"] == 0
+    assert false_row["total_rows"] == 3
+
+
+def test_condition_flag_node_evaluates_field_exists_true_and_false(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    exists_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-field-exists",
+            node_instance_id="condition_field_exists",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "condition_type": "field_exists",
+                "field": "amount",
+            },
+        )
+    )
+    missing_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-field-missing",
+            node_instance_id="condition_field_missing",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "condition_type": "field_exists",
+                "field": "missing",
+            },
+        )
+    )
+
+    assert exists_result.status == NodeResultStatus.SUCCEEDED
+    _exists_ref, exists_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=exists_result,
+    )
+    assert exists_row["result"] == "true"
+    assert exists_row["matched_count"] == 2
+    assert json.loads(exists_row["details"]) == {
+        "exists": True,
+        "field": "amount",
+    }
+
+    assert missing_result.status == NodeResultStatus.SUCCEEDED
+    _missing_ref, missing_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=missing_result,
+    )
+    assert missing_row["result"] == "false"
+    assert missing_row["matched_count"] == 0
+    assert json.loads(missing_row["details"]) == {
+        "exists": False,
+        "field": "missing",
+    }
+
+
+def test_condition_flag_node_evaluates_field_value_literal_and_same_row_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": ["row_id", "label", "needle", "left", "right"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"label": "abc-123", "needle": "123", "left": "A", "right": "A"}
+    rows[1] |= {"label": "xyz-789", "needle": "000", "left": "B", "right": "B"}
+    rows[2] |= {"label": "plain", "needle": "plain", "left": "C", "right": "D"}
+    custom_input_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=input_ref.schema,
+        rows=rows,
+        output_name="condition_input",
+    )
+
+    literal_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-field-literal",
+            node_instance_id="condition_field_literal",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "condition_type": "field_value",
+                "field": "label",
+                "operator": "CONTAINS",
+                "value": "123",
+                "aggregation": "any",
+            },
+        )
+    )
+    field_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-field-source",
+            node_instance_id="condition_field_source",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "condition_type": "field_value",
+                "field": "left",
+                "operator": "EQ",
+                "value_source": {"mode": "field", "field": "right"},
+                "aggregation": "any",
+            },
+        )
+    )
+
+    assert literal_result.status == NodeResultStatus.SUCCEEDED
+    _literal_ref, literal_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=literal_result,
+    )
+    assert literal_row["result"] == "true"
+    assert literal_row["matched_count"] == 1
+    literal_details = json.loads(literal_row["details"])
+    assert literal_details["value_source"] == "literal"
+
+    assert field_result.status == NodeResultStatus.SUCCEEDED
+    _field_ref, field_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=field_result,
+    )
+    assert field_row["result"] == "true"
+    assert field_row["matched_count"] == 2
+    field_details = json.loads(field_row["details"])
+    assert field_details["value_source"] == "field"
+    assert field_details["value_field"] == "right"
+
+
+def test_condition_flag_node_supports_field_value_aggregations(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    cases = [
+        ("any", "GT", 2, "true", 1),
+        ("all", "GE", 1, "true", 3),
+        ("first", "EQ", 1, "true", 1),
+        ("count", "GT", 1, "true", 2),
+    ]
+
+    for aggregation, operator, value, expected_result, expected_count in cases:
+        result = executor.execute(
+            make_task(
+                node_type=CONDITION_FLAG_NODE_TYPE,
+                node_run_id=f"node-run-condition-{aggregation}",
+                node_instance_id=f"condition_{aggregation}",
+                input_refs=[input_ref.table_ref_id],
+                config={
+                    "condition_type": "field_value",
+                    "field": "amount",
+                    "operator": operator,
+                    "value": value,
+                    "aggregation": aggregation,
+                },
+            )
+        )
+
+        assert result.status == NodeResultStatus.SUCCEEDED
+        _output_ref, row = read_single_output_row(
+            registry=registry,
+            provider=provider,
+            result=result,
+        )
+        assert row["aggregation"] == aggregation
+        assert row["result"] == expected_result
+        assert row["matched_count"] == expected_count
+        assert row["total_rows"] == 3
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -4942,6 +5241,66 @@ def test_parse_datetime_node_returns_validation_error_for_missing_source_field(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_condition_flag_node_returns_validation_errors_for_invalid_config(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    invalid_tasks = [
+        (
+            {
+                "condition_type": "field_value",
+                "field": "missing",
+                "operator": "EQ",
+                "value": 1,
+            },
+            "Field does not exist: missing",
+        ),
+        (
+            {
+                "condition_type": "field_value",
+                "field": "amount",
+                "operator": "EQ",
+            },
+            "ConditionFlagNode config.value is required",
+        ),
+        (
+            {
+                "condition_type": "field_value",
+                "field": "amount",
+                "operator": "BAD",
+                "value": 1,
+            },
+            "Unsupported ConditionFlagNode operator",
+        ),
+    ]
+
+    for index, (config, expected_message) in enumerate(invalid_tasks, start=1):
+        result = executor.execute(
+            make_task(
+                node_type=CONDITION_FLAG_NODE_TYPE,
+                node_run_id=f"node-run-condition-invalid-{index}",
+                node_instance_id=f"condition_invalid_{index}",
+                input_refs=[input_ref.table_ref_id],
+                config=config,
+            )
+        )
+
+        assert result.status == NodeResultStatus.FAILED
+        assert result.output_refs == []
+        assert result.error is not None
+        assert result.error["error_code"] == "VALIDATION_ERROR"
+        assert expected_message in result.error["message"]
 
 
 def test_copy_column_node_returns_validation_error_for_missing_source_field(

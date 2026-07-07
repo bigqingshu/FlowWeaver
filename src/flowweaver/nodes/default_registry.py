@@ -14,6 +14,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     BATCH_RENAME_FILES_NODE_TYPE,
+    CONDITION_FLAG_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -235,6 +236,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_parse_datetime_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_version="1.0",
+            display_name="Condition Flag",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_condition_flag_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1598,6 +1607,85 @@ def _parse_datetime_schema() -> NodeConfigSchemaSpec:
             "unmatched_fixed": NodeConfigFieldSpec(
                 type="object",
                 title="Unmatched Fixed",
+            ),
+        }
+    )
+
+
+def _condition_flag_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "flag_name": NodeConfigFieldSpec(
+                type="string",
+                title="Flag Name",
+                required=True,
+                default="condition",
+            ),
+            "condition_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Condition Type",
+                required=True,
+                default="row_count",
+                enum=("row_count", "field_exists", "field_value"),
+            ),
+            "field": NodeConfigFieldSpec(
+                type="string",
+                title="Field",
+            ),
+            "operator": NodeConfigFieldSpec(
+                type="enum",
+                title="Operator",
+                default="GE",
+                enum=(
+                    "EQ",
+                    "NE",
+                    "GT",
+                    "GE",
+                    "LT",
+                    "LE",
+                    "CONTAINS",
+                    "IS_NULL",
+                    "IS_EMPTY",
+                ),
+            ),
+            "value": NodeConfigFieldSpec(
+                type="object",
+                title="Value",
+                default=1,
+            ),
+            "value_source": NodeConfigFieldSpec(
+                type="object",
+                title="Value Source",
+                description=(
+                    "Literal values or same-row field objects are supported by "
+                    "runtime."
+                ),
+            ),
+            "value_field": NodeConfigFieldSpec(
+                type="string",
+                title="Value Field",
+                description="Shortcut for same-row field comparison.",
+            ),
+            "aggregation": NodeConfigFieldSpec(
+                type="enum",
+                title="Aggregation",
+                default="any",
+                enum=("any", "all", "first", "count"),
+            ),
+            "case_sensitive": NodeConfigFieldSpec(
+                type="boolean",
+                title="Case Sensitive",
+                default=True,
+            ),
+            "true_value": NodeConfigFieldSpec(
+                type="object",
+                title="True Value",
+                default=True,
+            ),
+            "false_value": NodeConfigFieldSpec(
+                type="object",
+                title="False Value",
+                default=False,
             ),
         }
     )

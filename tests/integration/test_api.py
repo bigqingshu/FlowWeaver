@@ -378,6 +378,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "NumericColumnOperationNode",
         "AddCurrentDateTimeColumnNode",
         "ParseDateTimeNode",
+        "ConditionFlagNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
@@ -466,6 +467,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert by_type["ParseDateTimeNode"]["input_ports"] == [
         {"name": "in", "required": True}
+    ]
+    assert by_type["ConditionFlagNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["ConditionFlagNode"]["output_ports"] == [
+        {"name": "status", "required": False}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
         {"name": "in", "required": True}
@@ -951,6 +958,44 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "keep_original",
         "fixed",
     ]
+
+    condition_properties = by_type["ConditionFlagNode"]["config_schema"][
+        "properties"
+    ]
+    assert condition_properties["flag_name"] == {
+        "type": "string",
+        "title": "Flag Name",
+        "required": True,
+        "default": "condition",
+    }
+    assert condition_properties["condition_type"]["enum"] == [
+        "row_count",
+        "field_exists",
+        "field_value",
+    ]
+    assert condition_properties["operator"]["enum"] == [
+        "EQ",
+        "NE",
+        "GT",
+        "GE",
+        "LT",
+        "LE",
+        "CONTAINS",
+        "IS_NULL",
+        "IS_EMPTY",
+    ]
+    assert condition_properties["value"]["default"] == 1
+    assert condition_properties["value_source"]["type"] == "object"
+    assert condition_properties["value_field"]["type"] == "string"
+    assert condition_properties["aggregation"]["enum"] == [
+        "any",
+        "all",
+        "first",
+        "count",
+    ]
+    assert condition_properties["case_sensitive"]["default"] is True
+    assert condition_properties["true_value"]["default"] is True
+    assert condition_properties["false_value"]["default"] is False
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
