@@ -4,7 +4,7 @@
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowListView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="18">
-        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="12">
             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding WorkflowsSectionText}"
                            FontSize="18"
@@ -69,6 +69,31 @@
             </ListBox>
 
             <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <Panel Grid.Column="1"
+                       Background="Transparent"
+                       ToolTip.Tip="{Binding DeleteSelectedWorkflowDisabledReasonText}">
+                    <Button Content="{Binding DeleteWorkflowText}"
+                            IsEnabled="{Binding CanUseDeleteSelectedWorkflowAction}"
+                            MinWidth="84">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding DeleteWorkflowConfirmTitleText}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding DeleteWorkflowConfirmMessageText}"
+                                               MaxWidth="260"
+                                               TextWrapping="Wrap"/>
+                                    <Button Content="{Binding DeleteWorkflowText}"
+                                            Command="{Binding DeleteSelectedWorkflowCommand}"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Panel>
+            </Grid>
+
+            <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="4">
                     <TextBlock Text="{Binding WorkflowMessage}"
                                Foreground="{DynamicResource TextSecondaryBrush}"/>

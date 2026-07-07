@@ -84,6 +84,24 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowListViewExposesDeleteWorkflowConfirmation()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowListView.axaml");
+
+        StringAssert.Contains(xaml, "Content=\"{Binding DeleteWorkflowText}\"");
+        StringAssert.Contains(xaml, "IsEnabled=\"{Binding CanUseDeleteSelectedWorkflowAction}\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding DeleteSelectedWorkflowDisabledReasonText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmTitleText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmMessageText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding DeleteSelectedWorkflowCommand}\"");
+    }
+
+    [TestMethod]
     public void NodeTemplateDoesNotIntroduceNodeEditingActions()
     {
         var xaml = ReadSourceFile(

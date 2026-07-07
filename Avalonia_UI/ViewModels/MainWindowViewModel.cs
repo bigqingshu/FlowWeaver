@@ -28,6 +28,14 @@ public partial class MainWindowViewModel : ViewModelBase
     private const int WorkflowRunTerminalRefreshAttemptCount = 40;
     private const int NotificationCountdownTickMilliseconds = 16;
     private static readonly TimeSpan DefaultNotificationAutoDismissAfter = TimeSpan.FromSeconds(4);
+    private static readonly string[] RuntimeOptionsProfileValues =
+        ["normal", "background_fast", "diagnostic", "custom"];
+    private static readonly string[] RuntimeOptionsLogLevelValues =
+        ["DEBUG", "INFO", "WARN", "ERROR"];
+    private static readonly string[] RuntimeOptionsEventLevelValues =
+        ["none", "basic", "progress", "verbose"];
+    private static readonly string[] RuntimeOptionsMaskPolicyValues =
+        ["none", "partial", "full"];
 
     private readonly IEngineHostApiClient _apiClient;
     private readonly EngineHostHealthClient _healthClient;
@@ -83,6 +91,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool isCreatingWorkflow;
+
+    [ObservableProperty]
+    private bool isDeletingWorkflow;
 
     [ObservableProperty]
     private WorkflowListItemViewModel? selectedWorkflow;
@@ -895,17 +906,17 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
         WorkflowDefinitionDraftNodes { get; } = new();
 
-    public IReadOnlyList<string> RuntimeOptionsProfileOptions { get; } =
-        ["normal", "background_fast", "diagnostic", "custom"];
+    public IReadOnlyList<NodeConfigOptionItemViewModel> RuntimeOptionsProfileOptions =>
+        CreateRuntimeOptionsOptions("profile", RuntimeOptionsProfileValues);
 
-    public IReadOnlyList<string> RuntimeOptionsLogLevelOptions { get; } =
-        ["DEBUG", "INFO", "WARN", "ERROR"];
+    public IReadOnlyList<NodeConfigOptionItemViewModel> RuntimeOptionsLogLevelOptions =>
+        CreateRuntimeOptionsOptions("log_level", RuntimeOptionsLogLevelValues);
 
-    public IReadOnlyList<string> RuntimeOptionsEventLevelOptions { get; } =
-        ["none", "basic", "progress", "verbose"];
+    public IReadOnlyList<NodeConfigOptionItemViewModel> RuntimeOptionsEventLevelOptions =>
+        CreateRuntimeOptionsOptions("event_level", RuntimeOptionsEventLevelValues);
 
-    public IReadOnlyList<string> RuntimeOptionsMaskPolicyOptions { get; } =
-        ["none", "partial", "full"];
+    public IReadOnlyList<NodeConfigOptionItemViewModel> RuntimeOptionsMaskPolicyOptions =>
+        CreateRuntimeOptionsOptions("mask_policy", RuntimeOptionsMaskPolicyValues);
 
     public ObservableCollection<NodeConfigEditableFieldInputViewModel>
         SelectedNodeConfigEditableInputFields { get; } = new();
@@ -946,7 +957,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool HasWorkflowError => !string.IsNullOrWhiteSpace(WorkflowErrorMessage);
 
-    public bool IsWorkflowBusy => IsLoadingWorkflows || IsStartingWorkflow || IsCreatingWorkflow;
+    public bool IsWorkflowBusy =>
+        IsLoadingWorkflows || IsStartingWorkflow || IsCreatingWorkflow || IsDeletingWorkflow;
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
@@ -981,8 +993,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public string RuntimeOptionsSummaryText =>
         F(
             "definition.runtime_options_summary",
-            RuntimeOptionsProfileDraft,
-            RuntimeOptionsEventLevelDraft,
+            FormatRuntimeOptionsOptionValue("profile", RuntimeOptionsProfileDraft),
+            FormatRuntimeOptionsOptionValue("event_level", RuntimeOptionsEventLevelDraft),
             RuntimeOptionsProgressEnabledDraft ? T("common.on") : T("common.off"),
             RuntimeOptionsNodeOverrideCount);
 
@@ -1263,6 +1275,16 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public string CreateText => T("workflow.create");
+
+    public string ImportWorkflowText => T("workflow.import");
+
+    public string ExportWorkflowText => T("workflow.export");
+
+    public string DeleteWorkflowText => T("workflow.delete");
+
+    public string DeleteWorkflowConfirmTitleText => T("workflow.delete_confirm_title");
+
+    public string DeleteWorkflowConfirmMessageText => T("workflow.delete_confirm_message");
 
     public string WorkflowNameWatermarkText => T("workflow.name_watermark");
 
@@ -1616,6 +1638,44 @@ public partial class MainWindowViewModel : ViewModelBase
         return CanUseEngineActions
             && !IsWorkflowBusy
             && !string.IsNullOrWhiteSpace(NewWorkflowName);
+    }
+
+    private bool CanDeleteSelectedWorkflowCore()
+    {
+        return CanUseEngineActions
+            && SelectedWorkflow is not null
+            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
+            && !IsWorkflowBusy;
+    }
+
+    public bool CanUseDeleteSelectedWorkflowAction => CanDeleteSelectedWorkflowCore();
+
+    public string? DeleteSelectedWorkflowDisabledReasonText
+    {
+        get
+        {
+            if (IsWorkflowBusy)
+            {
+                return T("action.disabled.busy");
+            }
+
+            if (!CanUseEngineActions)
+            {
+                return T("action.disabled.engine_not_connected");
+            }
+
+            if (SelectedWorkflow is null)
+            {
+                return T("action.disabled.no_workflow_selected");
+            }
+
+            if (!IsActiveWorkflowStatus(SelectedWorkflow.Status))
+            {
+                return T("action.disabled.workflow_not_active");
+            }
+
+            return null;
+        }
     }
 
     private bool CanLoadSelectedWorkflowDefinition()
@@ -2185,6 +2245,50 @@ public partial class MainWindowViewModel : ViewModelBase
         WorkflowMessage = T("workflow.creation_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsCreatingWorkflow = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowCore))]
+    private async Task DeleteSelectedWorkflowAsync()
+    {
+        if (SelectedWorkflow is null)
+        {
+            return;
+        }
+
+        var workflowId = SelectedWorkflow.WorkflowId;
+        var workflowName = SelectedWorkflow.Name;
+        IsDeletingWorkflow = true;
+        WorkflowMessage = F("format.deleting_workflow", workflowName);
+        WorkflowErrorMessage = null;
+
+        var response = await _apiClient.DeleteWorkflowAsync(
+            BuildSettings(),
+            workflowId,
+            _shutdown.Token);
+
+        IsDeletingWorkflow = false;
+
+        if (response.Ok)
+        {
+            var workflow = Workflows.FirstOrDefault(
+                item => item.WorkflowId == workflowId);
+            if (workflow is not null)
+            {
+                Workflows.Remove(workflow);
+            }
+
+            if (SelectedWorkflow?.WorkflowId == workflowId)
+            {
+                SelectedWorkflow = null;
+            }
+
+            WorkflowMessage = F("format.deleted_workflow", workflowName);
+            WorkflowErrorMessage = null;
+            return;
+        }
+
+        WorkflowMessage = T("workflow.delete_failed");
+        WorkflowErrorMessage = DescribeError(response);
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadSelectedWorkflowDefinition))]
@@ -5539,7 +5643,7 @@ public partial class MainWindowViewModel : ViewModelBase
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
-            RuntimeOptionsProfileOptions,
+            RuntimeOptionsProfileValues,
             draft.Profile,
             RuntimeOptionsProfileText,
             out errorMessage) ||
@@ -5562,12 +5666,12 @@ public partial class MainWindowViewModel : ViewModelBase
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
-            RuntimeOptionsLogLevelOptions,
+            RuntimeOptionsLogLevelValues,
             draft.LogLevel,
             RuntimeOptionsLogLevelText,
             out errorMessage) ||
             !TryValidateRuntimeOptionsOption(
-                RuntimeOptionsEventLevelOptions,
+                RuntimeOptionsEventLevelValues,
                 draft.EventLevel,
                 RuntimeOptionsEventLevelText,
                 out errorMessage) ||
@@ -5600,7 +5704,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 RuntimeOptionsTtlSecondsText,
                 out errorMessage) ||
             !TryValidateRuntimeOptionsOption(
-                RuntimeOptionsMaskPolicyOptions,
+                RuntimeOptionsMaskPolicyValues,
                 draft.MaskPolicy,
                 RuntimeOptionsMaskPolicyText,
                 out errorMessage))
@@ -5617,7 +5721,7 @@ public partial class MainWindowViewModel : ViewModelBase
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
-            RuntimeOptionsProfileOptions,
+            RuntimeOptionsProfileValues,
             draft.Profile,
             RuntimeOptionsProfileText,
             out errorMessage))
@@ -5650,12 +5754,12 @@ public partial class MainWindowViewModel : ViewModelBase
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
-            RuntimeOptionsLogLevelOptions,
+            RuntimeOptionsLogLevelValues,
             draft.LogLevel,
             RuntimeOptionsLogLevelText,
             out errorMessage) ||
             !TryValidateRuntimeOptionsOption(
-                RuntimeOptionsEventLevelOptions,
+                RuntimeOptionsEventLevelValues,
                 draft.EventLevel,
                 RuntimeOptionsEventLevelText,
                 out errorMessage) ||
@@ -5688,7 +5792,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 RuntimeOptionsTtlSecondsText,
                 out errorMessage) ||
             !TryValidateRuntimeOptionsOption(
-                RuntimeOptionsMaskPolicyOptions,
+                RuntimeOptionsMaskPolicyValues,
                 draft.MaskPolicy,
                 RuntimeOptionsMaskPolicyText,
                 out errorMessage))
@@ -5818,6 +5922,22 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RuntimeOptionsSummaryText));
     }
 
+    private IReadOnlyList<NodeConfigOptionItemViewModel> CreateRuntimeOptionsOptions(
+        string group,
+        IReadOnlyList<string> values)
+    {
+        return values
+            .Select(value => new NodeConfigOptionItemViewModel(
+                value,
+                FormatRuntimeOptionsOptionValue(group, value)))
+            .ToArray();
+    }
+
+    private string FormatRuntimeOptionsOptionValue(string group, string value)
+    {
+        return DisplayTextFormatter.FormatRuntimeOptionsOptionValue(group, value);
+    }
+
     private string FormatSelectedRunRuntimeOptionsSummary()
     {
         if (SelectedRun is null)
@@ -5841,8 +5961,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
         return F(
             "definition.runtime_options_run_summary",
-            readResult.Draft.Workflow.Profile,
-            readResult.Draft.Workflow.Telemetry.EventLevel,
+            FormatRuntimeOptionsOptionValue("profile", readResult.Draft.Workflow.Profile),
+            FormatRuntimeOptionsOptionValue(
+                "event_level",
+                readResult.Draft.Workflow.Telemetry.EventLevel),
             readResult.Draft.Workflow.Telemetry.ProgressEnabled
                 ? T("common.on")
                 : T("common.off"),
@@ -6740,6 +6862,13 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RunText));
         OnPropertyChanged(nameof(WorkflowRunGuardText));
         OnPropertyChanged(nameof(CreateText));
+        OnPropertyChanged(nameof(ImportWorkflowText));
+        OnPropertyChanged(nameof(ExportWorkflowText));
+        OnPropertyChanged(nameof(DeleteWorkflowText));
+        OnPropertyChanged(nameof(DeleteWorkflowConfirmTitleText));
+        OnPropertyChanged(nameof(DeleteWorkflowConfirmMessageText));
+        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(WorkflowNameWatermarkText));
         OnPropertyChanged(nameof(RunsSectionText));
         OnPropertyChanged(nameof(CancelText));
@@ -6767,9 +6896,12 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RuntimeOptionsWorkflowSectionText));
         OnPropertyChanged(nameof(RuntimeOptionsNodeOverrideSectionText));
         OnPropertyChanged(nameof(RuntimeOptionsProfileText));
+        OnPropertyChanged(nameof(RuntimeOptionsProfileOptions));
         OnPropertyChanged(nameof(RuntimeOptionsStrictValidationText));
         OnPropertyChanged(nameof(RuntimeOptionsLogLevelText));
+        OnPropertyChanged(nameof(RuntimeOptionsLogLevelOptions));
         OnPropertyChanged(nameof(RuntimeOptionsEventLevelText));
+        OnPropertyChanged(nameof(RuntimeOptionsEventLevelOptions));
         OnPropertyChanged(nameof(RuntimeOptionsEventRateLimitText));
         OnPropertyChanged(nameof(RuntimeOptionsProgressEnabledText));
         OnPropertyChanged(nameof(RuntimeOptionsProgressIntervalText));
@@ -6779,6 +6911,10 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RuntimeOptionsTtlSecondsText));
         OnPropertyChanged(nameof(RuntimeOptionsRedactColumnsText));
         OnPropertyChanged(nameof(RuntimeOptionsMaskPolicyText));
+        OnPropertyChanged(nameof(RuntimeOptionsMaskPolicyOptions));
+        OnPropertyChanged(nameof(RuntimeOptionsJsonSectionText));
+        OnPropertyChanged(nameof(RuntimeOptionsJsonRegenerateText));
+        OnPropertyChanged(nameof(RuntimeOptionsJsonWatermarkText));
         OnPropertyChanged(nameof(RuntimeOptionsSelectNodeText));
         OnPropertyChanged(nameof(RuntimeOptionsApplyText));
         OnPropertyChanged(nameof(RuntimeOptionsResetNodeOverrideText));
@@ -6949,12 +7085,20 @@ public partial class MainWindowViewModel : ViewModelBase
         NotifyWorkflowCommandStateChanged();
     }
 
+    partial void OnIsDeletingWorkflowChanged(bool value)
+    {
+        NotifyWorkflowCommandStateChanged();
+    }
+
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
         workflowDefinitionLoadVersion++;
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
+        DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         Runs.Clear();
         SelectedRun = null;
         RunMessage = value is null
@@ -7738,6 +7882,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsWorkflowBusy));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
     }
@@ -7757,6 +7904,9 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
+        OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         RefreshRunsCommand.NotifyCanExecuteChanged();

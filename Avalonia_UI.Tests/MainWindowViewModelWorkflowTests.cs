@@ -181,6 +181,89 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task DeleteSelectedWorkflowRemovesWorkflowAndClearsSelection()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    workflow,
+                    Workflow("wf-2", "Report", 1),
+                }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+            DeleteWorkflowResponse = ApiResponseEnvelope<WorkflowDeleteResultDto>.Success(
+                new WorkflowDeleteResultDto
+                {
+                    WorkflowId = "wf-1",
+                    Deleted = true,
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.HasWorkflowDefinition);
+
+        await viewModel.DeleteSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.DeletedWorkflowId);
+        Assert.HasCount(1, viewModel.Workflows);
+        Assert.AreEqual("wf-2", viewModel.Workflows[0].WorkflowId);
+        Assert.IsNull(viewModel.SelectedWorkflow);
+        Assert.IsFalse(viewModel.HasWorkflowDefinition);
+        Assert.IsNull(viewModel.SelectedWorkflowDefinitionNode);
+        Assert.AreEqual("Deleted workflow Daily Load.", viewModel.WorkflowMessage);
+        Assert.IsFalse(viewModel.HasWorkflowError);
+        Assert.AreEqual(
+            "Select a workflow to load definition.",
+            viewModel.WorkflowDefinitionMessage);
+    }
+
+    [TestMethod]
+    public async Task DeleteSelectedWorkflowKeepsSelectionWhenApiFails()
+    {
+        var workflow = Workflow("wf-1", "Daily Load", 1);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { workflow }),
+            DeleteWorkflowResponse = ApiResponseEnvelope<WorkflowDeleteResultDto>.Failure(
+                "WORKFLOW_NOT_FOUND",
+                "Workflow not found."),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.DeleteSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.DeletedWorkflowId);
+        Assert.HasCount(1, viewModel.Workflows);
+        Assert.AreEqual("wf-1", viewModel.SelectedWorkflow?.WorkflowId);
+        Assert.AreEqual("Workflow delete failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual("WORKFLOW_NOT_FOUND: Workflow not found.", viewModel.WorkflowErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
     public async Task CreateTemplateWorkflowShowsErrorEnvelope()
     {
         var apiClient = new FakeApiClient
@@ -3467,7 +3550,7 @@ public sealed class MainWindowViewModelWorkflowTests
 
         Assert.IsTrue(viewModel.HasSelectedRunRuntimeOptionsSummary);
         Assert.AreEqual(
-            "Run config: profile custom, events basic, progress Off, 1 node override(s)",
+            "Run config: profile Custom, events Basic events, progress Off, 1 node override(s)",
             viewModel.SelectedRunRuntimeOptionsSummaryText);
     }
 
@@ -4912,6 +4995,11 @@ public sealed class MainWindowViewModelWorkflowTests
                 "NOT_CONFIGURED",
                 "No update response configured.");
 
+        public ApiResponseEnvelope<WorkflowDeleteResultDto> DeleteWorkflowResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowDeleteResultDto>.Failure(
+                "NOT_CONFIGURED",
+                "No delete response configured.");
+
         public ApiResponseEnvelope<List<WorkflowRevisionDto>> WorkflowRevisionsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(new List<WorkflowRevisionDto>());
 
@@ -4966,6 +5054,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? UpdatedWorkflowBaseRevisionId { get; private set; }
 
         public string? LastWorkflowRevisionsWorkflowId { get; private set; }
+
+        public string? DeletedWorkflowId { get; private set; }
 
         public string? StartedWorkflowId { get; private set; }
 
@@ -5057,6 +5147,16 @@ public sealed class MainWindowViewModelWorkflowTests
             LastSettings = settings;
             LastWorkflowDetailId = workflowId;
             return Task.FromResult(WorkflowDetailResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowDeleteResultDto>> DeleteWorkflowAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            DeletedWorkflowId = workflowId;
+            return Task.FromResult(DeleteWorkflowResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(

@@ -45,6 +45,14 @@ public interface IEngineHostApiClient
         string workflowId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowDeleteResultDto>> DeleteWorkflowAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Workflow delete API is not implemented.");
+    }
+
     Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
         EngineHostConnectionSettings settings,
         string workflowId,

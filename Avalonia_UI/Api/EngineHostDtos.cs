@@ -113,6 +113,15 @@ public sealed record WorkflowUpdateRequestDto
     public string BaseRevisionId { get; init; } = string.Empty;
 }
 
+public sealed record WorkflowDeleteResultDto
+{
+    [JsonPropertyName("workflow_id")]
+    public string WorkflowId { get; init; } = string.Empty;
+
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; init; }
+}
+
 public sealed record WorkflowValidationIssueDto
 {
     [JsonPropertyName("code")]
