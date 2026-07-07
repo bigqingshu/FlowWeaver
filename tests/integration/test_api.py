@@ -367,6 +367,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "DeduplicateRowsNode",
         "AdvancedFilterRowsNode",
         "ExtractTextNode",
+        "LookupMatchedFieldNameNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -412,6 +413,10 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert by_type["ExtractTextNode"]["input_ports"] == [
         {"name": "in", "required": True}
+    ]
+    assert by_type["LookupMatchedFieldNameNode"]["input_ports"] == [
+        {"name": "in", "required": True},
+        {"name": "lookup", "required": True},
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
         {"name": "in", "required": True}
@@ -655,6 +660,26 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "skip_row",
     ]
     assert extract_text_properties["rule_value_source"]["type"] == "object"
+
+    lookup_matched_properties = by_type["LookupMatchedFieldNameNode"][
+        "config_schema"
+    ]["properties"]
+    assert lookup_matched_properties["source_field"] == {
+        "type": "string",
+        "title": "Source Field",
+        "required": True,
+    }
+    assert lookup_matched_properties["lookup_fields"]["items"] == {
+        "type": "string"
+    }
+    assert lookup_matched_properties["match_mode"]["enum"] == ["equals"]
+    assert lookup_matched_properties["output_field"]["default"] == "matched_field"
+    assert lookup_matched_properties["output_status"]["default"] is True
+    assert lookup_matched_properties["multi_match_policy"]["enum"] == [
+        "first",
+        "last",
+        "error",
+    ]
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

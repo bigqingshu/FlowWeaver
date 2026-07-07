@@ -26,6 +26,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1912,6 +1913,123 @@ def test_extract_text_node_can_extract_fixed_position_to_existing_field(
     ]
 
 
+def test_lookup_matched_field_name_node_outputs_match_metadata(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    main_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-main",
+            node_instance_id="main",
+            config={"rows": 3, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    lookup_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-lookup",
+            node_instance_id="lookup",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "lookup_id", "data_type": "INTEGER"},
+                    {"name": "first", "data_type": "TEXT"},
+                    {"name": "second", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    main_ref = registry.get(main_result.output_refs[0])
+    main_rows = provider.read_rows(main_ref, offset=0, limit=10, order_by=["row_id"])
+    main_rows[0]["source"] = "A"
+    main_rows[1]["source"] = "B"
+    main_rows[2]["source"] = "Z"
+    main_staged = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-main-custom",
+        output_name="main_custom",
+        schema=main_ref.schema,
+    )
+    provider.insert_rows(main_staged, main_rows)
+    registry.register_staging(main_staged)
+    main_input_ref = registry.publish(main_staged.table_ref_id)
+
+    lookup_ref = registry.get(lookup_result.output_refs[0])
+    lookup_rows = provider.read_rows(
+        lookup_ref,
+        offset=0,
+        limit=10,
+        order_by=["lookup_id"],
+    )
+    lookup_rows[0] |= {"first": "A", "second": "X"}
+    lookup_rows[1] |= {"first": "Y", "second": "B"}
+    lookup_rows[2] |= {"first": "A", "second": "C"}
+    lookup_staged = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-lookup-custom",
+        output_name="lookup_custom",
+        schema=lookup_ref.schema,
+    )
+    provider.insert_rows(lookup_staged, lookup_rows)
+    registry.register_staging(lookup_staged)
+    lookup_input_ref = registry.publish(lookup_staged.table_ref_id)
+
+    lookup_task = make_task(
+        node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+        node_run_id="node-run-lookup-matched-field",
+        node_instance_id="lookup_matched_field",
+        input_refs=[main_input_ref.table_ref_id, lookup_input_ref.table_ref_id],
+        config={
+            "source_field": "source",
+            "lookup_fields": ["first", "second"],
+            "output_match_value": True,
+            "output_match_row": True,
+            "no_match_value": "none",
+        },
+    )
+
+    lookup_node_result = executor.execute(lookup_task)
+
+    assert lookup_node_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(lookup_node_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "source",
+        "matched_field",
+        "matched_value",
+        "matched_row",
+        "match_status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "source": "A",
+            "matched_field": "first",
+            "matched_value": "A",
+            "matched_row": 1,
+            "match_status": "multiple_matched",
+        },
+        {
+            "row_id": 2,
+            "source": "B",
+            "matched_field": "second",
+            "matched_value": "B",
+            "matched_row": 2,
+            "match_status": "matched",
+        },
+        {
+            "row_id": 3,
+            "source": "Z",
+            "matched_field": "none",
+            "matched_value": "none",
+            "matched_row": None,
+            "match_status": "not_matched",
+        },
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2318,6 +2436,36 @@ def test_extract_text_node_returns_validation_error_for_missing_source_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_lookup_matched_field_name_node_requires_lookup_input_ref(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    lookup_task = make_task(
+        node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+        node_run_id="node-run-lookup-matched-field",
+        node_instance_id="lookup_matched_field",
+        input_refs=generate_result.output_refs,
+        config={"source_field": "source", "lookup_fields": ["source"]},
+    )
+
+    result = executor.execute(lookup_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "requires main and lookup input_refs" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

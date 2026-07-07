@@ -22,6 +22,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -154,6 +155,17 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_extract_text_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+            node_version="1.0",
+            display_name="Lookup Matched Field Name",
+            input_ports=(
+                NodePortSpec("in", required=True),
+                NodePortSpec("lookup", required=True),
+            ),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_lookup_matched_field_name_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -869,6 +881,76 @@ def _extract_text_schema() -> NodeConfigSchemaSpec:
             "unmatched_value": NodeConfigFieldSpec(
                 type="object",
                 title="Unmatched Value",
+            ),
+        }
+    )
+
+
+def _lookup_matched_field_name_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "source_field": NodeConfigFieldSpec(
+                type="string",
+                title="Source Field",
+                required=True,
+            ),
+            "lookup_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Lookup Fields",
+                required=True,
+                item_type="string",
+            ),
+            "match_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Match Mode",
+                default="equals",
+                enum=("equals",),
+            ),
+            "output_field": NodeConfigFieldSpec(
+                type="string",
+                title="Output Field",
+                default="matched_field",
+            ),
+            "output_match_value": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Match Value",
+                default=False,
+            ),
+            "match_value_field": NodeConfigFieldSpec(
+                type="string",
+                title="Match Value Field",
+                default="matched_value",
+            ),
+            "output_match_row": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Match Row",
+                default=False,
+            ),
+            "match_row_field": NodeConfigFieldSpec(
+                type="string",
+                title="Match Row Field",
+                default="matched_row",
+            ),
+            "output_status": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Status",
+                default=True,
+            ),
+            "status_field": NodeConfigFieldSpec(
+                type="string",
+                title="Status Field",
+                default="match_status",
+            ),
+            "multi_match_policy": NodeConfigFieldSpec(
+                type="enum",
+                title="Multi Match Policy",
+                default="first",
+                enum=("first", "last", "error"),
+            ),
+            "no_match_value": NodeConfigFieldSpec(
+                type="object",
+                title="No Match Value",
+                default="",
             ),
         }
     )
