@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any
 
 from flowweaver.common.time import utc_now
@@ -12,6 +11,10 @@ from flowweaver.nodes.builtin_sql import (
     SQL_MAPPING_NODE_TYPE,
     SqlMappingNodeRunner,
     SqlMappingTaskConfig,
+)
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeHandlerRegistry,
 )
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -25,7 +28,7 @@ SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 
 def table_node_types() -> tuple[str, ...]:
     return (
-        GENERATE_TEST_TABLE_NODE_TYPE,
+        *create_builtin_table_node_handler_registry().node_types(),
         FILTER_ROWS_NODE_TYPE,
         ADD_COLUMNS_NODE_TYPE,
         SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -35,6 +38,44 @@ def table_node_types() -> tuple[str, ...]:
 
 def is_table_node_type(node_type: str) -> bool:
     return node_type in table_node_types()
+
+
+def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegistry:
+    return BuiltinTableNodeHandlerRegistry(
+        handlers=(
+            GenerateTestTableNodeHandler(),
+        )
+    )
+
+
+class GenerateTestTableNodeHandler:
+    node_type = GENERATE_TEST_TABLE_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if task.input_refs:
+            raise _NodeValidationError("GenerateTestTableNode does not accept inputs")
+        rows_count = _int_config(task.config, "rows")
+        seed = _int_config(task.config, "seed", default=0)
+        schema = _parse_columns(task.config.get("columns"))
+        rows = [
+            {
+                field.name: _generated_value(field, row_number=row_number, seed=seed)
+                for field in schema
+            }
+            for row_number in range(1, rows_count + 1)
+        ]
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                rows=rows,
+            )
+        ]
 
 
 class BuiltinTableNodeRunner:
@@ -51,6 +92,13 @@ class BuiltinTableNodeRunner:
         self._table_provider = table_provider
         self._memory_provider = memory_provider or MemoryTableProvider()
         self._sql_mapping_runner = SqlMappingNodeRunner(store=store)
+        self._context = BuiltinTableNodeContext(
+            store=store,
+            registry=registry,
+            table_provider=table_provider,
+            memory_provider=self._memory_provider,
+        )
+        self._handler_registry = create_builtin_table_node_handler_registry()
 
     def execute(
         self,
@@ -60,20 +108,7 @@ class BuiltinTableNodeRunner:
     ) -> NodeTaskResultModel:
         started_at = utc_now()
         try:
-            if task.node_type == GENERATE_TEST_TABLE_NODE_TYPE:
-                output_refs = self._execute_generate(task)
-            elif task.node_type == FILTER_ROWS_NODE_TYPE:
-                output_refs = self._execute_filter(task)
-            elif task.node_type == ADD_COLUMNS_NODE_TYPE:
-                output_refs = self._execute_add_columns(task)
-            elif task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
-                output_refs = self._execute_save_memory(task)
-            elif task.node_type == SQL_MAPPING_NODE_TYPE:
-                output_refs = self._execute_sql_mapping(task)
-            else:
-                raise _NodeValidationError(
-                    f"Unsupported builtin node type: {task.node_type}"
-                )
+            output_refs = self._execute_node(task)
         except _NodeValidationError as exc:
             return NodeTaskResultModel(
                 task_id=task.task_id,
@@ -102,27 +137,22 @@ class BuiltinTableNodeRunner:
             finished_at=utc_now(),
         )
 
-    def _execute_generate(self, task: NodeTaskModel) -> list[TableRefModel]:
-        if task.input_refs:
-            raise _NodeValidationError("GenerateTestTableNode does not accept inputs")
-        rows_count = _int_config(task.config, "rows")
-        seed = _int_config(task.config, "seed", default=0)
-        schema = _parse_columns(task.config.get("columns"))
-        rows = [
-            {
-                field.name: _generated_value(field, row_number=row_number, seed=seed)
-                for field in schema
-            }
-            for row_number in range(1, rows_count + 1)
-        ]
-        return [
-            self._publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                rows=rows,
-            )
-        ]
+    def _execute_node(self, task: NodeTaskModel) -> list[TableRefModel]:
+        handler = self._handler_registry.get(task.node_type)
+        if handler is not None:
+            return handler.execute(task, self._context)
+        return self._execute_legacy_node(task)
+
+    def _execute_legacy_node(self, task: NodeTaskModel) -> list[TableRefModel]:
+        if task.node_type == FILTER_ROWS_NODE_TYPE:
+            return self._execute_filter(task)
+        if task.node_type == ADD_COLUMNS_NODE_TYPE:
+            return self._execute_add_columns(task)
+        if task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
+            return self._execute_save_memory(task)
+        if task.node_type == SQL_MAPPING_NODE_TYPE:
+            return self._execute_sql_mapping(task)
+        raise _NodeValidationError(f"Unsupported builtin node type: {task.node_type}")
 
     def _execute_save_memory(self, task: NodeTaskModel) -> list[TableRefModel]:
         if len(task.input_refs) != 1:
@@ -175,7 +205,7 @@ class BuiltinTableNodeRunner:
             if _row_matches(row.get(field), operator=operator, value=value)
         ]
         return [
-            self._publish_rows(
+            self._context.publish_rows(
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=input_ref.schema,
@@ -216,31 +246,13 @@ class BuiltinTableNodeRunner:
             for row in rows
         ]
         return [
-            self._publish_rows(
+            self._context.publish_rows(
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=schema,
                 rows=output_rows,
             )
         ]
-
-    def _publish_rows(
-        self,
-        task: NodeTaskModel,
-        *,
-        output_name: str,
-        schema: Sequence[FieldSchemaModel],
-        rows: Sequence[dict[str, Any]],
-    ) -> TableRefModel:
-        staging_ref = self._table_provider.create_staging_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            output_name=output_name,
-            schema=schema,
-        )
-        self._table_provider.insert_rows(staging_ref, rows)
-        self._registry.register_staging(staging_ref)
-        return self._registry.publish(staging_ref.table_ref_id)
 
     def _execute_sql_mapping(self, task: NodeTaskModel) -> list[TableRefModel]:
         if task.input_refs:

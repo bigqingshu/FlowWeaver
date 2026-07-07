@@ -12,9 +12,17 @@ from flowweaver.nodes.default_registry import (
     default_node_definitions,
 )
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeHandler,
+    BuiltinTableNodeHandlerRegistry,
+)
 
 __all__ = [
     "BuiltinSharedTableNodeRunner",
+    "BuiltinTableNodeContext",
+    "BuiltinTableNodeHandler",
+    "BuiltinTableNodeHandlerRegistry",
     "BuiltinTableNodeRunner",
     "SQL_MAPPING_NODE_TYPE",
     "SqlMappingNodeRunner",
