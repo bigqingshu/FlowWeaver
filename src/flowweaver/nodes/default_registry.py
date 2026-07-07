@@ -13,6 +13,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
+    DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
@@ -109,6 +110,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_replace_text_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=DELETE_ROWS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Delete Rows",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_delete_rows_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -483,6 +492,78 @@ def _replace_text_schema() -> NodeConfigSchemaSpec:
                 type="boolean",
                 title="Skip Empty Match Value",
                 default=True,
+            ),
+        }
+    )
+
+
+def _delete_rows_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "delete_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Delete Mode",
+                required=True,
+                default="row_numbers",
+                enum=("row_numbers", "row_range", "condition", "empty"),
+            ),
+            "row_spec": NodeConfigFieldSpec(
+                type="array",
+                title="Row Spec",
+                item_type="integer",
+                description="1-based row numbers to delete when mode is row_numbers.",
+            ),
+            "start_row": NodeConfigFieldSpec(
+                type="integer",
+                title="Start Row",
+                default=1,
+                minimum=1,
+            ),
+            "end_row": NodeConfigFieldSpec(
+                type="integer",
+                title="End Row",
+                minimum=1,
+            ),
+            "condition_field": NodeConfigFieldSpec(
+                type="string",
+                title="Condition Field",
+            ),
+            "condition_op": NodeConfigFieldSpec(
+                type="enum",
+                title="Condition Operator",
+                default="EQ",
+                enum=("EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"),
+            ),
+            "condition_value": NodeConfigFieldSpec(
+                type="object",
+                title="Condition Value",
+            ),
+            "condition_value_source": NodeConfigFieldSpec(
+                type="object",
+                title="Condition Value Source",
+                description=(
+                    "Literal values or row_field objects are supported by runtime."
+                ),
+            ),
+            "condition_value_field": NodeConfigFieldSpec(
+                type="string",
+                title="Condition Value Field",
+                description="Shortcut for same-row field comparison.",
+            ),
+            "case_sensitive": NodeConfigFieldSpec(
+                type="boolean",
+                title="Case Sensitive",
+                default=True,
+            ),
+            "empty_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Empty Mode",
+                default="all_fields",
+                enum=("all_fields", "field"),
+            ),
+            "empty_field": NodeConfigFieldSpec(
+                type="string",
+                title="Empty Field",
             ),
         }
     )

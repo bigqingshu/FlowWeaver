@@ -43,6 +43,7 @@ REORDER_COLUMNS_NODE_TYPE = "ReorderColumnsNode"
 FILL_CELLS_NODE_TYPE = "FillCellsNode"
 FILL_RANGE_NODE_TYPE = "FillRangeNode"
 REPLACE_TEXT_NODE_TYPE = "ReplaceTextNode"
+DELETE_ROWS_NODE_TYPE = "DeleteRowsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 _NodeValidationError = BuiltinTableNodeValidationError
@@ -68,6 +69,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             FillCellsNodeHandler(),
             FillRangeNodeHandler(),
             ReplaceTextNodeHandler(),
+            DeleteRowsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -678,6 +680,56 @@ class ReplaceTextNodeHandler:
         ]
 
 
+class DeleteRowsNodeHandler:
+    node_type = DELETE_ROWS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        delete_mode = _enum_config(
+            task.config,
+            "delete_mode",
+            default="row_numbers",
+            allowed={"row_numbers", "row_range", "condition", "empty"},
+            node_type=self.node_type,
+        )
+        total_rows = context.count_rows(input_ref)
+        should_delete = _delete_rows_predicate(
+            task.config,
+            input_ref=input_ref,
+            delete_mode=delete_mode,
+            total_rows=total_rows,
+        )
+
+        def output_batches():
+            row_number = 1
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    try:
+                        if not should_delete(row_number, row):
+                            output_rows.append(row)
+                    except ValueSourceError as exc:
+                        raise _NodeValidationError(str(exc)) from exc
+                    row_number += 1
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=input_ref.schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SaveMemoryTableNodeHandler:
     node_type = SAVE_MEMORY_TABLE_NODE_TYPE
 
@@ -1089,6 +1141,185 @@ def _fill_cells_selected_rows(
 
 def _is_empty_cell(value: Any) -> bool:
     return value is None or value == ""
+
+
+def _delete_rows_predicate(
+    config: dict[str, Any],
+    *,
+    input_ref: TableRefModel,
+    delete_mode: str,
+    total_rows: int,
+):
+    if delete_mode == "row_numbers":
+        row_numbers = _row_numbers_config(
+            config,
+            "row_spec",
+            total_rows=total_rows,
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        return lambda row_number, row: row_number in row_numbers
+    if delete_mode == "row_range":
+        if total_rows <= 0:
+            return lambda row_number, row: False
+        start_row = _positive_int_config(
+            config,
+            "start_row",
+            default=1,
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        end_row = _optional_positive_int_config(
+            config,
+            "end_row",
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        if end_row is None:
+            end_row = total_rows
+        if start_row > total_rows or end_row > total_rows:
+            raise _NodeValidationError("DeleteRowsNode row range is out of range")
+        if start_row > end_row:
+            raise _NodeValidationError("DeleteRowsNode start_row must be <= end_row")
+        return lambda row_number, row: start_row <= row_number <= end_row
+    if delete_mode == "condition":
+        condition_field = _node_string_config(
+            config,
+            "condition_field",
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        if find_field(input_ref.schema, condition_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {condition_field}")
+        operator = _normalize_condition_operator(
+            config.get("condition_op"),
+            node_type=DELETE_ROWS_NODE_TYPE,
+            key="condition_op",
+        )
+        value_source = _condition_value_source_config(config)
+        if (
+            value_source.field is not None
+            and find_field(input_ref.schema, value_source.field) is None
+        ):
+            raise _NodeValidationError(f"Field does not exist: {value_source.field}")
+        case_sensitive = _bool_config(
+            config,
+            "case_sensitive",
+            default=True,
+        )
+
+        def condition_predicate(row_number: int, row: dict[str, Any]) -> bool:
+            return _condition_cell_matches(
+                row.get(condition_field),
+                operator=operator,
+                value=value_source.resolve(row),
+                case_sensitive=case_sensitive,
+            )
+
+        return condition_predicate
+    if delete_mode == "empty":
+        empty_mode = _enum_config(
+            config,
+            "empty_mode",
+            default="all_fields",
+            allowed={"all_fields", "field"},
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        if empty_mode == "field":
+            empty_field = _node_string_config(
+                config,
+                "empty_field",
+                node_type=DELETE_ROWS_NODE_TYPE,
+            )
+            if find_field(input_ref.schema, empty_field) is None:
+                raise _NodeValidationError(f"Field does not exist: {empty_field}")
+            return lambda row_number, row: _is_empty_cell(row.get(empty_field))
+        field_names = [field.name for field in input_ref.schema]
+        return lambda row_number, row: all(
+            _is_empty_cell(row.get(field_name))
+            for field_name in field_names
+        )
+    raise _NodeValidationError(f"Unsupported DeleteRowsNode delete_mode: {delete_mode}")
+
+
+def _row_numbers_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    total_rows: int,
+    node_type: str,
+) -> set[int]:
+    value = config.get(key)
+    if not isinstance(value, list) or not value:
+        raise _NodeValidationError(
+            f"{node_type} config.{key} must be a non-empty row number list"
+        )
+    row_numbers: set[int] = set()
+    for item in value:
+        if not isinstance(item, int) or isinstance(item, bool):
+            raise _NodeValidationError(
+                f"{node_type} config.{key} must contain integers"
+            )
+        if item < 1:
+            raise _NodeValidationError(
+                f"{node_type} config.{key} must contain positive row numbers"
+            )
+        if item > total_rows:
+            raise _NodeValidationError(f"{node_type} config.{key} is out of range")
+        if item in row_numbers:
+            raise _NodeValidationError(
+                f"{node_type} config.{key} contains duplicate row: {item}"
+            )
+        row_numbers.add(item)
+    return row_numbers
+
+
+def _condition_value_source_config(config: dict[str, Any]):
+    if "condition_value_source" in config:
+        raw_value_source = config.get("condition_value_source")
+    elif config.get("condition_value_field") is not None:
+        condition_value_field = _node_string_config(
+            config,
+            "condition_value_field",
+            node_type=DELETE_ROWS_NODE_TYPE,
+        )
+        raw_value_source = {
+            "mode": "row_field",
+            "field": condition_value_field,
+        }
+    else:
+        raw_value_source = config.get("condition_value")
+    try:
+        return parse_value_source(raw_value_source)
+    except ValueSourceError as exc:
+        raise _NodeValidationError(str(exc)) from exc
+
+
+def _normalize_condition_operator(value: Any, *, node_type: str, key: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise _NodeValidationError(f"{node_type} config.{key} is required")
+    operator = value.upper()
+    if operator not in {"EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"}:
+        raise _NodeValidationError(f"Unsupported {node_type} {key}: {value}")
+    return operator
+
+
+def _condition_cell_matches(
+    cell_value: Any,
+    *,
+    operator: str,
+    value: Any,
+    case_sensitive: bool,
+) -> bool:
+    if case_sensitive or operator in {"GT", "GE", "LT", "LE", "IS_NULL"}:
+        return _row_matches(cell_value, operator=operator, value=value)
+    cell_text = "" if cell_value is None else str(cell_value)
+    value_text = "" if value is None else str(value)
+    candidate = cell_text.lower()
+    expected = value_text.lower()
+    if operator == "EQ":
+        return candidate == expected
+    if operator == "NE":
+        return candidate != expected
+    if operator == "CONTAINS":
+        return expected in candidate
+    return _row_matches(cell_value, operator=operator, value=value)
 
 
 def _replace_text_value(

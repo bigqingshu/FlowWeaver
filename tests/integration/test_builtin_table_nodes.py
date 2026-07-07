@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
+    DELETE_ROWS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
@@ -973,6 +974,184 @@ def test_replace_text_node_skips_empty_match_value_by_default(
     ]
 
 
+def test_delete_rows_node_deletes_row_number_list(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 5, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=[input_ref.table_ref_id],
+        config={"delete_mode": "row_numbers", "row_spec": [2, 4]},
+    )
+
+    delete_result = executor.execute(delete_task)
+
+    assert delete_result.status == NodeResultStatus.SUCCEEDED
+    assert delete_result.output_refs != generate_result.output_refs
+    assert provider.count_rows(input_ref) == 5
+    output_ref = registry.get(delete_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "delete_rows_output"
+    assert [field.name for field in output_ref.schema] == ["row_id", "label"]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 3, "label": "label_0_3"},
+        {"row_id": 5, "label": "label_0_5"},
+    ]
+
+
+def test_delete_rows_node_deletes_row_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 5, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "delete_mode": "row_range",
+            "start_row": 2,
+            "end_row": 4,
+        },
+    )
+
+    delete_result = executor.execute(delete_task)
+
+    assert delete_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(delete_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 5, "label": "label_0_5"},
+    ]
+
+
+def test_delete_rows_node_uses_same_row_condition_value_source(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "value", "data_type": "TEXT"},
+                    {"name": "match", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"value": "A-123", "match": "123"}
+    rows[1] |= {"value": "B-999", "match": "123"}
+    rows[2] |= {"value": "C-456", "match": "456"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "delete_mode": "condition",
+            "condition_field": "value",
+            "condition_op": "CONTAINS",
+            "condition_value_source": {"mode": "row_field", "field": "match"},
+        },
+    )
+
+    delete_result = executor.execute(delete_task)
+
+    assert delete_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(delete_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 2, "value": "B-999", "match": "123"},
+    ]
+
+
+def test_delete_rows_node_deletes_all_empty_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": [
+                    {"name": "left", "data_type": "TEXT"},
+                    {"name": "right", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] |= {"left": "keep", "right": ""}
+    rows[1] |= {"left": "", "right": ""}
+    rows[2] |= {"left": None, "right": ""}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={"delete_mode": "empty", "empty_mode": "all_fields"},
+    )
+
+    delete_result = executor.execute(delete_task)
+
+    assert delete_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(delete_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10) == [
+        {"left": "keep", "right": ""},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -1114,6 +1293,71 @@ def test_delete_columns_node_returns_validation_error_for_missing_column(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_delete_rows_node_returns_validation_error_for_row_out_of_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=generate_result.output_refs,
+        config={"delete_mode": "row_numbers", "row_spec": [3]},
+    )
+
+    result = executor.execute(delete_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "out of range" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_delete_rows_node_returns_validation_error_for_missing_condition_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    delete_task = make_task(
+        node_type=DELETE_ROWS_NODE_TYPE,
+        node_run_id="node-run-delete-rows",
+        node_instance_id="delete_rows",
+        input_refs=generate_result.output_refs,
+        config={
+            "delete_mode": "condition",
+            "condition_field": "missing",
+            "condition_op": "EQ",
+            "condition_value": 1,
+        },
+    )
+
+    result = executor.execute(delete_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

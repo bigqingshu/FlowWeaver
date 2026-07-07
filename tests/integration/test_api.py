@@ -362,6 +362,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "FillCellsNode",
         "FillRangeNode",
         "ReplaceTextNode",
+        "DeleteRowsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -391,6 +392,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["ReplaceTextNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["DeleteRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -530,6 +534,29 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert replace_text_properties["replace_mode"]["default"] == "partial"
     assert replace_text_properties["skip_empty_match_value"]["default"] is True
+
+    delete_rows_properties = by_type["DeleteRowsNode"]["config_schema"][
+        "properties"
+    ]
+    assert delete_rows_properties["delete_mode"] == {
+        "type": "enum",
+        "title": "Delete Mode",
+        "required": True,
+        "default": "row_numbers",
+        "enum": ["row_numbers", "row_range", "condition", "empty"],
+    }
+    assert delete_rows_properties["row_spec"]["items"] == {"type": "integer"}
+    assert delete_rows_properties["condition_op"]["enum"] == [
+        "EQ",
+        "NE",
+        "GT",
+        "GE",
+        "LT",
+        "LE",
+        "CONTAINS",
+        "IS_NULL",
+    ]
+    assert delete_rows_properties["empty_mode"]["default"] == "all_fields"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
