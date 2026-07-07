@@ -35,6 +35,8 @@ from flowweaver.nodes.builtin_table import (
     JUMP_ANCHOR_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+    LOOP_JUDGE_NODE_TYPE,
+    LOOP_START_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
@@ -4142,6 +4144,29 @@ def test_preview_control_nodes_use_stable_status_schema(
             config={"condition_type": "row_count", "operator": "GE", "value": 1},
         )
     )
+    loop_start_result = executor.execute(
+        make_task(
+            node_type=LOOP_START_NODE_TYPE,
+            node_run_id="node-run-control-schema-loop-start",
+            node_instance_id="control_schema_loop_start",
+            input_refs=generate_result.output_refs,
+            config={"loop_id": "stable_loop", "max_loop_count": 3},
+        )
+    )
+    loop_judge_result = executor.execute(
+        make_task(
+            node_type=LOOP_JUDGE_NODE_TYPE,
+            node_run_id="node-run-control-schema-loop-judge",
+            node_instance_id="control_schema_loop_judge",
+            input_refs=generate_result.output_refs,
+            config={
+                "loop_id": "stable_loop",
+                "condition_mode": "row_count",
+                "condition_op": "GE",
+                "condition_value": 1,
+            },
+        )
+    )
     conditional_jump_result = executor.execute(
         make_task(
             node_type=CONDITIONAL_JUMP_NODE_TYPE,
@@ -4155,7 +4180,13 @@ def test_preview_control_nodes_use_stable_status_schema(
         )
     )
 
-    for result in [anchor_result, jump_result, conditional_jump_result]:
+    for result in [
+        anchor_result,
+        jump_result,
+        conditional_jump_result,
+        loop_start_result,
+        loop_judge_result,
+    ]:
         assert result.status == NodeResultStatus.SUCCEEDED
         output_ref, row = read_single_output_row(
             registry=registry,
@@ -4393,6 +4424,174 @@ def test_conditional_jump_node_returns_validation_errors_for_invalid_config(
         assert result.error is not None
         assert result.error["error_code"] == "VALIDATION_ERROR"
         assert expected_message in result.error["message"]
+
+
+def test_loop_start_node_outputs_preview_loop_plan(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-loop-start-source",
+            node_instance_id="loop_start_source",
+            config={"rows": 4, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    result = executor.execute(
+        make_task(
+            node_type=LOOP_START_NODE_TYPE,
+            node_run_id="node-run-loop-start",
+            node_instance_id="loop_start",
+            input_refs=generate_result.output_refs,
+            config={
+                "loop_id": "orders_loop",
+                "fields": ["row_id", "amount"],
+                "max_loop_count": 2,
+                "current_table_name": "current_order",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    _output_ref, row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=result,
+    )
+    assert row["signal_type"] == "loop_plan"
+    assert row["signal_status"] == "planned"
+    assert row["target_anchor"] == "orders_loop"
+    assert row["action"] == "declare_loop_plan"
+    assert row["actual_control"] == "false"
+    details = json.loads(row["details"])
+    assert details["loop_id"] == "orders_loop"
+    assert details["fields"] == ["row_id", "amount"]
+    assert details["total_items"] == 4
+    assert details["planned_iterations"] == 2
+    assert details["current_table_name"] == "current_order"
+
+
+def test_loop_judge_node_outputs_preview_loop_decisions(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-loop-judge-source",
+            node_instance_id="loop_judge_source",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    continue_result = executor.execute(
+        make_task(
+            node_type=LOOP_JUDGE_NODE_TYPE,
+            node_run_id="node-run-loop-judge-continue",
+            node_instance_id="loop_judge_continue",
+            input_refs=generate_result.output_refs,
+            config={
+                "loop_id": "orders_loop",
+                "condition_mode": "field_value",
+                "condition_field": "amount",
+                "condition_op": "GT",
+                "condition_value": 1,
+                "on_success": "continue_loop",
+                "on_fail": "end_loop",
+            },
+        )
+    )
+    end_result = executor.execute(
+        make_task(
+            node_type=LOOP_JUDGE_NODE_TYPE,
+            node_run_id="node-run-loop-judge-end",
+            node_instance_id="loop_judge_end",
+            input_refs=generate_result.output_refs,
+            config={
+                "loop_id": "orders_loop",
+                "condition_mode": "row_count",
+                "condition_op": "LT",
+                "condition_value": 1,
+                "on_success": "continue_loop",
+                "on_fail": "end_loop",
+            },
+        )
+    )
+
+    assert continue_result.status == NodeResultStatus.SUCCEEDED
+    _continue_ref, continue_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=continue_result,
+    )
+    assert continue_row["signal_type"] == "loop_decision"
+    assert continue_row["signal_status"] == "matched"
+    assert continue_row["condition_result"] == "true"
+    assert continue_row["selected_branch"] == "continue_loop"
+    assert continue_row["action"] == "continue_loop_preview"
+    assert continue_row["actual_control"] == "false"
+
+    assert end_result.status == NodeResultStatus.SUCCEEDED
+    _end_ref, end_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=end_result,
+    )
+    assert end_row["signal_status"] == "not_matched"
+    assert end_row["condition_result"] == "false"
+    assert end_row["selected_branch"] == "end_loop"
+    assert end_row["action"] == "end_loop_preview"
+
+
+def test_loop_preview_nodes_return_validation_errors(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-loop-error-source",
+            node_instance_id="loop_error_source",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+
+    missing_loop_id = executor.execute(
+        make_task(
+            node_type=LOOP_START_NODE_TYPE,
+            node_run_id="node-run-loop-start-missing-id",
+            node_instance_id="loop_start_missing_id",
+            input_refs=generate_result.output_refs,
+            config={"loop_id": " "},
+        )
+    )
+    missing_condition_field = executor.execute(
+        make_task(
+            node_type=LOOP_JUDGE_NODE_TYPE,
+            node_run_id="node-run-loop-judge-missing-field",
+            node_instance_id="loop_judge_missing_field",
+            input_refs=generate_result.output_refs,
+            config={
+                "loop_id": "orders_loop",
+                "condition_mode": "field_value",
+                "condition_field": "missing",
+                "condition_value": 1,
+            },
+        )
+    )
+
+    assert missing_loop_id.status == NodeResultStatus.FAILED
+    assert missing_loop_id.output_refs == []
+    assert missing_loop_id.error is not None
+    assert "LoopStartNode config.loop_id is required" in missing_loop_id.error[
+        "message"
+    ]
+    assert missing_condition_field.status == NodeResultStatus.FAILED
+    assert missing_condition_field.output_refs == []
+    assert missing_condition_field.error is not None
+    assert "Field does not exist: missing" in missing_condition_field.error[
+        "message"
+    ]
 
 
 def test_condition_flag_node_returns_validation_error_for_incompatible_compare(

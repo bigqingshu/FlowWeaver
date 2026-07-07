@@ -382,6 +382,8 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "ConditionalJumpNode",
         "JumpAnchorNode",
         "UnconditionalJumpNode",
+        "LoopStartNode",
+        "LoopJudgeNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
@@ -491,6 +493,18 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": False}
     ]
     assert by_type["UnconditionalJumpNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["LoopStartNode"]["input_ports"] == [
+        {"name": "in", "required": False}
+    ]
+    assert by_type["LoopStartNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["LoopJudgeNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["LoopJudgeNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -1064,6 +1078,50 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert unconditional_jump_properties["target_anchor"]["type"] == "string"
     assert unconditional_jump_properties["target_node_id"]["type"] == "string"
     assert unconditional_jump_properties["reason"]["default"] == ""
+
+    loop_start_properties = by_type["LoopStartNode"]["config_schema"][
+        "properties"
+    ]
+    assert loop_start_properties["loop_id"] == {
+        "type": "string",
+        "title": "Loop ID",
+        "required": True,
+        "default": "loop",
+    }
+    assert loop_start_properties["source_type"]["enum"] == [
+        "current_table",
+        "named_table",
+        "sqlite",
+    ]
+    assert loop_start_properties["fields"]["items"] == {"type": "string"}
+    assert loop_start_properties["max_loop_count"]["minimum"] == 1
+    assert loop_start_properties["output_current_as_table"]["default"] is True
+
+    loop_judge_properties = by_type["LoopJudgeNode"]["config_schema"][
+        "properties"
+    ]
+    assert loop_judge_properties["loop_id"]["required"] is True
+    assert loop_judge_properties["condition_mode"]["enum"] == [
+        "always_success",
+        "row_count",
+        "field_value",
+    ]
+    assert loop_judge_properties["condition_op"]["enum"] == [
+        "EQ",
+        "NE",
+        "GT",
+        "GE",
+        "LT",
+        "LE",
+        "CONTAINS",
+        "IS_NULL",
+        "IS_EMPTY",
+    ]
+    assert loop_judge_properties["on_success"]["enum"] == [
+        "continue_loop",
+        "end_loop",
+    ]
+    assert loop_judge_properties["on_fail"]["default"] == "end_loop"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

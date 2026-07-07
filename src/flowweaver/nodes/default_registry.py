@@ -30,6 +30,8 @@ from flowweaver.nodes.builtin_table import (
     JUMP_ANCHOR_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+    LOOP_JUDGE_NODE_TYPE,
+    LOOP_START_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
@@ -270,6 +272,22 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("condition", required=True),),
             output_ports=(NodePortSpec("status"),),
             config_schema=_conditional_jump_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=LOOP_START_NODE_TYPE,
+            node_version="1.0",
+            display_name="Loop Start",
+            input_ports=(NodePortSpec("in"),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_loop_start_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=LOOP_JUDGE_NODE_TYPE,
+            node_version="1.0",
+            display_name="Loop Judge",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_loop_judge_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1823,6 +1841,114 @@ def _conditional_jump_schema() -> NodeConfigSchemaSpec:
                     "Branch used when the condition value is missing or cannot "
                     "be parsed as true/false."
                 ),
+            ),
+        }
+    )
+
+
+def _loop_start_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "loop_id": NodeConfigFieldSpec(
+                type="string",
+                title="Loop ID",
+                required=True,
+                default="loop",
+            ),
+            "source_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Source Type",
+                default="current_table",
+                enum=("current_table", "named_table", "sqlite"),
+            ),
+            "fields": NodeConfigFieldSpec(
+                type="array",
+                title="Fields",
+                item_type="string",
+            ),
+            "max_loop_count": NodeConfigFieldSpec(
+                type="integer",
+                title="Max Loop Count",
+                default=1,
+                minimum=1,
+            ),
+            "output_current_as_table": NodeConfigFieldSpec(
+                type="boolean",
+                title="Output Current As Table",
+                default=True,
+            ),
+            "current_table_name": NodeConfigFieldSpec(
+                type="string",
+                title="Current Table Name",
+                default="current_loop_item",
+            ),
+        }
+    )
+
+
+def _loop_judge_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "loop_id": NodeConfigFieldSpec(
+                type="string",
+                title="Loop ID",
+                required=True,
+                default="loop",
+            ),
+            "condition_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Condition Mode",
+                default="always_success",
+                enum=("always_success", "row_count", "field_value"),
+            ),
+            "condition_field": NodeConfigFieldSpec(
+                type="string",
+                title="Condition Field",
+            ),
+            "condition_op": NodeConfigFieldSpec(
+                type="enum",
+                title="Condition Operator",
+                default="EQ",
+                enum=(
+                    "EQ",
+                    "NE",
+                    "GT",
+                    "GE",
+                    "LT",
+                    "LE",
+                    "CONTAINS",
+                    "IS_NULL",
+                    "IS_EMPTY",
+                ),
+            ),
+            "condition_value": NodeConfigFieldSpec(
+                type="object",
+                title="Condition Value",
+            ),
+            "condition_value_source": NodeConfigFieldSpec(
+                type="object",
+                title="Condition Value Source",
+            ),
+            "condition_value_field": NodeConfigFieldSpec(
+                type="string",
+                title="Condition Value Field",
+            ),
+            "on_success": NodeConfigFieldSpec(
+                type="enum",
+                title="On Success",
+                default="continue_loop",
+                enum=("continue_loop", "end_loop"),
+            ),
+            "on_fail": NodeConfigFieldSpec(
+                type="enum",
+                title="On Fail",
+                default="end_loop",
+                enum=("continue_loop", "end_loop"),
+            ),
+            "result_table_name": NodeConfigFieldSpec(
+                type="string",
+                title="Result Table Name",
+                default="loop_result",
             ),
         }
     )
