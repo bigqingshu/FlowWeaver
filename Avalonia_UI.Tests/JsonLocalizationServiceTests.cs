@@ -18,6 +18,13 @@ public sealed class JsonLocalizationServiceTests
 
         Assert.AreEqual("en-US", service.CurrentLanguageCode);
         Assert.AreEqual("Base URL", service.GetString("connection.base_url"));
+        Assert.AreEqual("Workflow import failed.", service.GetString("workflow.import_failed"));
+        Assert.AreEqual(
+            "Exported workflow Daily Load.",
+            service.Format("format.exported_workflow", "Daily Load"));
+        Assert.AreEqual(
+            "Imported workflow Daily Load.",
+            service.Format("format.imported_workflow", "Daily Load"));
         Assert.AreEqual(
             "A node with this instance ID already exists.",
             service.GetString("definition.warning.node_already_exists"));
@@ -38,6 +45,13 @@ public sealed class JsonLocalizationServiceTests
         Assert.AreEqual(
             "当前有未保存草稿；运行和预览会先保存草稿并使用最新版本。",
             service.GetString("workflow.run_guard_dirty_draft"));
+        Assert.AreEqual("工作流导入失败。", service.GetString("workflow.import_failed"));
+        Assert.AreEqual(
+            "已导出工作流 每日处理。",
+            service.Format("format.exported_workflow", "每日处理"));
+        Assert.AreEqual(
+            "已导入工作流 每日处理。",
+            service.Format("format.imported_workflow", "每日处理"));
         Assert.AreEqual("尚未加载数据预览。", service.GetString("data_preview.source_not_loaded"));
         Assert.AreEqual(
             "来源：完整运行 run-1，节点 generate，表 orders。",

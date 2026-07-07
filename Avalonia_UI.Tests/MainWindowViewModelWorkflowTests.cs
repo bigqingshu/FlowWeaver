@@ -295,6 +295,8 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             CreateWorkflowResponse =
                 ApiResponseEnvelope<WorkflowDefinitionDto>.Success(importedWorkflow),
+            WorkflowDetailResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(importedWorkflow),
             WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
                 new List<WorkflowDefinitionDto>
                 {
@@ -323,6 +325,19 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("wf-new", viewModel.SelectedWorkflow?.WorkflowId);
         Assert.AreEqual("Imported workflow Daily Load.", viewModel.WorkflowMessage);
         Assert.IsFalse(viewModel.HasWorkflowError);
+
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.HasWorkflowDefinition);
+        Assert.AreEqual("wf-new", apiClient.LastWorkflowDetailId);
+        Assert.IsTrue(viewModel.HasSelectedWorkflowDefinitionNode);
+        Assert.IsTrue(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+
+        viewModel.WorkflowDefinitionDraftJson = """{"nodes":[],"connections":[]}""";
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsTrue(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -478,6 +493,112 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("Workflow export failed.", viewModel.WorkflowMessage);
         Assert.AreEqual("WORKFLOW_NOT_FOUND: Workflow not found.", viewModel.WorkflowErrorMessage);
         Assert.IsTrue(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public void WorkflowManagementCommandsRespectEngineSelectionAndWorkflowStatus()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+
+        viewModel.ConnectionStatus = ConnectionStatus.Disconnected;
+
+        Assert.IsFalse(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because EngineHost is not connected or authenticated.",
+            viewModel.ImportWorkflowDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because EngineHost is not connected or authenticated.",
+            viewModel.ExportSelectedWorkflowDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because EngineHost is not connected or authenticated.",
+            viewModel.DeleteSelectedWorkflowDisabledReasonText);
+
+        viewModel.ConnectionStatus = ConnectionStatus.Connected;
+
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because no workflow is selected.",
+            viewModel.ExportSelectedWorkflowDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because no workflow is selected.",
+            viewModel.DeleteSelectedWorkflowDisabledReasonText);
+
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-1", "Daily Load", 1));
+
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsNull(viewModel.ImportWorkflowDisabledReasonText);
+        Assert.IsNull(viewModel.ExportSelectedWorkflowDisabledReasonText);
+        Assert.IsNull(viewModel.DeleteSelectedWorkflowDisabledReasonText);
+
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-deleted", "Deleted Workflow", 1) with
+            {
+                Status = "DELETED",
+            });
+
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+        Assert.AreEqual(
+            "Action is disabled because the selected workflow is not active.",
+            viewModel.ExportSelectedWorkflowDisabledReasonText);
+        Assert.AreEqual(
+            "Action is disabled because the selected workflow is not active.",
+            viewModel.DeleteSelectedWorkflowDisabledReasonText);
+    }
+
+    [TestMethod]
+    public async Task WorkflowManagementCommandsRemainIndependentFromDraftDirtyAndRevisionConflict()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 1, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(workflow);
+
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"nodes":[],"connections":[],"metadata":{"note":"dirty"}}""";
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsTrue(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
+
+        viewModel.HasWorkflowDefinitionRevisionConflict = true;
+
+        Assert.IsFalse(viewModel.SaveWorkflowDefinitionDraftCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.StartSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.PreviewSelectedWorkflowNodeCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.DeleteSelectedWorkflowCommand.CanExecute(null));
     }
 
     [TestMethod]
