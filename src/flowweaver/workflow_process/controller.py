@@ -17,6 +17,9 @@ from flowweaver.workflow_process.dag import (
     WorkflowDag,
     loop_exit_dependencies_for_node,
 )
+from flowweaver.workflow_process.workflow_completion import (
+    WorkflowCompletionEvaluator,
+)
 
 _LOOP_EXIT_READY_STATUSES = frozenset(
     {
@@ -192,9 +195,8 @@ def _complete_workflow_if_all_nodes_succeeded(
     process_generation: int | None = None,
     event_sink: RuntimeEventSink,
 ) -> WorkflowRun | None:
-    node_runs = store.list_node_runs(workflow_run_id)
-    if not node_runs or any(
-        node_run.status != NodeRunStatus.SUCCEEDED.value for node_run in node_runs
+    if not WorkflowCompletionEvaluator(store).can_mark_workflow_succeeded(
+        workflow_run_id
     ):
         return None
     run = store.get_workflow_run(workflow_run_id)

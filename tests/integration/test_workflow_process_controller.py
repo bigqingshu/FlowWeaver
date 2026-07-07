@@ -10,6 +10,7 @@ from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.protocols.enums import (
     LifecycleStatus,
+    LoopIterationRunStatus,
     LoopRunStatus,
     NodeResultStatus,
     NodeRunStatus,
@@ -1019,6 +1020,187 @@ def test_all_successful_nodes_complete_workflow(tmp_path: Path) -> None:
         process_id=process.process_id,
         dag=dag,
     )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="source",
+        event_sink=DatabaseEventSink(store),
+    )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+
+    result = apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="transform",
+        event_sink=DatabaseEventSink(store),
+    )
+
+    assert result.workflow_completed is not None
+    assert result.workflow_completed.status == "SUCCEEDED"
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+
+
+def test_workflow_completion_waits_for_loop_terminal_state(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-completion-running",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="source",
+        judge_node_instance_id="transform",
+        max_iterations=3,
+        status=LoopRunStatus.RUNNING,
+    )
+    assert loop is not None
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-running",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        status=LoopIterationRunStatus.RUNNING,
+    )
+    assert iteration is not None
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="source",
+        event_sink=DatabaseEventSink(store),
+    )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+
+    result = apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="transform",
+        event_sink=DatabaseEventSink(store),
+    )
+
+    assert result.workflow_completed is None
+    assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+
+
+def test_workflow_completion_waits_for_loop_iterations(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-completion-terminal",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="source",
+        judge_node_instance_id="transform",
+        max_iterations=3,
+        status=LoopRunStatus.ENDED,
+    )
+    assert loop is not None
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-still-running",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        status=LoopIterationRunStatus.RUNNING,
+    )
+    assert iteration is not None
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="source",
+        event_sink=DatabaseEventSink(store),
+    )
+    mark_node_running(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+
+    result = apply_node_success(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+        node_instance_id="transform",
+        event_sink=DatabaseEventSink(store),
+    )
+
+    assert result.workflow_completed is None
+    assert store.get_workflow_run(run.workflow_run_id).status == "RUNNING"
+
+
+def test_workflow_completion_allows_successful_terminal_loop(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, dag = create_run(store)
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-completion-ended",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="source",
+        judge_node_instance_id="transform",
+        max_iterations=3,
+        status=LoopRunStatus.ENDED,
+    )
+    assert loop is not None
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-succeeded",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        status=LoopIterationRunStatus.SUCCEEDED,
+    )
+    assert iteration is not None
     mark_node_running(
         store,
         workflow_run_id=run.workflow_run_id,
