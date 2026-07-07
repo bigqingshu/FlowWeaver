@@ -267,7 +267,7 @@ public partial class MainWindowViewModel
 
     private void ApplyRuntimeOptionsStructuredDraft()
     {
-        var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+        var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
         if (!readResult.Succeeded)
         {
             RuntimeOptionsEditorErrorMessage =
@@ -327,7 +327,7 @@ public partial class MainWindowViewModel
             return;
         }
 
-        var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+        var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
         if (!readResult.Succeeded)
         {
             RuntimeOptionsEditorErrorMessage =
@@ -369,13 +369,7 @@ public partial class MainWindowViewModel
 
     private void RefreshRuntimeOptionsDraftState()
     {
-        var readResult = string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson)
-            ? new RuntimeOptionsDraftReadResult
-            {
-                Status = RuntimeOptionsDraftReadStatus.Succeeded,
-                Draft = new RuntimeOptionsDraft(),
-            }
-            : RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+        var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
         var draft = readResult.Succeeded ? readResult.Draft : new RuntimeOptionsDraft();
 
         RuntimeOptionsProfileDraft = draft.Workflow.Profile;
@@ -420,7 +414,7 @@ public partial class MainWindowViewModel
         var draft = currentDraft;
         if (draft is null)
         {
-            var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+            var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
             draft = readResult.Succeeded ? readResult.Draft : new RuntimeOptionsDraft();
         }
 
@@ -481,7 +475,7 @@ public partial class MainWindowViewModel
         out RuntimeOptionsDraft draft,
         out string errorMessage)
     {
-        var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+        var readResult = ReadWorkflowDefinitionDraftRuntimeOptionsFromCache();
         if (!readResult.Succeeded)
         {
             draft = new RuntimeOptionsDraft();

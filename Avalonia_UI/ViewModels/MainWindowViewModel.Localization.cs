@@ -494,6 +494,7 @@ public partial class MainWindowViewModel
         }
 
         RefreshShellNavigationItems();
+        InvalidateWorkflowDefinitionDraftParseCache();
         RefreshWorkflowDefinitionDraftStructureState();
         RefreshSelectedNodeConfigDraftState();
     }

@@ -25,6 +25,7 @@ public partial class MainWindowViewModel
         nodeDefinitionByKey = new();
     private readonly Dictionary<string, NodeConfigSchemaParseResult> nodeConfigSchemaByKey =
         new(StringComparer.Ordinal);
+    private readonly WorkflowDefinitionDraftParseCache workflowDefinitionDraftParseCache = new();
     private string? nodeConfigSchemaCacheCatalogKey;
 
     [ObservableProperty]
@@ -296,8 +297,12 @@ public partial class MainWindowViewModel
                 return T("definition.linear_chain_status_not_loaded");
             }
 
-            var analysis = WorkflowDefinitionLinearChainAnalyzer.Analyze(
-                WorkflowDefinitionDraftJson);
+            var analysis = ReadWorkflowDefinitionLinearChainAnalysisFromCache();
+            if (analysis is null)
+            {
+                return T("definition.linear_chain_status_not_loaded");
+            }
+
             return analysis.IsLinear
                 ? F(
                     "definition.linear_chain_status_linear",
@@ -1573,16 +1578,38 @@ public partial class MainWindowViewModel
 
     private void RefreshWorkflowDefinitionDraftStructureState()
     {
-        WorkflowDefinitionDraftStructure = string.IsNullOrWhiteSpace(
-            WorkflowDefinitionDraftJson)
-            ? null
-            : WorkflowDefinitionDraftStructureBuilder.Build(
-                WorkflowDefinitionDraftJson,
-                DisplayTextFormatter);
+        WorkflowDefinitionDraftStructure =
+            ReadWorkflowDefinitionDraftStructureFromCache();
         RefreshWorkflowDefinitionDraftNodes();
         ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
         ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
         ClearSelectedNewDraftConnectionNodesIfMissing();
+    }
+
+    private WorkflowDefinitionDraftStructure? ReadWorkflowDefinitionDraftStructureFromCache()
+    {
+        return workflowDefinitionDraftParseCache.GetStructure(
+            WorkflowDefinitionDraftJson,
+            DisplayTextFormatter);
+    }
+
+    private WorkflowDefinitionLinearChainAnalysis?
+        ReadWorkflowDefinitionLinearChainAnalysisFromCache()
+    {
+        return workflowDefinitionDraftParseCache.GetLinearChainAnalysis(
+            WorkflowDefinitionDraftJson);
+    }
+
+    private RuntimeOptionsDraftReadResult
+        ReadWorkflowDefinitionDraftRuntimeOptionsFromCache()
+    {
+        return workflowDefinitionDraftParseCache.GetRuntimeOptions(
+            WorkflowDefinitionDraftJson);
+    }
+
+    private void InvalidateWorkflowDefinitionDraftParseCache()
+    {
+        workflowDefinitionDraftParseCache.Invalidate();
     }
 
     private void RefreshWorkflowDefinitionDraftNodes()
