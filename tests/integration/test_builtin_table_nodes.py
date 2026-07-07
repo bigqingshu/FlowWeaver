@@ -3717,6 +3717,113 @@ def test_write_selected_columns_node_can_append_to_memory_table_target(
     ]
 
 
+def test_write_selected_columns_node_rejects_create_when_target_exists(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-first",
+            node_instance_id="write_selected_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_transit_table": "target_scratch",
+                "write_mode": "create",
+                "enable_write": True,
+            },
+        )
+    )
+
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-second",
+            node_instance_id="write_selected_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_transit_table": "target_scratch",
+                "write_mode": "create",
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.FAILED
+    assert second_result.error is not None
+    assert second_result.error["error_code"] == "VALIDATION_ERROR"
+    assert "target table already exists" in second_result.error["message"]
+
+
+def test_write_selected_columns_node_rejects_append_schema_mismatch(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-first",
+            node_instance_id="write_selected_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_transit_table": "target_scratch",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "value"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-second",
+            node_instance_id="write_selected_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_transit_table": "target_scratch",
+                "write_mode": "append",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "row_id", "target_field": "value"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.FAILED
+    assert second_result.error is not None
+    assert second_result.error["error_code"] == "VALIDATION_ERROR"
+    assert "append target schema does not match" in second_result.error["message"]
+
+
 def test_write_selected_columns_node_returns_validation_error_for_missing_field(
     tmp_path: Path,
 ) -> None:
@@ -4040,6 +4147,177 @@ def test_write_back_table_node_can_append_to_memory_table_target(
     assert rows[0]["affected_rows"] == 2
     assert rows[0]["skipped_rows"] == 0
     assert rows[0]["target_table_ref_id"] == second_target_ref.table_ref_id
+
+
+def test_write_back_table_node_skips_empty_source_rows_for_runtime_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[1] = {"row_id": 2, "amount": ""}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-writeback-input",
+        output_name="writeback_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+
+    writeback_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback",
+            node_instance_id="writeback",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "source_empty_policy": "skip",
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert writeback_result.status == NodeResultStatus.SUCCEEDED
+    status_ref = registry.get(writeback_result.output_refs[0])
+    target_ref = registry.get(writeback_result.output_refs[1])
+    status_rows = provider.read_rows(status_ref, offset=0, limit=10)
+    assert status_rows[0]["affected_rows"] == 2
+    assert status_rows[0]["skipped_rows"] == 1
+    assert provider.read_rows(target_ref, offset=0, limit=10) == [
+        {"total": 1.0},
+        {"total": 3.0},
+    ]
+
+
+def test_write_back_table_node_rejects_create_when_target_exists(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-first",
+            node_instance_id="writeback_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "write_mode": "create",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-second",
+            node_instance_id="writeback_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "write_mode": "create",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.FAILED
+    assert second_result.error is not None
+    assert second_result.error["error_code"] == "VALIDATION_ERROR"
+    assert "target table already exists" in second_result.error["message"]
+
+
+def test_write_back_table_node_rejects_append_schema_mismatch(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-first",
+            node_instance_id="writeback_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "value"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-second",
+            node_instance_id="writeback_second",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "target_type": "run_table",
+                "target_table": "orders_projection",
+                "write_mode": "append",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "row_id", "target_field": "value"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.FAILED
+    assert second_result.error is not None
+    assert second_result.error["error_code"] == "VALIDATION_ERROR"
+    assert "append target schema does not match" in second_result.error["message"]
 
 
 def test_write_back_table_node_returns_validation_error_for_missing_mapping_field(
