@@ -18,6 +18,7 @@ from flowweaver.nodes.builtin_table import (
     COPY_COLUMN_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
+    FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
@@ -661,6 +662,118 @@ def test_fill_cells_node_empty_only_keeps_existing_values(
     ]
 
 
+def test_fill_range_node_fills_literal_value_in_field_and_row_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": ["row_id", "amount", "label", "status"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    fill_task = make_task(
+        node_type=FILL_RANGE_NODE_TYPE,
+        node_run_id="node-run-fill-range",
+        node_instance_id="fill_range",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "start_field": "label",
+            "end_field": "status",
+            "start_row": 2,
+            "end_row": 3,
+            "manual_value": "filled",
+        },
+    )
+
+    fill_result = executor.execute(fill_task)
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    assert fill_result.output_refs != generate_result.output_refs
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "fill_range_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "amount",
+        "label",
+        "status",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "amount": 1.0,
+            "label": "label_0_1",
+            "status": "status_0_1",
+        },
+        {"row_id": 2, "amount": 2.0, "label": "filled", "status": "filled"},
+        {"row_id": 3, "amount": 3.0, "label": "filled", "status": "filled"},
+    ]
+
+
+def test_fill_range_node_empty_only_keeps_existing_area_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "label", "data_type": "TEXT"},
+                    {"name": "status", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"label": "keep", "status": ""}
+    rows[1] |= {"label": "", "status": "keep"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    fill_task = make_task(
+        node_type=FILL_RANGE_NODE_TYPE,
+        node_run_id="node-run-fill-range",
+        node_instance_id="fill_range",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "start_field": "label",
+            "end_field": "status",
+            "manual_value": "filled",
+            "overwrite_rule": "empty_only",
+        },
+    )
+
+    fill_result = executor.execute(fill_task)
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "keep", "status": "filled"},
+        {"row_id": 2, "label": "filled", "status": "keep"},
+    ]
+
+
 def test_replace_text_node_replaces_literal_partial_text(
     tmp_path: Path,
 ) -> None:
@@ -1099,4 +1212,43 @@ def test_fill_cells_node_returns_validation_error_for_start_row_out_of_range(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "start_row is out of range" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_fill_range_node_returns_validation_error_when_range_exceeds_limit(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    fill_task = make_task(
+        node_type=FILL_RANGE_NODE_TYPE,
+        node_run_id="node-run-fill-range",
+        node_instance_id="fill_range",
+        input_refs=generate_result.output_refs,
+        config={
+            "start_field": "amount",
+            "end_field": "label",
+            "manual_value": "filled",
+            "max_cells": 3,
+        },
+    )
+
+    result = executor.execute(fill_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "target range exceeds max_cells" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2

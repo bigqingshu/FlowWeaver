@@ -360,6 +360,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "CopyColumnNode",
         "ReorderColumnsNode",
         "FillCellsNode",
+        "FillRangeNode",
         "ReplaceTextNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
@@ -384,6 +385,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["FillCellsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["FillRangeNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["ReplaceTextNode"]["input_ports"] == [
@@ -497,6 +501,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert fill_cells_properties["direction"]["enum"] == ["down", "up"]
     assert fill_cells_properties["overwrite_rule"]["default"] == "all"
+
+    fill_range_properties = by_type["FillRangeNode"]["config_schema"]["properties"]
+    assert fill_range_properties["start_field"] == {
+        "type": "string",
+        "title": "Start Field",
+        "required": True,
+    }
+    assert fill_range_properties["overwrite_rule"]["default"] == "all"
+    assert fill_range_properties["max_cells"]["default"] == 100000
 
     replace_text_properties = by_type["ReplaceTextNode"]["config_schema"][
         "properties"
