@@ -8,8 +8,8 @@ from pydantic import ValidationError
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
 from flowweaver.protocols.base import StrictModel
 from flowweaver.workflow.definition import (
-    ControlProtocolMode,
     UNAVAILABLE_FAILURE_POLICY_MODES,
+    ControlProtocolMode,
     WorkflowDefinitionModel,
     failure_policy_unavailable_message,
 )

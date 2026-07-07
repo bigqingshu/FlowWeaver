@@ -162,7 +162,7 @@ def test_workflow_definition_parses_runtime_options() -> None:
     ] == "DEBUG"
 
 
-def test_workflow_definition_parses_preview_control_protocol_without_dag_cycle() -> None:
+def test_workflow_definition_parses_preview_control_protocol_without_cycle() -> None:
     definition = WorkflowDefinitionModel.model_validate(
         {
             "schema_version": "1.0",
