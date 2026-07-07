@@ -1,19 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
 using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.Services;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -25,12 +16,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
     private readonly CancellationTokenSource _shutdown = new();
-
-
-
-
-
-
 
     public MainWindowViewModel()
         : this(new EngineHostApiClient())
@@ -101,17 +86,7 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshSelectedNodeConfigDraftState();
     }
 
-
-
-
-
-
-
     private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
-
-
-
-
 
     public string ExecutionTabText => T("tab.execution");
 
@@ -123,7 +98,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string DataPreviewTabText => T("tab.data_preview");
 
-
     public string WorkflowsSectionText => T("workflow.section");
 
     public string RefreshText => T("common.refresh");
@@ -131,7 +105,6 @@ public partial class MainWindowViewModel : ViewModelBase
     public string CloseText => T("common.close");
 
     public string RunText => T("workflow.run");
-
 
     public string CreateText => T("workflow.create");
 
@@ -157,14 +130,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string NodeRunsSectionText => T("node_runs.section");
 
-
-
-
-
-
-
-
-
     public async Task LoadUiSettingsAsync(
         CancellationToken cancellationToken = default)
     {
@@ -183,7 +148,6 @@ public partial class MainWindowViewModel : ViewModelBase
             ErrorMessage = F("format.ui_settings_load_failed", ex.Message);
         }
     }
-
 
     private void NotifyEngineActionStateChanged()
     {
