@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     CONDITIONAL_JUMP_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    SUB_WORKFLOW_NODE_TYPE,
 )
 from flowweaver.protocols.enums import WorkflowProcessStatus, WorkflowRunStatus
 
@@ -203,6 +204,20 @@ def test_control_preview_nodes_run_as_plain_dag(
                                 },
                             },
                             {
+                                "node_instance_id": "subworkflow-preview",
+                                "node_type": SUB_WORKFLOW_NODE_TYPE,
+                                "node_version": "1.0",
+                                "config": {
+                                    "group_name": "preview_group",
+                                    "nodes": [
+                                        {
+                                            "node_instance_id": "child-placeholder",
+                                            "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                                        }
+                                    ],
+                                },
+                            },
+                            {
                                 "node_instance_id": "save-status",
                                 "node_type": SAVE_RUN_TABLE_NODE_TYPE,
                                 "node_version": "1.0",
@@ -227,8 +242,15 @@ def test_control_preview_nodes_run_as_plain_dag(
                                 "target_port": "condition",
                             },
                             {
-                                "connection_id": "jump-to-save",
+                                "connection_id": "jump-to-subworkflow",
                                 "source_node_id": "conditional-jump",
+                                "source_port": "status",
+                                "target_node_id": "subworkflow-preview",
+                                "target_port": "in",
+                            },
+                            {
+                                "connection_id": "subworkflow-to-save",
+                                "source_node_id": "subworkflow-preview",
                                 "source_port": "status",
                                 "target_node_id": "save-status",
                                 "target_port": "in",
@@ -274,6 +296,13 @@ def test_control_preview_nodes_run_as_plain_dag(
                 headers=auth_headers(),
             )
         )
+        subworkflow_status_ref = table_refs_by_name["subworkflow-preview_output"]
+        subworkflow_rows = response_data(
+            client.get(
+                f"/api/v1/data/{subworkflow_status_ref['table_ref_id']}/rows",
+                headers=auth_headers(),
+            )
+        )
 
         assert run.status == WorkflowRunStatus.SUCCEEDED.value
         assert {
@@ -283,6 +312,7 @@ def test_control_preview_nodes_run_as_plain_dag(
             "generate": "SUCCEEDED",
             "condition": "SUCCEEDED",
             "conditional-jump": "SUCCEEDED",
+            "subworkflow-preview": "SUCCEEDED",
             "save-status": "SUCCEEDED",
         }
         assert control_rows["rows"] == [
@@ -300,6 +330,19 @@ def test_control_preview_nodes_run_as_plain_dag(
                 "details": control_rows["rows"][0]["details"],
             }
         ]
+        assert subworkflow_rows["rows"][0] == {
+            "signal_type": "subworkflow_plan",
+            "signal_status": "planned",
+            "source_node_id": "subworkflow-preview",
+            "target_node_id": "",
+            "target_anchor": "preview_group",
+            "condition_result": "",
+            "selected_branch": "",
+            "action": "declare_subworkflow_plan",
+            "actual_control": "false",
+            "reason": "preview only; no child workflow run is created",
+            "details": subworkflow_rows["rows"][0]["details"],
+        }
         assert "control_status_transit" in table_refs_by_name
     finally:
         container.close()

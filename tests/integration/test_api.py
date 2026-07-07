@@ -384,6 +384,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "UnconditionalJumpNode",
         "LoopStartNode",
         "LoopJudgeNode",
+        "SubWorkflowNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
@@ -505,6 +506,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["LoopJudgeNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["SubWorkflowNode"]["input_ports"] == [
+        {"name": "in", "required": False}
+    ]
+    assert by_type["SubWorkflowNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -1122,6 +1129,36 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "end_loop",
     ]
     assert loop_judge_properties["on_fail"]["default"] == "end_loop"
+
+    subworkflow_properties = by_type["SubWorkflowNode"]["config_schema"][
+        "properties"
+    ]
+    assert subworkflow_properties["group_name"] == {
+        "type": "string",
+        "title": "Group Name",
+        "required": True,
+        "default": "subworkflow",
+    }
+    assert subworkflow_properties["nodes"]["items"] == {"type": "object"}
+    assert subworkflow_properties["input_source_type"]["enum"] == [
+        "current_table",
+        "named_inputs",
+        "none",
+    ]
+    assert subworkflow_properties["input_mapping"]["items"] == {"type": "object"}
+    assert subworkflow_properties["missing_input_policy"]["enum"] == [
+        "error",
+        "skip",
+        "use_default",
+    ]
+    assert subworkflow_properties["transit_scope"]["default"] == "isolated"
+    assert subworkflow_properties["allow_loop_nodes"]["default"] is False
+    assert subworkflow_properties["main_output_mode"]["enum"] == [
+        "status_only",
+        "passthrough",
+        "named_outputs",
+    ]
+    assert subworkflow_properties["save_to_transit"]["default"] is False
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

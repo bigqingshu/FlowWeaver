@@ -12,7 +12,7 @@ FlowWeaver 暂定类型名：`SubWorkflowNode` / `CompositeNode`
 
 优先级：P4
 
-当前状态：规划中，代码未实现
+当前状态：已实现预览控制节点；真实子工作流执行未实现
 
 ## 要解决的问题
 
@@ -51,9 +51,9 @@ FlowWeaver 暂定类型名：`SubWorkflowNode` / `CompositeNode`
 
 ## 执行模式
 
-普通运行：后置规划。
+普通运行：当前只输出预览控制状态表；真实普通运行后置规划。
 
-预览运行：需要定义是否只运行子流程上游闭包。
+预览运行：已落地为普通后端节点，输出统一控制状态表，不创建子 `WorkflowRun`。
 
 支持取消：必须支持，取消父节点应能取消子流程。
 
@@ -72,6 +72,8 @@ FlowWeaver 暂定类型名：`SubWorkflowNode` / `CompositeNode`
 推荐先补通用父子 run 或复合节点执行能力，由节点通过标准上下文创建子运行。
 
 不依赖 UI 专用组编辑器作为执行前提。
+
+当前预览版只在节点 handler 内校验基础配置并输出 `subworkflow_plan` 状态表，不修改 `WorkflowDag`、`ready_queue`、`controller` 或父子运行记录。
 
 ## 运行记录
 
@@ -118,12 +120,12 @@ FlowWeaver 暂定类型名：`SubWorkflowNode` / `CompositeNode`
 - provider_type：builtin
 - category：流程控制
 - ui_visibility：visible
-- enabled：规划期为 false；实现和验收后再按节点成熟度设为 true。
+- enabled：true；仅代表预览状态表可用，真实子工作流执行仍未开启。
 - display_name：节点组与子工作流
 - config_schema：沿用本文“配置项草案”，后续落到统一 config_schema。
 - input_ports：按循环或子工作流配置接收 TableRef、循环上下文或子工作流输入绑定。
-- output_ports：输出循环上下文、当前项 TableRef、子工作流结果或控制状态。
-- implementation_ref：builtin.SubWorkflowNode（暂定内部执行入口，后续实现时绑定真实实现；不对普通 UI 暴露）。
+- output_ports：当前为 `status`，输出统一控制状态表；真实子工作流结果输出后置。
+- implementation_ref：builtin.SubWorkflowNode（当前绑定预览状态表 handler；真实执行入口后置）。
 
 输入说明：见上文“输入输出”章节；第一版按 input_ports 约束接收数据。
 
@@ -131,7 +133,7 @@ FlowWeaver 暂定类型名：`SubWorkflowNode` / `CompositeNode`
 
 配置说明：见上文“配置项草案”；配置只描述节点自身能力，不绑定具体 UI 控件。
 
-数据流转方式：通过标准端口和运行上下文传递循环/子工作流状态；不在 WorkflowRunProcess 中增加节点专用回跳分支，需接入通用循环或动态调度能力。
+数据流转方式：当前只输出标准控制状态表；不在 WorkflowRunProcess 中增加节点专用解释分支，真实子工作流需接入通用父子 run 或复合节点执行能力。
 
 是否支持取消：必须支持；每轮或每批次检查取消，并保证循环状态可解释。
 

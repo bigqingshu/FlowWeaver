@@ -62,7 +62,7 @@
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
-| `signal_type` | TEXT | 控制信号类型，例如 `anchor`、`jump`、`conditional_jump`、`loop_plan` |
+| `signal_type` | TEXT | 控制信号类型，例如 `anchor`、`jump`、`conditional_jump`、`loop_plan`、`subworkflow_plan` |
 | `signal_status` | TEXT | `planned`、`matched`、`not_matched`、`invalid`、`skipped` |
 | `source_node_id` | TEXT | 当前节点实例 ID |
 | `target_node_id` | TEXT | 目标节点实例 ID，没有则为空 |
@@ -217,6 +217,8 @@ actual_control=false
 | 5 | 补 API schema 测试 | 已完成：确认节点定义、端口、配置 schema 暴露 |
 | 6 | 补执行测试 | 已完成：覆盖成功输出、默认分支和配置错误 |
 | 7 | 更新节点状态文档 | 已完成：标记为预览控制节点，说明不改变 DAG |
+| 8 | 注册循环预览节点 | 已完成：`LoopStartNode` / `LoopJudgeNode` 输出 `loop_plan` / `loop_decision` 状态表 |
+| 9 | 注册子工作流预览节点 | 已完成：`SubWorkflowNode` 输出 `subworkflow_plan` 状态表，不创建子运行 |
 
 ## 测试计划
 
@@ -273,6 +275,7 @@ docs/nodes/*
 | `JumpAnchorNode` | 生成一行状态表 |
 | `UnconditionalJumpNode` | 生成一行状态表 |
 | `ConditionalJumpNode` | 读取一张很小的条件状态表并生成一行状态表 |
+| `SubWorkflowNode` | 汇总输入引用和配置摘要并生成一行状态表，不创建子运行 |
 
 性能风险主要来自后续真实调度阶段，而不是第一阶段预览节点。
 
@@ -306,16 +309,21 @@ docs/nodes/*
 
 ### 第五阶段：子工作流
 
-最后再处理 `SubWorkflowNode`，重点是输入输出映射、父子运行记录、取消传播和结果汇总。
+当前已先落地 `SubWorkflowNode` 预览版：输出 `subworkflow_plan` 控制状态表，记录组名、输入引用、子节点数量、输入映射和输出计划，不创建子 `WorkflowRun`，不解释子图，不影响 DAG 调度。
+
+真实子工作流仍后置，重点是输入输出映射、父子运行记录、取消传播和结果汇总。
 
 ## 当前建议
 
-下一步最小实现入口：
+预览控制节点当前已经覆盖：
 
 ```text
-先实现 JumpAnchorNode 的预览状态表版本。
-随后实现 UnconditionalJumpNode 的预览状态表版本。
-最后实现 ConditionalJumpNode 读取 ConditionFlagNode 状态表并输出分支计划。
+JumpAnchorNode
+UnconditionalJumpNode
+ConditionalJumpNode
+LoopStartNode
+LoopJudgeNode
+SubWorkflowNode
 ```
 
-这样可以先把控制节点的后端注册、状态协议和测试基础建立起来，同时不打断当前主程序 DAG 执行模型。
+下一步应保持预览协议稳定，补主程序级真实调度实施方案；真实分支、真实循环和真实子工作流不要放进单个节点 handler 内解决。

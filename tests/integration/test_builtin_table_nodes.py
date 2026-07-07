@@ -46,6 +46,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    SUB_WORKFLOW_NODE_TYPE,
     UNCONDITIONAL_JUMP_NODE_TYPE,
     UNPIVOT_ROWS_NODE_TYPE,
     WRITE_BACK_TABLE_NODE_TYPE,
@@ -4167,6 +4168,15 @@ def test_preview_control_nodes_use_stable_status_schema(
             },
         )
     )
+    subworkflow_result = executor.execute(
+        make_task(
+            node_type=SUB_WORKFLOW_NODE_TYPE,
+            node_run_id="node-run-control-schema-subworkflow",
+            node_instance_id="control_schema_subworkflow",
+            input_refs=generate_result.output_refs,
+            config={"group_name": "stable_subworkflow"},
+        )
+    )
     conditional_jump_result = executor.execute(
         make_task(
             node_type=CONDITIONAL_JUMP_NODE_TYPE,
@@ -4186,6 +4196,7 @@ def test_preview_control_nodes_use_stable_status_schema(
         conditional_jump_result,
         loop_start_result,
         loop_judge_result,
+        subworkflow_result,
     ]:
         assert result.status == NodeResultStatus.SUCCEEDED
         output_ref, row = read_single_output_row(
@@ -4590,6 +4601,138 @@ def test_loop_preview_nodes_return_validation_errors(
     assert missing_condition_field.output_refs == []
     assert missing_condition_field.error is not None
     assert "Field does not exist: missing" in missing_condition_field.error[
+        "message"
+    ]
+
+
+def test_subworkflow_node_outputs_preview_plan(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-subworkflow-source",
+            node_instance_id="subworkflow_source",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    result = executor.execute(
+        make_task(
+            node_type=SUB_WORKFLOW_NODE_TYPE,
+            node_run_id="node-run-subworkflow",
+            node_instance_id="subworkflow",
+            input_refs=generate_result.output_refs,
+            config={
+                "group_name": "orders_group",
+                "subworkflow_ref": "workflow-template-1",
+                "nodes": [
+                    {
+                        "node_instance_id": "child_generate",
+                        "node_type": GENERATE_TEST_TABLE_NODE_TYPE,
+                    }
+                ],
+                "input_source_type": "current_table",
+                "input_mapping": [
+                    {"source": "amount", "target": "child_amount"}
+                ],
+                "input_defaults": {"currency": "CNY"},
+                "missing_input_policy": "use_default",
+                "transit_scope": "isolated",
+                "main_output_mode": "status_only",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    _output_ref, row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=result,
+    )
+    assert row["signal_type"] == "subworkflow_plan"
+    assert row["signal_status"] == "planned"
+    assert row["target_anchor"] == "orders_group"
+    assert row["action"] == "declare_subworkflow_plan"
+    assert row["actual_control"] == "false"
+    assert row["reason"] == "preview only; no child workflow run is created"
+    details = json.loads(row["details"])
+    assert details["group_name"] == "orders_group"
+    assert details["subworkflow_ref"] == "workflow-template-1"
+    assert details["node_count"] == 1
+    assert details["input_ref_count"] == 1
+    assert details["input_refs"][0]["logical_table_id"] == "subworkflow_source_output"
+    assert details["input_mapping"] == [{"source": "amount", "target": "child_amount"}]
+    assert details["input_defaults"] == {"currency": "CNY"}
+    assert details["main_output_mode"] == "status_only"
+
+
+def test_subworkflow_node_returns_validation_errors(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-subworkflow-error-source",
+            node_instance_id="subworkflow_error_source",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+
+    missing_group = executor.execute(
+        make_task(
+            node_type=SUB_WORKFLOW_NODE_TYPE,
+            node_run_id="node-run-subworkflow-missing-group",
+            node_instance_id="subworkflow_missing_group",
+            input_refs=generate_result.output_refs,
+            config={"group_name": " "},
+        )
+    )
+    missing_transit_name = executor.execute(
+        make_task(
+            node_type=SUB_WORKFLOW_NODE_TYPE,
+            node_run_id="node-run-subworkflow-missing-transit",
+            node_instance_id="subworkflow_missing_transit",
+            input_refs=generate_result.output_refs,
+            config={"group_name": "orders_group", "save_to_transit": True},
+        )
+    )
+    blocked_loop_node = executor.execute(
+        make_task(
+            node_type=SUB_WORKFLOW_NODE_TYPE,
+            node_run_id="node-run-subworkflow-block-loop",
+            node_instance_id="subworkflow_block_loop",
+            input_refs=generate_result.output_refs,
+            config={
+                "group_name": "orders_group",
+                "nodes": [
+                    {
+                        "node_instance_id": "loop_start",
+                        "node_type": LOOP_START_NODE_TYPE,
+                    }
+                ],
+            },
+        )
+    )
+
+    assert missing_group.status == NodeResultStatus.FAILED
+    assert missing_group.output_refs == []
+    assert missing_group.error is not None
+    assert "SubWorkflowNode config.group_name is required" in missing_group.error[
+        "message"
+    ]
+    assert missing_transit_name.status == NodeResultStatus.FAILED
+    assert missing_transit_name.output_refs == []
+    assert missing_transit_name.error is not None
+    assert (
+        "SubWorkflowNode config.output_transit_name is required"
+        in missing_transit_name.error["message"]
+    )
+    assert blocked_loop_node.status == NodeResultStatus.FAILED
+    assert blocked_loop_node.output_refs == []
+    assert blocked_loop_node.error is not None
+    assert "allow_loop_nodes is false: loop_start" in blocked_loop_node.error[
         "message"
     ]
 
