@@ -62,6 +62,7 @@ SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
 WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
 WRITE_BACK_TABLE_NODE_TYPE = "WriteBackTableNode"
 LIST_FILES_NODE_TYPE = "ListFilesNode"
+BATCH_RENAME_FILES_NODE_TYPE = "BatchRenameFilesNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
@@ -103,6 +104,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             WriteSelectedColumnsNodeHandler(),
             WriteBackTableNodeHandler(),
             ListFilesNodeHandler(),
+            BatchRenameFilesNodeHandler(),
             SqlMappingNodeHandler(),
         )
     )
@@ -2058,6 +2060,113 @@ class ListFilesNodeHandler:
         ]
 
 
+class BatchRenameFilesNodeHandler:
+    node_type = BATCH_RENAME_FILES_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        path_field = _node_string_config(
+            task.config,
+            "path_field",
+            node_type=self.node_type,
+        )
+        new_name_field = _node_string_config(
+            task.config,
+            "new_name_field",
+            node_type=self.node_type,
+        )
+        _require_fields(input_ref.schema, [path_field, new_name_field])
+        name_value_type = _enum_config(
+            task.config,
+            "name_value_type",
+            default="file_name",
+            allowed={"file_name", "full_path"},
+            node_type=self.node_type,
+        )
+        new_path_field = _optional_node_string_config(
+            task.config,
+            "new_path_field",
+            default="new_path",
+            node_type=self.node_type,
+        )
+        status_field = _optional_node_string_config(
+            task.config,
+            "status_field",
+            default="rename_status",
+            node_type=self.node_type,
+        )
+        if new_path_field == status_field:
+            raise _NodeValidationError(
+                "BatchRenameFilesNode new_path_field and status_field must differ"
+            )
+        auto_append_ext = _bool_config(task.config, "auto_append_ext", default=True)
+        allow_dirs = _bool_config(task.config, "allow_dirs", default=False)
+        create_target_dirs = _bool_config(
+            task.config,
+            "create_target_dirs",
+            default=False,
+        )
+        conflict_mode = _enum_config(
+            task.config,
+            "conflict_mode",
+            default="error",
+            allowed={"error", "skip", "overwrite", "append_number"},
+            node_type=self.node_type,
+        )
+        actual_rename = _bool_config(task.config, "actual_rename", default=False)
+        write_log = _bool_config(task.config, "write_log", default=False)
+        log_path = _optional_string_config(
+            task.config,
+            "log_path",
+            node_type=self.node_type,
+        )
+
+        def output_batches():
+            row_number = 1
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    output_rows.append(
+                        _batch_rename_plan_row(
+                            row,
+                            row_number=row_number,
+                            path_field=path_field,
+                            new_name_field=new_name_field,
+                            name_value_type=name_value_type,
+                            new_path_field=new_path_field,
+                            status_field=status_field,
+                            auto_append_ext=auto_append_ext,
+                            allow_dirs=allow_dirs,
+                            create_target_dirs=create_target_dirs,
+                            conflict_mode=conflict_mode,
+                            actual_rename=actual_rename,
+                            write_log=write_log,
+                            log_path=log_path,
+                        )
+                    )
+                    row_number += 1
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=_batch_rename_status_schema(
+                    new_path_field=new_path_field,
+                    status_field=status_field,
+                ),
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SqlMappingNodeHandler:
     node_type = SQL_MAPPING_NODE_TYPE
 
@@ -2857,6 +2966,188 @@ def _list_files_schema() -> list[FieldSchemaModel]:
             ("is_symlink", "TEXT", False),
             ("size_bytes", "INTEGER", True),
             ("modified_at", "TEXT", True),
+        ]
+    )
+
+
+def _require_fields(
+    schema: list[FieldSchemaModel],
+    field_names: list[str],
+) -> None:
+    missing_fields = [
+        field_name
+        for field_name in field_names
+        if find_field(schema, field_name) is None
+    ]
+    if missing_fields:
+        raise _NodeValidationError(
+            f"Fields do not exist: {', '.join(missing_fields)}"
+        )
+
+
+def _batch_rename_plan_row(
+    row: dict[str, Any],
+    *,
+    row_number: int,
+    path_field: str,
+    new_name_field: str,
+    name_value_type: str,
+    new_path_field: str,
+    status_field: str,
+    auto_append_ext: bool,
+    allow_dirs: bool,
+    create_target_dirs: bool,
+    conflict_mode: str,
+    actual_rename: bool,
+    write_log: bool,
+    log_path: str,
+) -> dict[str, Any]:
+    original_value = row.get(path_field)
+    new_name_value = row.get(new_name_field)
+    if not isinstance(original_value, str) or not original_value.strip():
+        return _batch_rename_status_row(
+            row_number=row_number,
+            original_path="" if original_value is None else str(original_value),
+            new_path="",
+            new_path_field=new_path_field,
+            status_field=status_field,
+            status="failed",
+            error_message="source path is required",
+            actual_rename=actual_rename,
+            write_log=write_log,
+            log_path=log_path,
+        )
+    if not isinstance(new_name_value, str) or not new_name_value.strip():
+        return _batch_rename_status_row(
+            row_number=row_number,
+            original_path=original_value,
+            new_path="",
+            new_path_field=new_path_field,
+            status_field=status_field,
+            status="failed",
+            error_message="new name is required",
+            actual_rename=actual_rename,
+            write_log=write_log,
+            log_path=log_path,
+        )
+    source_path = Path(original_value).expanduser()
+    target_path = _batch_rename_target_path(
+        source_path,
+        new_name_value.strip(),
+        name_value_type=name_value_type,
+        auto_append_ext=auto_append_ext,
+    )
+    status = "planned"
+    error_message = ""
+    skipped_reason = ""
+    try:
+        source_exists = source_path.exists()
+        source_is_dir = source_path.is_dir() if source_exists else False
+        target_exists = target_path.exists()
+    except OSError as exc:
+        source_exists = False
+        source_is_dir = False
+        target_exists = False
+        status = "failed"
+        error_message = str(exc)
+    if status != "failed" and not source_exists:
+        status = "failed"
+        error_message = "source path does not exist"
+    elif status != "failed" and source_is_dir and not allow_dirs:
+        status = "failed"
+        error_message = "directories are not allowed"
+    elif status != "failed" and not target_path.parent.exists():
+        if create_target_dirs:
+            status = "planned"
+        else:
+            status = "failed"
+            error_message = "target directory does not exist"
+    elif status != "failed" and target_exists:
+        if conflict_mode == "error":
+            status = "failed"
+            error_message = "target path already exists"
+        elif conflict_mode == "skip":
+            status = "skipped"
+            skipped_reason = "target path already exists"
+    if status == "planned" and actual_rename:
+        status = "skipped"
+        skipped_reason = "rename execution is not implemented"
+    return _batch_rename_status_row(
+        row_number=row_number,
+        original_path=str(source_path),
+        new_path=str(target_path),
+        new_path_field=new_path_field,
+        status_field=status_field,
+        status=status,
+        error_message=error_message,
+        skipped_reason=skipped_reason,
+        actual_rename=actual_rename,
+        write_log=write_log,
+        log_path=log_path,
+    )
+
+
+def _batch_rename_target_path(
+    source_path: Path,
+    new_name: str,
+    *,
+    name_value_type: str,
+    auto_append_ext: bool,
+) -> Path:
+    if name_value_type == "full_path":
+        target_path = Path(new_name).expanduser()
+    else:
+        target_path = source_path.with_name(new_name)
+    if auto_append_ext and source_path.suffix and not target_path.suffix:
+        target_path = target_path.with_suffix(source_path.suffix)
+    return target_path
+
+
+def _batch_rename_status_row(
+    *,
+    row_number: int,
+    original_path: str,
+    new_path: str,
+    new_path_field: str,
+    status_field: str,
+    status: str,
+    error_message: str,
+    actual_rename: bool,
+    write_log: bool,
+    log_path: str,
+    skipped_reason: str = "",
+) -> dict[str, Any]:
+    return {
+        "source_row_number": row_number,
+        "original_path": original_path,
+        new_path_field: new_path,
+        status_field: status,
+        "error_message": error_message,
+        "rename_requested": _bool_status(actual_rename),
+        "actual_rename": "false",
+        "write_log": _bool_status(write_log),
+        "log_path": log_path,
+        "skipped_reason": skipped_reason,
+    }
+
+
+def _batch_rename_status_schema(
+    *,
+    new_path_field: str,
+    status_field: str,
+) -> list[FieldSchemaModel]:
+    return _simple_schema(
+        [
+            ("source_row_number", "INTEGER", False),
+            ("original_path", "TEXT", False),
+            (new_path_field, "TEXT", False),
+            (status_field, "TEXT", False),
+            ("error_message", "TEXT", False),
+            ("rename_requested", "TEXT", False),
+            ("actual_rename", "TEXT", False),
+            ("write_log", "TEXT", False),
+            ("log_path", "TEXT", False),
+            ("skipped_reason", "TEXT", False),
         ]
     )
 

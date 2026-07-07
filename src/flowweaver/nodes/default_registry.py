@@ -13,6 +13,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
+    BATCH_RENAME_FILES_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -245,6 +246,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="List Files",
             output_ports=(NodePortSpec("out"),),
             config_schema=_list_files_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=BATCH_RENAME_FILES_NODE_TYPE,
+            node_version="1.0",
+            display_name="Batch Rename Files",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_batch_rename_files_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -1586,6 +1595,74 @@ def _list_files_schema() -> NodeConfigSchemaSpec:
                 title="Max Files",
                 default=10000,
                 minimum=1,
+            ),
+        }
+    )
+
+
+def _batch_rename_files_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "path_field": NodeConfigFieldSpec(
+                type="string",
+                title="Path Field",
+                required=True,
+            ),
+            "new_name_field": NodeConfigFieldSpec(
+                type="string",
+                title="New Name Field",
+                required=True,
+            ),
+            "name_value_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Name Value Type",
+                default="file_name",
+                enum=("file_name", "full_path"),
+            ),
+            "new_path_field": NodeConfigFieldSpec(
+                type="string",
+                title="New Path Field",
+                default="new_path",
+            ),
+            "status_field": NodeConfigFieldSpec(
+                type="string",
+                title="Status Field",
+                default="rename_status",
+            ),
+            "auto_append_ext": NodeConfigFieldSpec(
+                type="boolean",
+                title="Auto Append Extension",
+                default=True,
+            ),
+            "allow_dirs": NodeConfigFieldSpec(
+                type="boolean",
+                title="Allow Directories",
+                default=False,
+            ),
+            "create_target_dirs": NodeConfigFieldSpec(
+                type="boolean",
+                title="Create Target Directories",
+                default=False,
+            ),
+            "conflict_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Conflict Mode",
+                default="error",
+                enum=("error", "skip", "overwrite", "append_number"),
+            ),
+            "actual_rename": NodeConfigFieldSpec(
+                type="boolean",
+                title="Actual Rename",
+                default=False,
+            ),
+            "write_log": NodeConfigFieldSpec(
+                type="boolean",
+                title="Write Log",
+                default=False,
+            ),
+            "log_path": NodeConfigFieldSpec(
+                type="string",
+                title="Log Path",
             ),
         }
     )

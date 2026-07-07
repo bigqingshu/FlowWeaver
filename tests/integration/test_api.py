@@ -355,6 +355,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert set(by_type) == {
         "GenerateTestTableNode",
         "ListFilesNode",
+        "BatchRenameFilesNode",
         "FilterRowsNode",
         "AddColumnsNode",
         "DeleteColumnsNode",
@@ -388,6 +389,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert by_type["ListFilesNode"]["output_ports"] == [
         {"name": "out", "required": False}
+    ]
+    assert by_type["BatchRenameFilesNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["BatchRenameFilesNode"]["output_ports"] == [
+        {"name": "status", "required": False}
     ]
     assert by_type["FilterRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
@@ -502,6 +509,25 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert list_files_properties["extensions"]["items"] == {"type": "string"}
     assert list_files_properties["glob_pattern"]["default"] == "*"
     assert list_files_properties["max_files"]["minimum"] == 1
+
+    batch_rename_properties = by_type["BatchRenameFilesNode"]["config_schema"][
+        "properties"
+    ]
+    assert batch_rename_properties["path_field"]["required"] is True
+    assert batch_rename_properties["new_name_field"]["required"] is True
+    assert batch_rename_properties["name_value_type"]["enum"] == [
+        "file_name",
+        "full_path",
+    ]
+    assert batch_rename_properties["auto_append_ext"]["default"] is True
+    assert batch_rename_properties["allow_dirs"]["default"] is False
+    assert batch_rename_properties["conflict_mode"]["enum"] == [
+        "error",
+        "skip",
+        "overwrite",
+        "append_number",
+    ]
+    assert batch_rename_properties["actual_rename"]["default"] is False
 
     filter_properties = by_type["FilterRowsNode"]["config_schema"]["properties"]
     assert filter_properties["operator"] == {

@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
+    BATCH_RENAME_FILES_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -257,6 +258,142 @@ def test_list_files_node_can_include_directories_and_limit_rows(
     assert result.status == NodeResultStatus.SUCCEEDED
     output_ref = registry.get(result.output_refs[0])
     assert provider.count_rows(output_ref) == 1
+
+
+def test_batch_rename_files_node_outputs_preview_plan_without_renaming(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "rename"
+    source_dir.mkdir()
+    source_file = source_dir / "old.txt"
+    source_file.write_text("alpha", encoding="utf-8")
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["path", "new_name"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] = {"path": str(source_file), "new_name": "renamed"}
+    rows[1] = {"path": str(source_dir / "missing.txt"), "new_name": "missing_new"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-rename-input",
+        output_name="rename_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    rename_task = make_task(
+        node_type=BATCH_RENAME_FILES_NODE_TYPE,
+        node_run_id="node-run-batch-rename",
+        node_instance_id="batch_rename",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "path_field": "path",
+            "new_name_field": "new_name",
+            "auto_append_ext": True,
+            "actual_rename": False,
+        },
+    )
+
+    rename_result = executor.execute(rename_task)
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(rename_result.output_refs[0])
+    output_rows = provider.read_rows(
+        output_ref,
+        offset=0,
+        limit=10,
+        order_by=["source_row_number"],
+    )
+    assert output_rows == [
+        {
+            "source_row_number": 1,
+            "original_path": str(source_file),
+            "new_path": str(source_dir / "renamed.txt"),
+            "rename_status": "planned",
+            "error_message": "",
+            "rename_requested": "false",
+            "actual_rename": "false",
+            "write_log": "false",
+            "log_path": "",
+            "skipped_reason": "",
+        },
+        {
+            "source_row_number": 2,
+            "original_path": str(source_dir / "missing.txt"),
+            "new_path": str(source_dir / "missing_new.txt"),
+            "rename_status": "failed",
+            "error_message": "source path does not exist",
+            "rename_requested": "false",
+            "actual_rename": "false",
+            "write_log": "false",
+            "log_path": "",
+            "skipped_reason": "",
+        },
+    ]
+    assert source_file.exists()
+    assert not (source_dir / "renamed.txt").exists()
+
+
+def test_batch_rename_files_node_skips_actual_rename_until_write_is_supported(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "rename"
+    source_dir.mkdir()
+    source_file = source_dir / "old.txt"
+    source_file.write_text("alpha", encoding="utf-8")
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["path", "new_name"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] = {"path": str(source_file), "new_name": "renamed.txt"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-rename-input",
+        output_name="rename_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+
+    rename_result = executor.execute(
+        make_task(
+            node_type=BATCH_RENAME_FILES_NODE_TYPE,
+            node_run_id="node-run-batch-rename",
+            node_instance_id="batch_rename",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "path_field": "path",
+                "new_name_field": "new_name",
+                "actual_rename": True,
+            },
+        )
+    )
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(rename_result.output_refs[0])
+    output_rows = provider.read_rows(output_ref, offset=0, limit=10)
+    assert output_rows[0]["rename_status"] == "skipped"
+    assert output_rows[0]["rename_requested"] == "true"
+    assert output_rows[0]["actual_rename"] == "false"
+    assert output_rows[0]["skipped_reason"] == "rename execution is not implemented"
+    assert source_file.exists()
+    assert not (source_dir / "renamed.txt").exists()
 
 
 def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
@@ -3171,6 +3308,40 @@ def test_list_files_node_returns_validation_error_for_missing_directory(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Directory does not exist" in result.error["message"]
     assert registry.list_by_workflow_run("run-1") == []
+
+
+def test_batch_rename_files_node_returns_validation_error_for_missing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["path"], "seed": 0},
+        )
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=BATCH_RENAME_FILES_NODE_TYPE,
+            node_run_id="node-run-batch-rename",
+            node_instance_id="batch_rename",
+            input_refs=generate_result.output_refs,
+            config={
+                "path_field": "path",
+                "new_name_field": "missing",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields do not exist: missing" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
 def test_delete_columns_node_returns_validation_error_for_missing_column(
