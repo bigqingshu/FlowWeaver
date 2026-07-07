@@ -357,6 +357,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "FilterRowsNode",
         "AddColumnsNode",
         "DeleteColumnsNode",
+        "CopyColumnNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -371,6 +372,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["DeleteColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["CopyColumnNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -438,6 +442,23 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "items": {"type": "string"},
         "description": "Column names to remove from the output table.",
     }
+
+    copy_column_properties = by_type["CopyColumnNode"]["config_schema"][
+        "properties"
+    ]
+    assert copy_column_properties["source_field"] == {
+        "type": "string",
+        "title": "Source Field",
+        "required": True,
+    }
+    assert copy_column_properties["output_mode"] == {
+        "type": "enum",
+        "title": "Output Mode",
+        "required": True,
+        "default": "new_field",
+        "enum": ["new_field", "overwrite"],
+    }
+    assert copy_column_properties["trim_value"]["default"] is False
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

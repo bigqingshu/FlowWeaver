@@ -59,3 +59,18 @@ def remove_fields(
             if field.name not in removed_names
         )
     ]
+
+
+def replace_field_schema(
+    schema: Sequence[FieldSchemaModel],
+    field_name: str,
+    *,
+    data_type: str,
+    nullable: bool,
+) -> list[FieldSchemaModel]:
+    return [
+        field.model_copy(update={"data_type": data_type, "nullable": nullable})
+        if field.name == field_name
+        else field
+        for field in schema
+    ]

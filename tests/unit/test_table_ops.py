@@ -6,6 +6,7 @@ from flowweaver.nodes.table_ops import (
     find_field,
     has_field,
     remove_fields,
+    replace_field_schema,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel
 
@@ -55,6 +56,26 @@ def test_remove_fields_returns_schema_with_rebased_ordinals() -> None:
     assert [field.name for field in next_schema] == ["row_id", "status"]
     assert [field.ordinal for field in next_schema] == [0, 1]
     assert [field.ordinal for field in schema] == [0, 1, 2]
+
+
+def test_replace_field_schema_updates_type_without_reordering() -> None:
+    schema = [
+        _field("row_id", "INTEGER", 0),
+        _field("label", "TEXT", 1),
+    ]
+
+    next_schema = replace_field_schema(
+        schema,
+        "label",
+        data_type="INTEGER",
+        nullable=True,
+    )
+
+    assert [field.name for field in next_schema] == ["row_id", "label"]
+    assert [field.ordinal for field in next_schema] == [0, 1]
+    assert next_schema[1].data_type == "INTEGER"
+    assert next_schema[1].nullable is True
+    assert schema[1].data_type == "TEXT"
 
 
 def _field(name: str, data_type: str, ordinal: int) -> FieldSchemaModel:

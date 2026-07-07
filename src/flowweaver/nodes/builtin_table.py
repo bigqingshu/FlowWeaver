@@ -22,6 +22,7 @@ from flowweaver.nodes.table_ops import (
     find_field,
     has_field,
     remove_fields,
+    replace_field_schema,
 )
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -31,6 +32,7 @@ GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
+COPY_COLUMN_NODE_TYPE = "CopyColumnNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -50,6 +52,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             FilterRowsNodeHandler(),
             AddColumnsNodeHandler(),
             DeleteColumnsNodeHandler(),
+            CopyColumnNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -205,6 +208,75 @@ class DeleteColumnsNodeHandler:
                     {
                         column: row.get(column)
                         for column in output_columns
+                    }
+                    for row in rows
+                ]
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
+class CopyColumnNodeHandler:
+    node_type = COPY_COLUMN_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        source_field = _node_string_config(
+            task.config,
+            "source_field",
+            node_type=self.node_type,
+        )
+        source_schema = find_field(input_ref.schema, source_field)
+        if source_schema is None:
+            raise _NodeValidationError(f"Field does not exist: {source_field}")
+        output_mode = _copy_column_output_mode_config(task.config)
+        target_field = _copy_column_target_field_config(
+            task.config,
+            output_mode=output_mode,
+        )
+        if output_mode == "new_field":
+            if has_field(input_ref.schema, target_field):
+                raise _NodeValidationError(f"Field already exists: {target_field}")
+            schema = append_field(
+                input_ref.schema,
+                name=target_field,
+                data_type=source_schema.data_type,
+                nullable=source_schema.nullable,
+            )
+        else:
+            if not has_field(input_ref.schema, target_field):
+                raise _NodeValidationError(f"Field does not exist: {target_field}")
+            schema = replace_field_schema(
+                input_ref.schema,
+                target_field,
+                data_type=source_schema.data_type,
+                nullable=source_schema.nullable,
+            )
+        trim_value = _bool_config(task.config, "trim_value", default=False)
+        empty_default = task.config.get("empty_default")
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    row | {
+                        target_field: _copy_column_value(
+                            row.get(source_field),
+                            trim_value=trim_value,
+                            empty_default=empty_default,
+                        )
                     }
                     for row in rows
                 ]
@@ -394,6 +466,30 @@ def _string_config(config: dict[str, Any], key: str) -> str:
     return value.strip()
 
 
+def _node_string_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> str:
+    value = config.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError(f"{node_type} config.{key} is required")
+    return value.strip()
+
+
+def _bool_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    default: bool,
+) -> bool:
+    value = config.get(key, default)
+    if not isinstance(value, bool):
+        raise _NodeValidationError(f"config.{key} must be a boolean")
+    return value
+
+
 def _save_memory_table_name_config(config: dict[str, Any]) -> str:
     value = config.get("table_name")
     if not isinstance(value, str) or not value.strip():
@@ -425,6 +521,40 @@ def _string_list_config(
             )
         items.append(normalized)
     return items
+
+
+def _copy_column_output_mode_config(config: dict[str, Any]) -> str:
+    value = config.get("output_mode", "new_field")
+    if not isinstance(value, str) or not value:
+        raise _NodeValidationError("CopyColumnNode config.output_mode is required")
+    mode = value.strip().lower()
+    if mode not in {"new_field", "overwrite"}:
+        raise _NodeValidationError(f"Unsupported CopyColumnNode output_mode: {value}")
+    return mode
+
+
+def _copy_column_target_field_config(
+    config: dict[str, Any],
+    *,
+    output_mode: str,
+) -> str:
+    key = "new_field" if output_mode == "new_field" else "target_field"
+    value = config.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError(f"CopyColumnNode config.{key} is required")
+    return value.strip()
+
+
+def _copy_column_value(
+    value: Any,
+    *,
+    trim_value: bool,
+    empty_default: Any,
+) -> Any:
+    copied = value.strip() if trim_value and isinstance(value, str) else value
+    if copied is None or copied == "":
+        return empty_default
+    return copied
 
 
 def _infer_data_type(name: str) -> str:

@@ -11,6 +11,7 @@ from flowweaver.nodes.builtin_shared_table import (
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    COPY_COLUMN_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
@@ -64,6 +65,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_delete_columns_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=COPY_COLUMN_NODE_TYPE,
+            node_version="1.0",
+            display_name="Copy Column",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_copy_column_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -203,6 +212,45 @@ def _delete_columns_schema() -> NodeConfigSchemaSpec:
                 required=True,
                 item_type="string",
                 description="Column names to remove from the output table.",
+            ),
+        }
+    )
+
+
+def _copy_column_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "source_field": NodeConfigFieldSpec(
+                type="string",
+                title="Source Field",
+                required=True,
+            ),
+            "output_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Output Mode",
+                required=True,
+                default="new_field",
+                enum=("new_field", "overwrite"),
+            ),
+            "new_field": NodeConfigFieldSpec(
+                type="string",
+                title="New Field",
+                default="copied_column",
+            ),
+            "target_field": NodeConfigFieldSpec(
+                type="string",
+                title="Target Field",
+                description="Required when output_mode is overwrite.",
+            ),
+            "trim_value": NodeConfigFieldSpec(
+                type="boolean",
+                title="Trim Value",
+                default=False,
+            ),
+            "empty_default": NodeConfigFieldSpec(
+                type="object",
+                title="Empty Default",
+                description="Value used when the source value is null or empty.",
             ),
         }
     )
