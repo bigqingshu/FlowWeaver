@@ -3970,6 +3970,31 @@ def test_unconditional_jump_node_returns_validation_error_for_missing_target(
     assert registry.list_by_workflow_run("run-1") == []
 
 
+def test_unconditional_jump_node_returns_validation_error_for_multiple_inputs(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    result = executor.execute(
+        make_task(
+            node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-unconditional-jump-multiple-inputs",
+            node_instance_id="unconditional_jump_multiple_inputs",
+            input_refs=["input-1", "input-2"],
+            config={
+                "target_mode": "anchor",
+                "target_anchor": "after_cleanup",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "accepts at most one input_ref" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
+
+
 def test_conditional_jump_node_selects_true_and_false_preview_branches(
     tmp_path: Path,
 ) -> None:
@@ -4119,6 +4144,108 @@ def test_conditional_jump_node_uses_default_branch_for_invalid_condition(
     assert details["default_branch"] == "true"
 
 
+def test_conditional_jump_node_parses_common_boolean_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    condition_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-conditional-bool-source",
+            node_instance_id="conditional_bool_source",
+            config={"rows": 1, "columns": ["result"], "seed": 0},
+        )
+    )
+    condition_ref = registry.get(condition_result.output_refs[0])
+    cases = [
+        ("yes", "true", "true_anchor", ""),
+        ("1", "true", "true_anchor", ""),
+        ("no", "false", "", "false_node"),
+        ("0", "false", "", "false_node"),
+    ]
+
+    for index, (
+        raw_value,
+        expected_branch,
+        expected_anchor,
+        expected_node_id,
+    ) in enumerate(cases, start=1):
+        input_ref = publish_runtime_rows(
+            registry=registry,
+            provider=provider,
+            schema=condition_ref.schema,
+            rows=[{"result": raw_value}],
+            output_name=f"condition_bool_{index}",
+        )
+        result = executor.execute(
+            make_task(
+                node_type=CONDITIONAL_JUMP_NODE_TYPE,
+                node_run_id=f"node-run-conditional-bool-{index}",
+                node_instance_id=f"conditional_bool_{index}",
+                input_refs=[input_ref.table_ref_id],
+                config={
+                    "true_target_mode": "anchor",
+                    "true_target_anchor": "true_anchor",
+                    "false_target_mode": "node",
+                    "false_target_node_id": "false_node",
+                },
+            )
+        )
+
+        assert result.status == NodeResultStatus.SUCCEEDED
+        _output_ref, row = read_single_output_row(
+            registry=registry,
+            provider=provider,
+            result=result,
+        )
+        assert row["condition_result"] == expected_branch
+        assert row["selected_branch"] == expected_branch
+        assert row["target_anchor"] == expected_anchor
+        assert row["target_node_id"] == expected_node_id
+
+
+def test_conditional_jump_node_uses_default_false_branch_for_empty_condition_table(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    condition_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-conditional-empty-source",
+            node_instance_id="conditional_empty_source",
+            config={"rows": 0, "columns": ["result"], "seed": 0},
+        )
+    )
+
+    jump_result = executor.execute(
+        make_task(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-conditional-jump-empty",
+            node_instance_id="conditional_jump_empty",
+            input_refs=condition_result.output_refs,
+            config={
+                "false_target_mode": "anchor",
+                "false_target_anchor": "empty_default",
+                "default_branch": "false",
+            },
+        )
+    )
+
+    assert jump_result.status == NodeResultStatus.SUCCEEDED
+    _output_ref, row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=jump_result,
+    )
+    assert row["condition_result"] == ""
+    assert row["selected_branch"] == "false"
+    assert row["target_anchor"] == "empty_default"
+    assert row["signal_status"] == "not_matched"
+    details = json.loads(row["details"])
+    assert details["raw_condition"] is None
+    assert details["default_branch"] == "false"
+
+
 def test_conditional_jump_node_returns_validation_errors_for_invalid_config(
     tmp_path: Path,
 ) -> None:
@@ -4140,24 +4267,47 @@ def test_conditional_jump_node_returns_validation_errors_for_invalid_config(
             config={"condition_type": "row_count", "operator": "GE", "value": 1},
         )
     )
+    false_condition_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-conditional-error-false-flag",
+            node_instance_id="condition_error_false_flag",
+            input_refs=generate_result.output_refs,
+            config={"condition_type": "row_count", "operator": "LT", "value": 1},
+        )
+    )
     invalid_cases = [
         (
+            condition_result.output_refs,
             {"condition_field": "missing"},
             "Field does not exist: missing",
         ),
         (
+            condition_result.output_refs,
             {"true_target_mode": "anchor", "true_target_anchor": ""},
             "ConditionalJumpNode config.true_target_anchor is required",
         ),
+        (
+            false_condition_result.output_refs,
+            {
+                "condition_field": "result",
+                "false_target_mode": "node",
+                "false_target_node_id": "",
+            },
+            "ConditionalJumpNode config.false_target_node_id is required",
+        ),
     ]
 
-    for index, (config, expected_message) in enumerate(invalid_cases, start=1):
+    for index, (input_refs, config, expected_message) in enumerate(
+        invalid_cases,
+        start=1,
+    ):
         result = executor.execute(
             make_task(
                 node_type=CONDITIONAL_JUMP_NODE_TYPE,
                 node_run_id=f"node-run-conditional-jump-invalid-{index}",
                 node_instance_id=f"conditional_jump_invalid_{index}",
-                input_refs=condition_result.output_refs,
+                input_refs=input_refs,
                 config=config,
             )
         )

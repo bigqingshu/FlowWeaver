@@ -172,6 +172,39 @@ public sealed class NodeDefinitionListItemViewModelTests
     }
 
     [TestMethod]
+    public async Task LocalizesControlNodeDisplayNameAndConfigSchemaSummary()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var formatter = new DisplayTextFormatter(localizationService);
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "ConditionalJumpNode",
+                NodeVersion = "1.0",
+                DisplayName = "Conditional Jump",
+                InputPorts = [],
+                OutputPorts = [],
+                ConfigSchemaVersion = "1.0",
+                ConfigSchema = JsonDocument.Parse(
+                    """
+                    {
+                      "type": "object",
+                      "properties": {
+                        "condition_field": {"type": "string", "title": "Condition Field"},
+                        "true_target_mode": {"type": "enum", "title": "True Target Mode", "enum": ["anchor", "node"]},
+                        "default_branch": {"type": "enum", "title": "Default Branch", "enum": ["true", "false"]}
+                      }
+                    }
+                    """).RootElement.Clone(),
+            },
+            formatter);
+
+        Assert.AreEqual("条件跳转", item.DisplayNameText);
+        Assert.AreEqual("3 个配置字段：条件字段, True 目标类型, 默认分支", item.ConfigSchemaSummaryText);
+    }
+
+    [TestMethod]
     public async Task LocalizedDisplayFallsBackToBackendTextForUnknownNodeDefinition()
     {
         var localizationService = new JsonLocalizationService();

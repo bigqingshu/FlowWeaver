@@ -211,6 +211,37 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
     }
 
     [TestMethod]
+    public async Task LocalizesControlNodeEnumOptionDisplayTextWithoutChangingValues()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "target_mode",
+                Type = NodeConfigFieldType.Enum,
+                Title = "Target Mode",
+                Required = true,
+                InputValue = "anchor",
+                HasInputValue = true,
+                EnumValues = ["anchor", "node"],
+            },
+            "UnconditionalJumpNode",
+            new DisplayTextFormatter(localizationService));
+
+        Assert.AreEqual("目标类型", input.DisplayLabel);
+        CollectionAssert.AreEqual(
+            new[] { "anchor", "node" },
+            input.EnumOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "锚点", "节点" },
+            input.EnumOptions.Select(option => option.DisplayText).ToArray());
+
+        input.InputValue = "node";
+        Assert.AreEqual("node", input.ToEditableDraftField().InputValue);
+    }
+
+    [TestMethod]
     public async Task LocalizedFieldTitleFallsBackToSchemaTitleForUnknownField()
     {
         var localizationService = new JsonLocalizationService();
