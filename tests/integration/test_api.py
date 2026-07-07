@@ -553,6 +553,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert plugin_properties["params"]["type"] == "object"
     assert plugin_properties["input_bindings"]["type"] == "object"
     assert plugin_properties["output_bindings"]["type"] == "object"
+    assert plugin_properties["plugin_manifest"]["type"] == "object"
     assert plugin_properties["execution_mode"]["enum"] == [
         "in_process",
         "external_process",

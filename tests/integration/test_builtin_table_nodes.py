@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from alembic import command
@@ -346,7 +347,7 @@ def test_batch_rename_files_node_outputs_preview_plan_without_renaming(
     assert not (source_dir / "renamed.txt").exists()
 
 
-def test_batch_rename_files_node_skips_actual_rename_until_write_is_supported(
+def test_batch_rename_files_node_renames_file_when_enabled(
     tmp_path: Path,
 ) -> None:
     executor, _store, registry, provider = make_executor(tmp_path)
@@ -392,12 +393,77 @@ def test_batch_rename_files_node_skips_actual_rename_until_write_is_supported(
     assert rename_result.status == NodeResultStatus.SUCCEEDED
     output_ref = registry.get(rename_result.output_refs[0])
     output_rows = provider.read_rows(output_ref, offset=0, limit=10)
-    assert output_rows[0]["rename_status"] == "skipped"
+    assert output_rows[0]["rename_status"] == "renamed"
     assert output_rows[0]["rename_requested"] == "true"
-    assert output_rows[0]["actual_rename"] == "false"
-    assert output_rows[0]["skipped_reason"] == "rename execution is not implemented"
-    assert source_file.exists()
-    assert not (source_dir / "renamed.txt").exists()
+    assert output_rows[0]["actual_rename"] == "true"
+    assert output_rows[0]["skipped_reason"] == ""
+    assert not source_file.exists()
+    assert (source_dir / "renamed.txt").read_text(encoding="utf-8") == "alpha"
+
+
+def test_batch_rename_files_node_can_append_number_and_write_log(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "rename"
+    source_dir.mkdir()
+    source_file = source_dir / "old.txt"
+    source_file.write_text("alpha", encoding="utf-8")
+    existing_file = source_dir / "renamed.txt"
+    existing_file.write_text("existing", encoding="utf-8")
+    log_path = tmp_path / "logs" / "rename.jsonl"
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["path", "new_name"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] = {"path": str(source_file), "new_name": "renamed.txt"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-rename-input",
+        output_name="rename_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+
+    rename_result = executor.execute(
+        make_task(
+            node_type=BATCH_RENAME_FILES_NODE_TYPE,
+            node_run_id="node-run-batch-rename",
+            node_instance_id="batch_rename",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "path_field": "path",
+                "new_name_field": "new_name",
+                "actual_rename": True,
+                "conflict_mode": "append_number",
+                "write_log": True,
+                "log_path": str(log_path),
+            },
+        )
+    )
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(rename_result.output_refs[0])
+    output_rows = provider.read_rows(output_ref, offset=0, limit=10)
+    renamed_path = source_dir / "renamed_2.txt"
+    assert output_rows[0]["rename_status"] == "renamed"
+    assert output_rows[0]["new_path"] == str(renamed_path)
+    assert output_rows[0]["actual_rename"] == "true"
+    assert existing_file.read_text(encoding="utf-8") == "existing"
+    assert renamed_path.read_text(encoding="utf-8") == "alpha"
+    log_rows = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert log_rows == [output_rows[0]]
 
 
 def test_plugin_node_outputs_status_table_without_executing_plugin(
@@ -414,6 +480,15 @@ def test_plugin_node_outputs_status_table_without_executing_plugin(
             "params": {"threshold": 3},
             "input_bindings": {"input": "in"},
             "output_bindings": {"status": "status"},
+            "plugin_manifest": {
+                "plugin_id": "example.plugin",
+                "plugin_version": "1.2.3",
+                "execution_modes": ["external_process"],
+                "inputs": {"input": {"required": True}},
+                "outputs": {"status": {"required": True}},
+                "required_params": ["threshold"],
+                "has_external_actions": True,
+            },
             "execution_mode": "external_process",
             "allow_external_actions": True,
             "enable_execute": True,
@@ -430,17 +505,98 @@ def test_plugin_node_outputs_status_table_without_executing_plugin(
             "status": "skipped",
             "plugin_id": "example.plugin",
             "plugin_version": "1.2.3",
+            "manifest_status": "valid",
+            "manifest_plugin_id": "example.plugin",
+            "manifest_plugin_version": "1.2.3",
             "execution_mode": "external_process",
             "input_ref_count": 0,
             "param_count": 1,
             "input_binding_count": 1,
             "output_binding_count": 1,
+            "plugin_found": "true",
+            "validation_status": "valid",
+            "validation_errors": "",
             "allow_external_actions": "true",
             "enable_execute": "true",
+            "external_actions_declared": "true",
+            "execution_ready": "true",
             "actual_execute": "false",
-            "skipped_reason": "plugin execution is not implemented",
+            "skipped_reason": "plugin execution runner is not configured",
         }
     ]
+
+
+def test_plugin_node_blocks_external_actions_when_not_allowed(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    plugin_task = make_task(
+        node_type=PLUGIN_NODE_TYPE,
+        node_run_id="node-run-plugin",
+        node_instance_id="plugin",
+        config={
+            "plugin_id": "example.plugin",
+            "plugin_version": "1.2.3",
+            "params": {"threshold": 3},
+            "input_bindings": {"input": "in"},
+            "output_bindings": {"status": "status"},
+            "plugin_manifest": {
+                "plugin_id": "example.plugin",
+                "plugin_version": "1.2.3",
+                "execution_modes": ["external_process"],
+                "inputs": {"input": {"required": True}},
+                "outputs": {"status": {"required": True}},
+                "required_params": ["threshold"],
+                "has_external_actions": True,
+            },
+            "execution_mode": "external_process",
+            "allow_external_actions": False,
+            "enable_execute": True,
+        },
+    )
+
+    plugin_result = executor.execute(plugin_task)
+
+    assert plugin_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(plugin_result.output_refs[0])
+    rows = provider.read_rows(output_ref, offset=0, limit=10)
+    assert rows[0]["status"] == "blocked"
+    assert rows[0]["manifest_status"] == "valid"
+    assert rows[0]["validation_status"] == "blocked"
+    assert json.loads(rows[0]["validation_errors"]) == [
+        "plugin declares external actions but allow_external_actions is false"
+    ]
+    assert rows[0]["external_actions_declared"] == "true"
+    assert rows[0]["execution_ready"] == "false"
+    assert rows[0]["actual_execute"] == "false"
+
+
+def test_plugin_node_allows_missing_manifest_when_execution_disabled(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    plugin_task = make_task(
+        node_type=PLUGIN_NODE_TYPE,
+        node_run_id="node-run-plugin",
+        node_instance_id="plugin",
+        config={
+            "plugin_id": "example.plugin",
+            "params": {"threshold": 3},
+            "enable_execute": False,
+        },
+    )
+
+    plugin_result = executor.execute(plugin_task)
+
+    assert plugin_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(plugin_result.output_refs[0])
+    rows = provider.read_rows(output_ref, offset=0, limit=10)
+    assert rows[0]["status"] == "skipped"
+    assert rows[0]["manifest_status"] == "missing"
+    assert rows[0]["validation_status"] == "skipped"
+    assert rows[0]["validation_errors"] == ""
+    assert rows[0]["execution_ready"] == "false"
+    assert rows[0]["skipped_reason"] == "enable_execute is false"
 
 
 def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(

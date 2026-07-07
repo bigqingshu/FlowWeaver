@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import json
 import math
 import re
 from datetime import UTC, datetime
@@ -2477,6 +2478,11 @@ class PluginNodeHandler:
             "output_bindings",
             node_type=self.node_type,
         )
+        plugin_manifest = _object_config(
+            task.config,
+            "plugin_manifest",
+            node_type=self.node_type,
+        )
         execution_mode = _enum_config(
             task.config,
             "execution_mode",
@@ -2494,25 +2500,18 @@ class PluginNodeHandler:
             "enable_execute",
             default=False,
         )
-        skipped_reason = (
-            "enable_execute is false"
-            if not enable_execute
-            else "plugin execution is not implemented"
+        status_row = _plugin_status_row(
+            plugin_id=plugin_id,
+            plugin_version=plugin_version,
+            plugin_manifest=plugin_manifest,
+            params=params,
+            input_bindings=input_bindings,
+            output_bindings=output_bindings,
+            input_ref_count=len(task.input_refs),
+            execution_mode=execution_mode,
+            allow_external_actions=allow_external_actions,
+            enable_execute=enable_execute,
         )
-        status_row = {
-            "status": "skipped",
-            "plugin_id": plugin_id,
-            "plugin_version": plugin_version,
-            "execution_mode": execution_mode,
-            "input_ref_count": len(task.input_refs),
-            "param_count": len(params),
-            "input_binding_count": len(input_bindings),
-            "output_binding_count": len(output_bindings),
-            "allow_external_actions": _bool_status(allow_external_actions),
-            "enable_execute": _bool_status(enable_execute),
-            "actual_execute": "false",
-            "skipped_reason": skipped_reason,
-        }
         return [
             context.publish_rows(
                 task,
@@ -2521,6 +2520,382 @@ class PluginNodeHandler:
                 rows=[status_row],
             )
         ]
+
+
+def _plugin_status_row(
+    *,
+    plugin_id: str,
+    plugin_version: str,
+    plugin_manifest: dict[str, Any],
+    params: dict[str, Any],
+    input_bindings: dict[str, Any],
+    output_bindings: dict[str, Any],
+    input_ref_count: int,
+    execution_mode: str,
+    allow_external_actions: bool,
+    enable_execute: bool,
+) -> dict[str, Any]:
+    validation_errors: list[str] = []
+    manifest_status = "missing"
+    manifest_plugin_id = ""
+    manifest_plugin_version = ""
+    plugin_found = False
+    external_actions_declared = False
+    external_actions_blocked = False
+
+    _plugin_validate_binding_object(
+        input_bindings,
+        binding_name="input_bindings",
+        validation_errors=validation_errors,
+    )
+    _plugin_validate_binding_object(
+        output_bindings,
+        binding_name="output_bindings",
+        validation_errors=validation_errors,
+    )
+
+    if plugin_manifest:
+        manifest_status = "valid"
+        manifest_plugin_id = _plugin_manifest_string(
+            plugin_manifest,
+            "plugin_id",
+            required=True,
+            validation_errors=validation_errors,
+        )
+        manifest_plugin_version = _plugin_manifest_string(
+            plugin_manifest,
+            "plugin_version",
+            validation_errors=validation_errors,
+        )
+        if manifest_plugin_id == plugin_id:
+            plugin_found = True
+        else:
+            validation_errors.append(
+                "plugin_manifest.plugin_id does not match config.plugin_id"
+            )
+        if (
+            plugin_version
+            and manifest_plugin_version
+            and plugin_version != manifest_plugin_version
+        ):
+            validation_errors.append(
+                "plugin_manifest.plugin_version does not match config.plugin_version"
+            )
+        _plugin_validate_execution_mode(
+            plugin_manifest,
+            execution_mode=execution_mode,
+            validation_errors=validation_errors,
+        )
+        _plugin_validate_bindings_against_manifest(
+            plugin_manifest,
+            key="inputs",
+            bindings=input_bindings,
+            validation_errors=validation_errors,
+        )
+        _plugin_validate_bindings_against_manifest(
+            plugin_manifest,
+            key="outputs",
+            bindings=output_bindings,
+            validation_errors=validation_errors,
+        )
+        _plugin_validate_required_params(
+            plugin_manifest,
+            params=params,
+            validation_errors=validation_errors,
+        )
+        external_actions_declared = _plugin_manifest_external_actions(
+            plugin_manifest,
+            validation_errors=validation_errors,
+        )
+        if external_actions_declared and not allow_external_actions:
+            external_actions_blocked = True
+            validation_errors.append(
+                "plugin declares external actions but allow_external_actions is false"
+            )
+    else:
+        if enable_execute:
+            validation_errors.append("plugin_manifest is not configured")
+
+    if validation_errors:
+        external_only_block = external_actions_blocked and len(validation_errors) == 1
+        manifest_status = (
+            "valid"
+            if external_only_block
+            else "missing" if not plugin_manifest else "invalid"
+        )
+        validation_status = "blocked" if external_only_block else manifest_status
+        status = "blocked" if validation_status == "blocked" else "invalid"
+        execution_ready = False
+        skipped_reason = (
+            "external actions are not allowed"
+            if validation_status == "blocked"
+            else "plugin validation failed"
+        )
+    elif not enable_execute:
+        validation_status = "skipped" if manifest_status == "missing" else "valid"
+        status = "skipped"
+        execution_ready = False
+        skipped_reason = "enable_execute is false"
+    else:
+        validation_status = "valid"
+        status = "skipped"
+        execution_ready = True
+        skipped_reason = "plugin execution runner is not configured"
+
+    validation_errors_text = (
+        json.dumps(validation_errors, ensure_ascii=False)
+        if validation_errors
+        else ""
+    )
+    status_row = {
+        "status": status,
+        "plugin_id": plugin_id,
+        "plugin_version": plugin_version,
+        "manifest_status": manifest_status,
+        "manifest_plugin_id": manifest_plugin_id,
+        "manifest_plugin_version": manifest_plugin_version,
+        "execution_mode": execution_mode,
+        "input_ref_count": input_ref_count,
+        "param_count": len(params),
+        "input_binding_count": len(input_bindings),
+        "output_binding_count": len(output_bindings),
+        "plugin_found": _bool_status(plugin_found),
+        "validation_status": validation_status,
+        "validation_errors": validation_errors_text,
+        "allow_external_actions": _bool_status(allow_external_actions),
+        "enable_execute": _bool_status(enable_execute),
+        "external_actions_declared": _bool_status(external_actions_declared),
+        "execution_ready": _bool_status(execution_ready),
+        "actual_execute": "false",
+        "skipped_reason": skipped_reason,
+    }
+    return status_row
+
+
+def _plugin_validate_binding_object(
+    bindings: dict[str, Any],
+    *,
+    binding_name: str,
+    validation_errors: list[str],
+) -> None:
+    for key, value in bindings.items():
+        if not isinstance(key, str) or not key.strip():
+            validation_errors.append(f"{binding_name} contains an empty binding name")
+        if not isinstance(value, str) or not value.strip():
+            validation_errors.append(
+                f"{binding_name}.{key} must map to a non-empty string"
+            )
+
+
+def _plugin_manifest_string(
+    manifest: dict[str, Any],
+    key: str,
+    *,
+    validation_errors: list[str],
+    required: bool = False,
+) -> str:
+    value = manifest.get(key)
+    if value is None:
+        if required:
+            validation_errors.append(f"plugin_manifest.{key} is required")
+        return ""
+    if not isinstance(value, str) or not value.strip():
+        validation_errors.append(f"plugin_manifest.{key} must be a string")
+        return ""
+    return value.strip()
+
+
+def _plugin_validate_execution_mode(
+    manifest: dict[str, Any],
+    *,
+    execution_mode: str,
+    validation_errors: list[str],
+) -> None:
+    modes_value = manifest.get("execution_modes")
+    if modes_value is None:
+        modes_value = manifest.get("execution_mode")
+    modes = _plugin_string_set(
+        modes_value,
+        manifest_key="execution_modes",
+        validation_errors=validation_errors,
+    )
+    if modes is not None and execution_mode not in modes:
+        validation_errors.append(
+            f"plugin_manifest.execution_modes does not allow {execution_mode}"
+        )
+
+
+def _plugin_validate_bindings_against_manifest(
+    manifest: dict[str, Any],
+    *,
+    key: str,
+    bindings: dict[str, Any],
+    validation_errors: list[str],
+) -> None:
+    declarations = manifest.get(key)
+    declared_names = _plugin_manifest_declared_names(
+        declarations,
+        manifest_key=key,
+        validation_errors=validation_errors,
+    )
+    if declared_names is None:
+        return
+    for binding_name in bindings:
+        if binding_name not in declared_names:
+            validation_errors.append(
+                f"{key} does not declare binding: {binding_name}"
+            )
+    for required_name in _plugin_manifest_required_names(
+        declarations,
+        manifest_key=key,
+        validation_errors=validation_errors,
+    ):
+        if required_name not in bindings:
+            validation_errors.append(
+                f"{key} requires binding: {required_name}"
+            )
+
+
+def _plugin_manifest_declared_names(
+    declarations: Any,
+    *,
+    manifest_key: str,
+    validation_errors: list[str],
+) -> set[str] | None:
+    if declarations is None:
+        return None
+    if isinstance(declarations, list):
+        return _plugin_string_set(
+            declarations,
+            manifest_key=manifest_key,
+            validation_errors=validation_errors,
+        )
+    if isinstance(declarations, dict):
+        names: set[str] = set()
+        for name in declarations:
+            if not isinstance(name, str) or not name.strip():
+                validation_errors.append(
+                    f"plugin_manifest.{manifest_key} contains an empty name"
+                )
+                continue
+            names.add(name.strip())
+        return names
+    validation_errors.append(f"plugin_manifest.{manifest_key} must be a list or object")
+    return None
+
+
+def _plugin_manifest_required_names(
+    declarations: Any,
+    *,
+    manifest_key: str,
+    validation_errors: list[str],
+) -> set[str]:
+    if not isinstance(declarations, dict):
+        return set()
+    required: set[str] = set()
+    for name, spec in declarations.items():
+        if not isinstance(name, str) or not name.strip():
+            continue
+        normalized_name = name.strip()
+        if spec is True:
+            required.add(normalized_name)
+        elif isinstance(spec, dict):
+            required_value = spec.get("required", False)
+            if isinstance(required_value, bool):
+                if required_value:
+                    required.add(normalized_name)
+            else:
+                validation_errors.append(
+                    f"plugin_manifest.{manifest_key}.{normalized_name}.required "
+                    "must be a boolean"
+                )
+    return required
+
+
+def _plugin_validate_required_params(
+    manifest: dict[str, Any],
+    *,
+    params: dict[str, Any],
+    validation_errors: list[str],
+) -> None:
+    required_params = _plugin_string_set(
+        manifest.get("required_params"),
+        manifest_key="required_params",
+        validation_errors=validation_errors,
+    )
+    if required_params is None:
+        return
+    for required_param in sorted(required_params):
+        if required_param not in params:
+            validation_errors.append(
+                f"plugin_manifest.required_params requires param: {required_param}"
+            )
+
+
+def _plugin_manifest_external_actions(
+    manifest: dict[str, Any],
+    *,
+    validation_errors: list[str],
+) -> bool:
+    declared = False
+    for key in (
+        "has_external_actions",
+        "requires_external_actions",
+        "external_actions",
+    ):
+        if key not in manifest:
+            continue
+        value = manifest[key]
+        if isinstance(value, bool):
+            declared = declared or value
+        else:
+            validation_errors.append(f"plugin_manifest.{key} must be a boolean")
+    side_effect_level = manifest.get("side_effect_level")
+    if isinstance(side_effect_level, str):
+        declared = declared or side_effect_level.strip().lower() in {
+            "external",
+            "write_external",
+            "external_write",
+            "high",
+        }
+    elif side_effect_level is not None:
+        validation_errors.append("plugin_manifest.side_effect_level must be a string")
+    return declared
+
+
+def _plugin_string_set(
+    value: Any,
+    *,
+    manifest_key: str,
+    validation_errors: list[str],
+) -> set[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        if not value.strip():
+            validation_errors.append(f"plugin_manifest.{manifest_key} is empty")
+            return set()
+        return {value.strip()}
+    if not isinstance(value, list):
+        validation_errors.append(
+            f"plugin_manifest.{manifest_key} must be a string list"
+        )
+        return None
+    items: set[str] = set()
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            validation_errors.append(
+                f"plugin_manifest.{manifest_key} must be a string list"
+            )
+            continue
+        normalized = item.strip()
+        if normalized in items:
+            validation_errors.append(
+                f"plugin_manifest.{manifest_key} contains duplicate value: "
+                f"{normalized}"
+            )
+        items.add(normalized)
+    return items
 
 
 class SqlMappingNodeHandler:
@@ -3589,6 +3964,19 @@ def _batch_rename_plan_row(
             write_log=write_log,
             log_path=log_path,
         )
+    if write_log and not log_path.strip():
+        return _batch_rename_status_row(
+            row_number=row_number,
+            original_path=original_value,
+            new_path="",
+            new_path_field=new_path_field,
+            status_field=status_field,
+            status="failed",
+            error_message="log_path is required when write_log is true",
+            actual_rename=actual_rename,
+            write_log=write_log,
+            log_path=log_path,
+        )
     source_path = Path(original_value).expanduser()
     target_path = _batch_rename_target_path(
         source_path,
@@ -3599,6 +3987,7 @@ def _batch_rename_plan_row(
     status = "planned"
     error_message = ""
     skipped_reason = ""
+    actual_rename_done = False
     try:
         source_exists = source_path.exists()
         source_is_dir = source_path.is_dir() if source_exists else False
@@ -3615,6 +4004,9 @@ def _batch_rename_plan_row(
     elif status != "failed" and source_is_dir and not allow_dirs:
         status = "failed"
         error_message = "directories are not allowed"
+    elif status != "failed" and source_path == target_path:
+        status = "skipped"
+        skipped_reason = "source and target path are identical"
     elif status != "failed" and not target_path.parent.exists():
         if create_target_dirs:
             status = "planned"
@@ -3622,16 +4014,24 @@ def _batch_rename_plan_row(
             status = "failed"
             error_message = "target directory does not exist"
     elif status != "failed" and target_exists:
-        if conflict_mode == "error":
+        if conflict_mode == "append_number":
+            target_path = _batch_rename_append_number_path(target_path)
+        elif conflict_mode == "error":
             status = "failed"
             error_message = "target path already exists"
         elif conflict_mode == "skip":
             status = "skipped"
             skipped_reason = "target path already exists"
     if status == "planned" and actual_rename:
-        status = "skipped"
-        skipped_reason = "rename execution is not implemented"
-    return _batch_rename_status_row(
+        status, error_message, skipped_reason, actual_rename_done = (
+            _batch_rename_execute(
+                source_path=source_path,
+                target_path=target_path,
+                create_target_dirs=create_target_dirs,
+                conflict_mode=conflict_mode,
+            )
+        )
+    status_row = _batch_rename_status_row(
         row_number=row_number,
         original_path=str(source_path),
         new_path=str(target_path),
@@ -3641,9 +4041,12 @@ def _batch_rename_plan_row(
         error_message=error_message,
         skipped_reason=skipped_reason,
         actual_rename=actual_rename,
+        actual_rename_done=actual_rename_done,
         write_log=write_log,
         log_path=log_path,
     )
+    _batch_rename_write_log_if_requested(status_row, write_log=write_log)
+    return status_row
 
 
 def _batch_rename_target_path(
@@ -3662,6 +4065,73 @@ def _batch_rename_target_path(
     return target_path
 
 
+def _batch_rename_append_number_path(target_path: Path) -> Path:
+    if not target_path.exists():
+        return target_path
+    index = 2
+    while True:
+        candidate = target_path.with_name(
+            f"{target_path.stem}_{index}{target_path.suffix}"
+        )
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def _batch_rename_execute(
+    *,
+    source_path: Path,
+    target_path: Path,
+    create_target_dirs: bool,
+    conflict_mode: str,
+) -> tuple[str, str, str, bool]:
+    try:
+        if create_target_dirs:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+        if target_path.exists():
+            if conflict_mode == "skip":
+                return (
+                    "skipped",
+                    "",
+                    "target path already exists",
+                    False,
+                )
+            if conflict_mode == "error":
+                return (
+                    "failed",
+                    "target path already exists",
+                    "",
+                    False,
+                )
+            if conflict_mode == "append_number":
+                target_path = _batch_rename_append_number_path(target_path)
+        source_path.replace(target_path)
+        return ("renamed", "", "", True)
+    except OSError as exc:
+        return ("failed", str(exc), "", False)
+
+
+def _batch_rename_write_log_if_requested(
+    status_row: dict[str, Any],
+    *,
+    write_log: bool,
+) -> None:
+    if not write_log:
+        return
+    log_path = status_row.get("log_path")
+    if not isinstance(log_path, str) or not log_path.strip():
+        return
+    try:
+        path = Path(log_path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as log_file:
+            log_file.write(
+                json.dumps(status_row, ensure_ascii=False, sort_keys=True) + "\n"
+            )
+    except OSError as exc:
+        status_row["error_message"] = str(exc)
+
+
 def _batch_rename_status_row(
     *,
     row_number: int,
@@ -3675,6 +4145,7 @@ def _batch_rename_status_row(
     write_log: bool,
     log_path: str,
     skipped_reason: str = "",
+    actual_rename_done: bool = False,
 ) -> dict[str, Any]:
     return {
         "source_row_number": row_number,
@@ -3683,7 +4154,7 @@ def _batch_rename_status_row(
         status_field: status,
         "error_message": error_message,
         "rename_requested": _bool_status(actual_rename),
-        "actual_rename": "false",
+        "actual_rename": _bool_status(actual_rename_done),
         "write_log": _bool_status(write_log),
         "log_path": log_path,
         "skipped_reason": skipped_reason,
@@ -3717,13 +4188,21 @@ def _plugin_status_schema() -> list[FieldSchemaModel]:
             ("status", "TEXT", False),
             ("plugin_id", "TEXT", False),
             ("plugin_version", "TEXT", False),
+            ("manifest_status", "TEXT", False),
+            ("manifest_plugin_id", "TEXT", False),
+            ("manifest_plugin_version", "TEXT", False),
             ("execution_mode", "TEXT", False),
             ("input_ref_count", "INTEGER", False),
             ("param_count", "INTEGER", False),
             ("input_binding_count", "INTEGER", False),
             ("output_binding_count", "INTEGER", False),
+            ("plugin_found", "TEXT", False),
+            ("validation_status", "TEXT", False),
+            ("validation_errors", "TEXT", False),
             ("allow_external_actions", "TEXT", False),
             ("enable_execute", "TEXT", False),
+            ("external_actions_declared", "TEXT", False),
+            ("execution_ready", "TEXT", False),
             ("actual_execute", "TEXT", False),
             ("skipped_reason", "TEXT", False),
         ]

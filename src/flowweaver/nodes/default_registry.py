@@ -1967,6 +1967,11 @@ def _plugin_node_schema() -> NodeConfigSchemaSpec:
                 title="Output Bindings",
                 description="Plugin output binding object.",
             ),
+            "plugin_manifest": NodeConfigFieldSpec(
+                type="object",
+                title="Plugin Manifest",
+                description="Plugin manifest object used for preflight validation.",
+            ),
             "execution_mode": NodeConfigFieldSpec(
                 type="enum",
                 title="Execution Mode",

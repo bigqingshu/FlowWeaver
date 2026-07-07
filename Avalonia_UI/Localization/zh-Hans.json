@@ -676,6 +676,7 @@
   "node_config.PluginNode.params.title": "参数",
   "node_config.PluginNode.input_bindings.title": "输入绑定",
   "node_config.PluginNode.output_bindings.title": "输出绑定",
+  "node_config.PluginNode.plugin_manifest.title": "插件清单",
   "node_config.PluginNode.execution_mode.title": "执行模式",
   "node_config.PluginNode.execution_mode.option.in_process": "进程内",
   "node_config.PluginNode.execution_mode.option.external_process": "外部进程",
