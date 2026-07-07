@@ -27,6 +27,7 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+    MERGE_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -2030,6 +2031,144 @@ def test_lookup_matched_field_name_node_outputs_match_metadata(
     ]
 
 
+def test_merge_columns_node_merges_fields_with_separator_and_trim(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "first", "data_type": "TEXT"},
+                    {"name": "last", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"first": " Ada ", "last": " Lovelace "}
+    rows[1] |= {"first": "Grace", "last": "Hopper"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    merge_task = make_task(
+        node_type=MERGE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-merge-columns",
+        node_instance_id="merge_columns",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "fields": ["first", "last"],
+            "separators": [" "],
+            "output_field": "full_name",
+            "trim_value": True,
+        },
+    )
+
+    merge_result = executor.execute(merge_task)
+
+    assert merge_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(merge_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "merge_columns_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "first",
+        "last",
+        "full_name",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "first": " Ada ",
+            "last": " Lovelace ",
+            "full_name": "Ada Lovelace",
+        },
+        {
+            "row_id": 2,
+            "first": "Grace",
+            "last": "Hopper",
+            "full_name": "Grace Hopper",
+        },
+    ]
+
+
+def test_merge_columns_node_skip_empty_and_overwrite_conflict(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "left", "data_type": "TEXT"},
+                    {"name": "middle", "data_type": "TEXT"},
+                    {"name": "right", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"left": "A", "middle": "", "right": "C"}
+    rows[1] |= {"left": "", "middle": "B", "right": ""}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    merge_task = make_task(
+        node_type=MERGE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-merge-columns",
+        node_instance_id="merge_columns",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "fields": ["left", "middle", "right"],
+            "separators": ["-"],
+            "output_field": "right",
+            "conflict_mode": "overwrite",
+            "skip_empty": True,
+        },
+    )
+
+    merge_result = executor.execute(merge_task)
+
+    assert merge_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(merge_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "left",
+        "middle",
+        "right",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "left": "A", "middle": "", "right": "A-C"},
+        {"row_id": 2, "left": "", "middle": "B", "right": "B"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2466,6 +2605,36 @@ def test_lookup_matched_field_name_node_requires_lookup_input_ref(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "requires main and lookup input_refs" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_merge_columns_node_returns_validation_error_for_missing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "first"], "seed": 0},
+        )
+    )
+    merge_task = make_task(
+        node_type=MERGE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-merge-columns",
+        node_instance_id="merge_columns",
+        input_refs=generate_result.output_refs,
+        config={"fields": ["first", "missing"], "output_field": "merged"},
+    )
+
+    result = executor.execute(merge_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields do not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

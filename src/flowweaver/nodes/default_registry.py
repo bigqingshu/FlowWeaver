@@ -23,6 +23,7 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+    MERGE_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -166,6 +167,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             ),
             output_ports=(NodePortSpec("out"),),
             config_schema=_lookup_matched_field_name_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=MERGE_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Merge Columns",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_merge_columns_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -951,6 +960,54 @@ def _lookup_matched_field_name_schema() -> NodeConfigSchemaSpec:
                 type="object",
                 title="No Match Value",
                 default="",
+            ),
+        }
+    )
+
+
+def _merge_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "fields": NodeConfigFieldSpec(
+                type="array",
+                title="Fields",
+                required=True,
+                item_type="string",
+            ),
+            "separators": NodeConfigFieldSpec(
+                type="array",
+                title="Separators",
+                item_type="string",
+                description=(
+                    "One separator is repeated between all fields; field_count - 1 "
+                    "separators are also supported."
+                ),
+            ),
+            "output_field": NodeConfigFieldSpec(
+                type="string",
+                title="Output Field",
+                default="merged",
+            ),
+            "skip_empty": NodeConfigFieldSpec(
+                type="boolean",
+                title="Skip Empty",
+                default=False,
+            ),
+            "trim_value": NodeConfigFieldSpec(
+                type="boolean",
+                title="Trim Value",
+                default=False,
+            ),
+            "empty_placeholder": NodeConfigFieldSpec(
+                type="object",
+                title="Empty Placeholder",
+                default="",
+            ),
+            "conflict_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Conflict Mode",
+                default="error",
+                enum=("error", "overwrite"),
             ),
         }
     )

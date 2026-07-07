@@ -49,6 +49,7 @@ DEDUPLICATE_ROWS_NODE_TYPE = "DeduplicateRowsNode"
 ADVANCED_FILTER_ROWS_NODE_TYPE = "AdvancedFilterRowsNode"
 EXTRACT_TEXT_NODE_TYPE = "ExtractTextNode"
 LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE = "LookupMatchedFieldNameNode"
+MERGE_COLUMNS_NODE_TYPE = "MergeColumnsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
@@ -82,6 +83,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             AdvancedFilterRowsNodeHandler(),
             ExtractTextNodeHandler(),
             LookupMatchedFieldNameNodeHandler(),
+            MergeColumnsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -1240,6 +1242,82 @@ class LookupMatchedFieldNameNodeHandler:
                         )
                     )
                 yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=output_schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
+class MergeColumnsNodeHandler:
+    node_type = MERGE_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        fields = _string_list_config(
+            task.config,
+            "fields",
+            node_type=self.node_type,
+        )
+        missing_fields = [
+            field_name
+            for field_name in fields
+            if not has_field(input_ref.schema, field_name)
+        ]
+        if missing_fields:
+            raise _NodeValidationError(
+                f"Fields do not exist: {', '.join(missing_fields)}"
+            )
+        separators = _merge_columns_separators(task.config, field_count=len(fields))
+        output_field = _optional_node_string_config(
+            task.config,
+            "output_field",
+            default="merged",
+            node_type=self.node_type,
+        )
+        conflict_mode = _enum_config(
+            task.config,
+            "conflict_mode",
+            default="error",
+            allowed={"error", "overwrite"},
+            node_type=self.node_type,
+        )
+        output_schema = _merge_columns_output_schema(
+            input_ref.schema,
+            output_field=output_field,
+            conflict_mode=conflict_mode,
+        )
+        skip_empty = _bool_config(task.config, "skip_empty", default=False)
+        trim_value = _bool_config(task.config, "trim_value", default=False)
+        empty_placeholder = task.config.get("empty_placeholder", "")
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    row
+                    | {
+                        output_field: _merge_columns_value(
+                            row,
+                            fields=fields,
+                            separators=separators,
+                            skip_empty=skip_empty,
+                            trim_value=trim_value,
+                            empty_placeholder=empty_placeholder,
+                        )
+                    }
+                    for row in rows
+                ]
 
         return [
             context.publish_row_batches(
@@ -2690,6 +2768,98 @@ def _lookup_matched_values(
             else "matched"
         )
     return values
+
+
+def _merge_columns_separators(
+    config: dict[str, Any],
+    *,
+    field_count: int,
+) -> list[str]:
+    separator_count = max(0, field_count - 1)
+    raw_separators = config.get("separators", [""] * separator_count)
+    if isinstance(raw_separators, str):
+        return [raw_separators] * separator_count
+    if not isinstance(raw_separators, list):
+        raise _NodeValidationError("MergeColumnsNode config.separators must be a list")
+    if separator_count == 0:
+        return []
+    if len(raw_separators) == 1:
+        separator = raw_separators[0]
+        if not isinstance(separator, str):
+            raise _NodeValidationError(
+                "MergeColumnsNode config.separators must contain strings"
+            )
+        return [separator] * separator_count
+    if len(raw_separators) != separator_count:
+        raise _NodeValidationError(
+            "MergeColumnsNode config.separators must contain one separator or "
+            "field_count - 1 separators"
+        )
+    separators: list[str] = []
+    for separator in raw_separators:
+        if not isinstance(separator, str):
+            raise _NodeValidationError(
+                "MergeColumnsNode config.separators must contain strings"
+            )
+        separators.append(separator)
+    return separators
+
+
+def _merge_columns_output_schema(
+    input_schema: list[FieldSchemaModel],
+    *,
+    output_field: str,
+    conflict_mode: str,
+) -> list[FieldSchemaModel]:
+    if has_field(input_schema, output_field):
+        if conflict_mode == "error":
+            raise _NodeValidationError(f"Field already exists: {output_field}")
+        return replace_field_schema(
+            input_schema,
+            output_field,
+            data_type="TEXT",
+            nullable=True,
+        )
+    return append_field(
+        input_schema,
+        name=output_field,
+        data_type="TEXT",
+        nullable=True,
+    )
+
+
+def _merge_columns_value(
+    row: dict[str, Any],
+    *,
+    fields: list[str],
+    separators: list[str],
+    skip_empty: bool,
+    trim_value: bool,
+    empty_placeholder: Any,
+) -> str:
+    values: list[str] = []
+    for field_name in fields:
+        value = row.get(field_name)
+        if value is None:
+            text_value = ""
+        else:
+            text_value = str(value)
+        if trim_value:
+            text_value = text_value.strip()
+        if _is_empty_cell(text_value):
+            if skip_empty:
+                continue
+            text_value = "" if empty_placeholder is None else str(empty_placeholder)
+        values.append(text_value)
+    if skip_empty:
+        separator = separators[0] if separators else ""
+        return separator.join(values)
+    merged = ""
+    for index, value in enumerate(values):
+        if index > 0:
+            merged += separators[index - 1]
+        merged += value
+    return merged
 
 
 def _replace_text_value(

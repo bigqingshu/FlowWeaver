@@ -18,6 +18,7 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+    MERGE_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -102,6 +103,7 @@ def test_default_builtin_table_handler_registry_covers_table_node_types() -> Non
         DEDUPLICATE_ROWS_NODE_TYPE,
         EXTRACT_TEXT_NODE_TYPE,
         LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+        MERGE_COLUMNS_NODE_TYPE,
         SAVE_MEMORY_TABLE_NODE_TYPE,
         SQL_MAPPING_NODE_TYPE,
     }

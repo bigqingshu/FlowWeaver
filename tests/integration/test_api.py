@@ -368,6 +368,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AdvancedFilterRowsNode",
         "ExtractTextNode",
         "LookupMatchedFieldNameNode",
+        "MergeColumnsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -417,6 +418,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["LookupMatchedFieldNameNode"]["input_ports"] == [
         {"name": "in", "required": True},
         {"name": "lookup", "required": True},
+    ]
+    assert by_type["MergeColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
         {"name": "in", "required": True}
@@ -679,6 +683,23 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "first",
         "last",
         "error",
+    ]
+
+    merge_columns_properties = by_type["MergeColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert merge_columns_properties["fields"] == {
+        "type": "array",
+        "title": "Fields",
+        "required": True,
+        "items": {"type": "string"},
+    }
+    assert merge_columns_properties["separators"]["items"] == {"type": "string"}
+    assert merge_columns_properties["output_field"]["default"] == "merged"
+    assert merge_columns_properties["skip_empty"]["default"] is False
+    assert merge_columns_properties["conflict_mode"]["enum"] == [
+        "error",
+        "overwrite",
     ]
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
