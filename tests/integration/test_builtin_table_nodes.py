@@ -4092,6 +4092,82 @@ def test_conditional_jump_node_selects_true_and_false_preview_branches(
     assert false_row["action"] == "jump_to_node"
 
 
+def test_preview_control_nodes_use_stable_status_schema(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    expected_fields = [
+        "signal_type",
+        "signal_status",
+        "source_node_id",
+        "target_node_id",
+        "target_anchor",
+        "condition_result",
+        "selected_branch",
+        "action",
+        "actual_control",
+        "reason",
+        "details",
+    ]
+    anchor_result = executor.execute(
+        make_task(
+            node_type=JUMP_ANCHOR_NODE_TYPE,
+            node_run_id="node-run-control-schema-anchor",
+            node_instance_id="control_schema_anchor",
+            config={"anchor_name": "stable_anchor"},
+        )
+    )
+    jump_result = executor.execute(
+        make_task(
+            node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-control-schema-jump",
+            node_instance_id="control_schema_jump",
+            config={"target_mode": "anchor", "target_anchor": "stable_anchor"},
+        )
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-control-schema-source",
+            node_instance_id="control_schema_source",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    condition_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-control-schema-condition",
+            node_instance_id="control_schema_condition",
+            input_refs=generate_result.output_refs,
+            config={"condition_type": "row_count", "operator": "GE", "value": 1},
+        )
+    )
+    conditional_jump_result = executor.execute(
+        make_task(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-control-schema-conditional-jump",
+            node_instance_id="control_schema_conditional_jump",
+            input_refs=condition_result.output_refs,
+            config={
+                "true_target_mode": "anchor",
+                "true_target_anchor": "stable_anchor",
+            },
+        )
+    )
+
+    for result in [anchor_result, jump_result, conditional_jump_result]:
+        assert result.status == NodeResultStatus.SUCCEEDED
+        output_ref, row = read_single_output_row(
+            registry=registry,
+            provider=provider,
+            result=result,
+        )
+        assert output_ref.role == TableRole.CURRENT
+        assert [field.name for field in output_ref.schema] == expected_fields
+        assert row["actual_control"] == "false"
+        assert json.loads(row["details"]) is not None
+
+
 def test_conditional_jump_node_uses_default_branch_for_invalid_condition(
     tmp_path: Path,
 ) -> None:
