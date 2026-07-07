@@ -379,6 +379,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AddCurrentDateTimeColumnNode",
         "ParseDateTimeNode",
         "ConditionFlagNode",
+        "ConditionalJumpNode",
         "JumpAnchorNode",
         "UnconditionalJumpNode",
         "SaveMemoryTableNode",
@@ -474,6 +475,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["ConditionFlagNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["ConditionalJumpNode"]["input_ports"] == [
+        {"name": "condition", "required": True}
+    ]
+    assert by_type["ConditionalJumpNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["JumpAnchorNode"]["input_ports"] == []
@@ -1008,6 +1015,29 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert condition_properties["case_sensitive"]["default"] is True
     assert condition_properties["true_value"]["default"] is True
     assert condition_properties["false_value"]["default"] is False
+
+    conditional_jump_properties = by_type["ConditionalJumpNode"]["config_schema"][
+        "properties"
+    ]
+    assert conditional_jump_properties["condition_field"] == {
+        "type": "string",
+        "title": "Condition Field",
+        "required": True,
+        "default": "result",
+    }
+    assert conditional_jump_properties["true_target_mode"]["enum"] == [
+        "anchor",
+        "node",
+    ]
+    assert conditional_jump_properties["false_target_mode"]["enum"] == [
+        "anchor",
+        "node",
+    ]
+    assert conditional_jump_properties["default_branch"]["enum"] == [
+        "true",
+        "false",
+    ]
+    assert conditional_jump_properties["default_branch"]["default"] == "false"
 
     jump_anchor_properties = by_type["JumpAnchorNode"]["config_schema"][
         "properties"

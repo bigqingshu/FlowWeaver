@@ -20,6 +20,7 @@ from flowweaver.nodes.builtin_table import (
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     BATCH_RENAME_FILES_NODE_TYPE,
     CONDITION_FLAG_NODE_TYPE,
+    CONDITIONAL_JUMP_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -3967,6 +3968,205 @@ def test_unconditional_jump_node_returns_validation_error_for_missing_target(
         assert expected_message in result.error["message"]
 
     assert registry.list_by_workflow_run("run-1") == []
+
+
+def test_conditional_jump_node_selects_true_and_false_preview_branches(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-conditional-source",
+            node_instance_id="conditional_source",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    true_condition = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-conditional-true",
+            node_instance_id="condition_true",
+            input_refs=generate_result.output_refs,
+            config={
+                "condition_type": "row_count",
+                "operator": "GE",
+                "value": 1,
+            },
+        )
+    )
+    false_condition = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-conditional-false",
+            node_instance_id="condition_false",
+            input_refs=generate_result.output_refs,
+            config={
+                "condition_type": "row_count",
+                "operator": "LT",
+                "value": 1,
+            },
+        )
+    )
+
+    true_jump = executor.execute(
+        make_task(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-conditional-jump-true",
+            node_instance_id="conditional_jump_true",
+            input_refs=true_condition.output_refs,
+            config={
+                "true_target_mode": "anchor",
+                "true_target_anchor": "success_anchor",
+                "false_target_mode": "node",
+                "false_target_node_id": "fallback_node",
+            },
+        )
+    )
+    false_jump = executor.execute(
+        make_task(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-conditional-jump-false",
+            node_instance_id="conditional_jump_false",
+            input_refs=false_condition.output_refs,
+            config={
+                "true_target_mode": "anchor",
+                "true_target_anchor": "success_anchor",
+                "false_target_mode": "node",
+                "false_target_node_id": "fallback_node",
+            },
+        )
+    )
+
+    assert true_jump.status == NodeResultStatus.SUCCEEDED
+    _true_ref, true_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=true_jump,
+    )
+    assert true_row["signal_type"] == "conditional_jump"
+    assert true_row["signal_status"] == "matched"
+    assert true_row["condition_result"] == "true"
+    assert true_row["selected_branch"] == "true"
+    assert true_row["target_anchor"] == "success_anchor"
+    assert true_row["target_node_id"] == ""
+    assert true_row["action"] == "jump_to_anchor"
+    assert true_row["actual_control"] == "false"
+
+    assert false_jump.status == NodeResultStatus.SUCCEEDED
+    _false_ref, false_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=false_jump,
+    )
+    assert false_row["signal_status"] == "not_matched"
+    assert false_row["condition_result"] == "false"
+    assert false_row["selected_branch"] == "false"
+    assert false_row["target_anchor"] == ""
+    assert false_row["target_node_id"] == "fallback_node"
+    assert false_row["action"] == "jump_to_node"
+
+
+def test_conditional_jump_node_uses_default_branch_for_invalid_condition(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    condition_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-conditional-invalid-source",
+            node_instance_id="conditional_invalid_source",
+            config={"rows": 1, "columns": ["result"], "seed": 0},
+        )
+    )
+    condition_ref = registry.get(condition_result.output_refs[0])
+    invalid_condition_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=condition_ref.schema,
+        rows=[{"result": "unknown"}],
+        output_name="invalid_condition",
+    )
+
+    jump_result = executor.execute(
+        make_task(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-conditional-jump-default",
+            node_instance_id="conditional_jump_default",
+            input_refs=[invalid_condition_ref.table_ref_id],
+            config={
+                "true_target_mode": "anchor",
+                "true_target_anchor": "manual_default",
+                "default_branch": "true",
+            },
+        )
+    )
+
+    assert jump_result.status == NodeResultStatus.SUCCEEDED
+    _output_ref, row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=jump_result,
+    )
+    assert row["condition_result"] == ""
+    assert row["selected_branch"] == "true"
+    assert row["target_anchor"] == "manual_default"
+    assert row["reason"] == (
+        "condition value is missing or unsupported; used default_branch=true"
+    )
+    details = json.loads(row["details"])
+    assert details["raw_condition"] == "unknown"
+    assert details["default_branch"] == "true"
+
+
+def test_conditional_jump_node_returns_validation_errors_for_invalid_config(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-conditional-error-source",
+            node_instance_id="conditional_error_source",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    condition_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-conditional-error-flag",
+            node_instance_id="condition_error_flag",
+            input_refs=generate_result.output_refs,
+            config={"condition_type": "row_count", "operator": "GE", "value": 1},
+        )
+    )
+    invalid_cases = [
+        (
+            {"condition_field": "missing"},
+            "Field does not exist: missing",
+        ),
+        (
+            {"true_target_mode": "anchor", "true_target_anchor": ""},
+            "ConditionalJumpNode config.true_target_anchor is required",
+        ),
+    ]
+
+    for index, (config, expected_message) in enumerate(invalid_cases, start=1):
+        result = executor.execute(
+            make_task(
+                node_type=CONDITIONAL_JUMP_NODE_TYPE,
+                node_run_id=f"node-run-conditional-jump-invalid-{index}",
+                node_instance_id=f"conditional_jump_invalid_{index}",
+                input_refs=condition_result.output_refs,
+                config=config,
+            )
+        )
+
+        assert result.status == NodeResultStatus.FAILED
+        assert result.output_refs == []
+        assert result.error is not None
+        assert result.error["error_code"] == "VALIDATION_ERROR"
+        assert expected_message in result.error["message"]
 
 
 def test_condition_flag_node_returns_validation_error_for_incompatible_compare(

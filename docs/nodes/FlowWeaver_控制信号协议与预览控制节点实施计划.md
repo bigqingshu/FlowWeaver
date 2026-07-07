@@ -213,10 +213,10 @@ actual_control=false
 | 1 | 增加控制状态表 helper | 已完成：在 `builtin_table.py` 内复用 `_simple_schema` 和 `publish_rows` |
 | 2 | 注册 `JumpAnchorNode` | 已完成：最小无输入状态表节点，输出 `anchor` 预览控制状态 |
 | 3 | 注册 `UnconditionalJumpNode` | 已完成：输出跳转计划，不解析全图，不改变 DAG |
-| 4 | 注册 `ConditionalJumpNode` | 读取 `ConditionFlagNode` 状态表并输出分支计划 |
-| 5 | 补 API schema 测试 | 确认节点定义、端口、配置 schema 暴露 |
-| 6 | 补执行测试 | 覆盖成功输出和配置错误 |
-| 7 | 更新节点状态文档 | 标记为预览控制节点，说明不改变 DAG |
+| 4 | 注册 `ConditionalJumpNode` | 已完成：读取 `ConditionFlagNode` 状态表并输出分支计划 |
+| 5 | 补 API schema 测试 | 已完成：确认节点定义、端口、配置 schema 暴露 |
+| 6 | 补执行测试 | 已完成：覆盖成功输出、默认分支和配置错误 |
+| 7 | 更新节点状态文档 | 已完成：标记为预览控制节点，说明不改变 DAG |
 
 ## 测试计划
 

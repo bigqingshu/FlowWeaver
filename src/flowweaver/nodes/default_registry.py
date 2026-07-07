@@ -15,6 +15,7 @@ from flowweaver.nodes.builtin_table import (
     ADVANCED_FILTER_ROWS_NODE_TYPE,
     BATCH_RENAME_FILES_NODE_TYPE,
     CONDITION_FLAG_NODE_TYPE,
+    CONDITIONAL_JUMP_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     COPY_ROWS_NODE_TYPE,
     DEDUPLICATE_ROWS_NODE_TYPE,
@@ -261,6 +262,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in"),),
             output_ports=(NodePortSpec("status"),),
             config_schema=_unconditional_jump_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=CONDITIONAL_JUMP_NODE_TYPE,
+            node_version="1.0",
+            display_name="Conditional Jump",
+            input_ports=(NodePortSpec("condition", required=True),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_conditional_jump_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1759,6 +1768,61 @@ def _unconditional_jump_schema() -> NodeConfigSchemaSpec:
                 type="string",
                 title="Reason",
                 default="",
+            ),
+        }
+    )
+
+
+def _conditional_jump_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "condition_field": NodeConfigFieldSpec(
+                type="string",
+                title="Condition Field",
+                required=True,
+                default="result",
+            ),
+            "true_target_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="True Target Mode",
+                default="anchor",
+                enum=("anchor", "node"),
+            ),
+            "true_target_anchor": NodeConfigFieldSpec(
+                type="string",
+                title="True Target Anchor",
+                description="Required when the true branch targets an anchor.",
+            ),
+            "true_target_node_id": NodeConfigFieldSpec(
+                type="string",
+                title="True Target Node ID",
+                description="Required when the true branch targets a node.",
+            ),
+            "false_target_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="False Target Mode",
+                default="anchor",
+                enum=("anchor", "node"),
+            ),
+            "false_target_anchor": NodeConfigFieldSpec(
+                type="string",
+                title="False Target Anchor",
+                description="Required when the false branch targets an anchor.",
+            ),
+            "false_target_node_id": NodeConfigFieldSpec(
+                type="string",
+                title="False Target Node ID",
+                description="Required when the false branch targets a node.",
+            ),
+            "default_branch": NodeConfigFieldSpec(
+                type="enum",
+                title="Default Branch",
+                default="false",
+                enum=("true", "false"),
+                description=(
+                    "Branch used when the condition value is missing or cannot "
+                    "be parsed as true/false."
+                ),
             ),
         }
     )

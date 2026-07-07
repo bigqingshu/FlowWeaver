@@ -70,6 +70,7 @@ PARSE_DATETIME_NODE_TYPE = "ParseDateTimeNode"
 CONDITION_FLAG_NODE_TYPE = "ConditionFlagNode"
 JUMP_ANCHOR_NODE_TYPE = "JumpAnchorNode"
 UNCONDITIONAL_JUMP_NODE_TYPE = "UnconditionalJumpNode"
+CONDITIONAL_JUMP_NODE_TYPE = "ConditionalJumpNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
 WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
@@ -126,6 +127,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             ConditionFlagNodeHandler(),
             JumpAnchorNodeHandler(),
             UnconditionalJumpNodeHandler(),
+            ConditionalJumpNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SaveRunTableNodeHandler(),
             WriteSelectedColumnsNodeHandler(),
@@ -2091,6 +2093,84 @@ class UnconditionalJumpNodeHandler:
                     "target_node_id": target_node_id.strip(),
                     "reason": reason,
                     "input_ref_id": task.input_refs[0] if task.input_refs else "",
+                },
+            )
+        ]
+
+
+class ConditionalJumpNodeHandler:
+    node_type = CONDITIONAL_JUMP_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        condition_field = _optional_node_string_config(
+            task.config,
+            "condition_field",
+            default="result",
+            node_type=self.node_type,
+        )
+        if find_field(input_ref.schema, condition_field) is None:
+            raise _NodeValidationError(f"Field does not exist: {condition_field}")
+        default_branch = _enum_config(
+            task.config,
+            "default_branch",
+            default="false",
+            allowed={"true", "false"},
+            node_type=self.node_type,
+        )
+        rows = context.read_all_rows(input_ref)
+        raw_condition = rows[0].get(condition_field) if rows else None
+        parsed_condition = _condition_jump_bool(raw_condition)
+        if parsed_condition is None:
+            selected_branch = default_branch
+            condition_result = ""
+            signal_status = "matched" if selected_branch == "true" else "not_matched"
+            reason = (
+                "condition value is missing or unsupported; "
+                f"used default_branch={default_branch}"
+            )
+        else:
+            selected_branch = _bool_status(parsed_condition)
+            condition_result = selected_branch
+            signal_status = "matched" if parsed_condition else "not_matched"
+            reason = f"condition result is {selected_branch}"
+
+        target_mode, target_anchor, target_node_id, action = (
+            _conditional_jump_target_config(
+                task.config,
+                branch=selected_branch,
+            )
+        )
+        return [
+            _publish_control_status(
+                context,
+                task,
+                signal_type="conditional_jump",
+                signal_status=signal_status,
+                source_node_id=task.node_instance_id,
+                target_node_id=target_node_id,
+                target_anchor=target_anchor,
+                condition_result=condition_result,
+                selected_branch=selected_branch,
+                action=action,
+                reason=reason,
+                details={
+                    "condition_field": condition_field,
+                    "raw_condition": raw_condition,
+                    "parsed_condition": condition_result,
+                    "selected_branch": selected_branch,
+                    "default_branch": default_branch,
+                    "target_mode": target_mode,
+                    "target_anchor": target_anchor,
+                    "target_node_id": target_node_id,
+                    "input_ref_id": input_ref.table_ref_id,
                 },
             )
         ]
@@ -4127,6 +4207,60 @@ def _publish_control_status(
         schema=_control_status_schema(),
         rows=[row],
     )
+
+
+def _conditional_jump_target_config(
+    config: dict[str, Any],
+    *,
+    branch: str,
+) -> tuple[str, str, str, str]:
+    prefix = "true" if branch == "true" else "false"
+    target_mode = _enum_config(
+        config,
+        f"{prefix}_target_mode",
+        default="anchor",
+        allowed={"anchor", "node"},
+        node_type=CONDITIONAL_JUMP_NODE_TYPE,
+    )
+    target_anchor = _optional_string_config(
+        config,
+        f"{prefix}_target_anchor",
+        node_type=CONDITIONAL_JUMP_NODE_TYPE,
+    )
+    target_node_id = _optional_string_config(
+        config,
+        f"{prefix}_target_node_id",
+        node_type=CONDITIONAL_JUMP_NODE_TYPE,
+    )
+    if target_mode == "anchor":
+        if not target_anchor.strip():
+            raise _NodeValidationError(
+                f"ConditionalJumpNode config.{prefix}_target_anchor is required"
+            )
+        return target_mode, target_anchor.strip(), "", "jump_to_anchor"
+    if not target_node_id.strip():
+        raise _NodeValidationError(
+            f"ConditionalJumpNode config.{prefix}_target_node_id is required"
+        )
+    return target_mode, "", target_node_id.strip(), "jump_to_node"
+
+
+def _condition_jump_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return None
 
 
 def _condition_flag_output_text(value: Any) -> str:

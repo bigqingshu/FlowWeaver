@@ -12,41 +12,58 @@ FlowWeaver 暂定类型名：`ConditionalJumpNode`
 
 优先级：P4
 
-当前状态：规划中，代码未实现
+当前状态：后端预览版已实现。已进入默认注册表，读取条件状态表并输出统一控制状态表；不改变 DAG 执行路径。
 
 ## 要解决的问题
 
-根据条件标志值选择目标锚点，从而改变工作流执行路径。
+第一版根据条件状态表选择目标锚点或目标节点，生成条件跳转计划。
 
-用户看到的能力：配置条件标志和不同值对应的目标锚点。
+用户看到的能力：读取 `ConditionFlagNode` 的结果表，为 true/false 分支配置目标锚点或目标节点，并产出可预览的跳转计划。
 
-不解决的内容：不计算条件本身，不做复杂路由表达式。
+不解决的内容：第一版不执行真实跳转，不修改 ready 队列，不跳过未选分支节点，不计算复杂路由表达式。
 
 ## 输入输出
 
-输入：条件结果 DataRef 或运行上下文标志，可选透传 `TableRef`。
+输入：一个条件状态 `TableRef`，通常来自 `ConditionFlagNode` 的 `status` 输出。
 
-输出：透传输入或控制信号。
+输出：一个 `status` 控制状态表。
 
 ## 配置项草案
 
 | 字段 | 含义 |
 |---|---|
-| `flag_name` | 读取的条件标志名 |
-| `jump_rules` | 条件值到目标锚点映射 |
-| `default_anchor_id` | 默认目标锚点 |
+| `condition_field` | 条件结果字段，默认 `result` |
+| `true_target_mode` | true 分支目标类型，`anchor` 或 `node` |
+| `true_target_anchor` | true 分支目标锚点 |
+| `true_target_node_id` | true 分支目标节点 |
+| `false_target_mode` | false 分支目标类型，`anchor` 或 `node` |
+| `false_target_anchor` | false 分支目标锚点 |
+| `false_target_node_id` | false 分支目标节点 |
+| `default_branch` | 条件值缺失或无法解析时使用的分支，默认 `false` |
 
 ## 数据契约
 
-节点读取标准条件结果，而不是依赖不可见的进程内状态。
+节点读取标准条件结果表，而不是依赖不可见的进程内状态。
 
-跳转目标需要在工作流定义校验阶段可验证。
+状态表字段遵循 `FlowWeaver_控制信号协议与预览控制节点实施计划.md`：
+
+```text
+signal_type=conditional_jump
+signal_status=matched / not_matched
+condition_result=true / false / 空
+selected_branch=true / false
+target_anchor=<selected_target_anchor>
+target_node_id=<selected_target_node_id>
+actual_control=false
+```
+
+第一版只校验被选分支目标是否填写，不校验目标是否真实存在。
 
 ## 执行模式
 
-普通运行：后置规划。
+普通运行：读取条件状态表并生成条件跳转计划。
 
-预览运行：需要展示实际路径。
+预览运行：展示选中分支、目标和 `actual_control=false`。
 
 支持取消：低优先级。
 
@@ -54,7 +71,7 @@ FlowWeaver 暂定类型名：`ConditionalJumpNode`
 
 ## 副作用与确认
 
-副作用与外部资源说明：改变执行路径，本身无外部写入。
+副作用与外部资源说明：第一版不改变执行路径，无外部写入。
 
 是否需要用户确认：后置讨论；如果可能跳过高风险确认节点，需要额外路径校验。
 
@@ -66,23 +83,27 @@ FlowWeaver 暂定类型名：`ConditionalJumpNode`
 
 ## 运行记录
 
-结果摘要建议包含读取标志、标志值、命中规则、目标锚点。
+结果表包含条件字段、解析结果、命中分支、目标锚点或目标节点，以及 `actual_control=false`。
 
 RuntimeEvent 必须记录条件跳转动作。
 
 ## 验收方式
 
-不同条件值可跳转到不同锚点。
+后端能注册 `ConditionalJumpNode`。
 
-无匹配规则时按默认锚点或不跳转策略处理。
+读取 `ConditionFlagNode result=true` 时选择 true 分支。
 
-条件标志不存在时返回清晰错误或警告。
+读取 `ConditionFlagNode result=false` 时选择 false 分支。
+
+条件字段缺失时返回验证错误。
+
+被选分支目标为空时返回验证错误。
 
 ## 实现前置依赖
 
-需要 `ConditionFlagNode` 或条件结果模型。
+需要 `ConditionFlagNode` 或其他同协议条件结果表。
 
-需要锚点和控制流调度模型。
+真实调度仍需要锚点和控制流调度模型。
 
 ## 简要模板补齐
 
@@ -92,7 +113,7 @@ RuntimeEvent 必须记录条件跳转动作。
 
 优先级：P4。
 
-当前状态：规划中，代码未实现。
+当前状态：后端预览版已实现，真实调度语义后置。
 
 要解决的问题：见上文“要解决的问题”章节。
 
@@ -107,14 +128,14 @@ RuntimeEvent 必须记录条件跳转动作。
 - provider_type：builtin
 - category：流程控制
 - ui_visibility：visible
-- enabled：规划期为 false；实现和验收后再按节点成熟度设为 true。
+- enabled：后端预览版已可注册使用；真实跳转仍后置。
 - display_name：条件跳转节点
 - config_schema：沿用本文“配置项草案”，后续落到统一 config_schema。
-- input_ports：按节点配置接收条件输入、当前 TableRef 或运行上下文。
-- output_ports：输出条件结果、目标锚点或流程控制状态。
+- input_ports：必填 `condition`。
+- output_ports：`status`，输出统一控制状态表。
 - implementation_ref：builtin.ConditionalJumpNode（暂定内部执行入口，后续实现时绑定真实实现；不对普通 UI 暴露）。
 
-输入说明：见上文“输入输出”章节；第一版按 input_ports 约束接收数据。
+输入说明：见上文“输入输出”章节；第一版接收一个条件状态表。
 
 输出说明：见上文“输入输出”章节；输出必须使用标准引用或标准运行摘要。
 
