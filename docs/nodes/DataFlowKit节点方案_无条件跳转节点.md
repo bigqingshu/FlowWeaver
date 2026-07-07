@@ -12,40 +12,51 @@ FlowWeaver 暂定类型名：`UnconditionalJumpNode`
 
 优先级：P4
 
-当前状态：规划中，代码未实现
+当前状态：后端预览版已实现。已进入默认注册表，输出统一控制状态表；不改变 DAG 执行路径。
 
 ## 要解决的问题
 
-无条件改变工作流执行路径，跳转到指定锚点。
+第一版用于生成无条件跳转计划，记录目标锚点或目标节点。
 
-用户看到的能力：配置目标锚点，运行到该节点时直接转到目标位置。
+用户看到的能力：配置目标锚点或目标节点，运行后产出可预览的跳转计划。
 
-不解决的内容：不做条件判断，不修改数据，不承担循环控制。
+不解决的内容：第一版不执行真实跳转，不修改 ready 队列，不跳过下游节点，不做条件判断，不修改数据，不承担循环控制。
 
 ## 输入输出
 
-输入：可选透传 `TableRef`。
+输入：可选单个 `TableRef`，第一版仅记录输入引用 ID，不透传数据。
 
-输出：透传输入或控制信号。
+输出：一个 `status` 控制状态表。
 
 ## 配置项草案
 
 | 字段 | 含义 |
 |---|---|
-| `target_anchor_id` | 目标锚点 ID |
-| `note` | 备注 |
+| `target_mode` | `anchor` 或 `node` |
+| `target_anchor` | 目标锚点名，`target_mode=anchor` 时必填 |
+| `target_node_id` | 目标节点实例 ID，`target_mode=node` 时必填 |
+| `reason` | 可选原因 |
 
 ## 数据契约
 
-节点的主要输出不是数据表，而是执行路径控制信号。
+节点第一版输出统一控制状态表，不输出业务数据表。
 
-这需要 FlowWeaver 有明确的控制信号协议。
+状态表字段遵循 `FlowWeaver_控制信号协议与预览控制节点实施计划.md`：
+
+```text
+signal_type=jump
+signal_status=planned
+target_anchor=<target_anchor>
+target_node_id=<target_node_id>
+action=jump_to_anchor / jump_to_node
+actual_control=false
+```
 
 ## 执行模式
 
-普通运行：后置规划。
+普通运行：生成无条件跳转计划状态表。
 
-预览运行：需要清晰展示实际执行路径。
+预览运行：展示计划目标和 `actual_control=false`。
 
 支持取消：低优先级。
 
@@ -53,7 +64,7 @@ FlowWeaver 暂定类型名：`UnconditionalJumpNode`
 
 ## 副作用与确认
 
-副作用与外部资源说明：改变执行路径，本身无外部写入。
+副作用与外部资源说明：第一版不改变执行路径，无外部写入。
 
 是否需要用户确认：后置讨论；跳过外部写入节点时应有可解释路径记录。
 
@@ -65,23 +76,25 @@ FlowWeaver 暂定类型名：`UnconditionalJumpNode`
 
 ## 运行记录
 
-结果摘要建议包含目标锚点、实际跳转节点、被跳过节点范围。
+结果表包含目标锚点或目标节点、计划动作、原因和 `actual_control=false`。
 
 RuntimeEvent 需要记录跳转动作。
 
 ## 验收方式
 
-目标锚点存在时按预期跳转。
+后端能注册 `UnconditionalJumpNode`。
 
-目标锚点不存在时不崩溃，并给出错误或默认不跳转策略。
+`target_mode=anchor` 且目标锚点名存在时输出 `jump_to_anchor` 计划。
 
-跳转记录可在运行日志中复核。
+`target_mode=node` 且目标节点 ID 存在时输出 `jump_to_node` 计划。
+
+被选目标字段为空时返回验证错误。
 
 ## 实现前置依赖
 
-需要锚点节点。
+预览版已无需锚点节点前置依赖。
 
-需要控制流调度模型。
+真实调度仍需要控制流调度模型。
 
 ## 简要模板补齐
 
@@ -91,7 +104,7 @@ RuntimeEvent 需要记录跳转动作。
 
 优先级：P4。
 
-当前状态：规划中，代码未实现。
+当前状态：后端预览版已实现，真实调度语义后置。
 
 要解决的问题：见上文“要解决的问题”章节。
 
@@ -106,14 +119,14 @@ RuntimeEvent 需要记录跳转动作。
 - provider_type：builtin
 - category：流程控制
 - ui_visibility：visible
-- enabled：规划期为 false；实现和验收后再按节点成熟度设为 true。
+- enabled：后端预览版已可注册使用；真实跳转仍后置。
 - display_name：无条件跳转节点
 - config_schema：沿用本文“配置项草案”，后续落到统一 config_schema。
-- input_ports：按节点配置接收条件输入、当前 TableRef 或运行上下文。
-- output_ports：输出条件结果、目标锚点或流程控制状态。
+- input_ports：可选 `in`。
+- output_ports：`status`，输出统一控制状态表。
 - implementation_ref：builtin.UnconditionalJumpNode（暂定内部执行入口，后续实现时绑定真实实现；不对普通 UI 暴露）。
 
-输入说明：见上文“输入输出”章节；第一版按 input_ports 约束接收数据。
+输入说明：见上文“输入输出”章节；第一版最多接收一个输入引用，仅记录不透传。
 
 输出说明：见上文“输入输出”章节；输出必须使用标准引用或标准运行摘要。
 

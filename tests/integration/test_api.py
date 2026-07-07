@@ -380,6 +380,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "ParseDateTimeNode",
         "ConditionFlagNode",
         "JumpAnchorNode",
+        "UnconditionalJumpNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
@@ -477,6 +478,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert by_type["JumpAnchorNode"]["input_ports"] == []
     assert by_type["JumpAnchorNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["UnconditionalJumpNode"]["input_ports"] == [
+        {"name": "in", "required": False}
+    ]
+    assert by_type["UnconditionalJumpNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -1013,6 +1020,20 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert jump_anchor_properties["description"]["default"] == ""
     assert jump_anchor_properties["allow_multiple_hits"]["default"] is False
+
+    unconditional_jump_properties = by_type["UnconditionalJumpNode"][
+        "config_schema"
+    ]["properties"]
+    assert unconditional_jump_properties["target_mode"] == {
+        "type": "enum",
+        "title": "Target Mode",
+        "required": True,
+        "default": "anchor",
+        "enum": ["anchor", "node"],
+    }
+    assert unconditional_jump_properties["target_anchor"]["type"] == "string"
+    assert unconditional_jump_properties["target_node_id"]["type"] == "string"
+    assert unconditional_jump_properties["reason"]["default"] == ""
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

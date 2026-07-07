@@ -43,6 +43,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    UNCONDITIONAL_JUMP_NODE_TYPE,
     UNPIVOT_ROWS_NODE_TYPE,
     WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
@@ -3860,6 +3861,111 @@ def test_jump_anchor_node_returns_validation_error_for_missing_anchor_name(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "JumpAnchorNode config.anchor_name is required" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
+
+
+def test_unconditional_jump_node_outputs_anchor_and_node_preview_plans(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    anchor_result = executor.execute(
+        make_task(
+            node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-jump-anchor-target",
+            node_instance_id="jump_anchor_target",
+            config={
+                "target_mode": "anchor",
+                "target_anchor": "after_cleanup",
+                "reason": "preview route",
+            },
+        )
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-jump-input",
+            node_instance_id="jump_input",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    node_result = executor.execute(
+        make_task(
+            node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+            node_run_id="node-run-jump-node-target",
+            node_instance_id="jump_node_target",
+            input_refs=generate_result.output_refs,
+            config={
+                "target_mode": "node",
+                "target_node_id": "target_node",
+                "reason": "manual node jump",
+            },
+        )
+    )
+
+    assert anchor_result.status == NodeResultStatus.SUCCEEDED
+    _anchor_ref, anchor_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=anchor_result,
+    )
+    assert anchor_row["signal_type"] == "jump"
+    assert anchor_row["signal_status"] == "planned"
+    assert anchor_row["source_node_id"] == "jump_anchor_target"
+    assert anchor_row["target_anchor"] == "after_cleanup"
+    assert anchor_row["target_node_id"] == ""
+    assert anchor_row["action"] == "jump_to_anchor"
+    assert anchor_row["actual_control"] == "false"
+    anchor_details = json.loads(anchor_row["details"])
+    assert anchor_details["target_mode"] == "anchor"
+    assert anchor_details["target_anchor"] == "after_cleanup"
+    assert anchor_details["input_ref_id"] == ""
+
+    assert node_result.status == NodeResultStatus.SUCCEEDED
+    _node_ref, node_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=node_result,
+    )
+    assert node_row["target_anchor"] == ""
+    assert node_row["target_node_id"] == "target_node"
+    assert node_row["action"] == "jump_to_node"
+    node_details = json.loads(node_row["details"])
+    assert node_details["target_mode"] == "node"
+    assert node_details["target_node_id"] == "target_node"
+    assert node_details["input_ref_id"] == generate_result.output_refs[0]
+
+
+def test_unconditional_jump_node_returns_validation_error_for_missing_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    invalid_cases = [
+        (
+            {"target_mode": "anchor", "target_anchor": " "},
+            "UnconditionalJumpNode config.target_anchor is required",
+        ),
+        (
+            {"target_mode": "node", "target_node_id": ""},
+            "UnconditionalJumpNode config.target_node_id is required",
+        ),
+    ]
+
+    for index, (config, expected_message) in enumerate(invalid_cases, start=1):
+        result = executor.execute(
+            make_task(
+                node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+                node_run_id=f"node-run-unconditional-jump-invalid-{index}",
+                node_instance_id=f"unconditional_jump_invalid_{index}",
+                config=config,
+            )
+        )
+
+        assert result.status == NodeResultStatus.FAILED
+        assert result.output_refs == []
+        assert result.error is not None
+        assert result.error["error_code"] == "VALIDATION_ERROR"
+        assert expected_message in result.error["message"]
+
     assert registry.list_by_workflow_run("run-1") == []
 
 

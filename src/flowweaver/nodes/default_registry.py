@@ -38,6 +38,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    UNCONDITIONAL_JUMP_NODE_TYPE,
     UNPIVOT_ROWS_NODE_TYPE,
     WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
@@ -252,6 +253,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Jump Anchor",
             output_ports=(NodePortSpec("status"),),
             config_schema=_jump_anchor_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=UNCONDITIONAL_JUMP_NODE_TYPE,
+            node_version="1.0",
+            display_name="Unconditional Jump",
+            input_ports=(NodePortSpec("in"),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_unconditional_jump_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1721,6 +1730,35 @@ def _jump_anchor_schema() -> NodeConfigSchemaSpec:
                     "Recorded for future real scheduling; preview execution only "
                     "publishes a control status table."
                 ),
+            ),
+        }
+    )
+
+
+def _unconditional_jump_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "target_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Target Mode",
+                required=True,
+                default="anchor",
+                enum=("anchor", "node"),
+            ),
+            "target_anchor": NodeConfigFieldSpec(
+                type="string",
+                title="Target Anchor",
+                description="Required when target_mode is anchor.",
+            ),
+            "target_node_id": NodeConfigFieldSpec(
+                type="string",
+                title="Target Node ID",
+                description="Required when target_mode is node.",
+            ),
+            "reason": NodeConfigFieldSpec(
+                type="string",
+                title="Reason",
+                default="",
             ),
         }
     )
