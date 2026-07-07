@@ -31,6 +31,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_SEQUENCE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    JUMP_ANCHOR_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
@@ -3778,6 +3779,88 @@ def test_condition_flag_node_handles_empty_and_case_insensitive_values(
     assert case_row["result"] == "true"
     assert case_row["matched_count"] == 1
     assert json.loads(case_row["details"])["case_sensitive"] is False
+
+
+def test_jump_anchor_node_outputs_preview_control_status_table(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    result = executor.execute(
+        make_task(
+            node_type=JUMP_ANCHOR_NODE_TYPE,
+            node_run_id="node-run-jump-anchor",
+            node_instance_id="jump_anchor",
+            config={
+                "anchor_name": "after_cleanup",
+                "description": "manual preview anchor",
+                "allow_multiple_hits": True,
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    output_ref, row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=result,
+    )
+    assert output_ref.logical_table_id == "jump_anchor_output"
+    assert output_ref.role == TableRole.CURRENT
+    assert [field.name for field in output_ref.schema] == [
+        "signal_type",
+        "signal_status",
+        "source_node_id",
+        "target_node_id",
+        "target_anchor",
+        "condition_result",
+        "selected_branch",
+        "action",
+        "actual_control",
+        "reason",
+        "details",
+    ]
+    assert row == {
+        "signal_type": "anchor",
+        "signal_status": "planned",
+        "source_node_id": "jump_anchor",
+        "target_node_id": "",
+        "target_anchor": "after_cleanup",
+        "condition_result": "",
+        "selected_branch": "",
+        "action": "declare_anchor",
+        "actual_control": "false",
+        "reason": "manual preview anchor",
+        "details": json.dumps(
+            {
+                "allow_multiple_hits": True,
+                "anchor_name": "after_cleanup",
+                "description": "manual preview anchor",
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+        ),
+    }
+
+
+def test_jump_anchor_node_returns_validation_error_for_missing_anchor_name(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    result = executor.execute(
+        make_task(
+            node_type=JUMP_ANCHOR_NODE_TYPE,
+            node_run_id="node-run-jump-anchor-invalid",
+            node_instance_id="jump_anchor_invalid",
+            config={"anchor_name": "   "},
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "JumpAnchorNode config.anchor_name is required" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
 
 
 def test_condition_flag_node_returns_validation_error_for_incompatible_compare(

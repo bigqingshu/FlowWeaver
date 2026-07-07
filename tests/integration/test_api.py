@@ -379,6 +379,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AddCurrentDateTimeColumnNode",
         "ParseDateTimeNode",
         "ConditionFlagNode",
+        "JumpAnchorNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
         "WriteSelectedColumnsNode",
@@ -472,6 +473,10 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["ConditionFlagNode"]["output_ports"] == [
+        {"name": "status", "required": False}
+    ]
+    assert by_type["JumpAnchorNode"]["input_ports"] == []
+    assert by_type["JumpAnchorNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -996,6 +1001,18 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert condition_properties["case_sensitive"]["default"] is True
     assert condition_properties["true_value"]["default"] is True
     assert condition_properties["false_value"]["default"] is False
+
+    jump_anchor_properties = by_type["JumpAnchorNode"]["config_schema"][
+        "properties"
+    ]
+    assert jump_anchor_properties["anchor_name"] == {
+        "type": "string",
+        "title": "Anchor Name",
+        "required": True,
+        "default": "anchor",
+    }
+    assert jump_anchor_properties["description"]["default"] == ""
+    assert jump_anchor_properties["allow_multiple_hits"]["default"] is False
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

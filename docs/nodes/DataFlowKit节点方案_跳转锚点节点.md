@@ -12,7 +12,7 @@ FlowWeaver 暂定类型名：`JumpAnchorNode`
 
 优先级：P4
 
-当前状态：规划中，代码未实现
+当前状态：后端预览版已实现。已进入默认注册表，输出统一控制状态表；不改变 DAG 执行路径。
 
 ## 要解决的问题
 
@@ -24,27 +24,35 @@ FlowWeaver 暂定类型名：`JumpAnchorNode`
 
 ## 输入输出
 
-输入：可选透传 `TableRef`。
+输入：第一版无输入。
 
-输出：默认透传输入 `TableRef`，或无输出。
+输出：一个 `status` 控制状态表。
 
 ## 配置项草案
 
 | 字段 | 含义 |
 |---|---|
-| `anchor_id` | 锚点 ID |
-| `anchor_name` | 锚点显示名 |
+| `anchor_name` | 锚点名，必填 |
 | `description` | 说明 |
+| `allow_multiple_hits` | 后续真实调度使用；第一版仅记录 |
 
 ## 数据契约
 
-锚点是控制流元数据，不应写入业务表。
+锚点第一版以普通后端节点运行，不写业务表，只输出统一控制状态表。
 
-如果允许透传，应保持输入输出引用关系清晰。
+状态表字段遵循 `FlowWeaver_控制信号协议与预览控制节点实施计划.md`：
+
+```text
+signal_type=anchor
+signal_status=planned
+target_anchor=<anchor_name>
+action=declare_anchor
+actual_control=false
+```
 
 ## 执行模式
 
-普通运行：后置规划。
+普通运行：生成锚点声明状态表。
 
 支持取消：不需要或低优先级。
 
@@ -58,29 +66,31 @@ FlowWeaver 暂定类型名：`JumpAnchorNode`
 
 ## 主程序交互边界
 
-当前 FlowWeaver DAG 没有跳转锚点语义，因此不应先实现节点再让调度器补特殊分支。
+当前 FlowWeaver DAG 没有跳转锚点语义，因此第一版只输出预览控制状态，不让调度器补特殊分支。
 
-应先设计条件边、跳转边或有序执行模式。
+真实跳转、锚点唯一性校验和路径高亮仍属于后续控制信号或调度协议。
 
 ## 运行记录
 
-结果摘要建议记录锚点 ID 和是否被跳转引用。
+结果表记录锚点名、说明、是否允许多次命中，以及 `actual_control=false`。
 
 RuntimeEvent 可记录经过锚点。
 
 ## 验收方式
 
-锚点 ID 在工作流内唯一。
+后端能注册 `JumpAnchorNode`。
 
-跳转节点能解析到锚点。
+运行后能输出一行 `anchor` 控制状态表。
+
+`anchor_name` 为空时返回验证错误。
 
 未被引用时不影响运行。
 
 ## 实现前置依赖
 
-需要控制流模型。
+预览版已无需控制流模型前置依赖。
 
-需要工作流定义层校验锚点唯一性。
+真实调度前仍需要工作流定义层校验锚点唯一性。
 
 ## 简要模板补齐
 
@@ -90,7 +100,7 @@ RuntimeEvent 可记录经过锚点。
 
 优先级：P4。
 
-当前状态：规划中，代码未实现。
+当前状态：后端预览版已实现，真实调度语义后置。
 
 要解决的问题：见上文“要解决的问题”章节。
 
@@ -105,14 +115,14 @@ RuntimeEvent 可记录经过锚点。
 - provider_type：builtin
 - category：流程控制
 - ui_visibility：visible
-- enabled：规划期为 false；实现和验收后再按节点成熟度设为 true。
+- enabled：后端预览版已可注册使用；真实跳转仍后置。
 - display_name：跳转锚点节点
 - config_schema：沿用本文“配置项草案”，后续落到统一 config_schema。
-- input_ports：按节点配置接收条件输入、当前 TableRef 或运行上下文。
-- output_ports：输出条件结果、目标锚点或流程控制状态。
+- input_ports：第一版无输入。
+- output_ports：`status`，输出统一控制状态表。
 - implementation_ref：builtin.JumpAnchorNode（暂定内部执行入口，后续实现时绑定真实实现；不对普通 UI 暴露）。
 
-输入说明：见上文“输入输出”章节；第一版按 input_ports 约束接收数据。
+输入说明：见上文“输入输出”章节；第一版不接收输入表。
 
 输出说明：见上文“输入输出”章节；输出必须使用标准引用或标准运行摘要。
 

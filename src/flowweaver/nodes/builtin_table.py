@@ -68,6 +68,7 @@ NUMERIC_COLUMN_OPERATION_NODE_TYPE = "NumericColumnOperationNode"
 ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE = "AddCurrentDateTimeColumnNode"
 PARSE_DATETIME_NODE_TYPE = "ParseDateTimeNode"
 CONDITION_FLAG_NODE_TYPE = "ConditionFlagNode"
+JUMP_ANCHOR_NODE_TYPE = "JumpAnchorNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
 WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
@@ -122,6 +123,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             AddCurrentDateTimeColumnNodeHandler(),
             ParseDateTimeNodeHandler(),
             ConditionFlagNodeHandler(),
+            JumpAnchorNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SaveRunTableNodeHandler(),
             WriteSelectedColumnsNodeHandler(),
@@ -1976,6 +1978,50 @@ class ConditionFlagNodeHandler:
             rows=[status_row],
         )
         return [status_ref]
+
+
+class JumpAnchorNodeHandler:
+    node_type = JUMP_ANCHOR_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        if task.input_refs:
+            raise _NodeValidationError("JumpAnchorNode does not accept inputs")
+        anchor_name = _node_string_config(
+            task.config,
+            "anchor_name",
+            node_type=self.node_type,
+        )
+        description = _optional_string_config(
+            task.config,
+            "description",
+            node_type=self.node_type,
+        )
+        allow_multiple_hits = _bool_config(
+            task.config,
+            "allow_multiple_hits",
+            default=False,
+        )
+        return [
+            _publish_control_status(
+                context,
+                task,
+                signal_type="anchor",
+                signal_status="planned",
+                source_node_id=task.node_instance_id,
+                target_anchor=anchor_name,
+                action="declare_anchor",
+                reason=description,
+                details={
+                    "anchor_name": anchor_name,
+                    "description": description,
+                    "allow_multiple_hits": allow_multiple_hits,
+                },
+            )
+        ]
 
 
 class SaveMemoryTableNodeHandler:
@@ -3954,6 +4000,60 @@ def _condition_flag_status_schema() -> list[FieldSchemaModel]:
             ("total_rows", "INTEGER", False),
             ("details", "TEXT", False),
         ]
+    )
+
+
+def _control_status_schema() -> list[FieldSchemaModel]:
+    return _simple_schema(
+        [
+            ("signal_type", "TEXT", False),
+            ("signal_status", "TEXT", False),
+            ("source_node_id", "TEXT", False),
+            ("target_node_id", "TEXT", False),
+            ("target_anchor", "TEXT", False),
+            ("condition_result", "TEXT", False),
+            ("selected_branch", "TEXT", False),
+            ("action", "TEXT", False),
+            ("actual_control", "TEXT", False),
+            ("reason", "TEXT", False),
+            ("details", "TEXT", False),
+        ]
+    )
+
+
+def _publish_control_status(
+    context: BuiltinTableNodeContext,
+    task: NodeTaskModel,
+    *,
+    signal_type: str,
+    signal_status: str,
+    source_node_id: str,
+    action: str,
+    target_node_id: str = "",
+    target_anchor: str = "",
+    condition_result: str = "",
+    selected_branch: str = "",
+    reason: str = "",
+    details: dict[str, Any] | None = None,
+) -> TableRefModel:
+    row = {
+        "signal_type": signal_type,
+        "signal_status": signal_status,
+        "source_node_id": source_node_id,
+        "target_node_id": target_node_id,
+        "target_anchor": target_anchor,
+        "condition_result": condition_result,
+        "selected_branch": selected_branch,
+        "action": action,
+        "actual_control": _bool_status(False),
+        "reason": reason,
+        "details": _json_text(details or {}),
+    }
+    return context.publish_rows(
+        task,
+        output_name=f"{task.node_instance_id}_output",
+        schema=_control_status_schema(),
+        rows=[row],
     )
 
 

@@ -26,6 +26,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_SEQUENCE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    JUMP_ANCHOR_NODE_TYPE,
     LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
@@ -244,6 +245,13 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("status"),),
             config_schema=_condition_flag_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=JUMP_ANCHOR_NODE_TYPE,
+            node_version="1.0",
+            display_name="Jump Anchor",
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_jump_anchor_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -1686,6 +1694,33 @@ def _condition_flag_schema() -> NodeConfigSchemaSpec:
                 type="object",
                 title="False Value",
                 default=False,
+            ),
+        }
+    )
+
+
+def _jump_anchor_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "anchor_name": NodeConfigFieldSpec(
+                type="string",
+                title="Anchor Name",
+                required=True,
+                default="anchor",
+            ),
+            "description": NodeConfigFieldSpec(
+                type="string",
+                title="Description",
+                default="",
+            ),
+            "allow_multiple_hits": NodeConfigFieldSpec(
+                type="boolean",
+                title="Allow Multiple Hits",
+                default=False,
+                description=(
+                    "Recorded for future real scheduling; preview execution only "
+                    "publishes a control status table."
+                ),
             ),
         }
     )
