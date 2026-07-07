@@ -8,7 +8,7 @@ namespace Avalonia_UI.Tests;
 public sealed class WorkflowSummaryViewHeadlessSmokeTests
 {
     [TestMethod]
-    public void WorkflowSummaryViewKeepsAddNodePanelBindingsInSourceXaml()
+    public void WorkflowSummaryViewKeepsInlineAddNodeBindingsInSourceXaml()
     {
         var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
@@ -31,16 +31,19 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
 
         StringAssert.Contains(
             summaryXaml,
-            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
-        StringAssert.Contains(
-            summaryXaml,
-            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>");
+            "<workflow:WorkflowAddNodeView />");
+        Assert.IsFalse(
+            summaryXaml.Contains("OpenWorkflowAddNodePanelCommand", StringComparison.Ordinal),
+            "The middle column should show the inline add-node form without an opener button.");
+        Assert.IsFalse(
+            summaryXaml.Contains("IsWorkflowAddNodePanelVisible", StringComparison.Ordinal),
+            "The inline add-node form should not depend on the old panel visibility flag.");
         Assert.IsFalse(
             nodeListXaml.Contains("OpenWorkflowAddNodePanelCommand", StringComparison.Ordinal),
             "The node management column should not host add-node controls.");
         Assert.IsFalse(
             nodeListXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal),
-            "The node management column should not host the add-node panel.");
+            "The node management column should not host the add-node form.");
         StringAssert.Contains(
             addNodeXaml,
             "ItemsSource=\"{Binding NodeDefinitions}\"");
@@ -49,7 +52,10 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
             "SelectedItem=\"{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}\"");
         StringAssert.Contains(
             addNodeXaml,
-            "Command=\"{Binding CloseWorkflowAddNodePanelCommand}\"");
+            "Command=\"{Binding RefreshNodeDefinitionsCommand}\"");
+        Assert.IsFalse(
+            addNodeXaml.Contains("CloseWorkflowAddNodePanelCommand", StringComparison.Ordinal),
+            "The inline add-node form should not expose a close command.");
         StringAssert.Contains(
             addNodeXaml,
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");

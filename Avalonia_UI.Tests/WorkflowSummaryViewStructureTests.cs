@@ -237,19 +237,17 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(
             summaryXaml,
-            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>");
-        StringAssert.Contains(
-            summaryXaml,
-            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
+            "<workflow:WorkflowAddNodeView />");
+        Assert.IsFalse(
+            summaryXaml.Contains("Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"", StringComparison.Ordinal));
         Assert.IsFalse(
             nodeListXaml.Contains("<workflow:WorkflowAddNodeView", StringComparison.Ordinal));
         Assert.IsFalse(
             nodeListXaml.Contains("Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"", StringComparison.Ordinal));
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding AddNodeText}\"");
-        StringAssert.Contains(addNodeXaml, "Content=\"{Binding CloseText}\"");
-        StringAssert.Contains(
-            addNodeXaml,
-            "Command=\"{Binding CloseWorkflowAddNodePanelCommand}\"");
+        Assert.IsFalse(addNodeXaml.Contains("Content=\"{Binding CloseText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            addNodeXaml.Contains("Command=\"{Binding CloseWorkflowAddNodePanelCommand}\"", StringComparison.Ordinal));
         StringAssert.Contains(addNodeXaml, "Content=\"{Binding AddNodeText}\"");
         StringAssert.Contains(
             addNodeXaml,
@@ -378,7 +376,7 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
-    public void NodeActionGroupContainsDraftMutationButtonsAndAdvancedToggle()
+    public void NodeActionGroupContainsDraftMutationButtonsAndDraftJsonStaysInMiddleColumn()
     {
         var xaml = ReadSourceFile(
             "Avalonia_UI",
@@ -398,6 +396,12 @@ public sealed class WorkflowSummaryViewStructureTests
             "Components",
             "Workflow",
             "WorkflowSummaryView.axaml");
+        var editorXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowEditorView.axaml");
 
         StringAssert.Contains(xaml, "Text=\"{Binding NodeActionsSectionText}\"");
         StringAssert.Contains(xaml, "Content=\"?\"");
@@ -414,10 +418,9 @@ public sealed class WorkflowSummaryViewStructureTests
             "Command=\"{Binding AddWorkflowDefinitionDraftNodeCommand}\"");
         StringAssert.Contains(
             summaryXaml,
-            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"");
-        StringAssert.Contains(
-            summaryXaml,
-            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>");
+            "<workflow:WorkflowAddNodeView />");
+        Assert.IsFalse(
+            summaryXaml.Contains("Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"", StringComparison.Ordinal));
         Assert.IsFalse(
             xaml.Contains("Content=\"{Binding AddNodeText}\"", StringComparison.Ordinal));
         Assert.IsFalse(
@@ -459,13 +462,20 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding DeleteSelectedWorkflowDefinitionDraftNodesCommand}\"");
-        StringAssert.Contains(xaml, "Content=\"{Binding ShowAdvancedDraftJsonText}\"");
+        Assert.IsFalse(
+            xaml.Contains("Content=\"{Binding ShowAdvancedDraftJsonText}\"", StringComparison.Ordinal));
+        Assert.IsFalse(
+            xaml.Contains("IsWorkflowDraftJsonAdvancedVisible", StringComparison.Ordinal));
+        StringAssert.Contains(editorXaml, "Content=\"{Binding ShowAdvancedDraftJsonText}\"");
         StringAssert.Contains(
-            xaml,
+            editorXaml,
             "IsChecked=\"{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}\"");
         StringAssert.Contains(
-            summaryXaml,
-            "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"");
+            editorXaml,
+            "IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"");
+        StringAssert.Contains(summaryXaml, "<workflow:WorkflowEditorView />");
+        Assert.IsFalse(
+            summaryXaml.Contains("<workflow:WorkflowEditorView IsVisible=", StringComparison.Ordinal));
         Assert.IsFalse(
             summaryXaml.Contains("Text=\"{Binding NodeActionsSectionText}\"", StringComparison.Ordinal));
         Assert.IsFalse(
@@ -474,19 +484,20 @@ public sealed class WorkflowSummaryViewStructureTests
         var actionGroupIndex = xaml.IndexOf(
             "Text=\"{Binding NodeActionsSectionText}\"",
             StringComparison.Ordinal);
-        var advancedToggleIndex = xaml.IndexOf(
-            "Content=\"{Binding ShowAdvancedDraftJsonText}\"",
-            StringComparison.Ordinal);
         var editorIndex = summaryXaml.IndexOf(
-            "<workflow:WorkflowEditorView IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"",
+            "<workflow:WorkflowEditorView />",
             StringComparison.Ordinal);
+        var runtimeOptionsIndex = summaryXaml.IndexOf(
+            "<workflow:WorkflowRuntimeOptionsSummaryView />",
+            StringComparison.Ordinal);
+        var connectionsIndex = summaryXaml.IndexOf(
+            "Text=\"{Binding ConnectionsSectionText}\"",
+            StringComparison.Ordinal);
+        Assert.IsTrue(actionGroupIndex >= 0, "The node action group should still host node actions.");
+        Assert.IsTrue(editorIndex >= 0, "The draft JSON editor should remain in the middle column.");
         Assert.IsTrue(
-            actionGroupIndex >= 0 && advancedToggleIndex > actionGroupIndex,
-            "The draft JSON toggle should live inside the node action group.");
-        Assert.IsGreaterThanOrEqualTo(
-            0,
-            editorIndex,
-            "The draft JSON editor should remain controlled by the node action group's advanced toggle.");
+            runtimeOptionsIndex >= 0 && editorIndex > runtimeOptionsIndex && connectionsIndex > editorIndex,
+            "The draft JSON editor should stay below runtime options and above connections.");
 
         var infoFlyoutIndex = xaml.IndexOf("<Button.Flyout>", StringComparison.Ordinal);
         var nodeMoveSemanticsIndex = xaml.IndexOf(
@@ -573,6 +584,14 @@ public sealed class WorkflowSummaryViewStructureTests
             "Workflow",
             "WorkflowEditorView.axaml");
 
+        StringAssert.Contains(xaml, "Text=\"{Binding DraftJsonSectionText}\"");
+        StringAssert.Contains(xaml, "Content=\"{Binding ShowAdvancedDraftJsonText}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsChecked=\"{Binding IsWorkflowDraftJsonAdvancedVisible, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsVisible=\"{Binding IsWorkflowDraftJsonAdvancedVisible}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding RestoreText}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding RestoreWorkflowDefinitionDraftCommand}\"");
         StringAssert.Contains(xaml, "Content=\"{Binding ValidateText}\"");
@@ -643,7 +662,7 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
-    public void WorkflowSummaryViewHostsAddNodePanelAboveNodeConfig()
+    public void WorkflowSummaryViewHostsInlineAddNodeAboveNodeConfig()
     {
         var summaryXaml = ReadSourceFile(
             "Avalonia_UI",
@@ -658,11 +677,8 @@ public sealed class WorkflowSummaryViewStructureTests
             "Workflow",
             "WorkflowNodeListView.axaml");
 
-        var openCommandIndex = summaryXaml.IndexOf(
-            "Command=\"{Binding OpenWorkflowAddNodePanelCommand}\"",
-            StringComparison.Ordinal);
         var panelIndex = summaryXaml.IndexOf(
-            "<workflow:WorkflowAddNodeView IsVisible=\"{Binding IsWorkflowAddNodePanelVisible}\"/>",
+            "<workflow:WorkflowAddNodeView />",
             StringComparison.Ordinal);
         var configIndex = summaryXaml.IndexOf(
             "<workflow:WorkflowSelectedNodeConfigView />",
@@ -670,19 +686,21 @@ public sealed class WorkflowSummaryViewStructureTests
 
         Assert.AreNotEqual(
             -1,
-            openCommandIndex,
-            "The middle column should expose the add-node panel entry.");
-        Assert.AreNotEqual(
-            -1,
             panelIndex,
-            "The middle column should host the inline add-node panel.");
+            "The middle column should host the inline add-node form.");
         Assert.AreNotEqual(
             -1,
             configIndex,
             "The middle column should still host the selected node config panel.");
         Assert.IsTrue(
-            openCommandIndex < panelIndex && panelIndex < configIndex,
-            "The add-node entry and panel should stay above selected node configuration.");
+            panelIndex < configIndex,
+            "The add-node form should stay above selected node configuration.");
+        Assert.IsFalse(
+            summaryXaml.Contains("OpenWorkflowAddNodePanelCommand", StringComparison.Ordinal),
+            "The middle column should not require opening a separate add-node panel.");
+        Assert.IsFalse(
+            summaryXaml.Contains("IsWorkflowAddNodePanelVisible", StringComparison.Ordinal),
+            "The inline add-node form should not depend on the old panel visibility flag.");
         Assert.IsFalse(
             nodeListXaml.Contains("OpenWorkflowAddNodePanelCommand", StringComparison.Ordinal),
             "The node management column should not host add-node controls.");
