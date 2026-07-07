@@ -565,3 +565,113 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
     completed = store.get_workflow_run(workflow_run_id)
     assert completed is not None
     assert completed.status == WorkflowRunStatus.SUCCEEDED.value
+
+
+def test_enabled_loop_runtime_releases_exit_at_max_iterations(
+    tmp_path: Path,
+) -> None:
+    store, provider, registry = make_store_provider_registry(tmp_path)
+    definition_data = enabled_loop_definition().model_dump(mode="json")
+    definition_data["control_protocol"]["loop_regions"][0]["max_iterations"] = 1
+    definition = WorkflowDefinitionModel.model_validate(definition_data)
+    workflow_run_id, process_id, process_generation = create_running_workflow(
+        store,
+        definition,
+    )
+    dag = build_workflow_dag(definition)
+    initialize_node_runs(
+        store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        dag=dag,
+    )
+    initialize_enabled_loop_runtime_state(
+        store,
+        definition=definition,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+    )
+    manager = create_manager(store, registry, definition=definition, dag=dag)
+
+    entry = ready_candidate(
+        store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+        node_instance_id="loop_start",
+    )
+    entry_task = submit_and_accept_candidate(
+        manager,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        candidate=entry,
+    )
+    apply_success(manager, entry_task)
+
+    body = ready_candidate(
+        store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+        node_instance_id="body",
+    )
+    body_task = submit_and_accept_candidate(
+        manager,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        candidate=body,
+    )
+    apply_success(manager, body_task, output_refs=["body-output"])
+
+    judge = ready_candidate(
+        store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+        node_instance_id="loop_judge",
+    )
+    judge_task = submit_and_accept_candidate(
+        manager,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        candidate=judge,
+    )
+    continue_output = create_control_output(
+        store,
+        provider,
+        workflow_run_id=workflow_run_id,
+        node_run_id=judge_task.node_run_id,
+        selected_branch="continue_loop",
+    )
+    apply_success(manager, judge_task, output_refs=[continue_output.table_ref_id])
+
+    loop = store.get_loop_run_for_workflow_loop(
+        workflow_run_id=workflow_run_id,
+        loop_id="orders_loop",
+    )
+    assert loop is not None
+    assert loop.status == LoopRunStatus.MAX_ITERATIONS_REACHED.value
+    assert loop.exit_reason == "max_iterations_reached"
+    iterations = store.list_loop_iteration_runs(loop.loop_run_id)
+    assert [(item.iteration_index, item.status) for item in iterations] == [
+        (0, LoopIterationRunStatus.SUCCEEDED.value)
+    ]
+    exit_candidate = ready_candidate(
+        store,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+        node_instance_id="after_loop",
+    )
+    exit_task = submit_and_accept_candidate(
+        manager,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        candidate=exit_candidate,
+    )
+    apply_success(manager, exit_task)
+
+    completed = store.get_workflow_run(workflow_run_id)
+    assert completed is not None
+    assert completed.status == WorkflowRunStatus.SUCCEEDED.value
