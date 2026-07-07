@@ -23,6 +23,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
@@ -237,6 +238,13 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("status"),),
             config_schema=_write_back_table_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=LIST_FILES_NODE_TYPE,
+            node_version="1.0",
+            display_name="List Files",
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_list_files_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -1524,6 +1532,60 @@ def _write_back_table_schema() -> NodeConfigSchemaSpec:
                 type="boolean",
                 title="Output Preview Table",
                 default=True,
+            ),
+        }
+    )
+
+
+def _list_files_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "directory": NodeConfigFieldSpec(
+                type="string",
+                title="Directory",
+                required=True,
+            ),
+            "recursive": NodeConfigFieldSpec(
+                type="boolean",
+                title="Recursive",
+                default=False,
+            ),
+            "include_files": NodeConfigFieldSpec(
+                type="boolean",
+                title="Include Files",
+                default=True,
+            ),
+            "include_dirs": NodeConfigFieldSpec(
+                type="boolean",
+                title="Include Directories",
+                default=False,
+            ),
+            "include_hidden": NodeConfigFieldSpec(
+                type="boolean",
+                title="Include Hidden",
+                default=False,
+            ),
+            "extensions": NodeConfigFieldSpec(
+                type="array",
+                title="Extensions",
+                item_type="string",
+                description="Optional file extensions, with or without leading dots.",
+            ),
+            "name_contains": NodeConfigFieldSpec(
+                type="string",
+                title="Name Contains",
+                default="",
+            ),
+            "glob_pattern": NodeConfigFieldSpec(
+                type="string",
+                title="Glob Pattern",
+                default="*",
+            ),
+            "max_files": NodeConfigFieldSpec(
+                type="integer",
+                title="Max Files",
+                default=10000,
+                minimum=1,
             ),
         }
     )

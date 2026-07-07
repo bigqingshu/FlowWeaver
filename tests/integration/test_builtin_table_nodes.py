@@ -27,6 +27,7 @@ from flowweaver.nodes.builtin_table import (
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    LIST_FILES_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
@@ -161,6 +162,101 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
         {"row_id": 3, "amount": 3.0, "label": "label_7_3"},
         {"row_id": 4, "amount": 4.0, "label": "label_7_4"},
     ]
+
+
+def test_list_files_node_publishes_filtered_file_metadata_table(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "files"
+    source_dir.mkdir()
+    (source_dir / "a.txt").write_text("alpha", encoding="utf-8")
+    (source_dir / "b.csv").write_text("beta", encoding="utf-8")
+    (source_dir / ".hidden.txt").write_text("hidden", encoding="utf-8")
+    nested_dir = source_dir / "nested"
+    nested_dir.mkdir()
+    (nested_dir / "c.txt").write_text("charlie", encoding="utf-8")
+    task = make_task(
+        node_type=LIST_FILES_NODE_TYPE,
+        node_run_id="node-run-list-files",
+        node_instance_id="list_files",
+        config={
+            "directory": str(source_dir),
+            "recursive": True,
+            "include_files": True,
+            "include_dirs": False,
+            "include_hidden": False,
+            "extensions": ["txt"],
+            "max_files": 10,
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(result.output_refs[0])
+    assert output_ref.logical_table_id == "list_files_output"
+    rows = provider.read_rows(
+        output_ref,
+        offset=0,
+        limit=10,
+        order_by=["relative_path"],
+    )
+    assert [
+        {
+            "name": row["name"],
+            "relative_path": row["relative_path"],
+            "extension": row["extension"],
+            "is_file": row["is_file"],
+            "is_dir": row["is_dir"],
+            "size_bytes": row["size_bytes"],
+        }
+        for row in rows
+    ] == [
+        {
+            "name": "a.txt",
+            "relative_path": "a.txt",
+            "extension": ".txt",
+            "is_file": "true",
+            "is_dir": "false",
+            "size_bytes": 5,
+        },
+        {
+            "name": "c.txt",
+            "relative_path": "nested/c.txt",
+            "extension": ".txt",
+            "is_file": "true",
+            "is_dir": "false",
+            "size_bytes": 7,
+        },
+    ]
+
+
+def test_list_files_node_can_include_directories_and_limit_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "files"
+    source_dir.mkdir()
+    (source_dir / "a.txt").write_text("alpha", encoding="utf-8")
+    (source_dir / "nested").mkdir()
+    task = make_task(
+        node_type=LIST_FILES_NODE_TYPE,
+        node_run_id="node-run-list-files",
+        node_instance_id="list_files",
+        config={
+            "directory": str(source_dir),
+            "include_files": True,
+            "include_dirs": True,
+            "max_files": 1,
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(result.output_refs[0])
+    assert provider.count_rows(output_ref) == 1
 
 
 def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
@@ -3052,6 +3148,29 @@ def test_filter_rows_node_returns_validation_error_for_missing_field(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_list_files_node_returns_validation_error_for_missing_directory(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    task = make_task(
+        node_type=LIST_FILES_NODE_TYPE,
+        node_run_id="node-run-list-files",
+        node_instance_id="list_files",
+        config={
+            "directory": str(tmp_path / "missing"),
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Directory does not exist" in result.error["message"]
+    assert registry.list_by_workflow_run("run-1") == []
 
 
 def test_delete_columns_node_returns_validation_error_for_missing_column(

@@ -354,6 +354,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
 
     assert set(by_type) == {
         "GenerateTestTableNode",
+        "ListFilesNode",
         "FilterRowsNode",
         "AddColumnsNode",
         "DeleteColumnsNode",
@@ -383,6 +384,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert "DelayTestNode" not in by_type
     assert "FaultTestNode" not in by_type
     assert by_type["GenerateTestTableNode"]["output_ports"] == [
+        {"name": "out", "required": False}
+    ]
+    assert by_type["ListFilesNode"]["output_ports"] == [
         {"name": "out", "required": False}
     ]
     assert by_type["FilterRowsNode"]["input_ports"] == [
@@ -486,6 +490,18 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert generate_properties["seed"]["default"] == 0
     assert generate_properties["columns"]["items"] == {"type": "string"}
+
+    list_files_properties = by_type["ListFilesNode"]["config_schema"][
+        "properties"
+    ]
+    assert list_files_properties["directory"]["required"] is True
+    assert list_files_properties["recursive"]["default"] is False
+    assert list_files_properties["include_files"]["default"] is True
+    assert list_files_properties["include_dirs"]["default"] is False
+    assert list_files_properties["include_hidden"]["default"] is False
+    assert list_files_properties["extensions"]["items"] == {"type": "string"}
+    assert list_files_properties["glob_pattern"]["default"] == "*"
+    assert list_files_properties["max_files"]["minimum"] == 1
 
     filter_properties = by_type["FilterRowsNode"]["config_schema"]["properties"]
     assert filter_properties["operator"] == {
