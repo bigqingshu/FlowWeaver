@@ -36,7 +36,7 @@ class FakeNodeExecutor:
         started_at = utc_now()
         if self.delay_seconds > 0:
             time.sleep(self.delay_seconds)
-        identity_overrides = {}
+        identity_overrides: dict[str, Any] = {}
         if self.result_id is not None:
             identity_overrides["result_id"] = self.result_id
         return NodeTaskResultModel(

@@ -5,7 +5,7 @@ import math
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
@@ -68,6 +68,13 @@ DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
 _NodeValidationError = BuiltinTableNodeValidationError
+
+
+class _LookupMatchedOutputFields(TypedDict):
+    field: str
+    value: str | None
+    row: str | None
+    status: str | None
 
 
 def table_node_types() -> tuple[str, ...]:
@@ -1634,7 +1641,7 @@ class ParseDateTimeNodeHandler:
                 output_rows: list[dict[str, Any]] = []
                 for row in rows:
                     raw_value = row.get(source_field)
-                    if use_separate_time_field:
+                    if time_source_field is not None:
                         raw_value = f"{raw_value} {row.get(time_source_field)}"
                     parsed = _parse_datetime_value(
                         raw_value,
@@ -4204,8 +4211,8 @@ def _extract_text_unmatched_value(
     )
 
 
-def _lookup_matched_output_fields(config: dict[str, Any]) -> dict[str, str | None]:
-    output_fields: dict[str, str | None] = {
+def _lookup_matched_output_fields(config: dict[str, Any]) -> _LookupMatchedOutputFields:
+    output_fields: _LookupMatchedOutputFields = {
         "field": _optional_node_string_config(
             config,
             "output_field",
@@ -4242,11 +4249,16 @@ def _lookup_matched_output_fields(config: dict[str, Any]) -> dict[str, str | Non
 
 def _lookup_matched_output_schema(
     input_schema: list[FieldSchemaModel],
-    output_fields: dict[str, str | None],
+    output_fields: _LookupMatchedOutputFields,
 ) -> list[FieldSchemaModel]:
     field_names_to_add = [
         field_name
-        for field_name in output_fields.values()
+        for field_name in (
+            output_fields["field"],
+            output_fields["value"],
+            output_fields["row"],
+            output_fields["status"],
+        )
         if field_name is not None
     ]
     duplicate_field_names = [
@@ -4347,7 +4359,7 @@ def _lookup_matched_values(
     match: dict[str, Any] | None,
     *,
     match_count: int,
-    output_fields: dict[str, str | None],
+    output_fields: _LookupMatchedOutputFields,
     no_match_value: Any,
 ) -> dict[str, Any]:
     if match is None:
