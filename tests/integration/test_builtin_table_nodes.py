@@ -28,6 +28,7 @@ from flowweaver.nodes.builtin_table import (
     GENERATE_TEST_TABLE_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
+    NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -2169,6 +2170,171 @@ def test_merge_columns_node_skip_empty_and_overwrite_conflict(
     ]
 
 
+def test_numeric_column_operation_node_adds_same_row_operand_to_new_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "amount", "data_type": "FLOAT"},
+                    {"name": "fee", "data_type": "FLOAT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"amount": 10.0, "fee": 1.5}
+    rows[1] |= {"amount": 20.0, "fee": 2.25}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    numeric_task = make_task(
+        node_type=NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+        node_run_id="node-run-numeric-column",
+        node_instance_id="numeric_column",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "target_field": "amount",
+            "operation": "add",
+            "operand_source": "row_field",
+            "operand_field": "fee",
+            "output_mode": "new_field",
+            "output_field": "total",
+            "decimal_places": 2,
+        },
+    )
+
+    numeric_result = executor.execute(numeric_task)
+
+    assert numeric_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(numeric_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "numeric_column_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "amount",
+        "fee",
+        "total",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 10.0, "fee": 1.5, "total": 11.5},
+        {"row_id": 2, "amount": 20.0, "fee": 2.25, "total": 22.25},
+    ]
+
+
+def test_numeric_column_operation_node_handles_divide_zero_with_fixed_value(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "amount", "data_type": "FLOAT"},
+                    {"name": "divisor", "data_type": "FLOAT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"amount": 10.0, "divisor": 2.0}
+    rows[1] |= {"amount": 10.0, "divisor": 0.0}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    numeric_task = make_task(
+        node_type=NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+        node_run_id="node-run-numeric-column",
+        node_instance_id="numeric_column",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "target_field": "amount",
+            "operation": "divide",
+            "operand_source": "row_field",
+            "operand_field": "divisor",
+            "output_mode": "overwrite",
+            "divide_zero_policy": "fixed",
+            "divide_zero_fixed": -1,
+        },
+    )
+
+    numeric_result = executor.execute(numeric_task)
+
+    assert numeric_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(numeric_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 5.0, "divisor": 2.0},
+        {"row_id": 2, "amount": -1.0, "divisor": 0.0},
+    ]
+
+
+def test_numeric_column_operation_node_limits_changes_to_row_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    numeric_task = make_task(
+        node_type=NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+        node_run_id="node-run-numeric-column",
+        node_instance_id="numeric_column",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_field": "amount",
+            "operation": "multiply",
+            "operand_value": 10,
+            "range_mode": "row_range",
+            "start_row": 2,
+            "end_row": 2,
+        },
+    )
+
+    numeric_result = executor.execute(numeric_task)
+
+    assert numeric_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(numeric_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0},
+        {"row_id": 2, "amount": 20.0},
+        {"row_id": 3, "amount": 3.0},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2635,6 +2801,36 @@ def test_merge_columns_node_returns_validation_error_for_missing_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_numeric_column_operation_node_returns_validation_error_for_missing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    numeric_task = make_task(
+        node_type=NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+        node_run_id="node-run-numeric-column",
+        node_instance_id="numeric_column",
+        input_refs=generate_result.output_refs,
+        config={"target_field": "missing", "operation": "add", "operand_value": 1},
+    )
+
+    result = executor.execute(numeric_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

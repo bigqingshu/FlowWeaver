@@ -369,6 +369,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "ExtractTextNode",
         "LookupMatchedFieldNameNode",
         "MergeColumnsNode",
+        "NumericColumnOperationNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -420,6 +421,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "lookup", "required": True},
     ]
     assert by_type["MergeColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["NumericColumnOperationNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -700,6 +704,42 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert merge_columns_properties["conflict_mode"]["enum"] == [
         "error",
         "overwrite",
+    ]
+
+    numeric_properties = by_type["NumericColumnOperationNode"]["config_schema"][
+        "properties"
+    ]
+    assert numeric_properties["target_field"] == {
+        "type": "string",
+        "title": "Target Field",
+        "required": True,
+    }
+    assert numeric_properties["operation"]["enum"] == [
+        "add",
+        "subtract",
+        "multiply",
+        "divide",
+        "sequence",
+        "round",
+        "floor",
+        "ceil",
+    ]
+    assert numeric_properties["operand_source"]["enum"] == [
+        "literal",
+        "row_field",
+        "row_number",
+        "sequence",
+    ]
+    assert numeric_properties["divide_zero_policy"]["enum"] == [
+        "error",
+        "empty",
+        "fixed",
+        "keep_original",
+    ]
+    assert numeric_properties["range_mode"]["enum"] == [
+        "all",
+        "row_range",
+        "reference_non_empty",
     ]
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
