@@ -29,18 +29,19 @@ def collect_ready_node_candidates(
     workflow_run_id: str,
     dag: WorkflowDag,
 ) -> tuple[ReadyNodeCandidate, ...]:
-    node_runs_by_instance = {
-        node_run.node_instance_id: node_run
-        for node_run in store.list_node_runs(workflow_run_id)
-    }
+    node_runs = store.list_node_runs(workflow_run_id)
+    dag_nodes_by_instance = {node.node_instance_id: node for node in dag.nodes}
     candidates: list[ReadyNodeCandidate] = []
-    for dag_node in dag.nodes:
-        node_run = node_runs_by_instance.get(dag_node.node_instance_id)
-        if node_run is None or node_run.status != NodeRunStatus.READY.value:
+    for node_run in node_runs:
+        if node_run.status != NodeRunStatus.READY.value:
+            continue
+        dag_node = dag_nodes_by_instance.get(node_run.node_instance_id)
+        if dag_node is None:
             continue
         input_refs = _input_refs_for_ready_node(
             store=store,
-            node_runs_by_instance=node_runs_by_instance,
+            node_runs=node_runs,
+            node_run=node_run,
             dag_node=dag_node,
         )
         if input_refs is None:
@@ -71,12 +72,37 @@ def count_in_flight_node_runs(
 def _input_refs_for_ready_node(
     *,
     store: RuntimeStore,
-    node_runs_by_instance: dict[str, NodeRun],
+    node_runs: list[NodeRun],
+    node_run: NodeRun,
+    dag_node: DagNode,
+) -> list[str] | None:
+    loop_links = store.list_loop_iteration_node_runs_by_node_run(node_run.node_run_id)
+    if loop_links:
+        return _loop_iteration_input_refs_for_ready_node(
+            store=store,
+            node_runs=node_runs,
+            loop_iteration_id=loop_links[-1].loop_iteration_id,
+            dag_node=dag_node,
+        )
+    return _root_input_refs_for_ready_node(
+        store=store,
+        node_runs=node_runs,
+        dag_node=dag_node,
+    )
+
+
+def _root_input_refs_for_ready_node(
+    *,
+    store: RuntimeStore,
+    node_runs: list[NodeRun],
     dag_node: DagNode,
 ) -> list[str] | None:
     input_refs: list[str] = []
     for upstream_node_id in dag_node.upstream_node_ids:
-        upstream_node = node_runs_by_instance.get(upstream_node_id)
+        upstream_node = _latest_succeeded_node_run_for_instance(
+            node_runs,
+            upstream_node_id,
+        )
         if upstream_node is None:
             return None
         result = store.get_latest_succeeded_node_task_result_for_node_run(
@@ -91,6 +117,71 @@ def _input_refs_for_ready_node(
             )
         )
     return input_refs
+
+
+def _loop_iteration_input_refs_for_ready_node(
+    *,
+    store: RuntimeStore,
+    node_runs: list[NodeRun],
+    loop_iteration_id: str,
+    dag_node: DagNode,
+) -> list[str] | None:
+    input_refs: list[str] = []
+    for upstream_node_id in dag_node.upstream_node_ids:
+        upstream_node = _succeeded_loop_iteration_node_run(
+            store,
+            loop_iteration_id=loop_iteration_id,
+            node_instance_id=upstream_node_id,
+        )
+        if upstream_node is None:
+            upstream_node = _latest_succeeded_node_run_for_instance(
+                node_runs,
+                upstream_node_id,
+            )
+        if upstream_node is None:
+            return None
+        result = store.get_latest_succeeded_node_task_result_for_node_run(
+            upstream_node.node_run_id
+        )
+        if result is None:
+            return None
+        input_refs.extend(
+            _current_input_refs_from_output_refs(
+                store=store,
+                output_refs=result.output_refs,
+            )
+        )
+    return input_refs
+
+
+def _succeeded_loop_iteration_node_run(
+    store: RuntimeStore,
+    *,
+    loop_iteration_id: str,
+    node_instance_id: str,
+) -> NodeRun | None:
+    links = store.list_loop_iteration_node_runs(
+        loop_iteration_id,
+        node_instance_id=node_instance_id,
+    )
+    for link in reversed(links):
+        node_run = store.get_node_run(link.node_run_id)
+        if node_run is not None and node_run.status == NodeRunStatus.SUCCEEDED.value:
+            return node_run
+    return None
+
+
+def _latest_succeeded_node_run_for_instance(
+    node_runs: list[NodeRun],
+    node_instance_id: str,
+) -> NodeRun | None:
+    for node_run in reversed(node_runs):
+        if (
+            node_run.node_instance_id == node_instance_id
+            and node_run.status == NodeRunStatus.SUCCEEDED.value
+        ):
+            return node_run
+    return None
 
 
 def _current_input_refs_from_output_refs(

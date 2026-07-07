@@ -29,6 +29,9 @@ from flowweaver.workflow_process.dag import WorkflowDag
 from flowweaver.workflow_process.loop_iteration_nodes import (
     ensure_loop_iteration_entry_node_run,
 )
+from flowweaver.workflow_process.loop_iteration_scheduling import (
+    advance_loop_iteration_after_node_success,
+)
 from flowweaver.workflow_process.loop_terminal_state import (
     close_loop_after_node_terminal_result,
 )
@@ -103,6 +106,7 @@ class NodeTaskManager:
         workflow_process_id: str,
         process_generation: int,
         node_instance_id: str,
+        node_run_id: str | None = None,
         config: dict[str, Any] | None = None,
         input_refs: list[str] | None = None,
         timeout_seconds: int = 60,
@@ -110,10 +114,18 @@ class NodeTaskManager:
         node = self._dag_node(node_instance_id)
         if node is None:
             return None
-        node_run = self._store.get_node_run_for_instance(
-            workflow_run_id=workflow_run_id,
-            node_instance_id=node_instance_id,
-        )
+        if node_run_id is None:
+            node_run = self._store.get_node_run_for_instance(
+                workflow_run_id=workflow_run_id,
+                node_instance_id=node_instance_id,
+            )
+        else:
+            node_run = self._store.get_node_run(node_run_id)
+            if node_run is not None and (
+                node_run.workflow_run_id != workflow_run_id
+                or node_run.node_instance_id != node_instance_id
+            ):
+                return None
         if node_run is None:
             return None
         queued = self._store.update_node_run_status(
@@ -251,9 +263,7 @@ class NodeTaskManager:
     ) -> NodeTaskTimeoutResult:
         stored_task = self._store.get_node_task(task.task_id)
         if stored_task is None or stored_task.node_run_id != task.node_run_id:
-            return NodeTaskTimeoutResult(
-                NodeTaskTimeoutStatus.REJECTED_INVALID_TASK
-            )
+            return NodeTaskTimeoutResult(NodeTaskTimeoutStatus.REJECTED_INVALID_TASK)
         node_run = self._store.get_node_run(stored_task.node_run_id)
         if node_run is None or node_run.attempt != stored_task.attempt:
             return NodeTaskTimeoutResult(
@@ -285,9 +295,7 @@ class NodeTaskManager:
                 detail="missing_started_at",
             )
         checked_at = now or utc_now()
-        deadline = node_run.started_at + timedelta(
-            seconds=stored_task.timeout_seconds
-        )
+        deadline = node_run.started_at + timedelta(seconds=stored_task.timeout_seconds)
         if checked_at < deadline:
             return NodeTaskTimeoutResult(
                 NodeTaskTimeoutStatus.NOT_TIMED_OUT,
@@ -445,6 +453,13 @@ class NodeTaskManager:
                     owner_process_id=task.workflow_process_id,
                     process_generation=task.process_generation,
                 )
+        advance_loop_iteration_after_node_success(
+            self._store,
+            dag=self._dag,
+            completed_node=updated,
+            owner_process_id=task.workflow_process_id,
+            process_generation=task.process_generation,
+        )
         advance_after_node_success(
             self._store,
             workflow_run_id=task.workflow_run_id,
@@ -552,10 +567,7 @@ class NodeTaskManager:
                 },
             )
         )
-        if (
-            workflow_status == WorkflowRunStatus.FAILED
-            and updated_workflow is not None
-        ):
+        if workflow_status == WorkflowRunStatus.FAILED and updated_workflow is not None:
             self._event_sink.emit(
                 EventModel(
                     event_type=EventType.WORKFLOW_FAILED,

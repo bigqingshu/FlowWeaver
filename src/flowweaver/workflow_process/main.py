@@ -894,6 +894,7 @@ def dispatch_ready_node_candidate(
         workflow_process_id=workflow_process_id,
         process_generation=process_generation,
         node_instance_id=candidate.node_run.node_instance_id,
+        node_run_id=candidate.node_run.node_run_id,
         input_refs=list(candidate.input_refs),
         timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
     )
