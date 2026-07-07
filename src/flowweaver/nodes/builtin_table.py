@@ -25,6 +25,10 @@ from flowweaver.nodes.table_ops import (
     reorder_fields,
     replace_field_schema,
 )
+from flowweaver.nodes.value_sources import (
+    ValueSourceError,
+    parse_value_source,
+)
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -35,6 +39,7 @@ ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
 COPY_COLUMN_NODE_TYPE = "CopyColumnNode"
 REORDER_COLUMNS_NODE_TYPE = "ReorderColumnsNode"
+FILL_CELLS_NODE_TYPE = "FillCellsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -56,6 +61,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             DeleteColumnsNodeHandler(),
             CopyColumnNodeHandler(),
             ReorderColumnsNodeHandler(),
+            FillCellsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -378,6 +384,90 @@ class ReorderColumnsNodeHandler:
         ]
 
 
+class FillCellsNodeHandler:
+    node_type = FILL_CELLS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        target_field = _node_string_config(
+            task.config,
+            "target_field",
+            node_type=self.node_type,
+        )
+        if not has_field(input_ref.schema, target_field):
+            raise _NodeValidationError(f"Field does not exist: {target_field}")
+        value_source = _fill_cells_value_source_config(task.config)
+        start_row = _positive_int_config(
+            task.config,
+            "start_row",
+            default=1,
+            node_type=self.node_type,
+        )
+        direction = _enum_config(
+            task.config,
+            "direction",
+            default="down",
+            allowed={"down", "up"},
+            node_type=self.node_type,
+        )
+        count = _optional_positive_int_config(
+            task.config,
+            "count",
+            node_type=self.node_type,
+        )
+        overwrite_rule = _enum_config(
+            task.config,
+            "overwrite_rule",
+            default="all",
+            allowed={"all", "empty_only"},
+            node_type=self.node_type,
+        )
+        total_rows = context.count_rows(input_ref)
+        if start_row > total_rows and total_rows > 0:
+            raise _NodeValidationError("FillCellsNode config.start_row is out of range")
+        selected_rows = _fill_cells_selected_rows(
+            start_row=start_row,
+            direction=direction,
+            count=count,
+            total_rows=total_rows,
+        )
+
+        def output_batches():
+            row_number = 1
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    if row_number in selected_rows and (
+                        overwrite_rule == "all" or _is_empty_cell(row.get(target_field))
+                    ):
+                        try:
+                            output_rows.append(
+                                row | {target_field: value_source.resolve(row)}
+                            )
+                        except ValueSourceError as exc:
+                            raise _NodeValidationError(str(exc)) from exc
+                    else:
+                        output_rows.append(row)
+                    row_number += 1
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=input_ref.schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SaveMemoryTableNodeHandler:
     node_type = SAVE_MEMORY_TABLE_NODE_TYPE
 
@@ -546,6 +636,37 @@ def _int_config(
     return value
 
 
+def _positive_int_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    default: int,
+    node_type: str,
+) -> int:
+    value = config.get(key, default)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
+    if value < 1:
+        raise _NodeValidationError(f"{node_type} config.{key} must be positive")
+    return value
+
+
+def _optional_positive_int_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> int | None:
+    value = config.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
+    if value < 1:
+        raise _NodeValidationError(f"{node_type} config.{key} must be positive")
+    return value
+
+
 def _string_config(config: dict[str, Any], key: str) -> str:
     value = config.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -661,6 +782,41 @@ def _copy_column_value(
     if copied is None or copied == "":
         return empty_default
     return copied
+
+
+def _fill_cells_value_source_config(config: dict[str, Any]):
+    if "value_source" in config:
+        raw_value_source = config.get("value_source")
+    else:
+        raw_value_source = config.get("manual_value")
+    try:
+        return parse_value_source(raw_value_source)
+    except ValueSourceError as exc:
+        raise _NodeValidationError(str(exc)) from exc
+
+
+def _fill_cells_selected_rows(
+    *,
+    start_row: int,
+    direction: str,
+    count: int | None,
+    total_rows: int,
+) -> set[int]:
+    if total_rows <= 0:
+        return set()
+    if direction == "down":
+        end_row = (
+            total_rows
+            if count is None
+            else min(total_rows, start_row + count - 1)
+        )
+        return set(range(start_row, end_row + 1))
+    end_row = 1 if count is None else max(1, start_row - count + 1)
+    return set(range(end_row, start_row + 1))
+
+
+def _is_empty_cell(value: Any) -> bool:
+    return value is None or value == ""
 
 
 def _infer_data_type(name: str) -> str:

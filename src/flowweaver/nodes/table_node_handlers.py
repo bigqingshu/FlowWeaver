@@ -53,6 +53,9 @@ class BuiltinTableNodeContext:
             limit=self.table_provider.count_rows(table_ref),
         )
 
+    def count_rows(self, table_ref: TableRefModel) -> int:
+        return self.table_provider.count_rows(table_ref)
+
     def iter_row_batches(
         self,
         table_ref: TableRefModel,

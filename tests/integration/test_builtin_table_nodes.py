@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
     COPY_COLUMN_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
+    FILL_CELLS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
@@ -521,6 +522,144 @@ def test_reorder_columns_node_can_drop_unlisted_columns(
     ]
 
 
+def test_fill_cells_node_fills_literal_value_down_from_start_row(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 4,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    fill_task = make_task(
+        node_type=FILL_CELLS_NODE_TYPE,
+        node_run_id="node-run-fill-cells",
+        node_instance_id="fill_cells",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "value_source": {"mode": "literal", "value": "filled"},
+            "start_row": 2,
+            "direction": "down",
+            "count": 2,
+        },
+    )
+
+    fill_result = executor.execute(fill_task)
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    assert fill_result.output_refs != generate_result.output_refs
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "fill_cells_output"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0, "label": "label_0_1"},
+        {"row_id": 2, "amount": 2.0, "label": "filled"},
+        {"row_id": 3, "amount": 3.0, "label": "filled"},
+        {"row_id": 4, "amount": 4.0, "label": "label_0_4"},
+    ]
+
+
+def test_fill_cells_node_uses_same_row_field_value_source(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    fill_task = make_task(
+        node_type=FILL_CELLS_NODE_TYPE,
+        node_run_id="node-run-fill-cells",
+        node_instance_id="fill_cells",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "value_source": {"mode": "row_field", "field": "amount"},
+        },
+    )
+
+    fill_result = executor.execute(fill_task)
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 1.0, "label": "1.0"},
+        {"row_id": 2, "amount": 2.0, "label": "2.0"},
+    ]
+
+
+def test_fill_cells_node_empty_only_keeps_existing_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["label"] = "keep"
+    rows[1]["label"] = ""
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    fill_task = make_task(
+        node_type=FILL_CELLS_NODE_TYPE,
+        node_run_id="node-run-fill-cells",
+        node_instance_id="fill_cells",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "manual_value": "filled",
+            "overwrite_rule": "empty_only",
+        },
+    )
+
+    fill_result = executor.execute(fill_task)
+
+    assert fill_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(fill_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "keep"},
+        {"row_id": 2, "label": "filled"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -726,4 +865,38 @@ def test_reorder_columns_node_returns_validation_error_for_missing_column(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Fields do not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_fill_cells_node_returns_validation_error_for_start_row_out_of_range(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    fill_task = make_task(
+        node_type=FILL_CELLS_NODE_TYPE,
+        node_run_id="node-run-fill-cells",
+        node_instance_id="fill_cells",
+        input_refs=generate_result.output_refs,
+        config={
+            "target_field": "label",
+            "manual_value": "filled",
+            "start_row": 3,
+        },
+    )
+
+    result = executor.execute(fill_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "start_row is out of range" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2

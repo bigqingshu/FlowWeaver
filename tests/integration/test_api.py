@@ -359,6 +359,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "DeleteColumnsNode",
         "CopyColumnNode",
         "ReorderColumnsNode",
+        "FillCellsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -379,6 +380,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["ReorderColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["FillCellsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -480,6 +484,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "warn",
     ]
     assert reorder_columns_properties["unlisted_policy"]["default"] == "append"
+
+    fill_cells_properties = by_type["FillCellsNode"]["config_schema"]["properties"]
+    assert fill_cells_properties["target_field"] == {
+        "type": "string",
+        "title": "Target Field",
+        "required": True,
+    }
+    assert fill_cells_properties["direction"]["enum"] == ["down", "up"]
+    assert fill_cells_properties["overwrite_rule"]["default"] == "all"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
