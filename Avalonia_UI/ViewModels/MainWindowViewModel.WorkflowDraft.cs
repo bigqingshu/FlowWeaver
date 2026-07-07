@@ -111,9 +111,6 @@ public partial class MainWindowViewModel
     private bool isWorkflowConnectionsAdvancedVisible;
 
     [ObservableProperty]
-    private bool isWorkflowAddNodePanelVisible;
-
-    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -417,15 +414,6 @@ public partial class MainWindowViewModel
             && !string.IsNullOrWhiteSpace(NewDraftNodeType)
             && !string.IsNullOrWhiteSpace(NewDraftNodeVersion)
             && !string.IsNullOrWhiteSpace(NewDraftNodeConfigJson);
-    }
-
-    private bool CanOpenWorkflowAddNodePanel()
-    {
-        return CanUseEngineActions
-            && WorkflowDefinitionDetail is not null
-            && HasWorkflowDefinitionDraft
-            && !IsWorkflowDefinitionDraftBusy
-            && !HasWorkflowDefinitionRevisionConflict;
     }
 
     private bool CanDeleteWorkflowDefinitionDraftNode()
@@ -1007,19 +995,6 @@ public partial class MainWindowViewModel
             "workflow.definition.add_node",
             UiNotificationKind.Success);
         ResetNewDraftNodeInput();
-        IsWorkflowAddNodePanelVisible = false;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanOpenWorkflowAddNodePanel))]
-    private void OpenWorkflowAddNodePanel()
-    {
-        IsWorkflowAddNodePanelVisible = true;
-    }
-
-    [RelayCommand]
-    private void CloseWorkflowAddNodePanel()
-    {
-        IsWorkflowAddNodePanelVisible = false;
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteWorkflowDefinitionDraftNode))]
@@ -1576,7 +1551,6 @@ public partial class MainWindowViewModel
 
     private void ResetWorkflowDefinitionStructuredEditInput()
     {
-        IsWorkflowAddNodePanelVisible = false;
         lastSuggestedNewDraftNodeInstanceId = string.Empty;
         lastSuggestedNewDraftConnectionId = string.Empty;
         ResetNewDraftNodeInput();
@@ -2193,7 +2167,6 @@ public partial class MainWindowViewModel
 
     private void NotifyWorkflowDefinitionNodeActionCommandsChanged()
     {
-        OpenWorkflowAddNodePanelCommand.NotifyCanExecuteChanged();
         CopyWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
