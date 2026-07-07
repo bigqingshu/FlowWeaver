@@ -45,6 +45,47 @@ public static class RuntimeOptionsDraftReader
         }
     }
 
+    public static RuntimeOptionsDraftReadResult ReadRuntimeOptionsJson(
+        string runtimeOptionsJson)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(runtimeOptionsJson);
+        }
+        catch (JsonException)
+        {
+            return Failed(
+                RuntimeOptionsDraftReadStatus.JsonInvalid,
+                "RUNTIME_OPTIONS_JSON_INVALID");
+        }
+
+        using (document)
+        {
+            var runtimeOptions = document.RootElement;
+            if (runtimeOptions.ValueKind != JsonValueKind.Object)
+            {
+                return Failed(
+                    RuntimeOptionsDraftReadStatus.RuntimeOptionsNotObject,
+                    "RUNTIME_OPTIONS_NOT_OBJECT");
+            }
+
+            if (runtimeOptions.TryGetProperty("runtime_options", out var nested))
+            {
+                if (nested.ValueKind != JsonValueKind.Object)
+                {
+                    return Failed(
+                        RuntimeOptionsDraftReadStatus.RuntimeOptionsNotObject,
+                        "RUNTIME_OPTIONS_NOT_OBJECT");
+                }
+
+                runtimeOptions = nested;
+            }
+
+            return Succeeded(ReadRuntimeOptions(runtimeOptions));
+        }
+    }
+
     private static RuntimeOptionsDraft ReadRuntimeOptions(JsonElement runtimeOptions)
     {
         var workflow = runtimeOptions.TryGetProperty("workflow", out var workflowElement) &&

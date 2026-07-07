@@ -236,6 +236,25 @@
                 </StackPanel>
             </Border>
 
+            <Expander Header="{Binding RuntimeOptionsJsonSectionText}"
+                      IsExpanded="{Binding IsRuntimeOptionsJsonEditorExpanded, Mode=TwoWay}">
+                <StackPanel Spacing="8">
+                    <TextBox Text="{Binding RuntimeOptionsJsonDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding RuntimeOptionsJsonWatermarkText}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             MinHeight="180"/>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                Spacing="8">
+                        <Button Content="{Binding RuntimeOptionsJsonRegenerateText}"
+                                Command="{Binding RegenerateRuntimeOptionsJsonDraftCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
             <TextBlock Text="{Binding RuntimeOptionsEditorErrorMessage}"
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextErrorBrush}"

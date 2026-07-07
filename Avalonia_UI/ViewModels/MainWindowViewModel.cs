@@ -286,6 +286,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private string? runtimeOptionsEditorErrorMessage;
 
     [ObservableProperty]
+    private bool isRuntimeOptionsJsonEditorExpanded;
+
+    [ObservableProperty]
+    private string runtimeOptionsJsonDraft = string.Empty;
+
+    [ObservableProperty]
+    private bool isRuntimeOptionsJsonDraftDirty;
+
+    [ObservableProperty]
     private bool isValidatingWorkflowDefinitionDraft;
 
     [ObservableProperty]
@@ -308,6 +317,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private string lastSuggestedNewDraftNodeConfigJson = "{}";
     private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
+    private bool isSynchronizingRuntimeOptionsJsonDraft;
 
     [ObservableProperty]
     private bool isLoadingRuns;
@@ -1342,6 +1352,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public string RuntimeOptionsMaskPolicyText =>
         T("definition.runtime_options_mask_policy");
+
+    public string RuntimeOptionsJsonSectionText =>
+        T("definition.runtime_options_json_section");
+
+    public string RuntimeOptionsJsonRegenerateText =>
+        T("definition.runtime_options_json_regenerate");
+
+    public string RuntimeOptionsJsonWatermarkText =>
+        T("definition.runtime_options_json_watermark");
 
     public string RuntimeOptionsSelectNodeText =>
         T("definition.runtime_options_select_node");
@@ -2470,6 +2489,36 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanApplyRuntimeOptionsDraft))]
     private void ApplyRuntimeOptionsDraft()
     {
+        if (IsRuntimeOptionsJsonEditorExpanded && IsRuntimeOptionsJsonDraftDirty)
+        {
+            ApplyRuntimeOptionsJsonDraft();
+            return;
+        }
+
+        ApplyRuntimeOptionsStructuredDraft();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanApplyRuntimeOptionsDraft))]
+    private void RegenerateRuntimeOptionsJsonDraft()
+    {
+        if (!TryBuildRuntimeOptionsDraftFromStructuredInputs(
+            out var draft,
+            out var errorMessage))
+        {
+            RuntimeOptionsEditorErrorMessage = errorMessage;
+            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+            return;
+        }
+
+        SetRuntimeOptionsJsonDraft(
+            WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(draft),
+            isDirty: false);
+        RuntimeOptionsEditorErrorMessage = null;
+        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+    }
+
+    private void ApplyRuntimeOptionsStructuredDraft()
+    {
         var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
         if (!readResult.Succeeded)
         {
@@ -2479,8 +2528,9 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        if (!TryBuildRuntimeOptionsWorkflowDraft(
-            out var workflowDraft,
+        if (!TryBuildRuntimeOptionsDraftFromStructuredInputs(
+            readResult.Draft,
+            out var draft,
             out var errorMessage))
         {
             RuntimeOptionsEditorErrorMessage = errorMessage;
@@ -2488,48 +2538,37 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var nodeOverrides =
-            new Dictionary<string, RuntimeOptionsNodeOverrideDraft>(
-                readResult.Draft.NodeOverrides);
-        if (SelectedRuntimeOptionsNode is not null)
-        {
-            if (!TryBuildSelectedRuntimeOptionsNodeOverrideDraft(
-                out var nodeOverride,
-                out errorMessage))
-            {
-                RuntimeOptionsEditorErrorMessage = errorMessage;
-                OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-                return;
-            }
+        ApplyRuntimeOptionsDraftToWorkflow(draft);
+    }
 
-            nodeOverrides[SelectedRuntimeOptionsNode.NodeInstanceId] = nodeOverride;
-        }
-
-        var draft = new RuntimeOptionsDraft
-        {
-            Version = RuntimeOptionsDefaults.Version,
-            Workflow = workflowDraft,
-            NodeOverrides = nodeOverrides,
-        };
-        var patchResult = WorkflowDefinitionDraftRuntimeOptionsPatcher.Apply(
-            WorkflowDefinitionDraftJson,
-            draft);
-        if (!patchResult.Succeeded)
+    private void ApplyRuntimeOptionsJsonDraft()
+    {
+        var readResult = RuntimeOptionsDraftReader.ReadRuntimeOptionsJson(
+            RuntimeOptionsJsonDraft);
+        if (!readResult.Succeeded)
         {
             RuntimeOptionsEditorErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+                LocalizeWorkflowDefinitionDraftWarning(readResult.Warning);
             OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
             return;
         }
 
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        RuntimeOptionsEditorErrorMessage = null;
-        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
-        WorkflowDefinitionValidationMessage = T("definition.runtime_options_applied");
-        WorkflowDefinitionValidationErrorMessage = null;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.runtime_options",
-            UiNotificationKind.Success);
+        if (!TryValidateRuntimeOptionsDraft(
+            readResult.Draft,
+            out var errorMessage))
+        {
+            RuntimeOptionsEditorErrorMessage = errorMessage;
+            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+            return;
+        }
+
+        if (ApplyRuntimeOptionsDraftToWorkflow(readResult.Draft))
+        {
+            SetRuntimeOptionsJsonDraft(
+                WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(
+                    readResult.Draft),
+                isDirty: false);
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanResetRuntimeOptionsSelectedNodeOverride))]
@@ -5241,6 +5280,122 @@ public partial class MainWindowViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(HasSelectedRuntimeOptionsNode));
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    private bool TryBuildRuntimeOptionsDraftFromStructuredInputs(
+        out RuntimeOptionsDraft draft,
+        out string errorMessage)
+    {
+        var readResult = RuntimeOptionsDraftReader.Read(WorkflowDefinitionDraftJson);
+        if (!readResult.Succeeded)
+        {
+            draft = new RuntimeOptionsDraft();
+            errorMessage =
+                LocalizeWorkflowDefinitionDraftWarning(readResult.Warning)
+                ?? string.Empty;
+            return false;
+        }
+
+        return TryBuildRuntimeOptionsDraftFromStructuredInputs(
+            readResult.Draft,
+            out draft,
+            out errorMessage);
+    }
+
+    private bool TryBuildRuntimeOptionsDraftFromStructuredInputs(
+        RuntimeOptionsDraft baseDraft,
+        out RuntimeOptionsDraft draft,
+        out string errorMessage)
+    {
+        draft = new RuntimeOptionsDraft();
+        if (!TryBuildRuntimeOptionsWorkflowDraft(
+            out var workflowDraft,
+            out errorMessage))
+        {
+            return false;
+        }
+
+        var nodeOverrides =
+            new Dictionary<string, RuntimeOptionsNodeOverrideDraft>(
+                baseDraft.NodeOverrides);
+        if (SelectedRuntimeOptionsNode is not null)
+        {
+            if (!TryBuildSelectedRuntimeOptionsNodeOverrideDraft(
+                out var nodeOverride,
+                out errorMessage))
+            {
+                return false;
+            }
+
+            nodeOverrides[SelectedRuntimeOptionsNode.NodeInstanceId] = nodeOverride;
+        }
+
+        draft = new RuntimeOptionsDraft
+        {
+            Version = RuntimeOptionsDefaults.Version,
+            Workflow = workflowDraft,
+            NodeOverrides = nodeOverrides,
+        };
+        return TryValidateRuntimeOptionsDraft(draft, out errorMessage);
+    }
+
+    private bool ApplyRuntimeOptionsDraftToWorkflow(RuntimeOptionsDraft draft)
+    {
+        var patchResult = WorkflowDefinitionDraftRuntimeOptionsPatcher.Apply(
+            WorkflowDefinitionDraftJson,
+            draft);
+        if (!patchResult.Succeeded)
+        {
+            RuntimeOptionsEditorErrorMessage =
+                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
+            OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+            return false;
+        }
+
+        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        RuntimeOptionsEditorErrorMessage = null;
+        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+        WorkflowDefinitionValidationMessage = T("definition.runtime_options_applied");
+        WorkflowDefinitionValidationErrorMessage = null;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.runtime_options",
+            UiNotificationKind.Success);
+        if (IsRuntimeOptionsJsonEditorExpanded && !IsRuntimeOptionsJsonDraftDirty)
+        {
+            SetRuntimeOptionsJsonDraft(
+                WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(draft),
+                isDirty: false);
+        }
+
+        return true;
+    }
+
+    private void RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean()
+    {
+        if (!IsRuntimeOptionsJsonEditorExpanded || IsRuntimeOptionsJsonDraftDirty)
+        {
+            return;
+        }
+
+        if (!TryBuildRuntimeOptionsDraftFromStructuredInputs(
+            out var draft,
+            out _))
+        {
+            return;
+        }
+
+        SetRuntimeOptionsJsonDraft(
+            WorkflowDefinitionDraftRuntimeOptionsPatcher.FormatRuntimeOptions(draft),
+            isDirty: false);
+    }
+
+    private void SetRuntimeOptionsJsonDraft(string value, bool isDirty)
+    {
+        isSynchronizingRuntimeOptionsJsonDraft = true;
+        RuntimeOptionsJsonDraft = value;
+        isSynchronizingRuntimeOptionsJsonDraft = false;
+        IsRuntimeOptionsJsonDraftDirty = isDirty;
     }
 
     private bool TryBuildRuntimeOptionsWorkflowDraft(
@@ -5354,6 +5509,241 @@ public partial class MainWindowViewModel : ViewModelBase
             },
         };
         return true;
+    }
+
+    private bool TryValidateRuntimeOptionsDraft(
+        RuntimeOptionsDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsWorkflowDraft(draft.Workflow, out errorMessage))
+        {
+            return false;
+        }
+
+        foreach (var nodeOverride in draft.NodeOverrides.Values)
+        {
+            if (!TryValidateRuntimeOptionsNodeOverrideDraft(
+                nodeOverride,
+                out errorMessage))
+            {
+                return false;
+            }
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsWorkflowDraft(
+        RuntimeOptionsWorkflowDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsOption(
+            RuntimeOptionsProfileOptions,
+            draft.Profile,
+            RuntimeOptionsProfileText,
+            out errorMessage) ||
+            !TryValidateRuntimeOptionsTelemetryDraft(
+                draft.Telemetry,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsDiagnosticsDraft(
+                draft.Diagnostics,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsTelemetryDraft(
+        RuntimeOptionsTelemetryDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsOption(
+            RuntimeOptionsLogLevelOptions,
+            draft.LogLevel,
+            RuntimeOptionsLogLevelText,
+            out errorMessage) ||
+            !TryValidateRuntimeOptionsOption(
+                RuntimeOptionsEventLevelOptions,
+                draft.EventLevel,
+                RuntimeOptionsEventLevelText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.EventRateLimitPerSecond,
+                RuntimeOptionsEventRateLimitText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.ProgressIntervalSeconds,
+                RuntimeOptionsProgressIntervalText,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsDiagnosticsDraft(
+        RuntimeOptionsDiagnosticsDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsNonNegative(
+            draft.PayloadByteLimit,
+            RuntimeOptionsPayloadByteLimitText,
+            out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.TtlSeconds,
+                RuntimeOptionsTtlSecondsText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsOption(
+                RuntimeOptionsMaskPolicyOptions,
+                draft.MaskPolicy,
+                RuntimeOptionsMaskPolicyText,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsNodeOverrideDraft(
+        RuntimeOptionsNodeOverrideDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsOption(
+            RuntimeOptionsProfileOptions,
+            draft.Profile,
+            RuntimeOptionsProfileText,
+            out errorMessage))
+        {
+            return false;
+        }
+
+        if (draft.Telemetry is not null &&
+            !TryValidateRuntimeOptionsTelemetryOverrideDraft(
+                draft.Telemetry,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        if (draft.Diagnostics is not null &&
+            !TryValidateRuntimeOptionsDiagnosticsOverrideDraft(
+                draft.Diagnostics,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsTelemetryOverrideDraft(
+        RuntimeOptionsTelemetryOverrideDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsOption(
+            RuntimeOptionsLogLevelOptions,
+            draft.LogLevel,
+            RuntimeOptionsLogLevelText,
+            out errorMessage) ||
+            !TryValidateRuntimeOptionsOption(
+                RuntimeOptionsEventLevelOptions,
+                draft.EventLevel,
+                RuntimeOptionsEventLevelText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.EventRateLimitPerSecond,
+                RuntimeOptionsEventRateLimitText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.ProgressIntervalSeconds,
+                RuntimeOptionsProgressIntervalText,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsDiagnosticsOverrideDraft(
+        RuntimeOptionsDiagnosticsOverrideDraft draft,
+        out string errorMessage)
+    {
+        if (!TryValidateRuntimeOptionsNonNegative(
+            draft.PayloadByteLimit,
+            RuntimeOptionsPayloadByteLimitText,
+            out errorMessage) ||
+            !TryValidateRuntimeOptionsNonNegative(
+                draft.TtlSeconds,
+                RuntimeOptionsTtlSecondsText,
+                out errorMessage) ||
+            !TryValidateRuntimeOptionsOption(
+                RuntimeOptionsMaskPolicyOptions,
+                draft.MaskPolicy,
+                RuntimeOptionsMaskPolicyText,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryValidateRuntimeOptionsOption(
+        IReadOnlyList<string> options,
+        string? value,
+        string label,
+        out string errorMessage)
+    {
+        if (value is null || options.Contains(value, StringComparer.Ordinal))
+        {
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        errorMessage = F("definition.runtime_options_value_invalid", label);
+        return false;
+    }
+
+    private bool TryValidateRuntimeOptionsNonNegative(
+        int? value,
+        string label,
+        out string errorMessage)
+    {
+        if (!value.HasValue || value.Value >= 0)
+        {
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        errorMessage = F("definition.runtime_options_number_invalid", label);
+        return false;
+    }
+
+    private bool TryValidateRuntimeOptionsNonNegative(
+        double? value,
+        string label,
+        out string errorMessage)
+    {
+        if (!value.HasValue || value.Value >= 0)
+        {
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        errorMessage = F("definition.runtime_options_number_invalid", label);
+        return false;
     }
 
     private bool TryParseNonNegativeInt(
@@ -5658,6 +6048,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return warning switch
         {
             "WORKFLOW_DRAFT_JSON_INVALID" => T("definition.warning.workflow_draft_json_invalid"),
+            "RUNTIME_OPTIONS_JSON_INVALID" => T("definition.warning.runtime_options_json_invalid"),
             "WORKFLOW_DRAFT_ROOT_NOT_OBJECT" => T("definition.warning.workflow_draft_root_not_object"),
             "WORKFLOW_DRAFT_NODES_MISSING" => T("definition.warning.workflow_draft_nodes_missing"),
             "WORKFLOW_DRAFT_CONNECTIONS_MISSING" => T("definition.warning.workflow_draft_connections_missing"),
@@ -6624,6 +7015,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
@@ -6658,24 +7050,161 @@ public partial class MainWindowViewModel : ViewModelBase
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
     }
 
+    partial void OnIsRuntimeOptionsJsonEditorExpandedChanged(bool value)
+    {
+        if (value && !IsRuntimeOptionsJsonDraftDirty)
+        {
+            RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+        }
+    }
+
+    partial void OnRuntimeOptionsJsonDraftChanged(string value)
+    {
+        if (!isSynchronizingRuntimeOptionsJsonDraft)
+        {
+            IsRuntimeOptionsJsonDraftDirty = true;
+        }
+    }
+
     partial void OnRuntimeOptionsProfileDraftChanged(string value)
     {
         NotifyRuntimeOptionsSummaryChanged();
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsStrictValidationDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsLogLevelDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
     }
 
     partial void OnRuntimeOptionsEventLevelDraftChanged(string value)
     {
         NotifyRuntimeOptionsSummaryChanged();
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsEventRateLimitPerSecondDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
     }
 
     partial void OnRuntimeOptionsProgressEnabledDraftChanged(bool value)
     {
         NotifyRuntimeOptionsSummaryChanged();
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsProgressIntervalSecondsDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsCaptureErrorContextDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsIncludeMetricsDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsPayloadByteLimitDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsTtlSecondsDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsRedactColumnsDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsMaskPolicyDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeProfileDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeStrictValidationDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeLogLevelDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeEventLevelDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeEventRateLimitPerSecondDraftChanged(
+        string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeProgressEnabledDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeProgressIntervalSecondsDraftChanged(
+        string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeCaptureErrorContextDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeIncludeMetricsDraftChanged(bool value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodePayloadByteLimitDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeTtlSecondsDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeRedactColumnsDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
+    }
+
+    partial void OnRuntimeOptionsSelectedNodeMaskPolicyDraftChanged(string value)
+    {
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
     }
 
     partial void OnRuntimeOptionsNodeOverrideCountChanged(int value)
     {
         NotifyRuntimeOptionsSummaryChanged();
+        RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
     }
 
     partial void OnRuntimeOptionsEditorErrorMessageChanged(string? value)
@@ -6722,6 +7251,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -6764,6 +7294,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -6783,6 +7314,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -6799,6 +7331,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();
@@ -7234,6 +7767,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ValidateWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
         ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
+        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
         ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
         AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionCommandsChanged();

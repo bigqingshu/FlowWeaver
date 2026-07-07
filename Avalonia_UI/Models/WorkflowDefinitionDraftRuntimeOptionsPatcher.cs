@@ -55,6 +55,11 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
         };
     }
 
+    public static string FormatRuntimeOptions(RuntimeOptionsDraft draft)
+    {
+        return CreateRuntimeOptionsObject(draft).ToJsonString(IndentedJsonOptions);
+    }
+
     private static JsonObject CreateRuntimeOptionsObject(RuntimeOptionsDraft draft)
     {
         return new JsonObject

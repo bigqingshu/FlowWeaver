@@ -3164,6 +3164,199 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public void RuntimeOptionsJsonEditorExpansionGeneratesCurrentDraftJson()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0"
+                }
+              ],
+              "connections": [],
+              "runtime_options": {
+                "version": "1.0",
+                "workflow": {
+                  "profile": "normal",
+                  "telemetry": {
+                    "event_level": "basic"
+                  }
+                },
+                "node_overrides": {
+                  "source": {
+                    "telemetry": {
+                      "log_level": "DEBUG"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        viewModel.IsRuntimeOptionsJsonEditorExpanded = true;
+
+        using var json = JsonDocument.Parse(viewModel.RuntimeOptionsJsonDraft);
+        var root = json.RootElement;
+        Assert.AreEqual(
+            "normal",
+            root.GetProperty("workflow").GetProperty("profile").GetString());
+        Assert.AreEqual(
+            "basic",
+            root
+                .GetProperty("workflow")
+                .GetProperty("telemetry")
+                .GetProperty("event_level")
+                .GetString());
+        Assert.AreEqual(
+            "DEBUG",
+            root
+                .GetProperty("node_overrides")
+                .GetProperty("source")
+                .GetProperty("telemetry")
+                .GetProperty("log_level")
+                .GetString());
+        Assert.IsFalse(viewModel.IsRuntimeOptionsJsonDraftDirty);
+    }
+
+    [TestMethod]
+    public void ApplyRuntimeOptionsJsonDraftPatchesWorkflowDefinitionDraftJson()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "source",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {"rows": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        viewModel.IsRuntimeOptionsJsonEditorExpanded = true;
+        viewModel.RuntimeOptionsJsonDraft =
+            """
+            {
+              "version": "1.0",
+              "workflow": {
+                "profile": "custom",
+                "telemetry": {
+                  "log_level": "WARN",
+                  "event_level": "progress",
+                  "event_rate_limit_per_second": 4,
+                  "progress_enabled": true,
+                  "progress_interval_seconds": 0
+                },
+                "diagnostics": {
+                  "capture_error_context": true,
+                  "include_metrics": true,
+                  "payload_byte_limit": 1024,
+                  "ttl_seconds": 0,
+                  "redact_columns": ["token"],
+                  "mask_policy": "partial"
+                }
+              },
+              "node_overrides": {
+                "source": {
+                  "telemetry": {
+                    "log_level": "DEBUG"
+                  }
+                }
+              }
+            }
+            """;
+
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        using var draft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var runtimeOptions = draft.RootElement.GetProperty("runtime_options");
+        Assert.AreEqual(
+            "custom",
+            runtimeOptions.GetProperty("workflow").GetProperty("profile").GetString());
+        Assert.AreEqual(
+            1024,
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("diagnostics")
+                .GetProperty("payload_byte_limit")
+                .GetInt32());
+        Assert.AreEqual(
+            "token",
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("diagnostics")
+                .GetProperty("redact_columns")[0]
+                .GetString());
+        Assert.AreEqual(
+            "DEBUG",
+            runtimeOptions
+                .GetProperty("node_overrides")
+                .GetProperty("source")
+                .GetProperty("telemetry")
+                .GetProperty("log_level")
+                .GetString());
+        Assert.AreEqual("custom", viewModel.RuntimeOptionsProfileDraft);
+        Assert.IsFalse(viewModel.IsRuntimeOptionsJsonDraftDirty);
+        Assert.IsFalse(viewModel.HasRuntimeOptionsEditorError);
+    }
+
+    [TestMethod]
+    public void ApplyRuntimeOptionsJsonDraftRejectsInvalidJson()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"schema_version":"1.0","nodes":[],"connections":[]}""";
+        var originalDraft = viewModel.WorkflowDefinitionDraftJson;
+        viewModel.IsRuntimeOptionsJsonEditorExpanded = true;
+        viewModel.RuntimeOptionsJsonDraft = "{";
+
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsTrue(viewModel.HasRuntimeOptionsEditorError);
+        StringAssert.Contains(
+            viewModel.RuntimeOptionsEditorErrorMessage,
+            "Runtime options JSON is invalid.");
+    }
+
+    [TestMethod]
+    public void ApplyRuntimeOptionsJsonDraftRejectsInvalidOptionValue()
+    {
+        var viewModel = CreateViewModel(new FakeApiClient());
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"schema_version":"1.0","nodes":[],"connections":[]}""";
+        var originalDraft = viewModel.WorkflowDefinitionDraftJson;
+        viewModel.IsRuntimeOptionsJsonEditorExpanded = true;
+        viewModel.RuntimeOptionsJsonDraft =
+            """
+            {
+              "workflow": {
+                "telemetry": {
+                  "event_level": "chatty"
+                }
+              }
+            }
+            """;
+
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsTrue(viewModel.HasRuntimeOptionsEditorError);
+        StringAssert.Contains(
+            viewModel.RuntimeOptionsEditorErrorMessage,
+            "Event level");
+    }
+
+    [TestMethod]
     public void ResetRuntimeOptionsSelectedNodeOverrideRemovesNodeOverride()
     {
         var viewModel = CreateViewModel(new FakeApiClient());
