@@ -23,6 +23,9 @@ from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec, NodeRegi
 from flowweaver.protocols.enums import (
     EventType,
     LifecycleStatus,
+    LoopIterationRunStatus,
+    LoopIterationTableRefRole,
+    LoopRunStatus,
     TableMutability,
     TableRole,
     TableScope,
@@ -211,7 +214,7 @@ def test_workflow_crud_api(tmp_path: Path) -> None:
                     "nodes": [],
                     "connections": [],
                     "outputs": [],
-                }
+                },
             },
             headers=auth_headers(),
         )
@@ -407,9 +410,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["BatchRenameFilesNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
-    assert by_type["PluginNode"]["input_ports"] == [
-        {"name": "in", "required": False}
-    ]
+    assert by_type["PluginNode"]["input_ports"] == [{"name": "in", "required": False}]
     assert by_type["PluginNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
@@ -428,12 +429,8 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["RenameColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
-    assert by_type["FillCellsNode"]["input_ports"] == [
-        {"name": "in", "required": True}
-    ]
-    assert by_type["FillRangeNode"]["input_ports"] == [
-        {"name": "in", "required": True}
-    ]
+    assert by_type["FillCellsNode"]["input_ports"] == [{"name": "in", "required": True}]
+    assert by_type["FillRangeNode"]["input_ports"] == [{"name": "in", "required": True}]
     assert by_type["FillSequenceNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
@@ -443,9 +440,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["DeleteRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
-    assert by_type["CopyRowsNode"]["input_ports"] == [
-        {"name": "in", "required": True}
-    ]
+    assert by_type["CopyRowsNode"]["input_ports"] == [{"name": "in", "required": True}]
     assert by_type["UnpivotRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
@@ -502,9 +497,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["LoopStartNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
-    assert by_type["LoopJudgeNode"]["input_ports"] == [
-        {"name": "in", "required": True}
-    ]
+    assert by_type["LoopJudgeNode"]["input_ports"] == [{"name": "in", "required": True}]
     assert by_type["LoopJudgeNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
@@ -543,12 +536,10 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
     assert all("implementation_ref" not in definition for definition in definitions)
     assert all(
-        definition["config_schema_version"] == "1.0"
-        for definition in definitions
+        definition["config_schema_version"] == "1.0" for definition in definitions
     )
     assert all(
-        definition["config_schema"]["type"] == "object"
-        for definition in definitions
+        definition["config_schema"]["type"] == "object" for definition in definitions
     )
 
     generate_properties = by_type["GenerateTestTableNode"]["config_schema"][
@@ -564,9 +555,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert generate_properties["seed"]["default"] == 0
     assert generate_properties["columns"]["items"] == {"type": "string"}
 
-    list_files_properties = by_type["ListFilesNode"]["config_schema"][
-        "properties"
-    ]
+    list_files_properties = by_type["ListFilesNode"]["config_schema"]["properties"]
     assert list_files_properties["directory"]["required"] is True
     assert list_files_properties["recursive"]["default"] is False
     assert list_files_properties["include_files"]["default"] is True
@@ -616,9 +605,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "enum": ["EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"],
     }
 
-    add_columns_properties = by_type["AddColumnsNode"]["config_schema"][
-        "properties"
-    ]
+    add_columns_properties = by_type["AddColumnsNode"]["config_schema"]["properties"]
     assert add_columns_properties["column_name"] == {
         "type": "string",
         "title": "Column Name",
@@ -643,9 +630,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "description": "Column names to remove from the output table.",
     }
 
-    copy_column_properties = by_type["CopyColumnNode"]["config_schema"][
-        "properties"
-    ]
+    copy_column_properties = by_type["CopyColumnNode"]["config_schema"]["properties"]
     assert copy_column_properties["source_field"] == {
         "type": "string",
         "title": "Source Field",
@@ -737,9 +722,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert fill_sequence_properties["overwrite_rule"]["default"] == "all"
     assert fill_sequence_properties["zero_pad"]["minimum"] == 0
 
-    replace_text_properties = by_type["ReplaceTextNode"]["config_schema"][
-        "properties"
-    ]
+    replace_text_properties = by_type["ReplaceTextNode"]["config_schema"]["properties"]
     assert replace_text_properties["target_field"] == {
         "type": "string",
         "title": "Target Field",
@@ -757,9 +740,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert replace_text_properties["replace_mode"]["default"] == "partial"
     assert replace_text_properties["skip_empty_match_value"]["default"] is True
 
-    delete_rows_properties = by_type["DeleteRowsNode"]["config_schema"][
-        "properties"
-    ]
+    delete_rows_properties = by_type["DeleteRowsNode"]["config_schema"]["properties"]
     assert delete_rows_properties["delete_mode"] == {
         "type": "enum",
         "title": "Delete Mode",
@@ -798,9 +779,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert copy_rows_properties["max_output_rows"]["default"] == 100000
 
-    unpivot_rows_properties = by_type["UnpivotRowsNode"]["config_schema"][
-        "properties"
-    ]
+    unpivot_rows_properties = by_type["UnpivotRowsNode"]["config_schema"]["properties"]
     assert unpivot_rows_properties["value_fields"] == {
         "type": "array",
         "title": "Value Fields",
@@ -856,9 +835,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert advanced_filter_properties["result_limit"]["minimum"] == 0
     assert advanced_filter_properties["remove_duplicates"]["default"] is False
 
-    extract_text_properties = by_type["ExtractTextNode"]["config_schema"][
-        "properties"
-    ]
+    extract_text_properties = by_type["ExtractTextNode"]["config_schema"]["properties"]
     assert extract_text_properties["source_field"] == {
         "type": "string",
         "title": "Source Field",
@@ -885,17 +862,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert extract_text_properties["rule_value_source"]["type"] == "object"
 
-    lookup_matched_properties = by_type["LookupMatchedFieldNameNode"][
-        "config_schema"
-    ]["properties"]
+    lookup_matched_properties = by_type["LookupMatchedFieldNameNode"]["config_schema"][
+        "properties"
+    ]
     assert lookup_matched_properties["source_field"] == {
         "type": "string",
         "title": "Source Field",
         "required": True,
     }
-    assert lookup_matched_properties["lookup_fields"]["items"] == {
-        "type": "string"
-    }
+    assert lookup_matched_properties["lookup_fields"]["items"] == {"type": "string"}
     assert lookup_matched_properties["match_mode"]["enum"] == ["equals"]
     assert lookup_matched_properties["output_field"]["default"] == "matched_field"
     assert lookup_matched_properties["output_status"]["default"] is True
@@ -999,9 +974,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "fixed",
     ]
 
-    condition_properties = by_type["ConditionFlagNode"]["config_schema"][
-        "properties"
-    ]
+    condition_properties = by_type["ConditionFlagNode"]["config_schema"]["properties"]
     assert condition_properties["flag_name"] == {
         "type": "string",
         "title": "Flag Name",
@@ -1060,9 +1033,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert conditional_jump_properties["default_branch"]["default"] == "false"
 
-    jump_anchor_properties = by_type["JumpAnchorNode"]["config_schema"][
-        "properties"
-    ]
+    jump_anchor_properties = by_type["JumpAnchorNode"]["config_schema"]["properties"]
     assert jump_anchor_properties["anchor_name"] == {
         "type": "string",
         "title": "Anchor Name",
@@ -1072,9 +1043,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert jump_anchor_properties["description"]["default"] == ""
     assert jump_anchor_properties["allow_multiple_hits"]["default"] is False
 
-    unconditional_jump_properties = by_type["UnconditionalJumpNode"][
-        "config_schema"
-    ]["properties"]
+    unconditional_jump_properties = by_type["UnconditionalJumpNode"]["config_schema"][
+        "properties"
+    ]
     assert unconditional_jump_properties["target_mode"] == {
         "type": "enum",
         "title": "Target Mode",
@@ -1086,9 +1057,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert unconditional_jump_properties["target_node_id"]["type"] == "string"
     assert unconditional_jump_properties["reason"]["default"] == ""
 
-    loop_start_properties = by_type["LoopStartNode"]["config_schema"][
-        "properties"
-    ]
+    loop_start_properties = by_type["LoopStartNode"]["config_schema"]["properties"]
     assert loop_start_properties["loop_id"] == {
         "type": "string",
         "title": "Loop ID",
@@ -1104,9 +1073,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert loop_start_properties["max_loop_count"]["minimum"] == 1
     assert loop_start_properties["output_current_as_table"]["default"] is True
 
-    loop_judge_properties = by_type["LoopJudgeNode"]["config_schema"][
-        "properties"
-    ]
+    loop_judge_properties = by_type["LoopJudgeNode"]["config_schema"]["properties"]
     assert loop_judge_properties["loop_id"]["required"] is True
     assert loop_judge_properties["condition_mode"]["enum"] == [
         "always_success",
@@ -1130,9 +1097,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     ]
     assert loop_judge_properties["on_fail"]["default"] == "end_loop"
 
-    subworkflow_properties = by_type["SubWorkflowNode"]["config_schema"][
-        "properties"
-    ]
+    subworkflow_properties = by_type["SubWorkflowNode"]["config_schema"]["properties"]
     assert subworkflow_properties["group_name"] == {
         "type": "string",
         "title": "Group Name",
@@ -1171,19 +1136,15 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert save_memory_properties["mode"]["enum"] == ["overwrite"]
 
-    save_run_properties = by_type["SaveRunTableNode"]["config_schema"][
-        "properties"
-    ]
+    save_run_properties = by_type["SaveRunTableNode"]["config_schema"]["properties"]
     assert save_run_properties["transit_name"]["default"] == "run_table"
     assert save_run_properties["save_memory"]["default"] is True
     assert save_run_properties["mode"]["enum"] == ["overwrite"]
 
-    write_selected_properties = by_type["WriteSelectedColumnsNode"][
-        "config_schema"
-    ]["properties"]
-    assert write_selected_properties["selected_fields"]["items"] == {
-        "type": "string"
-    }
+    write_selected_properties = by_type["WriteSelectedColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert write_selected_properties["selected_fields"]["items"] == {"type": "string"}
     assert write_selected_properties["target_type"]["enum"] == [
         "run_table",
         "memory_table",
@@ -1195,15 +1156,11 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "suffix",
         "mapping",
     ]
-    assert write_selected_properties["field_mappings"]["items"] == {
-        "type": "object"
-    }
+    assert write_selected_properties["field_mappings"]["items"] == {"type": "object"}
     assert write_selected_properties["enable_write"]["default"] is False
     assert write_selected_properties["backup_before_write"]["default"] is False
 
-    write_back_properties = by_type["WriteBackTableNode"]["config_schema"][
-        "properties"
-    ]
+    write_back_properties = by_type["WriteBackTableNode"]["config_schema"]["properties"]
     assert write_back_properties["writeback_direction"]["enum"] == [
         "source_to_target",
         "target_to_source",
@@ -1374,6 +1331,119 @@ def test_run_query_api_includes_completion_reason(tmp_path: Path) -> None:
 
     assert loaded["status"] == "FAILED"
     assert loaded["completion_reason"] == "PARTIAL_FAILURE"
+
+
+def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Loop API workflow",
+        definition=valid_definition(),
+        workflow_id="workflow-loop-api",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-loop-api",
+        status=WorkflowRunStatus.RUNNING,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="loop-body",
+        node_type="core.transform",
+        node_run_id="node-loop-body",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-loop-input",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="loop_input",
+    )
+    store.register_table_ref(table_ref)
+    loop = store.create_loop_run(
+        loop_run_id="loop-run-1",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="orders_loop",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+        status=LoopRunStatus.RUNNING,
+        started_at=utc_now(),
+    )
+    assert loop is not None
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-1",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        status=LoopIterationRunStatus.RUNNING,
+        input_table_ref_id=table_ref.table_ref_id,
+        input_selector={"row_index": 0},
+        started_at=utc_now(),
+    )
+    assert iteration is not None
+    linked_ref = store.add_loop_iteration_table_ref(
+        loop_iteration_id=iteration.loop_iteration_id,
+        table_ref_id=table_ref.table_ref_id,
+        role=LoopIterationTableRefRole.INPUT,
+    )
+    assert linked_ref is not None
+
+    loops = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops",
+            headers=auth_headers(),
+        )
+    )
+    loaded_loop = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/{loop.loop_run_id}",
+            headers=auth_headers(),
+        )
+    )
+    iterations = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/{loop.loop_run_id}/iterations",
+            headers=auth_headers(),
+        )
+    )
+    loaded_iteration = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/"
+            f"{loop.loop_run_id}/iterations/{iteration.loop_iteration_id}",
+            headers=auth_headers(),
+        )
+    )
+    table_refs = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/"
+            f"{loop.loop_run_id}/iterations/"
+            f"{iteration.loop_iteration_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+    filtered_table_refs = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/"
+            f"{loop.loop_run_id}/iterations/"
+            f"{iteration.loop_iteration_id}/table-refs",
+            params={"role": "INPUT"},
+            headers=auth_headers(),
+        )
+    )
+
+    assert [item["loop_run_id"] for item in loops] == [loop.loop_run_id]
+    assert loaded_loop["loop_id"] == "orders_loop"
+    assert loaded_loop["status"] == LoopRunStatus.RUNNING.value
+    assert loaded_loop["current_iteration"] == 0
+    assert [item["loop_iteration_id"] for item in iterations] == [
+        iteration.loop_iteration_id
+    ]
+    assert loaded_iteration["iteration_index"] == 0
+    assert loaded_iteration["status"] == LoopIterationRunStatus.RUNNING.value
+    assert loaded_iteration["input_selector"] == {"row_index": 0}
+    assert table_refs == filtered_table_refs
+    assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
+    assert table_refs[0]["role"] == LoopIterationTableRefRole.INPUT.value
 
 
 def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:

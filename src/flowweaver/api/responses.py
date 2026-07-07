@@ -7,6 +7,9 @@ from fastapi.responses import JSONResponse
 
 from flowweaver.common.ids import new_id
 from flowweaver.engine.runtime_store import (
+    LoopIterationRun,
+    LoopIterationTableRef,
+    LoopRun,
     NodeRun,
     RuntimeEventLog,
     SharedPublication,
@@ -114,9 +117,7 @@ def _to_jsonable(value: Any) -> Any:
             "status": value.status,
             "started_at": value.started_at.isoformat(),
             "last_heartbeat_at": (
-                value.last_heartbeat_at.isoformat()
-                if value.last_heartbeat_at
-                else None
+                value.last_heartbeat_at.isoformat() if value.last_heartbeat_at else None
             ),
             "cancel_requested_at": (
                 value.cancel_requested_at.isoformat()
@@ -146,6 +147,46 @@ def _to_jsonable(value: Any) -> Any:
             ),
             "error": value.error,
         }
+    if isinstance(value, LoopRun):
+        return {
+            "loop_run_id": value.loop_run_id,
+            "workflow_run_id": value.workflow_run_id,
+            "loop_id": value.loop_id,
+            "start_node_instance_id": value.start_node_instance_id,
+            "judge_node_instance_id": value.judge_node_instance_id,
+            "status": value.status,
+            "state_version": value.state_version,
+            "current_iteration": value.current_iteration,
+            "max_iterations": value.max_iterations,
+            "exit_reason": value.exit_reason,
+            "started_at": value.started_at.isoformat() if value.started_at else None,
+            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
+            "error": value.error,
+            "created_at": value.created_at.isoformat(),
+        }
+    if isinstance(value, LoopIterationRun):
+        return {
+            "loop_iteration_id": value.loop_iteration_id,
+            "loop_run_id": value.loop_run_id,
+            "iteration_index": value.iteration_index,
+            "status": value.status,
+            "state_version": value.state_version,
+            "input_table_ref_id": value.input_table_ref_id,
+            "input_selector": value.input_selector,
+            "output_table_ref_id": value.output_table_ref_id,
+            "failed_node_run_id": value.failed_node_run_id,
+            "started_at": value.started_at.isoformat() if value.started_at else None,
+            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
+            "error": value.error,
+            "created_at": value.created_at.isoformat(),
+        }
+    if isinstance(value, LoopIterationTableRef):
+        return {
+            "loop_iteration_id": value.loop_iteration_id,
+            "table_ref_id": value.table_ref_id,
+            "role": value.role,
+            "created_at": value.created_at.isoformat(),
+        }
     if isinstance(value, RuntimeEventLog):
         return {
             "event_id": value.event_id,
@@ -170,9 +211,7 @@ def _to_jsonable(value: Any) -> Any:
             "resource_profile_id": value.resource_profile_id,
             "mount_id": value.mount_id,
             "logical_table_id": value.logical_table_id,
-            "schema": [
-                field.model_dump(mode="json") for field in value.schema
-            ],
+            "schema": [field.model_dump(mode="json") for field in value.schema],
             "schema_fingerprint": value.schema_fingerprint,
             "version": value.version,
             "capabilities": sorted(value.capabilities),
