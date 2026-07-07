@@ -35,6 +35,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
@@ -2663,6 +2664,158 @@ def test_save_run_table_node_can_pass_through_without_memory_save(
 
     assert save_result.status == NodeResultStatus.SUCCEEDED
     assert save_result.output_refs == [input_ref.table_ref_id]
+
+
+def test_write_selected_columns_node_outputs_write_plan_status_table(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 3,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    write_task = make_task(
+        node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-write-selected",
+        node_instance_id="write_selected",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "selected_fields": ["row_id", "amount"],
+            "target_type": "sqlite",
+            "target_table": "target_orders",
+            "write_mode": "append",
+            "field_name_mode": "mapping",
+            "field_mappings": [
+                {"source_field": "row_id", "target_field": "target_id"},
+                {"source_field": "amount", "target_field": "target_amount"},
+            ],
+            "overwrite_rule": "empty_only",
+            "enable_write": False,
+            "backup_before_write": True,
+        },
+    )
+
+    write_result = executor.execute(write_task)
+
+    assert write_result.status == NodeResultStatus.SUCCEEDED
+    assert len(write_result.output_refs) == 1
+    status_ref = registry.get(write_result.output_refs[0])
+    assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert status_ref.logical_table_id == "write_selected_output"
+    assert provider.read_rows(status_ref, offset=0, limit=10) == [
+        {
+            "status": "skipped",
+            "source_type": "current_table",
+            "target_type": "sqlite",
+            "target_table": "target_orders",
+            "write_mode": "append",
+            "overwrite_rule": "empty_only",
+            "selected_field_count": 2,
+            "mapping_count": 2,
+            "source_row_count": 3,
+            "enable_write": "false",
+            "backup_before_write": "true",
+            "actual_write": "false",
+            "selected_fields": "row_id,amount",
+            "target_fields": "target_id,target_amount",
+            "skipped_reason": "enable_write is false",
+        }
+    ]
+    assert provider.count_rows(input_ref) == 3
+
+
+def test_write_selected_columns_node_outputs_preview_only_when_write_enabled(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    write_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected",
+            node_instance_id="write_selected",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_transit_table": "target_scratch",
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert write_result.status == NodeResultStatus.SUCCEEDED
+    status_ref = registry.get(write_result.output_refs[0])
+    assert provider.read_rows(status_ref, offset=0, limit=10) == [
+        {
+            "status": "skipped",
+            "source_type": "current_table",
+            "target_type": "run_table",
+            "target_table": "target_scratch",
+            "write_mode": "overwrite",
+            "overwrite_rule": "all",
+            "selected_field_count": 1,
+            "mapping_count": 0,
+            "source_row_count": 1,
+            "enable_write": "true",
+            "backup_before_write": "false",
+            "actual_write": "false",
+            "selected_fields": "row_id",
+            "target_fields": "row_id",
+            "skipped_reason": "write execution is not implemented",
+        }
+    ]
+
+
+def test_write_selected_columns_node_returns_validation_error_for_missing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected",
+            node_instance_id="write_selected",
+            input_refs=generate_result.output_refs,
+            config={
+                "selected_fields": ["missing"],
+                "target_transit_table": "target_scratch",
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields do not exist: missing" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
 
 
 def test_add_columns_node_returns_validation_error_for_duplicate_column(

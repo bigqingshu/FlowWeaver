@@ -57,6 +57,7 @@ ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE = "AddCurrentDateTimeColumnNode"
 PARSE_DATETIME_NODE_TYPE = "ParseDateTimeNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 SAVE_RUN_TABLE_NODE_TYPE = "SaveRunTableNode"
+WRITE_SELECTED_COLUMNS_NODE_TYPE = "WriteSelectedColumnsNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _SKIP_ROW = object()
@@ -95,6 +96,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             ParseDateTimeNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SaveRunTableNodeHandler(),
+            WriteSelectedColumnsNodeHandler(),
             SqlMappingNodeHandler(),
         )
     )
@@ -1733,6 +1735,119 @@ class SaveRunTableNodeHandler:
         return [input_ref, memory_ref]
 
 
+class WriteSelectedColumnsNodeHandler:
+    node_type = WRITE_SELECTED_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        source_type = _enum_config(
+            task.config,
+            "source_type",
+            default="current_table",
+            allowed={"current_table", "run_table", "sqlite"},
+            node_type=self.node_type,
+        )
+        selected_fields = _string_list_config(
+            task.config,
+            "selected_fields",
+            node_type=self.node_type,
+        )
+        missing_fields = [
+            field
+            for field in selected_fields
+            if find_field(input_ref.schema, field) is None
+        ]
+        if missing_fields:
+            raise _NodeValidationError(
+                f"Fields do not exist: {', '.join(missing_fields)}"
+            )
+        target_type = _enum_config(
+            task.config,
+            "target_type",
+            default="run_table",
+            allowed={"run_table", "memory_table", "sqlite"},
+            node_type=self.node_type,
+        )
+        target_table = _write_selected_target_table_config(
+            task.config,
+            target_type=target_type,
+        )
+        write_mode = _enum_config(
+            task.config,
+            "write_mode",
+            default="overwrite",
+            allowed={"create", "overwrite", "append", "upsert"},
+            node_type=self.node_type,
+        )
+        field_name_mode = _enum_config(
+            task.config,
+            "field_name_mode",
+            default="keep",
+            allowed={"keep", "prefix", "suffix", "mapping"},
+            node_type=self.node_type,
+        )
+        overwrite_rule = _enum_config(
+            task.config,
+            "overwrite_rule",
+            default="all",
+            allowed={"all", "empty_only", "skip_existing"},
+            node_type=self.node_type,
+        )
+        field_mappings = _write_selected_field_mappings_config(
+            task.config,
+            selected_fields=selected_fields,
+        )
+        target_fields = _write_selected_target_fields(
+            task.config,
+            selected_fields=selected_fields,
+            field_name_mode=field_name_mode,
+            field_mappings=field_mappings,
+        )
+        enable_write = _bool_config(task.config, "enable_write", default=False)
+        backup_before_write = _bool_config(
+            task.config,
+            "backup_before_write",
+            default=False,
+        )
+        skipped_reason = (
+            "enable_write is false"
+            if not enable_write
+            else "write execution is not implemented"
+        )
+        status_row = {
+            "status": "skipped",
+            "source_type": source_type,
+            "target_type": target_type,
+            "target_table": target_table,
+            "write_mode": write_mode,
+            "overwrite_rule": overwrite_rule,
+            "selected_field_count": len(selected_fields),
+            "mapping_count": len(field_mappings),
+            "source_row_count": context.count_rows(input_ref),
+            "enable_write": _bool_status(enable_write),
+            "backup_before_write": _bool_status(backup_before_write),
+            "actual_write": "false",
+            "selected_fields": ",".join(selected_fields),
+            "target_fields": ",".join(target_fields),
+            "skipped_reason": skipped_reason,
+        }
+        return [
+            context.publish_rows(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=_write_selected_columns_status_schema(),
+                rows=[status_row],
+            )
+        ]
+
+
 class SqlMappingNodeHandler:
     node_type = SQL_MAPPING_NODE_TYPE
 
@@ -1856,6 +1971,19 @@ def _parse_columns(value: Any) -> list[FieldSchemaModel]:
             )
         )
     return fields
+
+
+def _simple_schema(fields: list[tuple[str, str, bool]]) -> list[FieldSchemaModel]:
+    return [
+        FieldSchemaModel(
+            field_id=name,
+            name=name,
+            data_type=data_type,
+            nullable=nullable,
+            ordinal=index,
+        )
+        for index, (name, data_type, nullable) in enumerate(fields)
+    ]
 
 
 def _int_config(
@@ -2035,6 +2163,155 @@ def _string_list_config(
             )
         items.append(normalized)
     return items
+
+
+def _optional_string_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    default: str = "",
+    node_type: str,
+) -> str:
+    value = config.get(key, default)
+    if not isinstance(value, str):
+        raise _NodeValidationError(f"{node_type} config.{key} must be a string")
+    return value
+
+
+def _write_selected_target_table_config(
+    config: dict[str, Any],
+    *,
+    target_type: str,
+) -> str:
+    if target_type in {"run_table", "memory_table"}:
+        return _named_output_config(
+            config,
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            keys=("target_transit_table", "target_table"),
+        )
+    return _named_output_config(
+        config,
+        node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+        keys=("target_table",),
+    )
+
+
+def _write_selected_field_mappings_config(
+    config: dict[str, Any],
+    *,
+    selected_fields: list[str],
+) -> dict[str, str]:
+    value = config.get("field_mappings", [])
+    if value is None:
+        return {}
+    if not isinstance(value, list):
+        raise _NodeValidationError(
+            "WriteSelectedColumnsNode config.field_mappings must be a list"
+        )
+    selected = set(selected_fields)
+    mappings: dict[str, str] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            raise _NodeValidationError(
+                "WriteSelectedColumnsNode config.field_mappings must contain objects"
+            )
+        source_value = item.get("source_field", item.get("source"))
+        target_value = item.get("target_field", item.get("target"))
+        if not isinstance(source_value, str) or not source_value.strip():
+            raise _NodeValidationError(
+                "WriteSelectedColumnsNode field_mappings.source_field is required"
+            )
+        if not isinstance(target_value, str) or not target_value.strip():
+            raise _NodeValidationError(
+                "WriteSelectedColumnsNode field_mappings.target_field is required"
+            )
+        source_field = source_value.strip()
+        target_field = target_value.strip()
+        if source_field not in selected:
+            raise _NodeValidationError(
+                f"WriteSelectedColumnsNode mapping source is not selected: "
+                f"{source_field}"
+            )
+        if source_field in mappings:
+            raise _NodeValidationError(
+                f"WriteSelectedColumnsNode duplicate mapping source: {source_field}"
+            )
+        mappings[source_field] = target_field
+    return mappings
+
+
+def _write_selected_target_fields(
+    config: dict[str, Any],
+    *,
+    selected_fields: list[str],
+    field_name_mode: str,
+    field_mappings: dict[str, str],
+) -> list[str]:
+    if field_name_mode == "mapping":
+        missing_mappings = [
+            field
+            for field in selected_fields
+            if field not in field_mappings
+        ]
+        if missing_mappings:
+            raise _NodeValidationError(
+                "WriteSelectedColumnsNode field_mappings missing selected fields: "
+                f"{', '.join(missing_mappings)}"
+            )
+        target_fields = [field_mappings[field] for field in selected_fields]
+    elif field_name_mode == "prefix":
+        prefix = _optional_string_config(
+            config,
+            "field_prefix",
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+        )
+        target_fields = [f"{prefix}{field}" for field in selected_fields]
+    elif field_name_mode == "suffix":
+        suffix = _optional_string_config(
+            config,
+            "field_suffix",
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+        )
+        target_fields = [f"{field}{suffix}" for field in selected_fields]
+    else:
+        target_fields = list(selected_fields)
+    duplicates = sorted(
+        field
+        for field in set(target_fields)
+        if target_fields.count(field) > 1
+    )
+    if duplicates:
+        raise _NodeValidationError(
+            f"WriteSelectedColumnsNode target fields are duplicated: "
+            f"{', '.join(duplicates)}"
+        )
+    return target_fields
+
+
+def _write_selected_columns_status_schema() -> list[FieldSchemaModel]:
+    return _simple_schema(
+        [
+            ("status", "TEXT", False),
+            ("source_type", "TEXT", False),
+            ("target_type", "TEXT", False),
+            ("target_table", "TEXT", False),
+            ("write_mode", "TEXT", False),
+            ("overwrite_rule", "TEXT", False),
+            ("selected_field_count", "INTEGER", False),
+            ("mapping_count", "INTEGER", False),
+            ("source_row_count", "INTEGER", False),
+            ("enable_write", "TEXT", False),
+            ("backup_before_write", "TEXT", False),
+            ("actual_write", "TEXT", False),
+            ("selected_fields", "TEXT", False),
+            ("target_fields", "TEXT", False),
+            ("skipped_reason", "TEXT", False),
+        ]
+    )
+
+
+def _bool_status(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def _field_range(

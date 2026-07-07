@@ -31,6 +31,7 @@ from flowweaver.nodes.builtin_table import (
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     SAVE_RUN_TABLE_NODE_TYPE,
+    WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
 from flowweaver.nodes.registry import (
     NodeConfigFieldSpec,
@@ -219,6 +220,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"), NodePortSpec("transit")),
             config_schema=_save_run_table_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Write Selected Columns",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("status"),),
+            config_schema=_write_selected_columns_schema(),
         ),
         NodeDefinitionSpec(
             node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
@@ -1339,6 +1348,87 @@ def _save_run_table_schema() -> NodeConfigSchemaSpec:
                 required=True,
                 default="overwrite",
                 enum=("overwrite",),
+            ),
+        }
+    )
+
+
+def _write_selected_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "source_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Source Type",
+                default="current_table",
+                enum=("current_table", "run_table", "sqlite"),
+            ),
+            "selected_fields": NodeConfigFieldSpec(
+                type="array",
+                title="Selected Fields",
+                required=True,
+                item_type="string",
+            ),
+            "target_type": NodeConfigFieldSpec(
+                type="enum",
+                title="Target Type",
+                default="run_table",
+                enum=("run_table", "memory_table", "sqlite"),
+            ),
+            "target_table": NodeConfigFieldSpec(
+                type="string",
+                title="Target Table",
+                description=(
+                    "Required for sqlite targets; also accepted for run tables."
+                ),
+            ),
+            "target_transit_table": NodeConfigFieldSpec(
+                type="string",
+                title="Target Transit Table",
+                description="Workflow-run local target name.",
+            ),
+            "write_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Write Mode",
+                default="overwrite",
+                enum=("create", "overwrite", "append", "upsert"),
+            ),
+            "field_name_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Field Name Mode",
+                default="keep",
+                enum=("keep", "prefix", "suffix", "mapping"),
+            ),
+            "field_prefix": NodeConfigFieldSpec(
+                type="string",
+                title="Field Prefix",
+                default="",
+            ),
+            "field_suffix": NodeConfigFieldSpec(
+                type="string",
+                title="Field Suffix",
+                default="",
+            ),
+            "field_mappings": NodeConfigFieldSpec(
+                type="array",
+                title="Field Mappings",
+                item_type="object",
+                description="Objects with source_field and target_field.",
+            ),
+            "overwrite_rule": NodeConfigFieldSpec(
+                type="enum",
+                title="Overwrite Rule",
+                default="all",
+                enum=("all", "empty_only", "skip_existing"),
+            ),
+            "enable_write": NodeConfigFieldSpec(
+                type="boolean",
+                title="Enable Write",
+                default=False,
+            ),
+            "backup_before_write": NodeConfigFieldSpec(
+                type="boolean",
+                title="Backup Before Write",
+                default=False,
             ),
         }
     )

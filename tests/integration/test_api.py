@@ -374,6 +374,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "ParseDateTimeNode",
         "SaveMemoryTableNode",
         "SaveRunTableNode",
+        "WriteSelectedColumnsNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
         "SqlMappingNode",
@@ -448,6 +449,12 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["SaveRunTableNode"]["output_ports"] == [
         {"name": "out", "required": False},
         {"name": "transit", "required": False},
+    ]
+    assert by_type["WriteSelectedColumnsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["WriteSelectedColumnsNode"]["output_ports"] == [
+        {"name": "status", "required": False}
     ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
     assert all("implementation_ref" not in definition for definition in definitions)
@@ -816,6 +823,29 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert save_run_properties["transit_name"]["default"] == "run_table"
     assert save_run_properties["save_memory"]["default"] is True
     assert save_run_properties["mode"]["enum"] == ["overwrite"]
+
+    write_selected_properties = by_type["WriteSelectedColumnsNode"][
+        "config_schema"
+    ]["properties"]
+    assert write_selected_properties["selected_fields"]["items"] == {
+        "type": "string"
+    }
+    assert write_selected_properties["target_type"]["enum"] == [
+        "run_table",
+        "memory_table",
+        "sqlite",
+    ]
+    assert write_selected_properties["field_name_mode"]["enum"] == [
+        "keep",
+        "prefix",
+        "suffix",
+        "mapping",
+    ]
+    assert write_selected_properties["field_mappings"]["items"] == {
+        "type": "object"
+    }
+    assert write_selected_properties["enable_write"]["default"] is False
+    assert write_selected_properties["backup_before_write"]["default"] is False
 
     publish_properties = by_type["PublishSharedTablesNode"]["config_schema"][
         "properties"
