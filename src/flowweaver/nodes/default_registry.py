@@ -17,6 +17,7 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
+    REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.nodes.registry import (
@@ -91,6 +92,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_fill_cells_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=REPLACE_TEXT_NODE_TYPE,
+            node_version="1.0",
+            display_name="Replace Text",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_replace_text_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -342,6 +351,77 @@ def _fill_cells_schema() -> NodeConfigSchemaSpec:
                 title="Overwrite Rule",
                 default="all",
                 enum=("all", "empty_only"),
+            ),
+        }
+    )
+
+
+def _replace_text_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "target_field": NodeConfigFieldSpec(
+                type="string",
+                title="Target Field",
+                required=True,
+            ),
+            "match_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Match Mode",
+                required=True,
+                default="contains",
+                enum=(
+                    "contains",
+                    "equals",
+                    "starts_with",
+                    "ends_with",
+                    "regex",
+                    "is_empty",
+                    "is_not_empty",
+                ),
+            ),
+            "match_value": NodeConfigFieldSpec(
+                type="object",
+                title="Match Value",
+            ),
+            "replace_value": NodeConfigFieldSpec(
+                type="object",
+                title="Replace Value",
+            ),
+            "match_value_source": NodeConfigFieldSpec(
+                type="object",
+                title="Match Value Source",
+                description=(
+                    "Literal values or row_field objects are supported by runtime."
+                ),
+            ),
+            "replace_value_source": NodeConfigFieldSpec(
+                type="object",
+                title="Replace Value Source",
+                description=(
+                    "Literal values or row_field objects are supported by runtime."
+                ),
+            ),
+            "replace_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Replace Mode",
+                default="partial",
+                enum=("partial", "whole_cell"),
+            ),
+            "case_sensitive": NodeConfigFieldSpec(
+                type="boolean",
+                title="Case Sensitive",
+                default=True,
+            ),
+            "replace_count": NodeConfigFieldSpec(
+                type="integer",
+                title="Replace Count",
+                default=0,
+                minimum=0,
+            ),
+            "skip_empty_match_value": NodeConfigFieldSpec(
+                type="boolean",
+                title="Skip Empty Match Value",
+                default=True,
             ),
         }
     )

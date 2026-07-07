@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from flowweaver.common.time import utc_now
@@ -40,6 +41,7 @@ DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
 COPY_COLUMN_NODE_TYPE = "CopyColumnNode"
 REORDER_COLUMNS_NODE_TYPE = "ReorderColumnsNode"
 FILL_CELLS_NODE_TYPE = "FillCellsNode"
+REPLACE_TEXT_NODE_TYPE = "ReplaceTextNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -62,6 +64,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             CopyColumnNodeHandler(),
             ReorderColumnsNodeHandler(),
             FillCellsNodeHandler(),
+            ReplaceTextNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -468,6 +471,108 @@ class FillCellsNodeHandler:
         ]
 
 
+class ReplaceTextNodeHandler:
+    node_type = REPLACE_TEXT_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        target_field = _node_string_config(
+            task.config,
+            "target_field",
+            node_type=self.node_type,
+        )
+        if not has_field(input_ref.schema, target_field):
+            raise _NodeValidationError(f"Field does not exist: {target_field}")
+        match_mode = _enum_config(
+            task.config,
+            "match_mode",
+            default="contains",
+            allowed={
+                "contains",
+                "equals",
+                "starts_with",
+                "ends_with",
+                "regex",
+                "is_empty",
+                "is_not_empty",
+            },
+            node_type=self.node_type,
+        )
+        replace_mode = _enum_config(
+            task.config,
+            "replace_mode",
+            default="partial",
+            allowed={"partial", "whole_cell"},
+            node_type=self.node_type,
+        )
+        case_sensitive = _bool_config(
+            task.config,
+            "case_sensitive",
+            default=True,
+        )
+        replace_count = _non_negative_int_config(
+            task.config,
+            "replace_count",
+            default=0,
+            node_type=self.node_type,
+        )
+        skip_empty_match_value = _bool_config(
+            task.config,
+            "skip_empty_match_value",
+            default=True,
+        )
+        match_source = _value_source_config(
+            task.config,
+            "match_value_source",
+            fallback_key="match_value",
+        )
+        replace_source = _value_source_config(
+            task.config,
+            "replace_value_source",
+            fallback_key="replace_value",
+        )
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                output_rows: list[dict[str, Any]] = []
+                for row in rows:
+                    try:
+                        output_rows.append(
+                            row | {
+                                target_field: _replace_text_value(
+                                    row.get(target_field),
+                                    row=row,
+                                    match_mode=match_mode,
+                                    match_source=match_source,
+                                    replace_source=replace_source,
+                                    replace_mode=replace_mode,
+                                    case_sensitive=case_sensitive,
+                                    replace_count=replace_count,
+                                    skip_empty_match_value=skip_empty_match_value,
+                                )
+                            }
+                        )
+                    except (ValueSourceError, re.error) as exc:
+                        raise _NodeValidationError(str(exc)) from exc
+                yield output_rows
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=input_ref.schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SaveMemoryTableNodeHandler:
     node_type = SAVE_MEMORY_TABLE_NODE_TYPE
 
@@ -651,6 +756,21 @@ def _positive_int_config(
     return value
 
 
+def _non_negative_int_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    default: int,
+    node_type: str,
+) -> int:
+    value = config.get(key, default)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
+    if value < 0:
+        raise _NodeValidationError(f"{node_type} config.{key} must be non-negative")
+    return value
+
+
 def _optional_positive_int_config(
     config: dict[str, Any],
     key: str,
@@ -785,10 +905,20 @@ def _copy_column_value(
 
 
 def _fill_cells_value_source_config(config: dict[str, Any]):
-    if "value_source" in config:
-        raw_value_source = config.get("value_source")
-    else:
-        raw_value_source = config.get("manual_value")
+    return _value_source_config(
+        config,
+        "value_source",
+        fallback_key="manual_value",
+    )
+
+
+def _value_source_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    fallback_key: str,
+):
+    raw_value_source = config.get(key) if key in config else config.get(fallback_key)
     try:
         return parse_value_source(raw_value_source)
     except ValueSourceError as exc:
@@ -817,6 +947,82 @@ def _fill_cells_selected_rows(
 
 def _is_empty_cell(value: Any) -> bool:
     return value is None or value == ""
+
+
+def _replace_text_value(
+    cell_value: Any,
+    *,
+    row: dict[str, Any],
+    match_mode: str,
+    match_source,
+    replace_source,
+    replace_mode: str,
+    case_sensitive: bool,
+    replace_count: int,
+    skip_empty_match_value: bool,
+) -> Any:
+    match_value = match_source.resolve(row)
+    replace_value = replace_source.resolve(row)
+    if match_mode not in {"is_empty", "is_not_empty"}:
+        match_text = "" if match_value is None else str(match_value)
+        if skip_empty_match_value and match_text == "":
+            return cell_value
+    else:
+        match_text = ""
+    if not _text_cell_matches(
+        cell_value,
+        match_mode=match_mode,
+        match_text=match_text,
+        case_sensitive=case_sensitive,
+    ):
+        return cell_value
+    if replace_mode == "whole_cell" or match_mode in {"is_empty", "is_not_empty"}:
+        return replace_value
+    cell_text = "" if cell_value is None else str(cell_value)
+    replacement = "" if replace_value is None else str(replace_value)
+    if match_mode == "regex":
+        flags = 0 if case_sensitive else re.IGNORECASE
+        count = 0 if replace_count == 0 else replace_count
+        return re.sub(match_text, replacement, cell_text, count=count, flags=flags)
+    if case_sensitive:
+        count = -1 if replace_count == 0 else replace_count
+        return cell_text.replace(match_text, replacement, count)
+    count = 0 if replace_count == 0 else replace_count
+    return re.sub(
+        re.escape(match_text),
+        replacement,
+        cell_text,
+        count=count,
+        flags=re.IGNORECASE,
+    )
+
+
+def _text_cell_matches(
+    cell_value: Any,
+    *,
+    match_mode: str,
+    match_text: str,
+    case_sensitive: bool,
+) -> bool:
+    if match_mode == "is_empty":
+        return _is_empty_cell(cell_value)
+    if match_mode == "is_not_empty":
+        return not _is_empty_cell(cell_value)
+    cell_text = "" if cell_value is None else str(cell_value)
+    candidate = cell_text if case_sensitive else cell_text.lower()
+    expected = match_text if case_sensitive else match_text.lower()
+    if match_mode == "contains":
+        return expected in candidate
+    if match_mode == "equals":
+        return candidate == expected
+    if match_mode == "starts_with":
+        return candidate.startswith(expected)
+    if match_mode == "ends_with":
+        return candidate.endswith(expected)
+    if match_mode == "regex":
+        flags = 0 if case_sensitive else re.IGNORECASE
+        return re.search(match_text, cell_text, flags=flags) is not None
+    return False
 
 
 def _infer_data_type(name: str) -> str:

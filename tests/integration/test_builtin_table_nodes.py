@@ -21,6 +21,7 @@ from flowweaver.nodes.builtin_table import (
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
+    REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.protocols.enums import (
@@ -657,6 +658,205 @@ def test_fill_cells_node_empty_only_keeps_existing_values(
     assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
         {"row_id": 1, "label": "keep"},
         {"row_id": 2, "label": "filled"},
+    ]
+
+
+def test_replace_text_node_replaces_literal_partial_text(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    replace_task = make_task(
+        node_type=REPLACE_TEXT_NODE_TYPE,
+        node_run_id="node-run-replace-text",
+        node_instance_id="replace_text",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "match_mode": "contains",
+            "match_value": "label",
+            "replace_value": "item",
+        },
+    )
+
+    replace_result = executor.execute(replace_task)
+
+    assert replace_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(replace_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "replace_text_output"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "item_0_1"},
+        {"row_id": 2, "label": "item_0_2"},
+    ]
+
+
+def test_replace_text_node_uses_same_row_value_sources(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "target", "data_type": "TEXT"},
+                    {"name": "match", "data_type": "TEXT"},
+                    {"name": "replacement", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"target": "abc-123", "match": "123", "replacement": "456"}
+    rows[1] |= {"target": "xyz-789", "match": "789", "replacement": "000"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    replace_task = make_task(
+        node_type=REPLACE_TEXT_NODE_TYPE,
+        node_run_id="node-run-replace-text",
+        node_instance_id="replace_text",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "target_field": "target",
+            "match_value_source": {"mode": "row_field", "field": "match"},
+            "replace_value_source": {"mode": "row_field", "field": "replacement"},
+        },
+    )
+
+    replace_result = executor.execute(replace_task)
+
+    assert replace_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(replace_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "target": "abc-456",
+            "match": "123",
+            "replacement": "456",
+        },
+        {
+            "row_id": 2,
+            "target": "xyz-000",
+            "match": "789",
+            "replacement": "000",
+        },
+    ]
+
+
+def test_replace_text_node_supports_regex_and_replace_count(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 1,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "label", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["label"] = "A1 B2 C3"
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    replace_task = make_task(
+        node_type=REPLACE_TEXT_NODE_TYPE,
+        node_run_id="node-run-replace-text",
+        node_instance_id="replace_text",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "match_mode": "regex",
+            "match_value": r"\d",
+            "replace_value": "x",
+            "replace_count": 2,
+        },
+    )
+
+    replace_result = executor.execute(replace_task)
+
+    assert replace_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(replace_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "Ax Bx C3"},
+    ]
+
+
+def test_replace_text_node_skips_empty_match_value_by_default(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    replace_task = make_task(
+        node_type=REPLACE_TEXT_NODE_TYPE,
+        node_run_id="node-run-replace-text",
+        node_instance_id="replace_text",
+        input_refs=[input_ref.table_ref_id],
+        config={
+            "target_field": "label",
+            "match_value": "",
+            "replace_value": "x",
+        },
+    )
+
+    replace_result = executor.execute(replace_task)
+
+    assert replace_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(replace_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "label_0_1"},
     ]
 
 

@@ -360,6 +360,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "CopyColumnNode",
         "ReorderColumnsNode",
         "FillCellsNode",
+        "ReplaceTextNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -383,6 +384,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["FillCellsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["ReplaceTextNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -493,6 +497,26 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     }
     assert fill_cells_properties["direction"]["enum"] == ["down", "up"]
     assert fill_cells_properties["overwrite_rule"]["default"] == "all"
+
+    replace_text_properties = by_type["ReplaceTextNode"]["config_schema"][
+        "properties"
+    ]
+    assert replace_text_properties["target_field"] == {
+        "type": "string",
+        "title": "Target Field",
+        "required": True,
+    }
+    assert replace_text_properties["match_mode"]["enum"] == [
+        "contains",
+        "equals",
+        "starts_with",
+        "ends_with",
+        "regex",
+        "is_empty",
+        "is_not_empty",
+    ]
+    assert replace_text_properties["replace_mode"]["default"] == "partial"
+    assert replace_text_properties["skip_empty_match_value"]["default"] is True
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
