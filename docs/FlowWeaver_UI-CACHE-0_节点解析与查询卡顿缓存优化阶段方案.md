@@ -1,459 +1,669 @@
-# FlowWeaver UI-CACHE-0：节点解析与查询卡顿缓存优化阶段方案
+# FlowWeaver UI-CACHE-0：节点目录版本标识与最小缓存讨论方案
 
-> 文档状态：前置方案
-> 当前阶段：确认 UI 解析热点、缓存边界和分阶段落地顺序
-> 不适用范围：本阶段不直接修改后端 API、不改 workflow 保存语义、不引入持久化 token
+> 文档状态：讨论方案
+> 当前阶段：先收敛最小可行方案，不进入代码实现
+> 不适用范围：本阶段不做数据预览 rows 缓存、不做 workflow detail 缓存、不做 token 持久化、不重构后端 API 主流程
 
 ## 1. 背景
 
-当前桌面 UI 已经具备：
-
-* 连接 EngineHost 并按 token 鉴权访问 REST API。
-* 拉取 `GET /api/v1/node-definitions` 并解析节点配置 schema。
-* 拉取 workflow detail / revisions，并把 `definition` 展示为节点、连接和 JSON 草稿。
-* 在 Workflow 页面中基于选中节点生成配置草稿表单。
-* 在数据预览中按 run / node / table_ref 查询表格行。
-
-用户点击节点、刷新详情或执行数据预览查询时，可能出现 UI 卡顿。初步分析显示，卡顿风险不只来自 HTTP 请求，也来自 UI 线程上对同一份 JSON 的重复解析和集合重建。
-
-## 2. 当前热点判断
-
-### 2.1 Workflow draft JSON 重复解析
-
-`WorkflowDefinitionDraftJson` 变化后，当前会连续触发：
+当前桌面 UI 在连接 EngineHost 后，会调用：
 
 ```text
-WorkflowDefinitionDraftStructureBuilder.Build(...)
-NodeConfigDraftBuilder.Build(...)
-RuntimeOptionsDraftReader.Read(...)
+GET /api/v1/node-definitions
 ```
 
-其中 `NodeConfigDraftBuilder.Build(...)` 会再次 `JsonDocument.Parse(...)` 并线性扫描 `nodes` 查找当前节点。
-
-此外，`WorkflowLinearChainStatusText` 当前在属性 getter 中调用：
+并把后端返回的节点定义转换为 UI 节点目录：
 
 ```text
-WorkflowDefinitionLinearChainAnalyzer.Analyze(...)
+NodeDefinitionDto
+→ NodeDefinitionListItemViewModel
+→ NodeConfigSchemaParser.Parse(config_schema_version, config_schema)
 ```
 
-绑定刷新时可能重复 parse 整份 workflow JSON。
+节点目录本身一般不频繁变化，但当前客户端缺少明确的“目录是否变化”依据。手动刷新、连接切换、未来插件加载或开发模式热更新时，客户端只能重新接收并重新解析节点目录。
 
-### 2.2 Node definitions 解析重复风险
+后端节点计划完成后，默认注册表中的节点数量已经明显增加。节点目录越大，完整拉取、DTO 反序列化、`NodeDefinitionListItemViewModel` 重建和 `config_schema` 解析的成本越值得单独控制。
 
-节点目录刷新后，每个 `NodeDefinitionDto` 会构造 `NodeDefinitionListItemViewModel`，并调用：
+本方案先讨论最小改动：让后端提前提供节点目录版本特征，客户端据此判断是否需要重建目录和重新解析 schema。
+
+## 2. 设计判断
+
+### 2.1 `node_version` 适合做契约版本
+
+`node_type + node_version` 适合表示 workflow 引用的是哪个节点契约，例如：
 
 ```text
-NodeConfigSchemaParser.Parse(config_schema_version, config_schema)
+BuiltinTableFilter@1.0
+CustomNode@0.1
 ```
 
-当前自动刷新已有保护：健康连接后只有 `NodeDefinitions` 为空才自动拉取。但手动刷新、连接切换和后续插件能力增强后，仍需要明确缓存和失效策略。
-
-### 2.3 数据预览查询串行等待
-
-按选中 workflow node 刷新数据预览时，当前链路是：
+它适合作为：
 
 ```text
-ListNodeRunsAsync
-→ ListTableRefsAsync
-→ GetTableDataRowsAsync
-→ UI 线程重建 Columns / Rows
+Node definition lookup key
+Workflow node definition reference
 ```
 
-如果后端响应慢、表列多、行对象复杂或 UI 集合频繁重建，都会形成点击后的等待感。
+但它不适合单独作为缓存失效依据。
 
-## 3. 缓存特征判断
+原因是 `node_version` 依赖人工维护。如果端口、schema、display name 或执行参数改了，但版本没有同步提升，客户端会错误复用旧缓存。
 
-### 3.1 `链接 + token` 可以做什么
+### 2.2 hash / fingerprint 适合做缓存失效依据
 
-`BaseUrl + token` 可以作为“连接身份命名空间”，用于区分不同 EngineHost 或不同鉴权上下文。
-
-建议使用：
+建议把职责拆开：
 
 ```text
-connection_key = normalized_base_url + token_fingerprint
+node_type + node_version：表示节点契约身份
+definition_hash：表示单个节点定义内容是否变化
+schema_fingerprint：表示节点 config_schema 是否变化
+catalog_hash：表示整个可见节点目录是否变化
+program_hash / build_hash：表示后端程序构建身份
 ```
 
-其中 `token_fingerprint` 必须是不可逆摘要或短 hash，不应保存 token 原文。
+其中：
 
-### 3.2 `链接 + token` 不能单独做什么
+* `definition_hash` 由单个节点定义稳定内容计算。
+* `schema_fingerprint` 只由 config schema 相关内容计算。
+* `catalog_hash` 由当前可见节点定义集合计算。
+* `program_hash` 只能作为辅助命名空间，不能替代 `catalog_hash`。
 
-`链接 + token` 不能唯一代表内容版本。
+### 2.3 `program_hash` 有价值，但不能单独使用
 
-同一个连接下：
-
-* workflow definition 会随着 save 产生新 revision；
-* node definitions 未来可能随插件加载、运行版本或开发模式变化；
-* table rows 会随 `table_ref_id`、分页参数、排序参数变化；
-* run / node_run 状态会持续变化。
-
-因此缓存 key 必须叠加资源自身版本特征。
-
-### 3.3 推荐缓存 key
-
-| 数据 | 推荐 key | 说明 |
-| --- | --- | --- |
-| Workflow parsed state | `workflow_draft_json_hash` | 本地草稿变化即失效 |
-| Saved workflow detail | `connection_key + workflow_id + revision_id + definition_hash` | 后端已有 `revision_id` / `definition_hash` |
-| Node definitions | `connection_key + catalog_hash 或 TTL` | 当前后端缺少 catalog hash |
-| Node definition lookup | `(node_type, node_version)` | ViewModel 内字典即可 |
-| Selected node config draft | `workflow_draft_json_hash + node_instance_id + schema_key` | 避免切换节点时重复 parse 全 JSON |
-| Runtime options draft | `workflow_draft_json_hash` | 与 workflow 草稿同步失效 |
-| Linear chain analysis | `workflow_draft_json_hash` | 不应放在 getter 中实时解析 |
-| Data preview rows | `connection_key + table_ref_id + offset + limit + columns + order_by` | `table_ref_id` 是更准确的数据版本身份 |
-| Node runs / table refs | `workflow_run_id + 短 TTL 或事件刷新` | 状态动态变化，不适合长缓存 |
-
-## 4. 分阶段方案
-
-### UI-CACHE-1：建立性能基线与日志
-
-目标：
-
-* 先确认卡顿主因是网络、JSON parse、集合重建还是绑定刷新。
-* 为后续优化提供可比较数据。
-
-建议工作：
+后端程序 hash 可以帮助客户端区分不同 EngineHost 构建：
 
 ```text
-在关键路径增加 Debug/Trace 级耗时记录
-统计 workflow JSON 大小、node 数、connection 数
-统计 NodeConfigDraftBuilder / RuntimeOptionsDraftReader / LinearChainAnalyzer 耗时
-统计数据预览 rows/columns 数和 UI 重建耗时
+engine_build_hash
+engine_started_at
+engine_instance_id
 ```
 
-验收标准：
+但它不一定能代表节点目录内容。未来可能出现：
+
+* 同一程序版本加载不同插件；
+* 配置决定启用不同节点；
+* 开发模式中节点目录热更新；
+* 节点定义来自外部包或运行时注册。
+
+因此更稳妥的判断是：
 
 ```text
-能在日志中看到点击节点、加载 workflow、刷新数据预览的分段耗时
-不输出 token 原文
-不改变用户可见行为
+connection_key + program_hash + catalog_hash
 ```
 
-### UI-CACHE-2：Workflow draft parsed state 缓存
+其中 `catalog_hash` 是目录是否变化的核心依据。
 
-目标：
+## 3. 最小方案
 
-* 消除同一份 `WorkflowDefinitionDraftJson` 在 UI 状态刷新中的重复 parse。
-* 让选中节点、runtime options、线性链分析共享同一个解析结果。
+### 3.1 第一阶段只新增全局 state
 
-建议新增模型：
+第一版建议保留当前完整目录接口不变：
 
 ```text
-WorkflowDefinitionDraftParsedState
-WorkflowDefinitionDraftParsedStateBuilder
-WorkflowDefinitionDraftParsedStateCache
+GET /api/v1/node-definitions
 ```
 
-建议内容：
+同时新增一个只用于缓存校验的轻量接口：
 
 ```text
-DraftJsonHash
-Structure
-NodesById
-NodeConfigJsonById
-RuntimeOptionsReadResult
-LinearChainAnalysis
-Warnings
+GET /api/v1/node-definitions/state
 ```
 
-ViewModel 调整方向：
+该接口继续走现有 API envelope 风格，避免单独改一套客户端响应处理：
 
 ```text
-OnWorkflowDefinitionDraftJsonChanged
-→ 只构建一次 ParsedState
-→ 从 ParsedState 更新 WorkflowDefinitionDraftStructure
-→ 从 ParsedState 更新 RuntimeOptionsDraftState
-→ 从 ParsedState 更新 WorkflowLinearChainStatusText 的 backing field
+APIResponseModel.data = {
+  catalog_hash,
+  program_hash 可选,
+  node_count 可选
+}
 ```
 
-关键要求：
+其中第一阶段只要求 `catalog_hash` 必须存在。其余字段用于诊断和后续命名空间增强。
 
-* `WorkflowLinearChainStatusText` 不再在 getter 中 parse JSON。
-* `RefreshSelectedNodeConfigDraftState` 优先从 `ParsedState.NodesById` 读取 config。
-* JSON 无效时也缓存失败状态，避免同一无效文本被重复解析。
-
-验收标准：
+该接口只返回极少量元信息：
 
 ```text
-同一 draft JSON 下，切换节点不再 parse 整份 workflow JSON
-线性链状态绑定刷新不触发 JsonDocument.Parse
-现有 workflow draft、节点配置、runtime options 测试保持通过
+catalog_hash
+program_hash 可选
+node_count 可选
 ```
 
-### UI-CACHE-3：Node definitions 本地目录优化
+这样前端可以先用很小的数据判断本地节点目录是否仍然可用。只有 `catalog_hash` 不一致时，才回退到完整目录拉取。
 
-目标：
+后续如果需要一次响应中同时包含数据和 meta，可以再考虑把 `GET /api/v1/node-definitions` 从“直接返回 list”升级为“带 meta 的对象”，或新增 v2。第一阶段不建议直接破坏当前前端 DTO。
 
-* 减少节点目录刷新后的重复解析和线性查找。
-* 为后续连接级缓存做准备。
-
-建议工作：
+单个节点定义级字段后置到 manifest 阶段：
 
 ```text
-维护 NodeDefinitionByKey 字典
-key = node_type + node_version
-FindNodeDefinition(...) 改为字典查找
-schema parse result 与 DTO 分离，避免重复解析同一 schema
+definition_hash
+schema_fingerprint
 ```
 
-注意：
-
-* 不建议直接长期缓存 `NodeDefinitionListItemViewModel`，因为它依赖当前语言 formatter。
-* 可以缓存 DTO 或不可变 schema descriptor，UI item 在当前语言环境下重新包装。
-
-验收标准：
+原因：
 
 ```text
-FindNodeDefinition 不再 FirstOrDefault 扫描整个 NodeDefinitions
-切换语言后节点显示文本仍能刷新
-刷新节点目录仍可覆盖旧 catalog
+第一阶段只需要判断整个目录是否变化
+完整目录接口仍返回旧 DTO，前端兼容成本最低
+per-node hash 只有在做 manifest / 单节点懒刷新时才真正需要
 ```
 
-### UI-CACHE-4：连接级 Node catalog 缓存
+### 3.2 后端预计算
 
-目标：
+后端在 NodeRegistry 注册完成后预计算：
 
-* 避免同一 EngineHost 连接下反复拉取和解析节点目录。
-* 解决连接切换时旧目录短暂残留的问题。
+```text
+catalog_hash
+```
 
-建议客户端 key：
+请求到来时直接读取缓存结果，避免每次请求都重新计算 hash。
+
+`catalog_hash` 必须基于“当前 API 实际返回给 UI 的可见节点目录”计算，而不是内部 registry 全量。也就是说，后端需要先应用 `BUILTIN_FAULT_NODE_TYPES` 等可见性过滤，再计算 hash。
+
+稳定 hash 内容建议包含：
+
+```text
+node_type
+node_version
+display_name
+input_ports
+output_ports
+execution_mode
+default_timeout_seconds
+retry_safe
+ui_visibility
+config_schema_version
+config_schema
+```
+
+计算规则必须使用稳定 JSON：
+
+```text
+sort_keys = true
+compact separators
+utf-8
+sha256
+```
+
+后续进入 manifest / 单节点懒刷新阶段时，再补充预计算：
+
+```text
+definition_hash by node_type + node_version
+schema_fingerprint by node_type + node_version
+manifest_hash 可选
+```
+
+### 3.3 客户端最小缓存
+
+客户端维护连接命名空间：
 
 ```text
 connection_key = normalized_base_url + token_fingerprint
 ```
 
-第一版失效策略：
+其中 `token_fingerprint` 只能是不可逆短摘要，不保存 token 原文。
+
+客户端缓存 key：
 
 ```text
-手动点击刷新：强制请求后端并覆盖缓存
-BaseUrl/token 变化：切换到对应 connection_key 的缓存；没有缓存则清空并等待刷新
-TTL：可选，开发阶段建议较短，例如 5 到 30 分钟
+catalog_cache_key = connection_key + program_hash + catalog_hash
+definition_lookup_key = node_type + node_version
 ```
 
-后端增强后失效策略：
+第一阶段不强依赖后端提供 `schema_fingerprint`。前端可以先做当前 catalog 内的 schema parse result 复用；等后端补齐 `schema_fingerprint` 后，再升级为跨 catalog 复用：
 
 ```text
-GET /api/v1/node-definitions 返回 catalog_hash 或 catalog_version
-客户端发现 hash 变化后重新解析
+schema_cache_key = node_type + node_version + config_schema_version + schema_fingerprint
 ```
 
-验收标准：
+命中策略：
+
+* `catalog_hash` 未变化：复用已有节点目录描述和 schema parse result。
+* `node_type + node_version`：用于字典查找，替代线性扫描。
+* 自动刷新 / 连接恢复：优先请求 `/node-definitions/state`。
+* 手动刷新：必须绕过本地命中，直接完整请求后端并覆盖缓存。
+* 连接变化：切换 `connection_key`，没有命中则清空并等待重新加载。
+
+后续命中策略：
+
+* `schema_fingerprint` 未变化：复用已解析的 schema descriptor。
+* `definition_hash` 未变化：复用对应节点 DTO / descriptor。
+* manifest 显示节点被删除：从本地目录移除对应节点。
+
+## 4. 能减少的计算
+
+该最小方案主要减少：
 
 ```text
-同一连接二次进入页面可复用 node catalog
-连接切换不会显示错误连接的节点目录
-手动刷新一定能绕过缓存拿最新结果
-不持久化 token 原文
+重复请求后端后重新解析相同 node config_schema
+重复构造相同节点目录 descriptor
+FindNodeDefinition 线性扫描
+后端每次请求重复计算目录版本信息
 ```
 
-### UI-CACHE-5：Workflow detail/revision 缓存
-
-目标：
-
-* 避免重复加载同一个 workflow revision 时重新格式化 JSON、重建节点列表和 revision 列表。
-
-推荐 key：
+如果后续支持 `ETag / If-None-Match`，还可以减少：
 
 ```text
-connection_key + workflow_id + revision_id + definition_hash
+节点目录未变化时的完整 JSON 传输
+客户端反序列化整个节点目录 payload
 ```
 
-建议策略：
+## 5. 不能解决的问题
 
-* 当前 workflow 列表返回的 revision/version 可作为预检查。
-* 点击加载详情时，如果缓存 key 命中，先立即显示缓存内容。
-* 后台仍可轻量确认当前 revision 是否变化。
-* 保存成功后用新 revision 更新缓存，并清理旧 revision 的当前选中状态。
+该方案不是完整 UI 卡顿优化，只覆盖节点目录和 schema 解析。
 
-验收标准：
+暂不解决：
 
 ```text
-重复点击同一 workflow 详情时可快速回显
-保存产生新 revision 后不会使用旧 parsed state
-revision conflict 处理保持不变
+WorkflowDefinitionDraftJson 在 UI 内重复 JsonDocument.Parse
+WorkflowLinearChainStatusText getter 中重复分析 workflow JSON
+RuntimeOptionsDraftReader 多处重复读取同一 draft
+数据预览 ListNodeRunsAsync → ListTableRefsAsync → GetTableDataRowsAsync 串行等待
+数据预览 rows/columns UI 集合重建
 ```
 
-### UI-CACHE-6：数据预览查询缓存与异步构建
+这些问题后续仍需要独立方案，例如 UI parsed state、rows cache 或组合查询接口。
 
-目标：
+## 6. 耦合度分析
 
-* 降低“查询/刷新预览”点击后的等待感。
-* 区分可缓存的静态行数据和动态 run 状态。
-
-建议拆分：
+低耦合部分：
 
 ```text
-NodeRuns / TableRefs：短 TTL 或事件驱动刷新
-Rows：按 table_ref_id + paging 参数缓存
-UI Rows：后台构建轻量中间结构，UI 线程只替换集合
+catalog_hash 是 state 接口元信息，不改变完整目录 DTO
+NodeRegistry 或目录 snapshot 负责预计算目录版本
+客户端用 hash 判断是否复用 descriptor
 ```
 
-Rows 推荐 key：
+中等耦合部分：
 
 ```text
-connection_key
-+ table_ref_id
-+ offset
-+ limit
-+ columns
-+ order_by
+如果未来让 node-definitions 响应结构从 list 改为对象，需要同步修改客户端 DTO
+如果未来加入 definition_hash / schema_fingerprint，需要同步扩展后端 DTO 和 Avalonia DTO
+如果加入 ETag，需要 API client 支持条件请求
 ```
 
-可选后端增强：
+不建议缓存：
 
 ```text
-GET /api/v1/runs/{run_id}/nodes/{node_instance_id}/latest-table-rows
+直接缓存 NodeDefinitionListItemViewModel
+直接缓存带语言 formatter 的显示文本
+直接缓存 token 原文
 ```
-
-该组合接口可以把当前三次 REST 往返减少为一次：
-
-```text
-node run 查找 + table ref 查找 + rows 读取
-```
-
-验收标准：
-
-```text
-重复打开同一 table_ref 同一页能快速回显
-刷新按钮可强制绕过 rows cache
-run/node_run 动态状态不会被长期缓存误导
-数据预览加载期间 UI 可继续响应
-```
-
-### UI-CACHE-7：后端版本特征补齐
-
-目标：
-
-* 给客户端缓存提供稳定失效依据。
-
-建议后端新增：
-
-```text
-GET /api/v1/health 增加 engine_instance_id 或 started_at
-GET /api/v1/node-definitions 增加 catalog_hash/catalog_version
-数据 rows 响应可回传 schema_fingerprint / table version
-可选支持 ETag / If-None-Match
-```
-
-注意：
-
-* `engine_instance_id` 只表示进程身份，不代表 node catalog 一定变化。
-* `catalog_hash` 应由 node type、version、ports、schema 等内容计算。
-* ETag 是优化网络传输，不替代 UI parsed state 缓存。
-
-验收标准：
-
-```text
-客户端可以基于 hash 判断 node catalog 是否需要重新解析
-EngineHost 重启后客户端能识别连接身份变化
-旧客户端仍能兼容没有 hash 的响应
-```
-
-## 5. 推荐落地顺序
-
-建议按下面顺序推进：
-
-```text
-1. UI-CACHE-1：先加耗时观测
-2. UI-CACHE-2：先修最明显的 UI 重复 parse
-3. UI-CACHE-3：节点目录字典与 schema 解析复用
-4. UI-CACHE-6：数据预览 rows 缓存与异步构建
-5. UI-CACHE-5：workflow detail/revision 缓存
-6. UI-CACHE-4：连接级 node catalog 缓存
-7. UI-CACHE-7：后端 catalog hash / ETag 增强
-```
-
-理由：
-
-* `UI-CACHE-2` 最直接对应点击节点和绑定刷新卡顿。
-* `UI-CACHE-3` 低风险，能改善目录和 schema 查找。
-* `UI-CACHE-6` 对“点击查询”体感收益更明显。
-* 后端版本特征可以后置，避免先改接口契约扩大影响面。
-
-## 6. 风险与约束
-
-### 6.1 token 安全
-
-缓存 key 不得包含 token 原文。
-
-推荐：
-
-```text
-token_fingerprint = SHA256(token).前 8 到 16 位
-```
-
-仅用于本地分区显示和内存缓存，不用于日志输出。
-
-### 6.2 stale cache
-
-所有缓存都必须有明确失效条件。
-
-最低要求：
-
-```text
-手动刷新必须绕过缓存
-保存成功必须更新 workflow parsed cache
-连接变化必须切换缓存命名空间
-鉴权失败不能继续展示为“已刷新成功”
-```
-
-### 6.3 ViewModel 缓存边界
-
-不建议跨语言、跨连接长期复用 ViewModel 对象。
 
 推荐缓存：
 
 ```text
-DTO
-不可变 descriptor
-parsed state
-轻量 row/cell 数据
+NodeDefinitionDto
+NodeConfigSchemaDescriptor
+Node catalog metadata
+definition lookup dictionary
 ```
 
-不推荐缓存：
+## 7. 刷新规则
+
+本地缓存刷新条件：
 
 ```text
-持有当前 localization formatter 的 ListItemViewModel
-持有 UI 事件订阅的节点 item
-可编辑输入框 ViewModel
+手动点击刷新节点目录
+BaseUrl 变化
+token 变化
+program_hash 变化
+catalog_hash 变化
+schema_fingerprint 变化
+manifest 中节点新增 / 删除 / definition_hash 变化
+后端返回鉴权失败或节点目录请求失败
 ```
 
-## 7. 测试计划
+其中：
 
-建议分层补测试：
+* 自动刷新和连接恢复可以先走 `/node-definitions/state`。
+* 手动刷新必须绕过本地命中，直接请求完整节点目录并覆盖缓存。
+* token 不保存原文，只参与短 fingerprint。
+* 语言切换不应重新请求节点目录，只刷新显示文本。
+* catalog 未变化时，客户端可以避免重建 schema descriptor。
+
+## 8. 建议实施顺序
+
+推荐按“先全局校验，再完整刷新，最后分节点懒刷新”的顺序推进。
+
+### UI-CACHE-MIN-1：保留完整目录接口
+
+目标：
 
 ```text
-WorkflowDefinitionDraftParsedStateBuilderTests
-MainWindowViewModelWorkflowTests
-NodeDefinitionListItemViewModelTests
-DataPreview cache / stale request tests
+保留 GET /api/v1/node-definitions 当前完整 list 行为
+继续兼容现有前端 List<NodeDefinitionDto>
+不在第一步改变已有响应结构
 ```
 
-重点场景：
+验收：
 
 ```text
-无效 JSON 只进入失败 parsed state，不抛异常
-切换节点不重建整份 workflow parsed state
-修改 draft JSON 后 selected node config 及时更新
-切换语言后 node catalog 文本仍刷新
-切换 BaseUrl/token 后不会继续显示错误连接的 node catalog
-手动刷新绕过 node catalog cache
-同 table_ref 同分页命中 rows cache
-run/node_run 动态状态不会被长缓存污染
+旧客户端仍能完整刷新节点目录
+当前节点目录页面行为不变
+后端新增缓存能力不影响原接口语义
 ```
 
-## 8. 当前阶段结论
+### UI-CACHE-MIN-2：新增全局 state 校验接口
 
-可以做缓存，但缓存粒度不应停留在“链接 + token”。
-
-推荐结论：
+目标：
 
 ```text
-链接 + token：只作为连接身份命名空间
-workflow：使用 revision_id + definition_hash
-draft JSON：使用 draft json hash
-node config：使用 draft json hash + node_instance_id + schema key
-table rows：使用 table_ref_id + paging/filter 参数
-node catalog：短期用 connection key + TTL/手动刷新，长期补 catalog_hash
+后端新增 GET /api/v1/node-definitions/state
+通过 APIResponseModel.data 返回 catalog_hash / program_hash / node_count 等极小元信息
+NodeRegistry 注册完成后预计算并缓存 catalog_hash
+catalog_hash 基于实际 API 可见节点目录计算
 ```
 
-第一优先级应放在 UI 端 parsed state 缓存，因为它不改变后端契约，且最直接减少点击节点、刷新绑定和编辑草稿时的重复解析。
+验收：
+
+```text
+相同节点目录返回相同 catalog_hash
+节点 schema、端口或定义内容变化后 catalog_hash 变化
+state 接口不返回完整 config_schema
+隐藏/测试节点变化不会误触发可见目录 catalog_hash 变化
+```
+
+### UI-CACHE-MIN-3：前端先校验 catalog_hash
+
+目标：
+
+```text
+前端刷新节点目录前先请求 state
+本地 catalog_hash 一致时直接复用已有节点目录
+catalog_hash 不一致时回退到旧完整 GET /api/v1/node-definitions
+手动刷新直接完整请求后端并覆盖缓存
+```
+
+验收：
+
+```text
+目录未变化时不重新拉完整节点目录
+目录变化时仍能完整刷新并覆盖缓存
+连接或 token 变化时切换 connection_key
+```
+
+### UI-CACHE-MIN-4：客户端目录字典与 schema 复用
+
+目标：
+
+```text
+维护 NodeDefinitionByKey 字典
+FindNodeDefinition 改为字典查找
+同一 catalog 内复用 schema parse result
+后端提供 schema_fingerprint 后升级为跨 catalog schema cache
+```
+
+验收：
+
+```text
+节点配置查找不再扫描 NodeDefinitions
+相同节点目录重复加载时不重复解析 schema
+语言切换后文本仍能刷新
+catalog_hash 变化后能重建字典和 schema cache
+```
+
+### UI-CACHE-MIN-5：可选 manifest 与懒刷新
+
+目标：
+
+```text
+全局 catalog_hash 不一致时，先请求节点 manifest
+manifest 只包含 node_type / node_version / definition_hash / schema_fingerprint
+前端逐节点比对本地缓存，确认哪些节点需要更新
+只按需拉取变更节点定义
+单节点定义开始返回 definition_hash / schema_fingerprint
+```
+
+可选接口：
+
+```text
+GET /api/v1/node-definitions/manifest
+GET /api/v1/node-definitions/{node_type}/{node_version}
+POST /api/v1/node-definitions/batch-get
+```
+
+验收：
+
+```text
+少量节点变化时不需要重新传输全部节点定义
+未变化节点继续复用本地 descriptor 和 schema parse result
+被删除节点能从本地目录移除
+新增节点能被加入本地目录
+```
+
+### UI-CACHE-MIN-6：可选 ETag
+
+目标：
+
+```text
+后端为 node-definitions/state 或完整 node-definitions 返回 ETag = catalog_hash
+客户端带 If-None-Match
+未变化时后端返回 304
+```
+
+验收：
+
+```text
+目录未变化时不传输完整节点目录 JSON
+目录变化时客户端正常接收并更新缓存
+ETag 只作为网络优化，不替代本地缓存失效规则
+```
+
+## 9. 备选办法与推荐组合
+
+### 9.1 可选办法
+
+#### ETag / If-None-Match
+
+后端把 `catalog_hash` 作为 HTTP ETag，前端下次请求时带上：
+
+```text
+If-None-Match: catalog_hash
+```
+
+未变化时返回：
+
+```text
+304 Not Modified
+```
+
+优点：
+
+```text
+标准 HTTP 缓存语义
+无需自定义 cache_status
+适合后续网络层优化
+```
+
+约束：
+
+```text
+当前 API client 主要按 APIResponseEnvelope<T> 解析
+支持 304 需要调整请求层
+第一阶段比新增 state 接口稍重
+```
+
+#### HEAD / node-definitions
+
+增加：
+
+```text
+HEAD /api/v1/node-definitions
+```
+
+响应头只返回：
+
+```text
+ETag: catalog_hash
+X-Node-Count: 26
+```
+
+优点：
+
+```text
+传输数据极少
+语义接近“只校验，不取数据”
+```
+
+约束：
+
+```text
+FastAPI 路由和客户端都需要补 HEAD 支持
+调试体验不如 JSON state 接口直观
+```
+
+#### summary/detail 拆分
+
+把节点目录拆成轻量 summary 和详情：
+
+```text
+GET /api/v1/node-definitions/summary
+GET /api/v1/node-definitions/{node_type}/{node_version}
+```
+
+summary 只返回：
+
+```text
+node_type
+node_version
+display_name
+definition_hash
+schema_fingerprint
+```
+
+详细 `config_schema` 只有选中节点或需要编辑时再拉。
+
+优点：
+
+```text
+大 schema 场景收益明显
+节点目录首屏数据更小
+```
+
+约束：
+
+```text
+前端需要处理 schema 未加载状态
+如果页面需要立即展示 schema 摘要，仍要增加懒加载或后台预热
+```
+
+#### 前端懒解析 schema
+
+不改后端完整目录接口，只调整前端：
+
+```text
+节点目录拉完整 DTO
+构造 NodeDefinitionListItemViewModel 时不立即 Parse config_schema
+第一次打开配置表单或展示 schema 摘要时再解析
+解析结果按 schema_cache_key 缓存
+```
+
+优点：
+
+```text
+后端改动少
+能减少节点目录首轮 UI 构建压力
+```
+
+约束：
+
+```text
+第一次点击某个节点时仍有解析成本
+需要处理解析中的 UI 状态或后台预热
+```
+
+#### 后台预热
+
+前端先显示已缓存目录或轻量目录，然后后台构建：
+
+```text
+NodeDefinitionByKey
+NodeConfigSchemaDescriptor cache
+schema summary
+```
+
+优点：
+
+```text
+用户体感更流畅
+不阻塞主 UI 操作
+```
+
+约束：
+
+```text
+需要处理解析任务取消、连接切换和过期结果
+```
+
+#### 服务端事件通知
+
+未来如果事件流稳定，可以新增：
+
+```text
+node_catalog_changed
+catalog_hash: ...
+```
+
+前端收到事件后再刷新节点目录。
+
+优点：
+
+```text
+变化驱动，减少轮询和主动校验
+```
+
+约束：
+
+```text
+依赖事件流稳定性
+对当前低频变化的节点目录不是第一优先级
+```
+
+### 9.2 推荐组合
+
+当前阶段推荐组合：
+
+```text
+第一步：保留 GET /api/v1/node-definitions 完整目录接口
+第二步：新增 GET /api/v1/node-definitions/state
+第三步：前端先校验 catalog_hash
+第四步：catalog_hash 一致则复用本地缓存
+第五步：catalog_hash 不一致则回退到完整目录拉取
+第六步：前端维护 NodeDefinitionByKey 和同一 catalog 内 schema parse result cache
+第七步：需要细粒度更新时，再加 definition_hash / schema_fingerprint / manifest / 单节点懒刷新
+第八步：最后考虑 ETag / 304 标准化
+```
+
+推荐理由：
+
+```text
+不破坏当前完整目录接口
+后端新增 state 接口很小
+前端可以先只做全局缓存命中判断
+catalog 不一致时仍然沿用旧完整刷新路径
+per-node hash、manifest、单节点懒刷新和 ETag 都可以后置
+```
+
+因此 `/node-definitions/state` 是当前最稳的入口。它和未来的 ETag 方案不冲突，后续可以把 `catalog_hash` 同时放进 JSON state 和 HTTP ETag。
+
+## 10. 当前阶段结论
+
+最小方案建议先聚焦节点目录：
+
+```text
+node_type + node_version：节点契约身份
+catalog_hash：第一阶段唯一必需的目录内容版本
+definition_hash：后续 manifest 阶段的单节点定义内容版本
+schema_fingerprint：后续 manifest 阶段的单节点 schema 内容版本
+program_hash：后端程序构建辅助命名空间
+connection_key：BaseUrl + token_fingerprint 的连接命名空间
+```
+
+这个方案能减少节点目录和 schema 的重复解析，改动边界清晰，耦合度可控。当前最小闭环是：
+
+```text
+后端：/node-definitions/state + catalog_hash
+前端：catalog_hash 命中复用 + NodeDefinitionByKey + 同一 catalog 内 schema parse result cache
+```
+
+它不会直接解决 workflow draft JSON 重复 parse 和数据预览查询卡顿，但可以作为缓存体系的最小、稳定入口。
