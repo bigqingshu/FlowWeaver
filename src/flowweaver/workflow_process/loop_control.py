@@ -318,26 +318,35 @@ def advance_serial_loop_from_decision(
     )
     if duplicate is not None:
         return duplicate
-    if iteration.status != LoopIterationRunStatus.RUNNING.value:
+    completed_iteration = iteration
+    if iteration.status == LoopIterationRunStatus.SUCCEEDED.value:
+        if loop.status != LoopRunStatus.RUNNING.value:
+            return SerialLoopAdvanceResult(
+                SerialLoopAdvanceStatus.LOOP_STATE_REJECTED,
+                loop_run=loop,
+                completed_iteration=iteration,
+            )
+    elif iteration.status != LoopIterationRunStatus.RUNNING.value:
         return SerialLoopAdvanceResult(
             SerialLoopAdvanceStatus.ITERATION_STATE_REJECTED,
             loop_run=loop,
             completed_iteration=iteration,
         )
-
-    completed_iteration = store.update_loop_iteration_run_status(
-        loop_iteration_id,
-        LoopIterationRunStatus.SUCCEEDED,
-        finished_at=finished_at,
-        expected_state_version=iteration.state_version,
-        allowed_source_statuses=[LoopIterationRunStatus.RUNNING],
-    )
-    if completed_iteration is None:
-        return SerialLoopAdvanceResult(
-            SerialLoopAdvanceStatus.ITERATION_STATE_REJECTED,
-            loop_run=store.get_loop_run(loop_run_id),
-            completed_iteration=store.get_loop_iteration_run(loop_iteration_id),
+    else:
+        updated_iteration = store.update_loop_iteration_run_status(
+            loop_iteration_id,
+            LoopIterationRunStatus.SUCCEEDED,
+            finished_at=finished_at,
+            expected_state_version=iteration.state_version,
+            allowed_source_statuses=[LoopIterationRunStatus.RUNNING],
         )
+        if updated_iteration is None:
+            return SerialLoopAdvanceResult(
+                SerialLoopAdvanceStatus.ITERATION_STATE_REJECTED,
+                loop_run=store.get_loop_run(loop_run_id),
+                completed_iteration=store.get_loop_iteration_run(loop_iteration_id),
+            )
+        completed_iteration = updated_iteration
     loop = store.get_loop_run(loop_run_id)
     if loop is None:
         return SerialLoopAdvanceResult(

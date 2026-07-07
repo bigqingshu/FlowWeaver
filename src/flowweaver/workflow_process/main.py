@@ -79,6 +79,9 @@ from flowweaver.workflow_process.executor_pool import (
     NodeTaskExecutionPool,
     ThreadedNodeTaskExecutionPool,
 )
+from flowweaver.workflow_process.loop_recovery import (
+    recover_serial_loop_runtime_state,
+)
 from flowweaver.workflow_process.loop_terminal_state import (
     cancel_active_loop_runs_for_workflow,
 )
@@ -419,13 +422,22 @@ def _run_workflow_process_loop(
         process_generation=process_generation,
         dag=dag,
     )
+    table_provider_registry = create_default_table_provider_registry(runtime_dir)
+    recover_serial_loop_runtime_state(
+        store,
+        table_provider_registry,
+        workflow_run_id=workflow_run_id,
+        dag=dag,
+        process_id=process_id,
+        process_generation=process_generation,
+    )
     task_manager = NodeTaskManager(
         store=store,
         event_sink=event_sink,
         dag=dag,
         failure_policy_mode=definition.failure_policy.mode,
         runtime_options_by_node=runtime_options_by_node,
-        table_provider_registry=create_default_table_provider_registry(runtime_dir),
+        table_provider_registry=table_provider_registry,
     )
     if execution_pool is None:
         execute_task = _build_node_task_execute(
