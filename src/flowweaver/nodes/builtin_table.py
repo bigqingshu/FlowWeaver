@@ -4641,7 +4641,9 @@ def _loop_judge_result(
             total_rows=total_rows,
         )
         return result, matched_count, details | {"condition_mode": condition_mode}
-    raise _NodeValidationError(f"Unsupported LoopJudgeNode condition_mode: {condition_mode}")
+    raise _NodeValidationError(
+        f"Unsupported LoopJudgeNode condition_mode: {condition_mode}"
+    )
 
 
 def _condition_flag_output_text(value: Any) -> str:
