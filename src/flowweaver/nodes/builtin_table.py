@@ -3775,7 +3775,11 @@ def _rename_columns_apply_duplicate_policy(
         return [
             input_name if proposed_name in duplicates and proposed_name != input_name
             else proposed_name
-            for input_name, proposed_name in zip(input_names, proposed_names, strict=True)
+            for input_name, proposed_name in zip(
+                input_names,
+                proposed_names,
+                strict=True,
+            )
         ]
     output_names: list[str] = []
     used_names: set[str] = set()
@@ -3930,7 +3934,9 @@ def _fill_sequence_selected_rows(
             node_type=FILL_SEQUENCE_NODE_TYPE,
         )
         if end_row > total_rows:
-            raise _NodeValidationError("FillSequenceNode config.end_row is out of range")
+            raise _NodeValidationError(
+                "FillSequenceNode config.end_row is out of range"
+            )
         if direction == "down":
             if start_row > end_row:
                 raise _NodeValidationError(
