@@ -41,6 +41,27 @@ class SerialLoopAdvanceStatus(str, Enum):
     LOOP_STATE_REJECTED = "LOOP_STATE_REJECTED"
 
 
+class SerialLoopInspectionStatus(str, Enum):
+    LOOP_NOT_FOUND = "LOOP_NOT_FOUND"
+    NOT_STARTED = "NOT_STARTED"
+    ACTIVE_ITERATION_RUNNING = "ACTIVE_ITERATION_RUNNING"
+    WAITING_FOR_DECISION = "WAITING_FOR_DECISION"
+    LOOP_TERMINAL = "LOOP_TERMINAL"
+    BLOCKED_BY_FAILED_ITERATION = "BLOCKED_BY_FAILED_ITERATION"
+    BLOCKED_BY_CANCELLED_ITERATION = "BLOCKED_BY_CANCELLED_ITERATION"
+    INCONSISTENT_STATE = "INCONSISTENT_STATE"
+
+
+_TERMINAL_LOOP_RUN_STATUSES = frozenset(
+    {
+        LoopRunStatus.ENDED.value,
+        LoopRunStatus.FAILED.value,
+        LoopRunStatus.CANCELLED.value,
+        LoopRunStatus.MAX_ITERATIONS_REACHED.value,
+    }
+)
+
+
 @dataclass(frozen=True)
 class ControlSignal:
     signal_type: str
@@ -77,6 +98,16 @@ class SerialLoopAdvanceResult:
     loop_run: LoopRun | None = None
     completed_iteration: LoopIterationRun | None = None
     next_iteration: LoopIterationRun | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class SerialLoopInspection:
+    status: SerialLoopInspectionStatus
+    loop_run: LoopRun | None = None
+    latest_iteration: LoopIterationRun | None = None
+    active_iteration: LoopIterationRun | None = None
+    next_iteration_index: int | None = None
     detail: str | None = None
 
 
@@ -145,6 +176,100 @@ def start_serial_loop(
         SerialLoopStartStatus.STARTED,
         loop_run=running,
         iteration=iteration,
+    )
+
+
+def inspect_serial_loop_state(
+    store: RuntimeStore,
+    *,
+    loop_run_id: str,
+) -> SerialLoopInspection:
+    loop = store.get_loop_run(loop_run_id)
+    if loop is None:
+        return SerialLoopInspection(SerialLoopInspectionStatus.LOOP_NOT_FOUND)
+
+    iterations = store.list_loop_iteration_runs(loop_run_id)
+    latest = iterations[-1] if iterations else None
+    running_iterations = [
+        iteration
+        for iteration in iterations
+        if iteration.status == LoopIterationRunStatus.RUNNING.value
+    ]
+    if loop.status in _TERMINAL_LOOP_RUN_STATUSES:
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.LOOP_TERMINAL,
+            loop_run=loop,
+            latest_iteration=latest,
+            active_iteration=running_iterations[-1] if running_iterations else None,
+            next_iteration_index=None,
+        )
+    if len(running_iterations) > 1:
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.INCONSISTENT_STATE,
+            loop_run=loop,
+            latest_iteration=latest,
+            active_iteration=running_iterations[-1],
+            next_iteration_index=None,
+            detail="multiple_running_iterations",
+        )
+    if latest is None:
+        status = (
+            SerialLoopInspectionStatus.NOT_STARTED
+            if loop.status == LoopRunStatus.PENDING.value
+            else SerialLoopInspectionStatus.INCONSISTENT_STATE
+        )
+        return SerialLoopInspection(
+            status,
+            loop_run=loop,
+            next_iteration_index=0,
+        )
+    if running_iterations:
+        active = running_iterations[0]
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.ACTIVE_ITERATION_RUNNING,
+            loop_run=loop,
+            latest_iteration=latest,
+            active_iteration=active,
+            next_iteration_index=active.iteration_index + 1,
+        )
+    if latest.status == LoopIterationRunStatus.SUCCEEDED.value:
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.WAITING_FOR_DECISION,
+            loop_run=loop,
+            latest_iteration=latest,
+            next_iteration_index=latest.iteration_index + 1,
+        )
+    if latest.status == LoopIterationRunStatus.FAILED.value:
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.BLOCKED_BY_FAILED_ITERATION,
+            loop_run=loop,
+            latest_iteration=latest,
+            next_iteration_index=None,
+        )
+    if latest.status == LoopIterationRunStatus.CANCELLED.value:
+        return SerialLoopInspection(
+            SerialLoopInspectionStatus.BLOCKED_BY_CANCELLED_ITERATION,
+            loop_run=loop,
+            latest_iteration=latest,
+            next_iteration_index=None,
+        )
+    return SerialLoopInspection(
+        SerialLoopInspectionStatus.INCONSISTENT_STATE,
+        loop_run=loop,
+        latest_iteration=latest,
+        next_iteration_index=None,
+        detail=latest.status,
+    )
+
+
+def workflow_loop_runs_are_terminal(
+    store: RuntimeStore,
+    *,
+    workflow_run_id: str,
+) -> bool:
+    return all(
+        loop.status in _TERMINAL_LOOP_RUN_STATUSES
+        for loop in store.list_loop_runs(workflow_run_id)
     )
 
 

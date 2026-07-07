@@ -13,9 +13,12 @@ from flowweaver.protocols.enums import (
 from flowweaver.workflow_process.loop_control import (
     ControlSignal,
     SerialLoopAdvanceStatus,
+    SerialLoopInspectionStatus,
     SerialLoopStartStatus,
     advance_serial_loop_from_decision,
+    inspect_serial_loop_state,
     start_serial_loop,
+    workflow_loop_runs_are_terminal,
 )
 
 
@@ -102,6 +105,100 @@ def test_start_serial_loop_creates_first_running_iteration(tmp_path: Path) -> No
     assert started.iteration.input_selector == {"row_index": 0}
     assert duplicate.status == SerialLoopStartStatus.ALREADY_STARTED
     assert len(store.list_loop_iteration_runs(loop_run_id)) == 1
+
+
+def test_inspect_serial_loop_state_tracks_recovery_boundaries(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    loop_run_id = create_loop(store)
+
+    before_start = inspect_serial_loop_state(store, loop_run_id=loop_run_id)
+    started = start_serial_loop(store, loop_run_id=loop_run_id)
+    active = inspect_serial_loop_state(store, loop_run_id=loop_run_id)
+    assert started.iteration is not None
+    succeeded = store.update_loop_iteration_run_status(
+        started.iteration.loop_iteration_id,
+        LoopIterationRunStatus.SUCCEEDED,
+        expected_state_version=started.iteration.state_version,
+        allowed_source_statuses=[LoopIterationRunStatus.RUNNING],
+    )
+    waiting = inspect_serial_loop_state(store, loop_run_id=loop_run_id)
+
+    assert before_start.status == SerialLoopInspectionStatus.NOT_STARTED
+    assert before_start.next_iteration_index == 0
+    assert active.status == SerialLoopInspectionStatus.ACTIVE_ITERATION_RUNNING
+    assert active.active_iteration == started.iteration
+    assert active.next_iteration_index == 1
+    assert succeeded is not None
+    assert waiting.status == SerialLoopInspectionStatus.WAITING_FOR_DECISION
+    assert waiting.latest_iteration == succeeded
+    assert waiting.next_iteration_index == 1
+
+
+def test_inspect_serial_loop_state_reports_failed_iteration_blocker(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    loop_run_id = create_loop(store)
+    started = start_serial_loop(store, loop_run_id=loop_run_id)
+    assert started.iteration is not None
+    failed = store.update_loop_iteration_run_status(
+        started.iteration.loop_iteration_id,
+        LoopIterationRunStatus.FAILED,
+        expected_state_version=started.iteration.state_version,
+        allowed_source_statuses=[LoopIterationRunStatus.RUNNING],
+        error={"message": "iteration failed"},
+    )
+
+    inspected = inspect_serial_loop_state(store, loop_run_id=loop_run_id)
+
+    assert failed is not None
+    assert inspected.status == SerialLoopInspectionStatus.BLOCKED_BY_FAILED_ITERATION
+    assert inspected.latest_iteration == failed
+    assert inspected.next_iteration_index is None
+
+
+def test_workflow_loop_terminal_helper_is_ready_for_completion_checks(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="No loop workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-no-loop",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-no-loop",
+    )
+
+    assert workflow_loop_runs_are_terminal(
+        store,
+        workflow_run_id=run.workflow_run_id,
+    )
+
+    loop_run_id = create_loop(store)
+    pending_loop = store.get_loop_run(loop_run_id)
+    assert pending_loop is not None
+    assert not workflow_loop_runs_are_terminal(
+        store,
+        workflow_run_id=pending_loop.workflow_run_id,
+    )
+    started = start_serial_loop(store, loop_run_id=loop_run_id)
+    assert started.iteration is not None
+    ended = advance_serial_loop_from_decision(
+        store,
+        loop_run_id=loop_run_id,
+        loop_iteration_id=started.iteration.loop_iteration_id,
+        signal=real_end_signal(),
+    )
+
+    assert ended.status == SerialLoopAdvanceStatus.LOOP_ENDED
+    assert workflow_loop_runs_are_terminal(
+        store,
+        workflow_run_id=pending_loop.workflow_run_id,
+    )
 
 
 def test_serial_loop_continue_creates_next_iteration_once(tmp_path: Path) -> None:
