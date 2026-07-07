@@ -73,6 +73,13 @@
                             Orientation="Horizontal"
                             Spacing="8">
                     <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding ImportWorkflowDisabledReasonText}">
+                        <Button Content="{Binding ImportWorkflowText}"
+                                Command="{Binding ImportWorkflowCommand}"
+                                IsEnabled="{Binding CanUseImportWorkflowAction}"
+                                MinWidth="84"/>
+                    </Panel>
+                    <Panel Background="Transparent"
                            ToolTip.Tip="{Binding ExportSelectedWorkflowDisabledReasonText}">
                         <Button Content="{Binding ExportWorkflowText}"
                                 Command="{Binding ExportSelectedWorkflowCommand}"

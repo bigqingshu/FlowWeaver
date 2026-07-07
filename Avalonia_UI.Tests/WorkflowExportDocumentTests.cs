@@ -85,4 +85,78 @@ public sealed class WorkflowExportDocumentTests
 
         Assert.AreEqual("workflow_v1.flowweaver-workflow.json", fileName);
     }
+
+    [TestMethod]
+    public void ReadImportDocumentAcceptsCurrentExportFormat()
+    {
+        var workflow = new WorkflowDefinitionDto
+        {
+            WorkflowId = "wf-source",
+            Name = "Daily Load",
+            RevisionId = "rev-source",
+            Version = 2,
+            DefinitionHash = "hash-source",
+            Status = "ACTIVE",
+            Definition = JsonDocument.Parse(
+                """{"schema_version":"1.0","nodes":[{"node_type":"GenerateTestTableNode"}]}""")
+                .RootElement
+                .Clone(),
+        };
+        var content = WorkflowExportDocumentBuilder.Serialize(
+            workflow,
+            DateTimeOffset.Parse("2026-06-29T01:02:03Z"));
+
+        var result = WorkflowImportDocumentReader.Read(content);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual("Daily Load", result.Name);
+        Assert.IsNull(result.ErrorMessageKey);
+        Assert.AreEqual(
+            "GenerateTestTableNode",
+            result.Definition.GetProperty("nodes")[0].GetProperty("node_type").GetString());
+    }
+
+    [TestMethod]
+    public void ReadImportDocumentRejectsInvalidJson()
+    {
+        var result = WorkflowImportDocumentReader.Read("{");
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual("workflow.import_invalid_json", result.ErrorMessageKey);
+    }
+
+    [TestMethod]
+    public void ReadImportDocumentRejectsUnsupportedFormat()
+    {
+        var result = WorkflowImportDocumentReader.Read(
+            """
+            {
+              "export_format": "other.workflow.v1",
+              "workflow": {
+                "name": "Daily Load",
+                "definition": {"nodes":[]}
+              }
+            }
+            """);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual("workflow.import_unsupported_format", result.ErrorMessageKey);
+    }
+
+    [TestMethod]
+    public void ReadImportDocumentRequiresWorkflowDefinition()
+    {
+        var result = WorkflowImportDocumentReader.Read(
+            """
+            {
+              "export_format": "flowweaver.workflow.v1",
+              "workflow": {
+                "name": "Daily Load"
+              }
+            }
+            """);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual("workflow.import_missing_definition", result.ErrorMessageKey);
+    }
 }

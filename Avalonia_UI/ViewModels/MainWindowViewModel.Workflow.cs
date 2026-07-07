@@ -27,6 +27,9 @@ public partial class MainWindowViewModel
     private bool isCreatingWorkflow;
 
     [ObservableProperty]
+    private bool isImportingWorkflow;
+
+    [ObservableProperty]
     private bool isDeletingWorkflow;
 
     [ObservableProperty]
@@ -55,10 +58,16 @@ public partial class MainWindowViewModel
         IsLoadingWorkflows
         || IsStartingWorkflow
         || IsCreatingWorkflow
+        || IsImportingWorkflow
         || IsDeletingWorkflow
         || IsExportingWorkflow;
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
+
+    public bool CanUseImportWorkflowAction => CanImportWorkflowCore();
+
+    public string? ImportWorkflowDisabledReasonText =>
+        GetWorkflowCollectionManagementDisabledReason();
 
     public bool CanUseDeleteSelectedWorkflowAction => CanDeleteSelectedWorkflowCore();
 
@@ -69,6 +78,21 @@ public partial class MainWindowViewModel
 
     public string? DeleteSelectedWorkflowDisabledReasonText
         => GetSelectedWorkflowManagementDisabledReason();
+
+    private string? GetWorkflowCollectionManagementDisabledReason()
+    {
+        if (IsWorkflowBusy)
+        {
+            return T("action.disabled.busy");
+        }
+
+        if (!CanUseEngineActions)
+        {
+            return T("action.disabled.engine_not_connected");
+        }
+
+        return null;
+    }
 
     private string? GetSelectedWorkflowManagementDisabledReason()
     {
@@ -126,6 +150,11 @@ public partial class MainWindowViewModel
         return CanUseEngineActions
             && !IsWorkflowBusy
             && !string.IsNullOrWhiteSpace(NewWorkflowName);
+    }
+
+    private bool CanImportWorkflowCore()
+    {
+        return CanUseEngineActions && !IsWorkflowBusy;
     }
 
     private bool CanDeleteSelectedWorkflowCore()
@@ -212,6 +241,70 @@ public partial class MainWindowViewModel
         WorkflowMessage = T("workflow.creation_failed");
         WorkflowErrorMessage = DescribeError(response);
         IsCreatingWorkflow = false;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanImportWorkflowCore))]
+    private async Task ImportWorkflowAsync()
+    {
+        IsImportingWorkflow = true;
+        WorkflowMessage = T("workflow.importing");
+        WorkflowErrorMessage = null;
+
+        try
+        {
+            var fileResult = await _workflowImportFileService.OpenWorkflowImportAsync(
+                _shutdown.Token);
+            if (fileResult.Cancelled)
+            {
+                WorkflowMessage = T("workflow.import_cancelled");
+                WorkflowErrorMessage = null;
+                return;
+            }
+
+            if (!fileResult.Opened || fileResult.Content is null)
+            {
+                WorkflowMessage = T("workflow.import_failed");
+                WorkflowErrorMessage = fileResult.ErrorMessage;
+                return;
+            }
+
+            var importResult = WorkflowImportDocumentReader.Read(fileResult.Content);
+            if (!importResult.Succeeded ||
+                importResult.Name is null ||
+                importResult.ErrorMessageKey is not null)
+            {
+                WorkflowMessage = T("workflow.import_failed");
+                WorkflowErrorMessage = T(
+                    importResult.ErrorMessageKey ?? "workflow.import_invalid_document");
+                return;
+            }
+
+            var response = await _apiClient.CreateWorkflowAsync(
+                BuildSettings(),
+                importResult.Name,
+                importResult.Definition,
+                _shutdown.Token);
+
+            if (response.Ok && response.Data is not null)
+            {
+                var importedWorkflowId = response.Data.WorkflowId;
+                var importedWorkflowName = response.Data.Name;
+                await RefreshWorkflowsSelectingAsync(importedWorkflowId);
+                if (!HasWorkflowError)
+                {
+                    WorkflowMessage = F("format.imported_workflow", importedWorkflowName);
+                }
+
+                return;
+            }
+
+            WorkflowMessage = T("workflow.import_failed");
+            WorkflowErrorMessage = DescribeError(response);
+        }
+        finally
+        {
+            IsImportingWorkflow = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanDeleteSelectedWorkflowCore))]
@@ -555,6 +648,11 @@ public partial class MainWindowViewModel
         NotifyWorkflowCommandStateChanged();
     }
 
+    partial void OnIsImportingWorkflowChanged(bool value)
+    {
+        NotifyWorkflowCommandStateChanged();
+    }
+
     partial void OnIsDeletingWorkflowChanged(bool value)
     {
         NotifyWorkflowCommandStateChanged();
@@ -625,8 +723,11 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(IsWorkflowBusy));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        ImportWorkflowCommand.NotifyCanExecuteChanged();
         ExportSelectedWorkflowCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseImportWorkflowAction));
+        OnPropertyChanged(nameof(ImportWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseExportSelectedWorkflowAction));
         OnPropertyChanged(nameof(ExportSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));

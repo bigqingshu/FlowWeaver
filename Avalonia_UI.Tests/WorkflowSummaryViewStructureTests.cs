@@ -118,6 +118,22 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowListViewExposesImportWorkflowAction()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowListView.axaml");
+
+        StringAssert.Contains(xaml, "Content=\"{Binding ImportWorkflowText}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding ImportWorkflowCommand}\"");
+        StringAssert.Contains(xaml, "IsEnabled=\"{Binding CanUseImportWorkflowAction}\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding ImportWorkflowDisabledReasonText}\"");
+    }
+
+    [TestMethod]
     public void NodeTemplateDoesNotIntroduceNodeEditingActions()
     {
         var xaml = ReadSourceFile(

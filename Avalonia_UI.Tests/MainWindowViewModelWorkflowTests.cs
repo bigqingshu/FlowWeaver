@@ -264,6 +264,125 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task ImportWorkflowCreatesNewWorkflowAndSelectsIt()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {"rows": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var sourceWorkflow = Workflow("wf-source", "Daily Load", 2, definitionJson);
+        var importedWorkflow = Workflow("wf-new", "Daily Load", 1, definitionJson);
+        var importFileService = new FakeWorkflowImportFileService
+        {
+            Result = WorkflowImportFileOpenResult.Success(
+                "Daily Load_v2.flowweaver-workflow.json",
+                WorkflowExportDocumentBuilder.Serialize(
+                    sourceWorkflow,
+                    DateTimeOffset.Parse("2026-06-29T01:02:03Z"))),
+        };
+        var apiClient = new FakeApiClient
+        {
+            CreateWorkflowResponse =
+                ApiResponseEnvelope<WorkflowDefinitionDto>.Success(importedWorkflow),
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    Workflow("wf-existing", "Existing", 1),
+                    importedWorkflow,
+                }),
+        };
+        var viewModel = CreateViewModel(
+            apiClient,
+            workflowImportFileService: importFileService);
+
+        Assert.IsTrue(viewModel.ImportWorkflowCommand.CanExecute(null));
+
+        await viewModel.ImportWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Daily Load", apiClient.CreatedWorkflowName);
+        Assert.IsNotNull(apiClient.CreatedWorkflowDefinition);
+        Assert.AreEqual(
+            "GenerateTestTableNode",
+            apiClient
+                .CreatedWorkflowDefinition
+                .Value
+                .GetProperty("nodes")[0]
+                .GetProperty("node_type")
+                .GetString());
+        Assert.AreEqual("wf-new", viewModel.SelectedWorkflow?.WorkflowId);
+        Assert.AreEqual("Imported workflow Daily Load.", viewModel.WorkflowMessage);
+        Assert.IsFalse(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public async Task ImportWorkflowShowsInvalidJsonWithoutCreatingWorkflow()
+    {
+        var importFileService = new FakeWorkflowImportFileService
+        {
+            Result = WorkflowImportFileOpenResult.Success("broken.json", "{"),
+        };
+        var apiClient = new FakeApiClient();
+        var viewModel = CreateViewModel(
+            apiClient,
+            workflowImportFileService: importFileService);
+
+        await viewModel.ImportWorkflowCommand.ExecuteAsync(null);
+
+        Assert.IsNull(apiClient.CreatedWorkflowName);
+        Assert.AreEqual("Workflow import failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual("The selected file is not valid JSON.", viewModel.WorkflowErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public async Task ImportWorkflowKeepsWorkflowListWhenCreateFails()
+    {
+        var existingWorkflow = Workflow("wf-existing", "Existing", 1);
+        var sourceWorkflow = Workflow("wf-source", "Daily Load", 2);
+        var importFileService = new FakeWorkflowImportFileService
+        {
+            Result = WorkflowImportFileOpenResult.Success(
+                "Daily Load_v2.flowweaver-workflow.json",
+                WorkflowExportDocumentBuilder.Serialize(
+                    sourceWorkflow,
+                    DateTimeOffset.Parse("2026-06-29T01:02:03Z"))),
+        };
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { existingWorkflow }),
+            CreateWorkflowResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_VALIDATION_FAILED",
+                "Workflow definition is invalid."),
+        };
+        var viewModel = CreateViewModel(
+            apiClient,
+            workflowImportFileService: importFileService);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.ImportWorkflowCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.Workflows);
+        Assert.AreEqual("wf-existing", viewModel.SelectedWorkflow?.WorkflowId);
+        Assert.AreEqual("Workflow import failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual(
+            "WORKFLOW_VALIDATION_FAILED: Workflow definition is invalid.",
+            viewModel.WorkflowErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
     public async Task ExportSelectedWorkflowReadsDetailAndSavesWorkflowDocument()
     {
         const string definitionJson =
@@ -4897,6 +5016,7 @@ public sealed class MainWindowViewModelWorkflowTests
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
+        IWorkflowImportFileService? workflowImportFileService = null,
         IWorkflowExportFileService? workflowExportFileService = null)
     {
         return new MainWindowViewModel(
@@ -4904,6 +5024,7 @@ public sealed class MainWindowViewModelWorkflowTests
             apiClient,
             new EngineHostRuntimeEventStreamClient(),
             dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay,
+            workflowImportFileService: workflowImportFileService,
             workflowExportFileService: workflowExportFileService)
         {
             BaseUrl = "http://127.0.0.1:8000",
@@ -5395,6 +5516,18 @@ public sealed class MainWindowViewModelWorkflowTests
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class FakeWorkflowImportFileService : IWorkflowImportFileService
+    {
+        public WorkflowImportFileOpenResult Result { get; set; } =
+            WorkflowImportFileOpenResult.Cancel();
+
+        public Task<WorkflowImportFileOpenResult> OpenWorkflowImportAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Result);
         }
     }
 

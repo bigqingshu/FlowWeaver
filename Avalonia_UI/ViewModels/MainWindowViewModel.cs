@@ -12,6 +12,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IEngineHostApiClient _apiClient;
     private readonly IUiSettingsStore _uiSettingsStore;
+    private readonly IWorkflowImportFileService _workflowImportFileService;
     private readonly IWorkflowExportFileService _workflowExportFileService;
     private readonly ILocalizationService _localizationService;
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
@@ -52,6 +53,7 @@ public partial class MainWindowViewModel : ViewModelBase
         IUiSettingsStore? uiSettingsStore = null,
         ILocalizationService? localizationService = null,
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
+        IWorkflowImportFileService? workflowImportFileService = null,
         IWorkflowExportFileService? workflowExportFileService = null)
     {
         _healthClient = healthClient;
@@ -63,6 +65,8 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
         _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
+        _workflowImportFileService =
+            workflowImportFileService ?? new AvaloniaWorkflowImportFileService();
         _workflowExportFileService =
             workflowExportFileService ?? new AvaloniaWorkflowExportFileService();
         _localizationService = localizationService ?? new JsonLocalizationService();
@@ -161,7 +165,13 @@ public partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        ImportWorkflowCommand.NotifyCanExecuteChanged();
+        ExportSelectedWorkflowCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseImportWorkflowAction));
+        OnPropertyChanged(nameof(ImportWorkflowDisabledReasonText));
+        OnPropertyChanged(nameof(CanUseExportSelectedWorkflowAction));
+        OnPropertyChanged(nameof(ExportSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
         OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();

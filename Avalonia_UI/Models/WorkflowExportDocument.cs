@@ -96,3 +96,80 @@ public static class WorkflowExportDocumentBuilder
             : sanitized;
     }
 }
+
+public sealed record WorkflowImportDocumentReadResult(
+    bool Succeeded,
+    string? Name,
+    JsonElement Definition,
+    string? ErrorMessageKey)
+{
+    public static WorkflowImportDocumentReadResult Success(
+        string name,
+        JsonElement definition)
+    {
+        return new WorkflowImportDocumentReadResult(true, name, definition, null);
+    }
+
+    public static WorkflowImportDocumentReadResult Failure(string errorMessageKey)
+    {
+        return new WorkflowImportDocumentReadResult(false, null, default, errorMessageKey);
+    }
+}
+
+public static class WorkflowImportDocumentReader
+{
+    public static WorkflowImportDocumentReadResult Read(string content)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(content);
+        }
+        catch (JsonException)
+        {
+            return WorkflowImportDocumentReadResult.Failure("workflow.import_invalid_json");
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return WorkflowImportDocumentReadResult.Failure("workflow.import_invalid_document");
+            }
+
+            if (!root.TryGetProperty("export_format", out var formatElement) ||
+                formatElement.ValueKind != JsonValueKind.String ||
+                !string.Equals(
+                    formatElement.GetString(),
+                    WorkflowExportDocument.CurrentFormat,
+                    StringComparison.Ordinal))
+            {
+                return WorkflowImportDocumentReadResult.Failure("workflow.import_unsupported_format");
+            }
+
+            if (!root.TryGetProperty("workflow", out var workflowElement) ||
+                workflowElement.ValueKind != JsonValueKind.Object)
+            {
+                return WorkflowImportDocumentReadResult.Failure("workflow.import_missing_workflow");
+            }
+
+            if (!workflowElement.TryGetProperty("name", out var nameElement) ||
+                nameElement.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(nameElement.GetString()))
+            {
+                return WorkflowImportDocumentReadResult.Failure("workflow.import_missing_name");
+            }
+
+            if (!workflowElement.TryGetProperty("definition", out var definitionElement) ||
+                definitionElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            {
+                return WorkflowImportDocumentReadResult.Failure("workflow.import_missing_definition");
+            }
+
+            return WorkflowImportDocumentReadResult.Success(
+                nameElement.GetString()!.Trim(),
+                definitionElement.Clone());
+        }
+    }
+}
