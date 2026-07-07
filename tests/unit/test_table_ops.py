@@ -6,6 +6,7 @@ from flowweaver.nodes.table_ops import (
     find_field,
     has_field,
     remove_fields,
+    reorder_fields,
     replace_field_schema,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel
@@ -76,6 +77,37 @@ def test_replace_field_schema_updates_type_without_reordering() -> None:
     assert next_schema[1].data_type == "INTEGER"
     assert next_schema[1].nullable is True
     assert schema[1].data_type == "TEXT"
+
+
+def test_reorder_fields_rebases_ordinals_and_appends_unlisted_fields() -> None:
+    schema = [
+        _field("row_id", "INTEGER", 0),
+        _field("amount", "FLOAT", 1),
+        _field("label", "TEXT", 2),
+    ]
+
+    next_schema = reorder_fields(schema, ["label", "row_id"])
+
+    assert [field.name for field in next_schema] == ["label", "row_id", "amount"]
+    assert [field.ordinal for field in next_schema] == [0, 1, 2]
+    assert [field.ordinal for field in schema] == [0, 1, 2]
+
+
+def test_reorder_fields_can_drop_unlisted_fields() -> None:
+    schema = [
+        _field("row_id", "INTEGER", 0),
+        _field("amount", "FLOAT", 1),
+        _field("label", "TEXT", 2),
+    ]
+
+    next_schema = reorder_fields(
+        schema,
+        ["label", "row_id"],
+        include_unlisted=False,
+    )
+
+    assert [field.name for field in next_schema] == ["label", "row_id"]
+    assert [field.ordinal for field in next_schema] == [0, 1]
 
 
 def _field(name: str, data_type: str, ordinal: int) -> FieldSchemaModel:

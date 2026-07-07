@@ -22,6 +22,7 @@ from flowweaver.nodes.table_ops import (
     find_field,
     has_field,
     remove_fields,
+    reorder_fields,
     replace_field_schema,
 )
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
@@ -33,6 +34,7 @@ FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
 COPY_COLUMN_NODE_TYPE = "CopyColumnNode"
+REORDER_COLUMNS_NODE_TYPE = "ReorderColumnsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -53,6 +55,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             AddColumnsNodeHandler(),
             DeleteColumnsNodeHandler(),
             CopyColumnNodeHandler(),
+            ReorderColumnsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -291,6 +294,90 @@ class CopyColumnNodeHandler:
         ]
 
 
+class ReorderColumnsNodeHandler:
+    node_type = REORDER_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        order = _string_list_config(
+            task.config,
+            "order",
+            node_type=self.node_type,
+        )
+        missing_policy = _enum_config(
+            task.config,
+            "missing_policy",
+            default="error",
+            allowed={"error", "skip", "warn"},
+            node_type=self.node_type,
+        )
+        unlisted_policy = _enum_config(
+            task.config,
+            "unlisted_policy",
+            default="append",
+            allowed={"append", "drop", "error"},
+            node_type=self.node_type,
+        )
+        missing_columns = [
+            column
+            for column in order
+            if not has_field(input_ref.schema, column)
+        ]
+        if missing_columns and missing_policy == "error":
+            raise _NodeValidationError(
+                f"Fields do not exist: {', '.join(missing_columns)}"
+            )
+        order = [
+            column
+            for column in order
+            if has_field(input_ref.schema, column)
+        ]
+        input_field_names = [field.name for field in input_ref.schema]
+        unlisted_columns = [
+            column
+            for column in input_field_names
+            if column not in order
+        ]
+        if unlisted_columns and unlisted_policy == "error":
+            raise _NodeValidationError(
+                f"Fields are not listed: {', '.join(unlisted_columns)}"
+            )
+        schema = reorder_fields(
+            input_ref.schema,
+            order,
+            include_unlisted=unlisted_policy == "append",
+        )
+        if not schema:
+            raise _NodeValidationError("ReorderColumnsNode output schema is empty")
+        output_columns = [field.name for field in schema]
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    {
+                        column: row.get(column)
+                        for column in output_columns
+                    }
+                    for row in rows
+                ]
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
 class SaveMemoryTableNodeHandler:
     node_type = SAVE_MEMORY_TABLE_NODE_TYPE
 
@@ -488,6 +575,25 @@ def _bool_config(
     if not isinstance(value, bool):
         raise _NodeValidationError(f"config.{key} must be a boolean")
     return value
+
+
+def _enum_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    default: str,
+    allowed: set[str],
+    node_type: str,
+) -> str:
+    value = config.get(key, default)
+    if not isinstance(value, str) or not value.strip():
+        raise _NodeValidationError(f"{node_type} config.{key} is required")
+    normalized = value.strip().lower()
+    if normalized not in allowed:
+        raise _NodeValidationError(
+            f"Unsupported {node_type} config.{key}: {value}"
+        )
+    return normalized
 
 
 def _save_memory_table_name_config(config: dict[str, Any]) -> str:

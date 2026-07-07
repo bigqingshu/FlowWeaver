@@ -74,3 +74,28 @@ def replace_field_schema(
         else field
         for field in schema
     ]
+
+
+def reorder_fields(
+    schema: Sequence[FieldSchemaModel],
+    ordered_field_names: Sequence[str],
+    *,
+    include_unlisted: bool = True,
+) -> list[FieldSchemaModel]:
+    fields_by_name = {field.name: field for field in schema}
+    reordered = [
+        fields_by_name[field_name]
+        for field_name in ordered_field_names
+        if field_name in fields_by_name
+    ]
+    if include_unlisted:
+        ordered_names = set(ordered_field_names)
+        reordered.extend(
+            field
+            for field in schema
+            if field.name not in ordered_names
+        )
+    return [
+        field.model_copy(update={"ordinal": ordinal})
+        for ordinal, field in enumerate(reordered)
+    ]

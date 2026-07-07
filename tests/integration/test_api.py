@@ -358,6 +358,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "AddColumnsNode",
         "DeleteColumnsNode",
         "CopyColumnNode",
+        "ReorderColumnsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -375,6 +376,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["CopyColumnNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["ReorderColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -459,6 +463,23 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "enum": ["new_field", "overwrite"],
     }
     assert copy_column_properties["trim_value"]["default"] is False
+
+    reorder_columns_properties = by_type["ReorderColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert reorder_columns_properties["order"] == {
+        "type": "array",
+        "title": "Order",
+        "required": True,
+        "items": {"type": "string"},
+        "description": "Target column order.",
+    }
+    assert reorder_columns_properties["missing_policy"]["enum"] == [
+        "error",
+        "skip",
+        "warn",
+    ]
+    assert reorder_columns_properties["unlisted_policy"]["default"] == "append"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

@@ -10,6 +10,7 @@ from flowweaver.nodes.builtin_table import (
     DELETE_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    REORDER_COLUMNS_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
     create_builtin_table_node_handler_registry,
     table_node_types,
@@ -82,6 +83,7 @@ def test_default_builtin_table_handler_registry_covers_table_node_types() -> Non
         ADD_COLUMNS_NODE_TYPE,
         DELETE_COLUMNS_NODE_TYPE,
         COPY_COLUMN_NODE_TYPE,
+        REORDER_COLUMNS_NODE_TYPE,
         SAVE_MEMORY_TABLE_NODE_TYPE,
         SQL_MAPPING_NODE_TYPE,
     }

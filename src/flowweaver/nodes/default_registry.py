@@ -15,6 +15,7 @@ from flowweaver.nodes.builtin_table import (
     DELETE_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
+    REORDER_COLUMNS_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
 )
 from flowweaver.nodes.registry import (
@@ -73,6 +74,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_copy_column_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=REORDER_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Reorder Columns",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_reorder_columns_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -251,6 +260,32 @@ def _copy_column_schema() -> NodeConfigSchemaSpec:
                 type="object",
                 title="Empty Default",
                 description="Value used when the source value is null or empty.",
+            ),
+        }
+    )
+
+
+def _reorder_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "order": NodeConfigFieldSpec(
+                type="array",
+                title="Order",
+                required=True,
+                item_type="string",
+                description="Target column order.",
+            ),
+            "missing_policy": NodeConfigFieldSpec(
+                type="enum",
+                title="Missing Policy",
+                default="error",
+                enum=("error", "skip", "warn"),
+            ),
+            "unlisted_policy": NodeConfigFieldSpec(
+                type="enum",
+                title="Unlisted Policy",
+                default="append",
+                enum=("append", "drop", "error"),
             ),
         }
     )
