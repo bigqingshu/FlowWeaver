@@ -146,6 +146,11 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
         process_generation=task.process_generation,
         status=NodeResultStatus.SUCCEEDED,
         output_refs=[],
+        summary={
+            "affected_rows": 3,
+            "warnings": [],
+            "metrics": {"elapsed_ms": 1.5},
+        },
     )
 
     restored_task = from_msgpack(to_msgpack(task), NodeTaskModel)
@@ -154,6 +159,7 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
     assert restored_task == task
     assert restored_result == result
     assert restored_result.task_id == task.task_id
+    assert restored_result.summary["affected_rows"] == 3
 
 
 def test_node_task_cancel_request_payload_msgpack_round_trip() -> None:

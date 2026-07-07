@@ -2068,6 +2068,7 @@ class BuiltinTableNodeRunner:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=[table_ref.table_ref_id for table_ref in output_refs],
+            summary=_table_output_summary(output_refs),
             started_at=started_at,
             finished_at=utc_now(),
         )
@@ -2113,6 +2114,21 @@ def _parse_columns(value: Any) -> list[FieldSchemaModel]:
             )
         )
     return fields
+
+
+def _table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
+    return {
+        "output_ref_count": len(output_refs),
+        "outputs": [
+            {
+                "table_ref_id": table_ref.table_ref_id,
+                "logical_table_id": table_ref.logical_table_id,
+                "role": table_ref.role.value,
+                "storage_kind": table_ref.storage_kind.value,
+            }
+            for table_ref in output_refs
+        ],
+    }
 
 
 def _simple_schema(fields: list[tuple[str, str, bool]]) -> list[FieldSchemaModel]:

@@ -179,6 +179,7 @@ class NodeTaskResultRecord(Base):
     process_generation: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     output_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     error_json: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str] = mapped_column(Text, nullable=False)
     finished_at: Mapped[str] = mapped_column(Text, nullable=False)

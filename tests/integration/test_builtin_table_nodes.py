@@ -141,6 +141,17 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
     assert result.executor_id == "builtin-executor-1"
     assert len(result.output_refs) == 1
     published = registry.get(result.output_refs[0])
+    assert result.summary == {
+        "output_ref_count": 1,
+        "outputs": [
+            {
+                "table_ref_id": published.table_ref_id,
+                "logical_table_id": "generate_output",
+                "role": TableRole.CURRENT.value,
+                "storage_kind": TableStorageKind.RUNTIME_SQL.value,
+            }
+        ],
+    }
     assert published.lifecycle_status == LifecycleStatus.PUBLISHED
     assert published.logical_table_id == "generate_output"
     assert provider.count_rows(published) == 4

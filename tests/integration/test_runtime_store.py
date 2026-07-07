@@ -751,6 +751,11 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
         process_generation=process.process_generation,
         status=NodeResultStatus.SUCCEEDED,
         output_refs=["table-1"],
+        summary={
+            "affected_rows": 1,
+            "warnings": [],
+            "metrics": {"elapsed_ms": 2.0},
+        },
     )
     store.create_node_task(task)
 
