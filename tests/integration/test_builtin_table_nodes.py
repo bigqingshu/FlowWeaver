@@ -21,6 +21,7 @@ from flowweaver.nodes.builtin_table import (
     DEDUPLICATE_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
+    EXTRACT_TEXT_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
@@ -1717,6 +1718,200 @@ def test_advanced_filter_rows_node_can_remove_duplicate_output_rows(
     ]
 
 
+def test_extract_text_node_uses_dynamic_regex_and_unmatched_value_source(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "source", "data_type": "TEXT"},
+                    {"name": "pattern", "data_type": "TEXT"},
+                    {"name": "fallback", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {
+        "source": "item-123",
+        "pattern": r"item-(\d+)",
+        "fallback": "missing",
+    }
+    rows[1] |= {
+        "source": "other",
+        "pattern": r"item-(\d+)",
+        "fallback": "fallback-value",
+    }
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    extract_task = make_task(
+        node_type=EXTRACT_TEXT_NODE_TYPE,
+        node_run_id="node-run-extract-text",
+        node_instance_id="extract_text",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "source_field": "source",
+            "method": "regex",
+            "rule_value_source": {"mode": "row_field", "field": "pattern"},
+            "regex_group": 1,
+            "new_field": "result",
+            "unmatched_mode": "fixed",
+            "unmatched_value_source": {"mode": "row_field", "field": "fallback"},
+        },
+    )
+
+    extract_result = executor.execute(extract_task)
+
+    assert extract_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(extract_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "extract_text_output"
+    assert [field.name for field in output_ref.schema] == [
+        "row_id",
+        "source",
+        "pattern",
+        "fallback",
+        "result",
+    ]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "source": "item-123",
+            "pattern": r"item-(\d+)",
+            "fallback": "missing",
+            "result": "123",
+        },
+        {
+            "row_id": 2,
+            "source": "other",
+            "pattern": r"item-(\d+)",
+            "fallback": "fallback-value",
+            "result": "fallback-value",
+        },
+    ]
+
+
+def test_extract_text_node_can_overwrite_source_with_delimiter_part(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["source"] = "left|middle|right"
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    extract_task = make_task(
+        node_type=EXTRACT_TEXT_NODE_TYPE,
+        node_run_id="node-run-extract-text",
+        node_instance_id="extract_text",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "source_field": "source",
+            "method": "delimiter",
+            "delimiter": "|",
+            "part_index": 2,
+            "output_mode": "overwrite_source",
+        },
+    )
+
+    extract_result = executor.execute(extract_task)
+
+    assert extract_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(extract_result.output_refs[0])
+    assert [field.name for field in output_ref.schema] == ["row_id", "source"]
+    assert output_ref.schema[1].data_type == "TEXT"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "source": "middle"},
+    ]
+
+
+def test_extract_text_node_can_extract_fixed_position_to_existing_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 1,
+                "columns": [
+                    {"name": "row_id", "data_type": "INTEGER"},
+                    {"name": "source", "data_type": "TEXT"},
+                    {"name": "target", "data_type": "TEXT"},
+                ],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"source": "abcdef", "target": ""}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    extract_task = make_task(
+        node_type=EXTRACT_TEXT_NODE_TYPE,
+        node_run_id="node-run-extract-text",
+        node_instance_id="extract_text",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "source_field": "source",
+            "method": "position",
+            "start_pos": 2,
+            "extract_len": 3,
+            "output_mode": "overwrite",
+            "target_field": "target",
+        },
+    )
+
+    extract_result = executor.execute(extract_task)
+
+    assert extract_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(extract_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "source": "abcdef", "target": "bcd"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2082,6 +2277,41 @@ def test_advanced_filter_rows_node_returns_validation_error_for_missing_field(
     )
 
     result = executor.execute(filter_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_extract_text_node_returns_validation_error_for_missing_source_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    extract_task = make_task(
+        node_type=EXTRACT_TEXT_NODE_TYPE,
+        node_run_id="node-run-extract-text",
+        node_instance_id="extract_text",
+        input_refs=generate_result.output_refs,
+        config={
+            "source_field": "missing",
+            "method": "regex",
+            "regex_pattern": r"(\d+)",
+            "new_field": "result",
+        },
+    )
+
+    result = executor.execute(extract_task)
 
     assert result.status == NodeResultStatus.FAILED
     assert result.output_refs == []

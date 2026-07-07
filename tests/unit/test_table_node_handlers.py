@@ -12,6 +12,7 @@ from flowweaver.nodes.builtin_table import (
     DEDUPLICATE_ROWS_NODE_TYPE,
     DELETE_COLUMNS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
+    EXTRACT_TEXT_NODE_TYPE,
     FILL_CELLS_NODE_TYPE,
     FILL_RANGE_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
@@ -98,6 +99,7 @@ def test_default_builtin_table_handler_registry_covers_table_node_types() -> Non
         REPLACE_TEXT_NODE_TYPE,
         DELETE_ROWS_NODE_TYPE,
         DEDUPLICATE_ROWS_NODE_TYPE,
+        EXTRACT_TEXT_NODE_TYPE,
         SAVE_MEMORY_TABLE_NODE_TYPE,
         SQL_MAPPING_NODE_TYPE,
     }

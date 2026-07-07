@@ -366,6 +366,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "CopyRowsNode",
         "DeduplicateRowsNode",
         "AdvancedFilterRowsNode",
+        "ExtractTextNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -407,6 +408,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["AdvancedFilterRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["ExtractTextNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -622,6 +626,35 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert advanced_filter_properties["output_fields"]["items"] == {"type": "string"}
     assert advanced_filter_properties["result_limit"]["minimum"] == 0
     assert advanced_filter_properties["remove_duplicates"]["default"] is False
+
+    extract_text_properties = by_type["ExtractTextNode"]["config_schema"][
+        "properties"
+    ]
+    assert extract_text_properties["source_field"] == {
+        "type": "string",
+        "title": "Source Field",
+        "required": True,
+    }
+    assert extract_text_properties["method"]["enum"] == [
+        "regex",
+        "position",
+        "left",
+        "right",
+        "delimiter",
+        "between",
+    ]
+    assert extract_text_properties["output_mode"]["enum"] == [
+        "new_field",
+        "overwrite_source",
+        "overwrite",
+    ]
+    assert extract_text_properties["unmatched_mode"]["enum"] == [
+        "empty",
+        "keep_original",
+        "fixed",
+        "skip_row",
+    ]
+    assert extract_text_properties["rule_value_source"]["type"] == "object"
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
