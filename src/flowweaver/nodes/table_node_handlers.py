@@ -8,11 +8,16 @@ from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 if TYPE_CHECKING:
     from flowweaver.nodes.builtin_sql import SqlMappingNodeRunner
+
+
+class BuiltinTableNodeValidationError(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,25 @@ class BuiltinTableNodeContext:
 
     def input_ref(self, table_ref_id: str) -> TableRefModel:
         return self.registry.get(table_ref_id)
+
+    def require_single_input_ref(
+        self,
+        task: NodeTaskModel,
+        *,
+        node_type: str,
+    ) -> TableRefModel:
+        if len(task.input_refs) != 1:
+            raise BuiltinTableNodeValidationError(
+                f"{node_type} requires exactly one input_ref"
+            )
+        return self.input_ref(task.input_refs[0])
+
+    def read_all_rows(self, table_ref: TableRefModel) -> list[dict[str, Any]]:
+        return self.table_provider.read_rows(
+            table_ref,
+            offset=0,
+            limit=self.table_provider.count_rows(table_ref),
+        )
 
     def publish_rows(
         self,
@@ -43,6 +67,26 @@ class BuiltinTableNodeContext:
         self.table_provider.insert_rows(staging_ref, rows)
         self.registry.register_staging(staging_ref)
         return self.registry.publish(staging_ref.table_ref_id)
+
+    def create_memory_table(
+        self,
+        task: NodeTaskModel,
+        *,
+        logical_table_id: str,
+        schema: Sequence[FieldSchemaModel],
+        rows: Sequence[dict[str, Any]],
+        role: TableRole = TableRole.AUXILIARY,
+    ) -> TableRefModel:
+        memory_ref = self.memory_provider.create_memory_table(
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            logical_table_id=logical_table_id,
+            schema=schema,
+            rows=rows,
+            role=role,
+        )
+        self.store.register_table_ref(memory_ref)
+        return memory_ref
 
 
 class BuiltinTableNodeHandler(Protocol):

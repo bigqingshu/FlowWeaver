@@ -15,6 +15,7 @@ from flowweaver.nodes.builtin_sql import (
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeHandlerRegistry,
+    BuiltinTableNodeValidationError,
 )
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -24,6 +25,7 @@ GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
+_NodeValidationError = BuiltinTableNodeValidationError
 
 
 def table_node_types() -> tuple[str, ...]:
@@ -84,9 +86,10 @@ class FilterRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError("FilterRowsNode requires exactly one input_ref")
-        input_ref = context.input_ref(task.input_refs[0])
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
         field = task.config.get("field")
         if not isinstance(field, str) or not field:
             raise _NodeValidationError("FilterRowsNode config.field is required")
@@ -95,11 +98,7 @@ class FilterRowsNodeHandler:
             raise _NodeValidationError(f"Field does not exist: {field}")
         operator = _normalize_operator(task.config.get("operator"))
         value = task.config.get("value")
-        rows = context.table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=context.table_provider.count_rows(input_ref),
-        )
+        rows = context.read_all_rows(input_ref)
         filtered_rows = [
             row
             for row in rows
@@ -123,9 +122,10 @@ class AddColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError("AddColumnsNode requires exactly one input_ref")
-        input_ref = context.input_ref(task.input_refs[0])
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
         column_name = _string_config(task.config, "column_name")
         existing_names = {field.name for field in input_ref.schema}
         if column_name in existing_names:
@@ -145,11 +145,7 @@ class AddColumnsNodeHandler:
                 ordinal=len(input_ref.schema),
             ),
         ]
-        rows = context.table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=context.table_provider.count_rows(input_ref),
-        )
+        rows = context.read_all_rows(input_ref)
         output_rows = [
             row | {column_name: default_value}
             for row in rows
@@ -172,31 +168,24 @@ class SaveMemoryTableNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        if len(task.input_refs) != 1:
-            raise _NodeValidationError(
-                "SaveMemoryTableNode requires exactly one input_ref"
-            )
-        input_ref = context.input_ref(task.input_refs[0])
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
         table_name = _save_memory_table_name_config(task.config)
         mode = str(task.config.get("mode", "overwrite"))
         if mode != "overwrite":
             raise _NodeValidationError(
                 f"Unsupported SaveMemoryTableNode mode: {mode}"
             )
-        rows = context.table_provider.read_rows(
-            input_ref,
-            offset=0,
-            limit=context.table_provider.count_rows(input_ref),
-        )
-        memory_ref = context.memory_provider.create_memory_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        rows = context.read_all_rows(input_ref)
+        memory_ref = context.create_memory_table(
+            task,
             logical_table_id=table_name,
             schema=input_ref.schema,
             rows=rows,
             role=TableRole.AUXILIARY,
         )
-        context.store.register_table_ref(memory_ref)
         return [input_ref, memory_ref]
 
 
@@ -287,10 +276,6 @@ class BuiltinTableNodeRunner:
         if handler is not None:
             return handler.execute(task, self._context)
         raise _NodeValidationError(f"Unsupported builtin node type: {task.node_type}")
-
-
-class _NodeValidationError(ValueError):
-    pass
 
 
 def _parse_columns(value: Any) -> list[FieldSchemaModel]:

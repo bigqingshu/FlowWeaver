@@ -16,6 +16,7 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeHandler,
     BuiltinTableNodeHandlerRegistry,
+    BuiltinTableNodeValidationError,
 )
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "BuiltinTableNodeContext",
     "BuiltinTableNodeHandler",
     "BuiltinTableNodeHandlerRegistry",
+    "BuiltinTableNodeValidationError",
     "BuiltinTableNodeRunner",
     "SQL_MAPPING_NODE_TYPE",
     "SqlMappingNodeRunner",
