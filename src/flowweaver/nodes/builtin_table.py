@@ -17,7 +17,12 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeHandlerRegistry,
     BuiltinTableNodeValidationError,
 )
-from flowweaver.nodes.table_ops import append_field, find_field, has_field
+from flowweaver.nodes.table_ops import (
+    append_field,
+    find_field,
+    has_field,
+    remove_fields,
+)
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -25,6 +30,7 @@ from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
 ADD_COLUMNS_NODE_TYPE = "AddColumnsNode"
+DELETE_COLUMNS_NODE_TYPE = "DeleteColumnsNode"
 SAVE_MEMORY_TABLE_NODE_TYPE = "SaveMemoryTableNode"
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -43,6 +49,7 @@ def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegis
             GenerateTestTableNodeHandler(),
             FilterRowsNodeHandler(),
             AddColumnsNodeHandler(),
+            DeleteColumnsNodeHandler(),
             SaveMemoryTableNodeHandler(),
             SqlMappingNodeHandler(),
         )
@@ -148,6 +155,57 @@ class AddColumnsNodeHandler:
             for rows in context.iter_row_batches(input_ref):
                 yield [
                     row | {column_name: default_value}
+                    for row in rows
+                ]
+
+        return [
+            context.publish_row_batches(
+                task,
+                output_name=f"{task.node_instance_id}_output",
+                schema=schema,
+                row_batches=output_batches(),
+            )
+        ]
+
+
+class DeleteColumnsNodeHandler:
+    node_type = DELETE_COLUMNS_NODE_TYPE
+
+    def execute(
+        self,
+        task: NodeTaskModel,
+        context: BuiltinTableNodeContext,
+    ) -> list[TableRefModel]:
+        input_ref = context.require_single_input_ref(
+            task,
+            node_type=self.node_type,
+        )
+        columns = _string_list_config(
+            task.config,
+            "columns",
+            node_type=self.node_type,
+        )
+        missing_columns = [
+            column
+            for column in columns
+            if not has_field(input_ref.schema, column)
+        ]
+        if missing_columns:
+            raise _NodeValidationError(
+                f"Fields do not exist: {', '.join(missing_columns)}"
+            )
+        schema = remove_fields(input_ref.schema, columns)
+        if not schema:
+            raise _NodeValidationError("DeleteColumnsNode cannot delete all fields")
+        output_columns = [field.name for field in schema]
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    {
+                        column: row.get(column)
+                        for column in output_columns
+                    }
                     for row in rows
                 ]
 
@@ -341,6 +399,32 @@ def _save_memory_table_name_config(config: dict[str, Any]) -> str:
     if not isinstance(value, str) or not value.strip():
         raise _NodeValidationError("SaveMemoryTableNode config.table_name is required")
     return value.strip()
+
+
+def _string_list_config(
+    config: dict[str, Any],
+    key: str,
+    *,
+    node_type: str,
+) -> list[str]:
+    value = config.get(key)
+    if not isinstance(value, list) or not value:
+        raise _NodeValidationError(
+            f"{node_type} config.{key} must be a non-empty string list"
+        )
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise _NodeValidationError(
+                f"{node_type} config.{key} must be a non-empty string list"
+            )
+        normalized = item.strip()
+        if normalized in items:
+            raise _NodeValidationError(
+                f"{node_type} config.{key} contains duplicate field: {normalized}"
+            )
+        items.append(normalized)
+    return items
 
 
 def _infer_data_type(name: str) -> str:

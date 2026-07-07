@@ -356,6 +356,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "GenerateTestTableNode",
         "FilterRowsNode",
         "AddColumnsNode",
+        "DeleteColumnsNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -367,6 +368,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "out", "required": False}
     ]
     assert by_type["FilterRowsNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["DeleteColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -423,6 +427,17 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "FLOAT",
         "BOOLEAN",
     ]
+
+    delete_columns_properties = by_type["DeleteColumnsNode"]["config_schema"][
+        "properties"
+    ]
+    assert delete_columns_properties["columns"] == {
+        "type": "array",
+        "title": "Columns",
+        "required": True,
+        "items": {"type": "string"},
+        "description": "Column names to remove from the output table.",
+    }
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"

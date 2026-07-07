@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from flowweaver.nodes.table_ops import append_field, field_names, find_field, has_field
+from flowweaver.nodes.table_ops import (
+    append_field,
+    field_names,
+    find_field,
+    has_field,
+    remove_fields,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel
 
 
@@ -35,6 +41,20 @@ def test_append_field_returns_schema_with_next_ordinal() -> None:
     assert next_schema[1].nullable is True
     assert next_schema[1].ordinal == 1
     assert [field.name for field in schema] == ["row_id"]
+
+
+def test_remove_fields_returns_schema_with_rebased_ordinals() -> None:
+    schema = [
+        _field("row_id", "INTEGER", 0),
+        _field("amount", "FLOAT", 1),
+        _field("status", "TEXT", 2),
+    ]
+
+    next_schema = remove_fields(schema, ["amount"])
+
+    assert [field.name for field in next_schema] == ["row_id", "status"]
+    assert [field.ordinal for field in next_schema] == [0, 1]
+    assert [field.ordinal for field in schema] == [0, 1, 2]
 
 
 def _field(name: str, data_type: str, ordinal: int) -> FieldSchemaModel:

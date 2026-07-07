@@ -15,6 +15,7 @@ from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.node_executor import BuiltinTableNodeExecutor
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    DELETE_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -229,6 +230,47 @@ def test_add_columns_node_publishes_table_with_new_default_column(
     ]
 
 
+def test_delete_columns_node_publishes_table_without_selected_columns(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 2,
+                "columns": ["row_id", "amount", "label"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    delete_task = make_task(
+        node_type=DELETE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-delete-columns",
+        node_instance_id="delete_columns",
+        input_refs=[input_ref.table_ref_id],
+        config={"columns": ["amount"]},
+    )
+
+    delete_result = executor.execute(delete_task)
+
+    assert delete_result.status == NodeResultStatus.SUCCEEDED
+    assert delete_result.output_refs != generate_result.output_refs
+    assert [field.name for field in input_ref.schema] == ["row_id", "amount", "label"]
+    output_ref = registry.get(delete_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "delete_columns_output"
+    assert [field.name for field in output_ref.schema] == ["row_id", "label"]
+    assert [field.ordinal for field in output_ref.schema] == [0, 1]
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "label": "label_0_1"},
+        {"row_id": 2, "label": "label_0_2"},
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -340,4 +382,34 @@ def test_filter_rows_node_returns_validation_error_for_missing_field(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field does not exist" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_delete_columns_node_returns_validation_error_for_missing_column(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    delete_task = make_task(
+        node_type=DELETE_COLUMNS_NODE_TYPE,
+        node_run_id="node-run-delete-columns",
+        node_instance_id="delete_columns",
+        input_refs=generate_result.output_refs,
+        config={"columns": ["missing"]},
+    )
+
+    result = executor.execute(delete_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Fields do not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2

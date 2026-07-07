@@ -11,6 +11,7 @@ from flowweaver.nodes.builtin_shared_table import (
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
 from flowweaver.nodes.builtin_table import (
     ADD_COLUMNS_NODE_TYPE,
+    DELETE_COLUMNS_NODE_TYPE,
     FILTER_ROWS_NODE_TYPE,
     GENERATE_TEST_TABLE_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -55,6 +56,14 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
             config_schema=_add_columns_schema(),
+        ),
+        NodeDefinitionSpec(
+            node_type=DELETE_COLUMNS_NODE_TYPE,
+            node_version="1.0",
+            display_name="Delete Columns",
+            input_ports=(NodePortSpec("in", required=True),),
+            output_ports=(NodePortSpec("out"),),
+            config_schema=_delete_columns_schema(),
         ),
         NodeDefinitionSpec(
             node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -180,6 +189,20 @@ def _add_columns_schema() -> NodeConfigSchemaSpec:
                 required=True,
                 default="TEXT",
                 enum=("TEXT", "INTEGER", "FLOAT", "BOOLEAN"),
+            ),
+        }
+    )
+
+
+def _delete_columns_schema() -> NodeConfigSchemaSpec:
+    return NodeConfigSchemaSpec(
+        properties={
+            "columns": NodeConfigFieldSpec(
+                type="array",
+                title="Columns",
+                required=True,
+                item_type="string",
+                description="Column names to remove from the output table.",
             ),
         }
     )

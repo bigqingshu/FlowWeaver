@@ -44,3 +44,18 @@ def append_field(
             ordinal=len(schema),
         ),
     ]
+
+
+def remove_fields(
+    schema: Sequence[FieldSchemaModel],
+    field_names_to_remove: Sequence[str],
+) -> list[FieldSchemaModel]:
+    removed_names = set(field_names_to_remove)
+    return [
+        field.model_copy(update={"ordinal": ordinal})
+        for ordinal, field in enumerate(
+            field
+            for field in schema
+            if field.name not in removed_names
+        )
+    ]
