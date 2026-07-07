@@ -29,6 +29,9 @@ from flowweaver.workflow_process.dag import WorkflowDag
 from flowweaver.workflow_process.loop_iteration_nodes import (
     ensure_loop_iteration_entry_node_run,
 )
+from flowweaver.workflow_process.loop_terminal_state import (
+    close_loop_after_node_terminal_result,
+)
 
 
 class NodeTaskApplyStatus(str, Enum):
@@ -488,6 +491,13 @@ class NodeTaskManager:
         )
         if updated is None:
             return self._result_already_applied_or_terminal(result)
+        close_loop_after_node_terminal_result(
+            self._store,
+            node_run_id=updated.node_run_id,
+            result_status=result.status,
+            error=result.error,
+            finished_at=result.finished_at,
+        )
         if (
             result.status == NodeResultStatus.FAILED
             and self._failure_policy_mode == FailurePolicyMode.CONTINUE_INDEPENDENT

@@ -11,6 +11,8 @@ from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.node_executor import FakeNodeExecutor
 from flowweaver.protocols.enums import (
+    LoopIterationRunStatus,
+    LoopRunStatus,
     NodeResultStatus,
     NodeRunStatus,
     WorkflowRunStatus,
@@ -22,6 +24,9 @@ from flowweaver.workflow.definition import (
 from flowweaver.workflow_process import main as workflow_process_main
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
+from flowweaver.workflow_process.loop_terminal_state import (
+    cancel_active_loop_runs_for_workflow,
+)
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyStatus,
     NodeTaskManager,
@@ -265,6 +270,38 @@ def submit_and_accept(
     assert node_run.executor_id == executor_id
     assert node_run.started_at is not None
     return task
+
+
+def attach_running_loop_iteration(
+    store: RuntimeStore,
+    *,
+    workflow_run_id: str,
+    node_run_id: str,
+) -> tuple[str, str]:
+    loop = store.create_loop_run(
+        loop_run_id=f"loop-run-{node_run_id}",
+        workflow_run_id=workflow_run_id,
+        loop_id=f"loop-{node_run_id}",
+        start_node_instance_id="loop-start",
+        judge_node_instance_id="loop-judge",
+        max_iterations=3,
+        status=LoopRunStatus.RUNNING,
+    )
+    assert loop is not None
+    iteration = store.create_loop_iteration_run(
+        loop_iteration_id=f"loop-iteration-{node_run_id}",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=0,
+        status=LoopIterationRunStatus.RUNNING,
+    )
+    assert iteration is not None
+    link = store.add_loop_iteration_node_run(
+        loop_iteration_id=iteration.loop_iteration_id,
+        node_run_id=node_run_id,
+        role="BODY",
+    )
+    assert link is not None
+    return loop.loop_run_id, iteration.loop_iteration_id
 
 
 def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
@@ -688,6 +725,105 @@ def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:
         "NODE_FAILED",
         "WORKFLOW_FAILED",
     ]
+
+
+def test_loop_node_failure_marks_iteration_and_loop_failed(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    loop_run_id, loop_iteration_id = attach_running_loop_iteration(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=task.node_run_id,
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={"message": "loop body failed"},
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    loop = store.get_loop_run(loop_run_id)
+    iteration = store.get_loop_iteration_run(loop_iteration_id)
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert loop is not None
+    assert iteration is not None
+    assert loop.status == LoopRunStatus.FAILED.value
+    assert loop.error == {"message": "loop body failed"}
+    assert iteration.status == LoopIterationRunStatus.FAILED.value
+    assert iteration.failed_node_run_id == task.node_run_id
+    assert iteration.error == {"message": "loop body failed"}
+
+
+def test_loop_node_cancel_marks_iteration_and_loop_cancelled(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    loop_run_id, loop_iteration_id = attach_running_loop_iteration(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=task.node_run_id,
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.CANCELLED,
+        error={"message": "loop body cancelled"},
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    loop = store.get_loop_run(loop_run_id)
+    iteration = store.get_loop_iteration_run(loop_iteration_id)
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert loop is not None
+    assert iteration is not None
+    assert loop.status == LoopRunStatus.CANCELLED.value
+    assert iteration.status == LoopIterationRunStatus.CANCELLED.value
+
+
+def test_workflow_cancel_closes_active_loop_runs(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    run, _process, _manager = create_running_process(store, linear_definition())
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    assert source is not None
+    loop_run_id, loop_iteration_id = attach_running_loop_iteration(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+    )
+
+    closed = cancel_active_loop_runs_for_workflow(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        error={"reason": "WORKFLOW_CANCEL_REQUESTED"},
+    )
+
+    loop = store.get_loop_run(loop_run_id)
+    iteration = store.get_loop_iteration_run(loop_iteration_id)
+    assert closed == 1
+    assert loop is not None
+    assert iteration is not None
+    assert loop.status == LoopRunStatus.CANCELLED.value
+    assert iteration.status == LoopIterationRunStatus.CANCELLED.value
+    assert loop.error == {"reason": "WORKFLOW_CANCEL_REQUESTED"}
 
 
 def test_node_task_manager_defaults_to_fail_fast_policy(

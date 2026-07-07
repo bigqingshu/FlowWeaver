@@ -79,6 +79,9 @@ from flowweaver.workflow_process.executor_pool import (
     NodeTaskExecutionPool,
     ThreadedNodeTaskExecutionPool,
 )
+from flowweaver.workflow_process.loop_terminal_state import (
+    cancel_active_loop_runs_for_workflow,
+)
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
@@ -452,6 +455,14 @@ def _run_workflow_process_loop(
             _request_cancel_for_in_flight_tasks(
                 store=store,
                 execution_pool=execution_pool,
+            )
+            cancel_active_loop_runs_for_workflow(
+                store,
+                workflow_run_id=workflow_run_id,
+                error={
+                    "message": "Workflow run cancelled",
+                    "reason": "WORKFLOW_CANCEL_REQUESTED",
+                },
             )
             store.update_workflow_run_status(
                 workflow_run_id,
