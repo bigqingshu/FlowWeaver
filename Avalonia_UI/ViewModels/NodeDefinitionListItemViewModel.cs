@@ -9,7 +9,8 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
 {
     public NodeDefinitionListItemViewModel(
         NodeDefinitionDto definition,
-        DisplayTextFormatter? displayTextFormatter = null)
+        DisplayTextFormatter? displayTextFormatter = null,
+        NodeConfigSchemaParseResult? configSchema = null)
     {
         DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         NodeType = definition.NodeType;
@@ -21,7 +22,7 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
         DefaultTimeoutSeconds = definition.DefaultTimeoutSeconds;
         RetrySafe = definition.RetrySafe;
         UiVisibility = definition.UiVisibility;
-        ConfigSchema = NodeConfigSchemaParser.Parse(
+        ConfigSchema = configSchema ?? NodeConfigSchemaParser.Parse(
             definition.ConfigSchemaVersion,
             definition.ConfigSchema);
     }

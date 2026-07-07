@@ -303,6 +303,60 @@ public sealed class MainWindowViewModelConnectionSettingsTests
     }
 
     [TestMethod]
+    public async Task RefreshNodeDefinitionsReusesSchemaParseResultForSameCatalog()
+    {
+        const string schemaJson =
+            """
+            {
+              "type": "object",
+              "properties": {
+                "rows": {
+                  "type": "integer",
+                  "title": "Rows",
+                  "required": true,
+                  "default": 3
+                }
+              }
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionCatalogStateResponse =
+                ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Success(
+                    new NodeDefinitionCatalogStateDto
+                    {
+                        CatalogHash = "catalog-1",
+                        NodeCount = 1,
+                    }),
+            NodeDefinitionsResponse =
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>
+                    {
+                        NodeDefinition("GenerateTestTableNode", "Generate Test Table", schemaJson),
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.Token = "secret";
+        viewModel.ConnectionStatus = ConnectionStatus.Connected;
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        var firstSchema = viewModel.NodeDefinitions[0].ConfigSchema;
+        apiClient.NodeDefinitionsResponse =
+            ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table", schemaJson),
+                });
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.GetNodeDefinitionCatalogStateCallCount);
+        Assert.AreEqual(2, apiClient.ListNodeDefinitionsCallCount);
+        Assert.AreSame(firstSchema, viewModel.NodeDefinitions[0].ConfigSchema);
+    }
+
+    [TestMethod]
     public async Task CheckConnectionLoadsWorkflowsWhenHealthyAndListIsEmpty()
     {
         var apiClient = new FakeApiClient
@@ -713,8 +767,18 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         };
     }
 
-    private static NodeDefinitionDto NodeDefinition(string nodeType, string displayName)
+    private static NodeDefinitionDto NodeDefinition(
+        string nodeType,
+        string displayName,
+        string? schemaJson = null)
     {
+        JsonElement? configSchema = null;
+        if (schemaJson is not null)
+        {
+            using var schemaDocument = JsonDocument.Parse(schemaJson);
+            configSchema = schemaDocument.RootElement.Clone();
+        }
+
         return new NodeDefinitionDto
         {
             NodeType = nodeType,
@@ -724,7 +788,8 @@ public sealed class MainWindowViewModelConnectionSettingsTests
             DefaultTimeoutSeconds = 60,
             RetrySafe = false,
             UiVisibility = "visible",
-            ConfigSchemaVersion = string.Empty,
+            ConfigSchemaVersion = schemaJson is null ? string.Empty : "1.0",
+            ConfigSchema = configSchema,
         };
     }
 }

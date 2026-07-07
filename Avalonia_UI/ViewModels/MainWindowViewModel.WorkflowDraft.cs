@@ -21,6 +21,11 @@ public partial class MainWindowViewModel
     private string? loadedNodeDefinitionCatalogConnectionKey;
     private string? loadedNodeDefinitionCatalogHash;
     private string? loadedNodeDefinitionCatalogProgramHash;
+    private readonly Dictionary<(string NodeType, string NodeVersion), NodeDefinitionListItemViewModel>
+        nodeDefinitionByKey = new();
+    private readonly Dictionary<string, NodeConfigSchemaParseResult> nodeConfigSchemaByKey =
+        new(StringComparer.Ordinal);
+    private string? nodeConfigSchemaCacheCatalogKey;
 
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
@@ -755,14 +760,22 @@ public partial class MainWindowViewModel
             {
                 SelectedNewDraftNodeDefinition = null;
                 NodeDefinitions.Clear();
+                nodeDefinitionByKey.Clear();
+                var schemaCatalogKey = PrepareNodeConfigSchemaCache(
+                    connectionKey,
+                    catalogState);
                 foreach (var definition in response.Data
                     .OrderBy(definition => definition.DisplayName)
                     .ThenBy(definition => definition.NodeType)
                     .ThenBy(definition => definition.NodeVersion))
                 {
-                    NodeDefinitions.Add(new NodeDefinitionListItemViewModel(
+                    var item = new NodeDefinitionListItemViewModel(
                         definition,
-                        DisplayTextFormatter));
+                        DisplayTextFormatter,
+                        GetOrParseNodeConfigSchema(definition, schemaCatalogKey));
+                    NodeDefinitions.Add(item);
+                    nodeDefinitionByKey[BuildNodeDefinitionLookupKey(item.NodeType, item.NodeVersion)] =
+                        item;
                 }
 
                 RecordNodeDefinitionCatalogCacheState(connectionKey, catalogState);
@@ -866,6 +879,82 @@ public partial class MainWindowViewModel
         loadedNodeDefinitionCatalogConnectionKey = null;
         loadedNodeDefinitionCatalogHash = null;
         loadedNodeDefinitionCatalogProgramHash = null;
+    }
+
+    private string? PrepareNodeConfigSchemaCache(
+        string connectionKey,
+        NodeDefinitionCatalogStateDto? catalogState)
+    {
+        var catalogKey = BuildNodeConfigSchemaCatalogKey(connectionKey, catalogState);
+        if (!string.Equals(
+            nodeConfigSchemaCacheCatalogKey,
+            catalogKey,
+            StringComparison.Ordinal))
+        {
+            nodeConfigSchemaByKey.Clear();
+            nodeConfigSchemaCacheCatalogKey = catalogKey;
+        }
+
+        return catalogKey;
+    }
+
+    private NodeConfigSchemaParseResult GetOrParseNodeConfigSchema(
+        NodeDefinitionDto definition,
+        string? schemaCatalogKey)
+    {
+        if (schemaCatalogKey is null)
+        {
+            return NodeConfigSchemaParser.Parse(
+                definition.ConfigSchemaVersion,
+                definition.ConfigSchema);
+        }
+
+        var schemaCacheKey = BuildNodeConfigSchemaCacheKey(definition);
+        if (nodeConfigSchemaByKey.TryGetValue(schemaCacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        var parsed = NodeConfigSchemaParser.Parse(
+            definition.ConfigSchemaVersion,
+            definition.ConfigSchema);
+        nodeConfigSchemaByKey[schemaCacheKey] = parsed;
+        return parsed;
+    }
+
+    private static string? BuildNodeConfigSchemaCatalogKey(
+        string connectionKey,
+        NodeDefinitionCatalogStateDto? catalogState)
+    {
+        var catalogHash = NormalizeNodeDefinitionCatalogToken(catalogState?.CatalogHash);
+        if (catalogHash is null)
+        {
+            return null;
+        }
+
+        return string.Concat(
+            connectionKey,
+            "|program:",
+            NormalizeNodeDefinitionCatalogToken(catalogState?.ProgramHash) ?? string.Empty,
+            "|catalog:",
+            catalogHash);
+    }
+
+    private static string BuildNodeConfigSchemaCacheKey(NodeDefinitionDto definition)
+    {
+        return string.Concat(
+            definition.NodeType,
+            "@",
+            definition.NodeVersion,
+            "|schema:",
+            definition.ConfigSchemaVersion);
+    }
+
+    private static (string NodeType, string NodeVersion) BuildNodeDefinitionLookupKey(
+        string nodeType,
+        string nodeVersion)
+    {
+        return (nodeType, nodeVersion);
     }
 
     private static string BuildNodeDefinitionConnectionKey(
@@ -1463,12 +1552,11 @@ public partial class MainWindowViewModel
     private NodeDefinitionListItemViewModel? FindNodeDefinition(
         WorkflowDefinitionNodeListItemViewModel node)
     {
-        return NodeDefinitions.FirstOrDefault(definition =>
-            string.Equals(definition.NodeType, node.NodeType, StringComparison.Ordinal)
-            && string.Equals(
-                definition.NodeVersion,
-                node.NodeVersion,
-                StringComparison.Ordinal));
+        return nodeDefinitionByKey.TryGetValue(
+            BuildNodeDefinitionLookupKey(node.NodeType, node.NodeVersion),
+            out var definition)
+                ? definition
+                : null;
     }
 
     private void RefreshNodeEditorSchemaFallbackNodes()
