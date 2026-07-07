@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia_UI.ViewModels;
 
 namespace Avalonia_UI.Views.Components.Workflow;
 
@@ -10,8 +11,21 @@ public partial class WorkflowListView : UserControl
         InitializeComponent();
     }
 
-    private void CloseDeleteWorkflowConfirmFlyout(object? sender, RoutedEventArgs e)
+    private async void ConfirmDeleteWorkflow(object? sender, RoutedEventArgs e)
     {
-        DeleteWorkflowButton.Flyout?.Hide();
+        if (DataContext is not MainWindowViewModel viewModel ||
+            !viewModel.DeleteSelectedWorkflowCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        try
+        {
+            await viewModel.DeleteSelectedWorkflowCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            DeleteWorkflowButton.Flyout?.Hide();
+        }
     }
 }

@@ -101,8 +101,7 @@
                                                    MaxWidth="260"
                                                    TextWrapping="Wrap"/>
                                         <Button Content="{Binding DeleteWorkflowText}"
-                                                Command="{Binding DeleteSelectedWorkflowCommand}"
-                                                Click="CloseDeleteWorkflowConfirmFlyout"
+                                                Click="ConfirmDeleteWorkflow"
                                                 HorizontalAlignment="Right"/>
                                     </StackPanel>
                                 </Flyout>

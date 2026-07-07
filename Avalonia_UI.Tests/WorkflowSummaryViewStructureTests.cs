@@ -92,15 +92,26 @@ public sealed class WorkflowSummaryViewStructureTests
             "Components",
             "Workflow",
             "WorkflowListView.axaml");
+        var codeBehind = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowListView.axaml.cs");
 
         StringAssert.Contains(xaml, "Content=\"{Binding DeleteWorkflowText}\"");
         StringAssert.Contains(xaml, "IsEnabled=\"{Binding CanUseDeleteSelectedWorkflowAction}\"");
         StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding DeleteSelectedWorkflowDisabledReasonText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmTitleText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DeleteWorkflowConfirmMessageText}\"");
-        StringAssert.Contains(xaml, "Command=\"{Binding DeleteSelectedWorkflowCommand}\"");
         StringAssert.Contains(xaml, "x:Name=\"DeleteWorkflowButton\"");
-        StringAssert.Contains(xaml, "Click=\"CloseDeleteWorkflowConfirmFlyout\"");
+        StringAssert.Contains(xaml, "Click=\"ConfirmDeleteWorkflow\"");
+        Assert.IsFalse(
+            xaml.Contains("Command=\"{Binding DeleteSelectedWorkflowCommand}\"", StringComparison.Ordinal));
+        StringAssert.Contains(
+            codeBehind,
+            "await viewModel.DeleteSelectedWorkflowCommand.ExecuteAsync(null);");
+        StringAssert.Contains(codeBehind, "DeleteWorkflowButton.Flyout?.Hide();");
     }
 
     [TestMethod]
