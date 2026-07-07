@@ -17,6 +17,7 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeHandlerRegistry,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.table_ops import append_field, find_field, has_field
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus, TableRole
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -93,8 +94,7 @@ class FilterRowsNodeHandler:
         field = task.config.get("field")
         if not isinstance(field, str) or not field:
             raise _NodeValidationError("FilterRowsNode config.field is required")
-        schema_field_names = {item.name for item in input_ref.schema}
-        if field not in schema_field_names:
+        if find_field(input_ref.schema, field) is None:
             raise _NodeValidationError(f"Field does not exist: {field}")
         operator = _normalize_operator(task.config.get("operator"))
         value = task.config.get("value")
@@ -130,24 +130,19 @@ class AddColumnsNodeHandler:
             node_type=self.node_type,
         )
         column_name = _string_config(task.config, "column_name")
-        existing_names = {field.name for field in input_ref.schema}
-        if column_name in existing_names:
+        if has_field(input_ref.schema, column_name):
             raise _NodeValidationError(f"Field already exists: {column_name}")
         data_type = _normalize_data_type(task.config.get("data_type", "TEXT"))
         default_value = _parse_default_value(
             task.config.get("default_value"),
             data_type=data_type,
         )
-        schema = [
-            *input_ref.schema,
-            FieldSchemaModel(
-                field_id=column_name,
-                name=column_name,
-                data_type=data_type,
-                nullable=default_value is None,
-                ordinal=len(input_ref.schema),
-            ),
-        ]
+        schema = append_field(
+            input_ref.schema,
+            name=column_name,
+            data_type=data_type,
+            nullable=default_value is None,
+        )
 
         def output_batches():
             for rows in context.iter_row_batches(input_ref):
