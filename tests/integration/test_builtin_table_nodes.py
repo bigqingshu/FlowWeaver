@@ -493,6 +493,61 @@ def test_batch_rename_files_node_can_append_number_and_write_log(
     assert log_rows == [output_rows[0]]
 
 
+def test_batch_rename_files_node_skips_existing_target_without_mutating_files(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "rename"
+    source_dir.mkdir()
+    source_file = source_dir / "old.txt"
+    source_file.write_text("alpha", encoding="utf-8")
+    target_file = source_dir / "renamed.txt"
+    target_file.write_text("existing", encoding="utf-8")
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["path", "new_name"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0] = {"path": str(source_file), "new_name": "renamed.txt"}
+    custom_input_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=input_ref.schema,
+        rows=rows,
+        output_name="rename_skip_input",
+    )
+
+    rename_result = executor.execute(
+        make_task(
+            node_type=BATCH_RENAME_FILES_NODE_TYPE,
+            node_run_id="node-run-batch-rename-skip",
+            node_instance_id="batch_rename_skip",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "path_field": "path",
+                "new_name_field": "new_name",
+                "actual_rename": True,
+                "conflict_mode": "skip",
+            },
+        )
+    )
+
+    assert rename_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(rename_result.output_refs[0])
+    output_rows = provider.read_rows(output_ref, offset=0, limit=10)
+    assert output_rows[0]["rename_status"] == "skipped"
+    assert output_rows[0]["rename_requested"] == "true"
+    assert output_rows[0]["actual_rename"] == "false"
+    assert output_rows[0]["skipped_reason"] == "target path already exists"
+    assert source_file.read_text(encoding="utf-8") == "alpha"
+    assert target_file.read_text(encoding="utf-8") == "existing"
+
+
 def test_plugin_node_outputs_status_table_without_executing_plugin(
     tmp_path: Path,
 ) -> None:
@@ -3649,6 +3704,127 @@ def test_condition_flag_node_supports_field_value_aggregations(
         assert row["total_rows"] == 3
 
 
+def test_condition_flag_node_handles_empty_and_case_insensitive_values(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 3, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["label"] = ""
+    rows[1]["label"] = "Alpha"
+    rows[2]["label"] = "beta"
+    custom_input_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=input_ref.schema,
+        rows=rows,
+        output_name="condition_empty_input",
+    )
+
+    empty_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-empty",
+            node_instance_id="condition_empty",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "condition_type": "field_value",
+                "field": "label",
+                "operator": "IS_EMPTY",
+                "aggregation": "any",
+            },
+        )
+    )
+    case_result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-case",
+            node_instance_id="condition_case",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "condition_type": "field_value",
+                "field": "label",
+                "operator": "EQ",
+                "value": "alpha",
+                "aggregation": "any",
+                "case_sensitive": False,
+            },
+        )
+    )
+
+    assert empty_result.status == NodeResultStatus.SUCCEEDED
+    _empty_ref, empty_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=empty_result,
+    )
+    assert empty_row["result"] == "true"
+    assert empty_row["matched_count"] == 1
+
+    assert case_result.status == NodeResultStatus.SUCCEEDED
+    _case_ref, case_row = read_single_output_row(
+        registry=registry,
+        provider=provider,
+        result=case_result,
+    )
+    assert case_row["result"] == "true"
+    assert case_row["matched_count"] == 1
+    assert json.loads(case_row["details"])["case_sensitive"] is False
+
+
+def test_condition_flag_node_returns_validation_error_for_incompatible_compare(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "label"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10)
+    rows[0]["label"] = "not-a-number"
+    custom_input_ref = publish_runtime_rows(
+        registry=registry,
+        provider=provider,
+        schema=input_ref.schema,
+        rows=rows,
+        output_name="condition_incompatible_input",
+    )
+
+    result = executor.execute(
+        make_task(
+            node_type=CONDITION_FLAG_NODE_TYPE,
+            node_run_id="node-run-condition-incompatible",
+            node_instance_id="condition_incompatible",
+            input_refs=[custom_input_ref.table_ref_id],
+            config={
+                "condition_type": "field_value",
+                "field": "label",
+                "operator": "GT",
+                "value": 1,
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "cannot compare values" in result.error["message"]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -3852,6 +4028,50 @@ def test_write_selected_columns_node_outputs_write_plan_status_table(
         }
     ]
     assert provider.count_rows(input_ref) == 3
+
+
+def test_write_selected_columns_node_does_not_create_runtime_target_when_disabled(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    write_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-disabled",
+            node_instance_id="write_selected_disabled",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_type": "run_table",
+                "target_transit_table": "disabled_target",
+                "enable_write": False,
+            },
+        )
+    )
+
+    assert write_result.status == NodeResultStatus.SUCCEEDED
+    assert len(write_result.output_refs) == 1
+    status_ref = registry.get(write_result.output_refs[0])
+    status_rows = provider.read_rows(status_ref, offset=0, limit=10)
+    assert status_rows[0]["target_type"] == "run_table"
+    assert status_rows[0]["target_table"] == "disabled_target"
+    assert status_rows[0]["actual_write"] == "false"
+    assert status_rows[0]["target_table_ref_id"] == ""
+    assert status_rows[0]["skipped_reason"] == "enable_write is false"
+    assert [
+        table_ref.logical_table_id
+        for table_ref in registry.list_by_workflow_run("run-1")
+    ].count("disabled_target") == 0
 
 
 def test_write_selected_columns_node_writes_run_table_when_enabled(
@@ -4290,6 +4510,56 @@ def test_write_back_table_node_outputs_preview_only_when_write_enabled(
     assert rows[0]["warnings"] == ""
     assert rows[0]["target_table_ref_id"] == ""
     assert rows[0]["skipped_reason"] == "sqlite target writes are not implemented"
+
+
+def test_write_back_table_node_skips_target_to_source_runtime_write(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    writeback_result = executor.execute(
+        make_task(
+            node_type=WRITE_BACK_TABLE_NODE_TYPE,
+            node_run_id="node-run-writeback-direction",
+            node_instance_id="writeback_direction",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "writeback_direction": "target_to_source",
+                "target_type": "run_table",
+                "target_table": "direction_target",
+                "use_match_rules": False,
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert writeback_result.status == NodeResultStatus.SUCCEEDED
+    assert len(writeback_result.output_refs) == 1
+    status_ref = registry.get(writeback_result.output_refs[0])
+    rows = provider.read_rows(status_ref, offset=0, limit=10)
+    assert rows[0]["writeback_direction"] == "target_to_source"
+    assert rows[0]["target_type"] == "run_table"
+    assert rows[0]["actual_write"] == "false"
+    assert rows[0]["target_table_ref_id"] == ""
+    assert rows[0]["skipped_reason"] == (
+        "target_to_source runtime writes are not implemented"
+    )
+    assert [
+        table_ref.logical_table_id
+        for table_ref in registry.list_by_workflow_run("run-1")
+    ].count("direction_target") == 0
 
 
 def test_write_back_table_node_writes_run_table_when_enabled(
