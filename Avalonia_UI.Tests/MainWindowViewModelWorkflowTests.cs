@@ -264,6 +264,104 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task ExportSelectedWorkflowReadsDetailAndSavesWorkflowDocument()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "generate",
+                  "node_type": "GenerateTestTableNode",
+                  "node_version": "1.0",
+                  "config": {"rows": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var workflow = Workflow("wf-1", "Daily Load", 2, definitionJson);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+        };
+        var exportFileService = new FakeWorkflowExportFileService();
+        var viewModel = CreateViewModel(apiClient, workflowExportFileService: exportFileService);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(workflow);
+
+        Assert.IsTrue(viewModel.ExportSelectedWorkflowCommand.CanExecute(null));
+
+        await viewModel.ExportSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("wf-1", apiClient.LastWorkflowDetailId);
+        Assert.AreEqual(
+            "Daily Load_v2.flowweaver-workflow.json",
+            exportFileService.SuggestedFileName);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(exportFileService.Content));
+        using var exportDocument = JsonDocument.Parse(exportFileService.Content);
+        Assert.AreEqual(
+            WorkflowExportDocument.CurrentFormat,
+            exportDocument.RootElement.GetProperty("export_format").GetString());
+        var exportedWorkflow = exportDocument.RootElement.GetProperty("workflow");
+        Assert.AreEqual("wf-1", exportedWorkflow.GetProperty("workflow_id").GetString());
+        Assert.AreEqual("Daily Load", exportedWorkflow.GetProperty("name").GetString());
+        Assert.AreEqual("rev-wf-1", exportedWorkflow.GetProperty("revision_id").GetString());
+        Assert.AreEqual(
+            "GenerateTestTableNode",
+            exportedWorkflow
+                .GetProperty("definition")
+                .GetProperty("nodes")[0]
+                .GetProperty("node_type")
+                .GetString());
+        Assert.AreEqual("Exported workflow Daily Load.", viewModel.WorkflowMessage);
+        Assert.IsFalse(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public async Task ExportSelectedWorkflowReportsCancelWithoutError()
+    {
+        var workflow = Workflow("wf-1", "Daily Load", 1);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(workflow),
+        };
+        var exportFileService = new FakeWorkflowExportFileService
+        {
+            Result = WorkflowExportFileSaveResult.Cancel(),
+        };
+        var viewModel = CreateViewModel(apiClient, workflowExportFileService: exportFileService);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(workflow);
+
+        await viewModel.ExportSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("Workflow export cancelled.", viewModel.WorkflowMessage);
+        Assert.IsFalse(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
+    public async Task ExportSelectedWorkflowShowsApiFailure()
+    {
+        var workflow = Workflow("wf-1", "Daily Load", 1);
+        var apiClient = new FakeApiClient
+        {
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
+                "WORKFLOW_NOT_FOUND",
+                "Workflow not found."),
+        };
+        var exportFileService = new FakeWorkflowExportFileService();
+        var viewModel = CreateViewModel(apiClient, workflowExportFileService: exportFileService);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(workflow);
+
+        await viewModel.ExportSelectedWorkflowCommand.ExecuteAsync(null);
+
+        Assert.IsNull(exportFileService.Content);
+        Assert.AreEqual("Workflow export failed.", viewModel.WorkflowMessage);
+        Assert.AreEqual("WORKFLOW_NOT_FOUND: Workflow not found.", viewModel.WorkflowErrorMessage);
+        Assert.IsTrue(viewModel.HasWorkflowError);
+    }
+
+    [TestMethod]
     public async Task CreateTemplateWorkflowShowsErrorEnvelope()
     {
         var apiClient = new FakeApiClient
@@ -4798,13 +4896,15 @@ public sealed class MainWindowViewModelWorkflowTests
 
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
-        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null)
+        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
+        IWorkflowExportFileService? workflowExportFileService = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
             apiClient,
             new EngineHostRuntimeEventStreamClient(),
-            dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay)
+            dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay,
+            workflowExportFileService: workflowExportFileService)
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
@@ -5295,6 +5395,26 @@ public sealed class MainWindowViewModelWorkflowTests
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class FakeWorkflowExportFileService : IWorkflowExportFileService
+    {
+        public WorkflowExportFileSaveResult Result { get; set; } =
+            WorkflowExportFileSaveResult.Success("Daily Load_v2.flowweaver-workflow.json");
+
+        public string? SuggestedFileName { get; private set; }
+
+        public string? Content { get; private set; }
+
+        public Task<WorkflowExportFileSaveResult> SaveWorkflowExportAsync(
+            string suggestedFileName,
+            string content,
+            CancellationToken cancellationToken = default)
+        {
+            SuggestedFileName = suggestedFileName;
+            Content = content;
+            return Task.FromResult(Result);
         }
     }
 }

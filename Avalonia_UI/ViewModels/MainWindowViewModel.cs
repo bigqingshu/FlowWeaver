@@ -12,6 +12,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IEngineHostApiClient _apiClient;
     private readonly IUiSettingsStore _uiSettingsStore;
+    private readonly IWorkflowExportFileService _workflowExportFileService;
     private readonly ILocalizationService _localizationService;
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
@@ -50,7 +51,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IConnectionSettingsStore? connectionSettingsStore = null,
         IUiSettingsStore? uiSettingsStore = null,
         ILocalizationService? localizationService = null,
-        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null)
+        Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
+        IWorkflowExportFileService? workflowExportFileService = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
@@ -61,6 +63,8 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
         _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
+        _workflowExportFileService =
+            workflowExportFileService ?? new AvaloniaWorkflowExportFileService();
         _localizationService = localizationService ?? new JsonLocalizationService();
         CurrentLanguageCode = _localizationService.CurrentLanguageCode;
         foreach (var language in _localizationService.SupportedLanguages)

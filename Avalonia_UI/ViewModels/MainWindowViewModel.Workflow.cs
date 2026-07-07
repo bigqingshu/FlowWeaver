@@ -30,6 +30,9 @@ public partial class MainWindowViewModel
     private bool isDeletingWorkflow;
 
     [ObservableProperty]
+    private bool isExportingWorkflow;
+
+    [ObservableProperty]
     private WorkflowListItemViewModel? selectedWorkflow;
 
     [ObservableProperty]
@@ -49,38 +52,47 @@ public partial class MainWindowViewModel
     public bool HasWorkflowError => !string.IsNullOrWhiteSpace(WorkflowErrorMessage);
 
     public bool IsWorkflowBusy =>
-        IsLoadingWorkflows || IsStartingWorkflow || IsCreatingWorkflow || IsDeletingWorkflow;
+        IsLoadingWorkflows
+        || IsStartingWorkflow
+        || IsCreatingWorkflow
+        || IsDeletingWorkflow
+        || IsExportingWorkflow;
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
     public bool CanUseDeleteSelectedWorkflowAction => CanDeleteSelectedWorkflowCore();
 
+    public bool CanUseExportSelectedWorkflowAction => CanExportSelectedWorkflowCore();
+
+    public string? ExportSelectedWorkflowDisabledReasonText =>
+        GetSelectedWorkflowManagementDisabledReason();
+
     public string? DeleteSelectedWorkflowDisabledReasonText
+        => GetSelectedWorkflowManagementDisabledReason();
+
+    private string? GetSelectedWorkflowManagementDisabledReason()
     {
-        get
+        if (IsWorkflowBusy)
         {
-            if (IsWorkflowBusy)
-            {
-                return T("action.disabled.busy");
-            }
-
-            if (!CanUseEngineActions)
-            {
-                return T("action.disabled.engine_not_connected");
-            }
-
-            if (SelectedWorkflow is null)
-            {
-                return T("action.disabled.no_workflow_selected");
-            }
-
-            if (!IsActiveWorkflowStatus(SelectedWorkflow.Status))
-            {
-                return T("action.disabled.workflow_not_active");
-            }
-
-            return null;
+            return T("action.disabled.busy");
         }
+
+        if (!CanUseEngineActions)
+        {
+            return T("action.disabled.engine_not_connected");
+        }
+
+        if (SelectedWorkflow is null)
+        {
+            return T("action.disabled.no_workflow_selected");
+        }
+
+        if (!IsActiveWorkflowStatus(SelectedWorkflow.Status))
+        {
+            return T("action.disabled.workflow_not_active");
+        }
+
+        return null;
     }
 
     private bool CanRefreshWorkflows()
@@ -117,6 +129,14 @@ public partial class MainWindowViewModel
     }
 
     private bool CanDeleteSelectedWorkflowCore()
+    {
+        return CanUseEngineActions
+            && SelectedWorkflow is not null
+            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
+            && !IsWorkflowBusy;
+    }
+
+    private bool CanExportSelectedWorkflowCore()
     {
         return CanUseEngineActions
             && SelectedWorkflow is not null
@@ -236,6 +256,65 @@ public partial class MainWindowViewModel
 
         WorkflowMessage = T("workflow.delete_failed");
         WorkflowErrorMessage = DescribeError(response);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExportSelectedWorkflowCore))]
+    private async Task ExportSelectedWorkflowAsync()
+    {
+        if (SelectedWorkflow is null)
+        {
+            return;
+        }
+
+        var workflowId = SelectedWorkflow.WorkflowId;
+        var workflowName = SelectedWorkflow.Name;
+        IsExportingWorkflow = true;
+        WorkflowMessage = F("format.exporting_workflow", workflowName);
+        WorkflowErrorMessage = null;
+
+        try
+        {
+            var response = await _apiClient.GetWorkflowAsync(
+                BuildSettings(),
+                workflowId,
+                _shutdown.Token);
+
+            if (!response.Ok || response.Data is null)
+            {
+                WorkflowMessage = T("workflow.export_failed");
+                WorkflowErrorMessage = DescribeError(response);
+                return;
+            }
+
+            var content = WorkflowExportDocumentBuilder.Serialize(
+                response.Data,
+                DateTimeOffset.UtcNow);
+            var result = await _workflowExportFileService.SaveWorkflowExportAsync(
+                WorkflowExportDocumentBuilder.SuggestedFileName(response.Data),
+                content,
+                _shutdown.Token);
+
+            if (result.Cancelled)
+            {
+                WorkflowMessage = T("workflow.export_cancelled");
+                WorkflowErrorMessage = null;
+                return;
+            }
+
+            if (!result.Saved)
+            {
+                WorkflowMessage = T("workflow.export_failed");
+                WorkflowErrorMessage = result.ErrorMessage;
+                return;
+            }
+
+            WorkflowMessage = F("format.exported_workflow", response.Data.Name);
+            WorkflowErrorMessage = null;
+        }
+        finally
+        {
+            IsExportingWorkflow = false;
+        }
     }
 
     private async Task RefreshWorkflowsAfterHealthyConnectionAsync()
@@ -481,13 +560,21 @@ public partial class MainWindowViewModel
         NotifyWorkflowCommandStateChanged();
     }
 
+    partial void OnIsExportingWorkflowChanged(bool value)
+    {
+        NotifyWorkflowCommandStateChanged();
+    }
+
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
         workflowDefinitionLoadVersion++;
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
+        ExportSelectedWorkflowCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseExportSelectedWorkflowAction));
+        OnPropertyChanged(nameof(ExportSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
         OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         Runs.Clear();
@@ -538,7 +625,10 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(IsWorkflowBusy));
         RefreshWorkflowsCommand.NotifyCanExecuteChanged();
         CreateTemplateWorkflowCommand.NotifyCanExecuteChanged();
+        ExportSelectedWorkflowCommand.NotifyCanExecuteChanged();
         DeleteSelectedWorkflowCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseExportSelectedWorkflowAction));
+        OnPropertyChanged(nameof(ExportSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
         OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();

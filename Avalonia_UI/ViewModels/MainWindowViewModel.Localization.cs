@@ -368,6 +368,8 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(DeleteWorkflowText));
         OnPropertyChanged(nameof(DeleteWorkflowConfirmTitleText));
         OnPropertyChanged(nameof(DeleteWorkflowConfirmMessageText));
+        OnPropertyChanged(nameof(CanUseExportSelectedWorkflowAction));
+        OnPropertyChanged(nameof(ExportSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(CanUseDeleteSelectedWorkflowAction));
         OnPropertyChanged(nameof(DeleteSelectedWorkflowDisabledReasonText));
         OnPropertyChanged(nameof(WorkflowNameWatermarkText));
