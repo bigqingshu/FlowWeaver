@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -11,6 +11,8 @@ from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+
+DEFAULT_ROW_BATCH_SIZE = 1000
 
 if TYPE_CHECKING:
     from flowweaver.nodes.builtin_sql import SqlMappingNodeRunner
@@ -27,6 +29,7 @@ class BuiltinTableNodeContext:
     table_provider: SQLiteRuntimeTableProvider
     memory_provider: MemoryTableProvider
     sql_mapping_runner: SqlMappingNodeRunner | None = None
+    row_batch_size: int = DEFAULT_ROW_BATCH_SIZE
 
     def input_ref(self, table_ref_id: str) -> TableRefModel:
         return self.registry.get(table_ref_id)
@@ -50,6 +53,28 @@ class BuiltinTableNodeContext:
             limit=self.table_provider.count_rows(table_ref),
         )
 
+    def iter_row_batches(
+        self,
+        table_ref: TableRefModel,
+        *,
+        batch_size: int | None = None,
+    ) -> Iterable[list[dict[str, Any]]]:
+        limit = self.row_batch_size if batch_size is None else batch_size
+        if limit <= 0:
+            raise BuiltinTableNodeValidationError("row batch size must be positive")
+        total_rows = self.table_provider.count_rows(table_ref)
+        offset = 0
+        while offset < total_rows:
+            rows = self.table_provider.read_rows(
+                table_ref,
+                offset=offset,
+                limit=limit,
+            )
+            if not rows:
+                break
+            yield rows
+            offset += len(rows)
+
     def publish_rows(
         self,
         task: NodeTaskModel,
@@ -58,13 +83,29 @@ class BuiltinTableNodeContext:
         schema: Sequence[FieldSchemaModel],
         rows: Sequence[dict[str, Any]],
     ) -> TableRefModel:
+        return self.publish_row_batches(
+            task,
+            output_name=output_name,
+            schema=schema,
+            row_batches=(rows,),
+        )
+
+    def publish_row_batches(
+        self,
+        task: NodeTaskModel,
+        *,
+        output_name: str,
+        schema: Sequence[FieldSchemaModel],
+        row_batches: Iterable[Sequence[dict[str, Any]]],
+    ) -> TableRefModel:
         staging_ref = self.table_provider.create_staging_table(
             workflow_run_id=task.workflow_run_id,
             node_run_id=task.node_run_id,
             output_name=output_name,
             schema=schema,
         )
-        self.table_provider.insert_rows(staging_ref, rows)
+        for rows in row_batches:
+            self.table_provider.insert_rows(staging_ref, rows)
         self.registry.register_staging(staging_ref)
         return self.registry.publish(staging_ref.table_ref_id)
 

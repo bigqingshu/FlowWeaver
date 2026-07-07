@@ -98,18 +98,21 @@ class FilterRowsNodeHandler:
             raise _NodeValidationError(f"Field does not exist: {field}")
         operator = _normalize_operator(task.config.get("operator"))
         value = task.config.get("value")
-        rows = context.read_all_rows(input_ref)
-        filtered_rows = [
-            row
-            for row in rows
-            if _row_matches(row.get(field), operator=operator, value=value)
-        ]
+
+        def filtered_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    row
+                    for row in rows
+                    if _row_matches(row.get(field), operator=operator, value=value)
+                ]
+
         return [
-            context.publish_rows(
+            context.publish_row_batches(
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=input_ref.schema,
-                rows=filtered_rows,
+                row_batches=filtered_batches(),
             )
         ]
 
@@ -145,17 +148,20 @@ class AddColumnsNodeHandler:
                 ordinal=len(input_ref.schema),
             ),
         ]
-        rows = context.read_all_rows(input_ref)
-        output_rows = [
-            row | {column_name: default_value}
-            for row in rows
-        ]
+
+        def output_batches():
+            for rows in context.iter_row_batches(input_ref):
+                yield [
+                    row | {column_name: default_value}
+                    for row in rows
+                ]
+
         return [
-            context.publish_rows(
+            context.publish_row_batches(
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=schema,
-                rows=output_rows,
+                row_batches=output_batches(),
             )
         ]
 
