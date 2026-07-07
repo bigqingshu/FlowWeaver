@@ -771,6 +771,7 @@ class FillSequenceNodeHandler:
                         or _is_empty_cell(row.get(target_field))
                     )
                     if should_fill:
+                        assert selected_index is not None
                         if selected_index <= 0:
                             sequence_index += 1
                             selected_index = sequence_index
