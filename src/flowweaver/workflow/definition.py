@@ -125,6 +125,34 @@ class RuntimeOptionsModel(StrictModel):
         return value
 
 
+class ControlProtocolMode(str, Enum):
+    PREVIEW = "preview"
+    ENABLED = "enabled"
+
+
+class LoopInputMode(str, Enum):
+    ROW = "row"
+
+
+class LoopRegionModel(StrictModel):
+    loop_id: str
+    start_node_id: str
+    judge_node_id: str
+    body_node_ids: list[str] = Field(default_factory=list)
+    end_node_id: str | None = None
+    max_iterations: int = Field(default=1, ge=1)
+    input_mode: LoopInputMode = LoopInputMode.ROW
+    continue_branch: str = "continue_loop"
+    end_branch: str = "end_loop"
+    enabled: bool = False
+
+
+class ControlProtocolModel(StrictModel):
+    version: Literal["1.0"] = "1.0"
+    mode: ControlProtocolMode = ControlProtocolMode.PREVIEW
+    loop_regions: list[LoopRegionModel] = Field(default_factory=list)
+
+
 class NodePositionModel(StrictModel):
     x: float = 0
     y: float = 0
@@ -168,3 +196,4 @@ class WorkflowDefinitionModel(StrictModel):
     outputs: list[WorkflowOutputModel] = Field(default_factory=list)
     failure_policy: FailurePolicyModel = Field(default_factory=FailurePolicyModel)
     runtime_options: RuntimeOptionsModel | None = None
+    control_protocol: ControlProtocolModel | None = None

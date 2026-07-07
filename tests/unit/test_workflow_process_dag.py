@@ -162,6 +162,68 @@ def test_workflow_definition_parses_runtime_options() -> None:
     ] == "DEBUG"
 
 
+def test_workflow_definition_parses_preview_control_protocol_without_dag_cycle() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "loop_start",
+                    "node_type": "core.loop_start",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "body",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "loop_judge",
+                    "node_type": "core.loop_judge",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [
+                {
+                    "connection_id": "start-to-body",
+                    "source_node_id": "loop_start",
+                    "source_port": "status",
+                    "target_node_id": "body",
+                    "target_port": "in",
+                },
+                {
+                    "connection_id": "body-to-judge",
+                    "source_node_id": "body",
+                    "source_port": "out",
+                    "target_node_id": "loop_judge",
+                    "target_port": "in",
+                },
+            ],
+            "control_protocol": {
+                "loop_regions": [
+                    {
+                        "loop_id": "orders_loop",
+                        "start_node_id": "loop_start",
+                        "judge_node_id": "loop_judge",
+                        "body_node_ids": ["body"],
+                        "max_iterations": 3,
+                    }
+                ],
+            },
+        }
+    )
+
+    dag = build_workflow_dag(definition)
+
+    assert dag.topological_order == ("loop_start", "body", "loop_judge")
+    assert definition.control_protocol is not None
+    assert definition.control_protocol.loop_regions[0].loop_id == "orders_loop"
+    assert definition.control_protocol.loop_regions[0].enabled is False
+    assert definition.model_dump(mode="json")["control_protocol"][
+        "loop_regions"
+    ][0]["max_iterations"] == 3
+
+
 def test_workflow_definition_rejects_invalid_runtime_options() -> None:
     with pytest.raises(ValidationError, match="event_level"):
         WorkflowDefinitionModel.model_validate(
