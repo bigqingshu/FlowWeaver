@@ -30,6 +30,7 @@ from flowweaver.nodes.builtin_table import (
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
+    PARSE_DATETIME_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
     SAVE_MEMORY_TABLE_NODE_TYPE,
@@ -2411,6 +2412,125 @@ def test_add_current_datetime_column_node_can_overwrite_target_with_template(
     assert rows[0]["label"].count("-") == 2
 
 
+def test_parse_datetime_node_auto_parses_dates_and_outputs_status(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "raw_date"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0]["raw_date"] = "2026-07-07"
+    rows[1]["raw_date"] = "not-a-date"
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    parse_task = make_task(
+        node_type=PARSE_DATETIME_NODE_TYPE,
+        node_run_id="node-run-parse-datetime",
+        node_instance_id="parse_datetime",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "source_field": "raw_date",
+            "parse_type": "date",
+            "new_field": "parsed_date",
+            "output_status": True,
+        },
+    )
+
+    parse_result = executor.execute(parse_task)
+
+    assert parse_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(parse_result.output_refs[0])
+    assert output_ref.lifecycle_status == LifecycleStatus.PUBLISHED
+    assert output_ref.logical_table_id == "parse_datetime_output"
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "raw_date": "2026-07-07",
+            "parsed_date": "2026-07-07",
+            "parse_status": "parsed",
+        },
+        {
+            "row_id": 2,
+            "raw_date": "not-a-date",
+            "parsed_date": "",
+            "parse_status": "failed",
+        },
+    ]
+
+
+def test_parse_datetime_node_combines_separate_time_field_with_strptime(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={
+                "rows": 1,
+                "columns": ["row_id", "raw_date", "raw_time"],
+                "seed": 0,
+            },
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+    rows = provider.read_rows(input_ref, offset=0, limit=10, order_by=["row_id"])
+    rows[0] |= {"raw_date": "07/07/2026", "raw_time": "14:05"}
+    staged_ref = provider.create_staging_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-custom-input",
+        output_name="custom_input",
+        schema=input_ref.schema,
+    )
+    provider.insert_rows(staged_ref, rows)
+    registry.register_staging(staged_ref)
+    custom_input_ref = registry.publish(staged_ref.table_ref_id)
+    parse_task = make_task(
+        node_type=PARSE_DATETIME_NODE_TYPE,
+        node_run_id="node-run-parse-datetime",
+        node_instance_id="parse_datetime",
+        input_refs=[custom_input_ref.table_ref_id],
+        config={
+            "source_field": "raw_date",
+            "use_separate_time_field": True,
+            "time_source_field": "raw_time",
+            "input_structure": "strptime",
+            "input_format": "%m/%d/%Y %H:%M",
+            "datetime_output_template": "%Y-%m-%dT%H:%M",
+            "new_field": "parsed_datetime",
+            "output_status": False,
+        },
+    )
+
+    parse_result = executor.execute(parse_task)
+
+    assert parse_result.status == NodeResultStatus.SUCCEEDED
+    output_ref = registry.get(parse_result.output_refs[0])
+    assert provider.read_rows(output_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {
+            "row_id": 1,
+            "raw_date": "07/07/2026",
+            "raw_time": "14:05",
+            "parsed_datetime": "2026-07-07T14:05",
+        },
+    ]
+
+
 def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
@@ -2937,6 +3057,36 @@ def test_add_current_datetime_column_node_returns_validation_error_for_conflict(
     assert result.error is not None
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "Field already exists" in result.error["message"]
+    assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_parse_datetime_node_returns_validation_error_for_missing_source_field(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "raw_date"], "seed": 0},
+        )
+    )
+    parse_task = make_task(
+        node_type=PARSE_DATETIME_NODE_TYPE,
+        node_run_id="node-run-parse-datetime",
+        node_instance_id="parse_datetime",
+        input_refs=generate_result.output_refs,
+        config={"source_field": "missing"},
+    )
+
+    result = executor.execute(parse_task)
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "Field does not exist" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
 
 

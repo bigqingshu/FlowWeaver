@@ -371,6 +371,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "MergeColumnsNode",
         "NumericColumnOperationNode",
         "AddCurrentDateTimeColumnNode",
+        "ParseDateTimeNode",
         "SaveMemoryTableNode",
         "PublishSharedTablesNode",
         "ReadSharedTablesNode",
@@ -428,6 +429,9 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "in", "required": True}
     ]
     assert by_type["AddCurrentDateTimeColumnNode"]["input_ports"] == [
+        {"name": "in", "required": True}
+    ]
+    assert by_type["ParseDateTimeNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["SaveMemoryTableNode"]["input_ports"] == [
@@ -761,6 +765,31 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "template",
     ]
     assert current_datetime_properties["template"]["default"] == "{datetime}"
+
+    parse_datetime_properties = by_type["ParseDateTimeNode"]["config_schema"][
+        "properties"
+    ]
+    assert parse_datetime_properties["source_field"] == {
+        "type": "string",
+        "title": "Source Field",
+        "required": True,
+    }
+    assert parse_datetime_properties["parse_type"]["enum"] == [
+        "date",
+        "time",
+        "datetime",
+    ]
+    assert parse_datetime_properties["input_structure"]["enum"] == [
+        "auto",
+        "strptime",
+    ]
+    assert parse_datetime_properties["date_order"]["enum"] == ["ymd", "mdy", "dmy"]
+    assert parse_datetime_properties["output_status"]["default"] is True
+    assert parse_datetime_properties["unmatched_mode"]["enum"] == [
+        "empty",
+        "keep_original",
+        "fixed",
+    ]
 
     save_memory_properties = by_type["SaveMemoryTableNode"]["config_schema"][
         "properties"
