@@ -15,13 +15,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private int nodeDefinitionsLoadVersion;
-    private readonly NodeDefinitionCatalogCacheState nodeDefinitionCatalogCacheState = new();
-    private readonly Dictionary<(string NodeType, string NodeVersion), NodeDefinitionListItemViewModel>
-        nodeDefinitionByKey = new();
-    private readonly Dictionary<string, NodeConfigSchemaParseResult> nodeConfigSchemaByKey =
-        new(StringComparer.Ordinal);
-
     [ObservableProperty]
     private bool isLoadingWorkflowDefinition;
 
@@ -48,15 +41,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? workflowDefinitionErrorMessage;
-
-    [ObservableProperty]
-    private bool isLoadingNodeDefinitions;
-
-    [ObservableProperty]
-    private string nodeDefinitionCatalogMessage = "No node definitions loaded.";
-
-    [ObservableProperty]
-    private string? nodeDefinitionCatalogErrorMessage;
 
     [ObservableProperty]
     private string workflowDefinitionDraftJson = string.Empty;
@@ -139,9 +123,6 @@ public partial class MainWindowViewModel
     private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
-    public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
-        new();
-
     public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
         WorkflowDefinitionDraftNodes { get; } = new();
 
@@ -153,14 +134,6 @@ public partial class MainWindowViewModel
     public bool HasWorkflowDefinitionError =>
         !string.IsNullOrWhiteSpace(WorkflowDefinitionErrorMessage);
 
-    public bool HasNodeDefinitionCatalogError =>
-        !string.IsNullOrWhiteSpace(NodeDefinitionCatalogErrorMessage);
-
-    public bool HasNodeDefinitions => NodeDefinitions.Count > 0;
-
-    public bool HasNodeDefinitionCatalogEmptyState =>
-        !IsLoadingNodeDefinitions && !HasNodeDefinitions;
-
     public bool HasSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is not null;
 
     public bool HasNoSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is null;
@@ -170,24 +143,6 @@ public partial class MainWindowViewModel
 
     public string SelectedNodeConfigDraftSummaryText =>
         SelectedNodeConfigEditableDraftMessage;
-
-    public string? RefreshNodeDefinitionsDisabledReasonText
-    {
-        get
-        {
-            if (IsLoadingNodeDefinitions)
-            {
-                return T("action.disabled.busy");
-            }
-
-            if (!CanUseEngineActions)
-            {
-                return T("action.disabled.engine_not_connected");
-            }
-
-            return null;
-        }
-    }
 
     public bool IsWorkflowDefinitionDraftBusy =>
         IsValidatingWorkflowDefinitionDraft || IsSavingWorkflowDefinitionDraft;
@@ -337,20 +292,6 @@ public partial class MainWindowViewModel
 
     public string TargetPortText => T("definition.target_port");
 
-    public string NodeCatalogSectionText => T("node_catalog.section");
-
-    public string NodeText => T("node_catalog.node");
-
-    public string NodeCatalogEmptyStateText => T("node_catalog.empty_state");
-
-    public string InputsText => T("node_catalog.inputs");
-
-    public string OutputsText => T("node_catalog.outputs");
-
-    public string ModeText => T("node_catalog.mode");
-
-    public string TimeoutText => T("node_catalog.timeout");
-
     public string DraftJsonSectionText => T("definition.draft_json");
 
     public string ShowAdvancedDraftJsonText => IsWorkflowDraftJsonAdvancedVisible
@@ -368,11 +309,6 @@ public partial class MainWindowViewModel
         return CanUseEngineActions
             && SelectedWorkflow is not null
             && !IsLoadingWorkflowDefinition;
-    }
-
-    private bool CanRefreshNodeDefinitions()
-    {
-        return CanUseEngineActions && !IsLoadingNodeDefinitions;
     }
 
     private bool CanValidateWorkflowDefinitionDraft()
@@ -711,176 +647,6 @@ public partial class MainWindowViewModel
                 IsLoadingWorkflowDefinition = false;
             }
         }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshNodeDefinitions))]
-    private async Task RefreshNodeDefinitionsAsync()
-    {
-        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: false);
-    }
-
-    private async Task RefreshNodeDefinitionsCoreAsync(bool allowStateCacheHit)
-    {
-        var requestVersion = ++nodeDefinitionsLoadVersion;
-        IsLoadingNodeDefinitions = true;
-        NodeDefinitionCatalogMessage = T("node_catalog.loading");
-        NodeDefinitionCatalogErrorMessage = null;
-        var settings = BuildSettings();
-        var connectionKey = NodeDefinitionCatalogCacheState.BuildConnectionKey(settings);
-
-        try
-        {
-            var catalogState = await TryGetNodeDefinitionCatalogStateAsync(settings);
-            if (requestVersion != nodeDefinitionsLoadVersion)
-            {
-                return;
-            }
-
-            if (allowStateCacheHit
-                && nodeDefinitionCatalogCacheState.IsCatalogHit(connectionKey, catalogState))
-            {
-                NodeDefinitionCatalogMessage =
-                    F("format.loaded_node_definitions", NodeDefinitions.Count);
-                OnPropertyChanged(nameof(HasNodeDefinitions));
-                OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-                return;
-            }
-
-            var response = await _apiClient.ListNodeDefinitionsAsync(
-                settings,
-                _shutdown.Token);
-
-            if (requestVersion != nodeDefinitionsLoadVersion)
-            {
-                return;
-            }
-
-            if (response.Ok && response.Data is not null)
-            {
-                SelectedNewDraftNodeDefinition = null;
-                NodeDefinitions.Clear();
-                nodeDefinitionByKey.Clear();
-                var schemaCatalogKey = PrepareNodeConfigSchemaCache(
-                    connectionKey,
-                    catalogState);
-                foreach (var definition in response.Data
-                    .OrderBy(definition => definition.DisplayName)
-                    .ThenBy(definition => definition.NodeType)
-                    .ThenBy(definition => definition.NodeVersion))
-                {
-                    var item = new NodeDefinitionListItemViewModel(
-                        definition,
-                        DisplayTextFormatter,
-                        GetOrParseNodeConfigSchema(definition, schemaCatalogKey));
-                    NodeDefinitions.Add(item);
-                    nodeDefinitionByKey[NodeDefinitionCatalogCacheState.BuildLookupKey(
-                            item.NodeType,
-                            item.NodeVersion)] =
-                        item;
-                }
-
-                nodeDefinitionCatalogCacheState.RecordLoadedCatalog(connectionKey, catalogState);
-                RefreshNodeEditorSchemaFallbackNodes();
-                OnPropertyChanged(nameof(HasNodeDefinitions));
-                OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-                RefreshWorkflowDefinitionDraftStructureState();
-                RefreshSelectedNodeConfigDraftState();
-                NodeDefinitionCatalogMessage =
-                    F("format.loaded_node_definitions", NodeDefinitions.Count);
-                return;
-            }
-
-            NodeDefinitionCatalogMessage = T("node_catalog.refresh_failed");
-            NodeDefinitionCatalogErrorMessage = DescribeError(response);
-            SelectedNewDraftNodeDefinition = null;
-            OnPropertyChanged(nameof(HasNodeDefinitions));
-            OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-            RefreshSelectedNodeConfigDraftState();
-        }
-        finally
-        {
-            if (requestVersion == nodeDefinitionsLoadVersion)
-            {
-                IsLoadingNodeDefinitions = false;
-            }
-        }
-    }
-
-    private async Task RefreshNodeDefinitionsAfterHealthyConnectionAsync()
-    {
-        if (!CanRefreshNodeDefinitions())
-        {
-            return;
-        }
-
-        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: true);
-    }
-
-    private async Task<NodeDefinitionCatalogStateDto?> TryGetNodeDefinitionCatalogStateAsync(
-        EngineHostConnectionSettings settings)
-    {
-        try
-        {
-            var response = await _apiClient.GetNodeDefinitionCatalogStateAsync(
-                settings,
-                _shutdown.Token);
-            if (response.Ok
-                && response.Data is { } state
-                && !string.IsNullOrWhiteSpace(state.CatalogHash))
-            {
-                return state;
-            }
-        }
-        catch (NotSupportedException)
-        {
-        }
-
-        return null;
-    }
-
-    private void InvalidateNodeDefinitionCatalogCacheState()
-    {
-        nodeDefinitionCatalogCacheState.InvalidateCatalog();
-    }
-
-    private string? PrepareNodeConfigSchemaCache(
-        string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
-    {
-        var catalogKey = nodeDefinitionCatalogCacheState.PrepareSchemaCatalogKey(
-            connectionKey,
-            catalogState,
-            out var changed);
-        if (changed)
-        {
-            nodeConfigSchemaByKey.Clear();
-        }
-
-        return catalogKey;
-    }
-
-    private NodeConfigSchemaParseResult GetOrParseNodeConfigSchema(
-        NodeDefinitionDto definition,
-        string? schemaCatalogKey)
-    {
-        if (schemaCatalogKey is null)
-        {
-            return NodeConfigSchemaParser.Parse(
-                definition.ConfigSchemaVersion,
-                definition.ConfigSchema);
-        }
-
-        var schemaCacheKey = NodeDefinitionCatalogCacheState.BuildSchemaCacheKey(definition);
-        if (nodeConfigSchemaByKey.TryGetValue(schemaCacheKey, out var cached))
-        {
-            return cached;
-        }
-
-        var parsed = NodeConfigSchemaParser.Parse(
-            definition.ConfigSchemaVersion,
-            definition.ConfigSchema);
-        nodeConfigSchemaByKey[schemaCacheKey] = parsed;
-        return parsed;
     }
 
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
@@ -1439,30 +1205,6 @@ public partial class MainWindowViewModel
         return issueLines.Length == 0
             ? null
             : string.Join(Environment.NewLine, issueLines);
-    }
-
-    private NodeDefinitionListItemViewModel? FindNodeDefinition(
-        WorkflowDefinitionNodeListItemViewModel node)
-    {
-        return nodeDefinitionByKey.TryGetValue(
-            NodeDefinitionCatalogCacheState.BuildLookupKey(
-                node.NodeType,
-                node.NodeVersion),
-            out var definition)
-                ? definition
-                : null;
-    }
-
-    private void RefreshNodeEditorSchemaFallbackNodes()
-    {
-        _nodeEditorResolver.ReplaceSchemaFallbackNodes(
-            NodeDefinitions
-                .Where(definition => definition.ConfigSchemaDescriptor?.IsSupported == true)
-                .Select(definition => (
-                    definition.NodeType,
-                    string.IsNullOrWhiteSpace(definition.DisplayName)
-                        ? definition.NodeType
-                        : definition.DisplayName)));
     }
 
     private void RefreshWorkflowDefinitionDraftStructureState()
@@ -2137,18 +1879,6 @@ public partial class MainWindowViewModel
     partial void OnWorkflowDefinitionErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasWorkflowDefinitionError));
-    }
-
-    partial void OnIsLoadingNodeDefinitionsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
-        RefreshNodeDefinitionsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnNodeDefinitionCatalogErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasNodeDefinitionCatalogError));
     }
 
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
