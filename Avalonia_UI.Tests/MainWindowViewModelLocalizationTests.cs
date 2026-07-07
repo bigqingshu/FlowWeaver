@@ -147,6 +147,60 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task RuntimeOptionsOptionDisplayUsesChineseTextAndEnglishValues()
+    {
+        var viewModel = CreateViewModel(new FakeUiSettingsStore());
+
+        await viewModel.ChangeLanguageCommand.ExecuteAsync("zh-Hans");
+
+        CollectionAssert.AreEqual(
+            new[] { "normal", "background_fast", "diagnostic", "custom" },
+            viewModel.RuntimeOptionsProfileOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "常规", "后台快速", "诊断", "自定义" },
+            viewModel.RuntimeOptionsProfileOptions
+                .Select(option => option.DisplayText)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "DEBUG", "INFO", "WARN", "ERROR" },
+            viewModel.RuntimeOptionsLogLevelOptions.Select(option => option.Value).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "调试", "信息", "警告", "错误" },
+            viewModel.RuntimeOptionsLogLevelOptions
+                .Select(option => option.DisplayText)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "none", "basic", "progress", "verbose" },
+            viewModel.RuntimeOptionsEventLevelOptions
+                .Select(option => option.Value)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "无事件", "基础事件", "进度事件", "详细事件" },
+            viewModel.RuntimeOptionsEventLevelOptions
+                .Select(option => option.DisplayText)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "none", "partial", "full" },
+            viewModel.RuntimeOptionsMaskPolicyOptions
+                .Select(option => option.Value)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "不脱敏", "部分脱敏", "完全脱敏" },
+            viewModel.RuntimeOptionsMaskPolicyOptions
+                .Select(option => option.DisplayText)
+                .ToArray());
+
+        viewModel.RuntimeOptionsProfileDraft = "custom";
+        viewModel.RuntimeOptionsEventLevelDraft = "basic";
+        viewModel.RuntimeOptionsProgressEnabledDraft = false;
+        viewModel.RuntimeOptionsNodeOverrideCount = 2;
+
+        Assert.AreEqual(
+            "预设 自定义，事件 基础事件，进度 关闭，节点覆盖 2 个",
+            viewModel.RuntimeOptionsSummaryText);
+    }
+
+    [TestMethod]
     public void ShellNavigationItemsMirrorBuiltinShellPages()
     {
         var viewModel = CreateViewModel(new FakeUiSettingsStore());

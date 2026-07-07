@@ -132,6 +132,16 @@ public sealed class DisplayTextFormatter
         return TextOrFallback($"node_config.option.{value}", value);
     }
 
+    public string FormatRuntimeOptionsOptionValue(string group, string value)
+    {
+        if (string.IsNullOrWhiteSpace(group) || string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        return TextOrFallback($"runtime_options.{group}.option.{value}", value);
+    }
+
     public string FormatSelectedNodeConfigDraftMissingSelection()
     {
         return Text("node_config_draft.no_node_selected");

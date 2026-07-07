@@ -30,7 +30,23 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <ComboBox Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsProfileOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsProfileDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsProfileDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <CheckBox Grid.Row="1"
                                   Grid.ColumnSpan="2"
@@ -44,7 +60,23 @@
                         <ComboBox Grid.Row="2"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsLogLevelDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsLogLevelDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Grid.Row="3"
                                    Text="{Binding RuntimeOptionsEventLevelText}"
@@ -53,7 +85,23 @@
                         <ComboBox Grid.Row="3"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsEventLevelDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsEventLevelDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Grid.Row="4"
                                    Text="{Binding RuntimeOptionsEventRateLimitText}"
@@ -109,7 +157,23 @@
                         <ComboBox Grid.Row="11"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsMaskPolicyDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsMaskPolicyDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </Grid>
 
                     <TextBox Text="{Binding RuntimeOptionsRedactColumnsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -148,7 +212,23 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <ComboBox Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsProfileOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeProfileDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsSelectedNodeProfileDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <CheckBox Grid.Row="1"
                                   Grid.ColumnSpan="2"
@@ -162,7 +242,23 @@
                         <ComboBox Grid.Row="2"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeLogLevelDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsSelectedNodeLogLevelDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Grid.Row="3"
                                    Text="{Binding RuntimeOptionsEventLevelText}"
@@ -171,7 +267,23 @@
                         <ComboBox Grid.Row="3"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeEventLevelDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsSelectedNodeEventLevelDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <TextBlock Grid.Row="4"
                                    Text="{Binding RuntimeOptionsEventRateLimitText}"
@@ -227,7 +339,23 @@
                         <ComboBox Grid.Row="11"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
-                                  SelectedItem="{Binding RuntimeOptionsSelectedNodeMaskPolicyDraft, Mode=TwoWay}"/>
+                                  SelectedValue="{Binding RuntimeOptionsSelectedNodeMaskPolicyDraft, Mode=TwoWay}"
+                                  SelectedValueBinding="{Binding Value}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:NodeConfigOptionItemViewModel"
+                                              x:DataType="vm:NodeConfigOptionItemViewModel">
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          ColumnSpacing="12">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Value}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </Grid>
 
                     <TextBox Text="{Binding RuntimeOptionsSelectedNodeRedactColumnsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
