@@ -108,14 +108,15 @@ _build_node_task_execute = execution_helpers.build_node_task_execute
 _close_execution_pool = execution_helpers.close_execution_pool
 
 
-class _DefaultWorkflowProcessExecutorOwner(DefaultWorkflowProcessExecutorOwner):
-    def __init__(self, *, store: RuntimeStore, runtime_dir: Path) -> None:
-        super().__init__(
-            store=store,
-            runtime_dir=runtime_dir,
-            default_executor_factory=SubprocessNodeExecutorIpcClient,
-            shared_table_executor_factory=BuiltinSharedTableNodeExecutor,
-        )
+def _DefaultWorkflowProcessExecutorOwner(
+    *, store: RuntimeStore, runtime_dir: Path
+) -> DefaultWorkflowProcessExecutorOwner:
+    return execution_helpers.create_default_workflow_process_executor_owner(
+        store=store,
+        runtime_dir=runtime_dir,
+        default_executor_factory=SubprocessNodeExecutorIpcClient,
+        shared_table_executor_factory=BuiltinSharedTableNodeExecutor,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -179,7 +180,7 @@ def run_workflow_process(
         resolve_workflow_process_max_concurrent_node_tasks(max_concurrent_node_tasks)
     )
     resolved_runtime_dir = Path(runtime_dir or Path("runtime") / "workflow_runs")
-    reusable_executor_owner: _DefaultWorkflowProcessExecutorOwner | None = None
+    reusable_executor_owner: DefaultWorkflowProcessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
         reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(
