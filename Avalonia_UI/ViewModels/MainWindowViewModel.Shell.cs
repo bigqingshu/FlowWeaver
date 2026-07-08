@@ -58,20 +58,6 @@ public partial class MainWindowViewModel
         NotifyShellNavigationItemsChanged();
     }
 
-    private void NotifyShellNavigationItemsChanged()
-    {
-        OnPropertyChanged(nameof(ShellNavigationItems));
-        OnPropertyChanged(nameof(WorkflowsNavigationItem));
-        OnPropertyChanged(nameof(DataPreviewNavigationItem));
-        OnPropertyChanged(nameof(RunsNavigationItem));
-        OnPropertyChanged(nameof(DataNavigationItem));
-        OnPropertyChanged(nameof(LogsNavigationItem));
-        OnPropertyChanged(nameof(SettingsNavigationItem));
-        OnPropertyChanged(nameof(SelectedShellNavigationItem));
-        OnPropertyChanged(nameof(SelectedShellPageContentKey));
-        OnPropertyChanged(nameof(SelectedShellPageIndex));
-    }
-
     private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
     {
         return descriptor.HeaderPropertyName switch
