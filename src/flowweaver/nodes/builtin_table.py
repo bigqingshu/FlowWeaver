@@ -4073,6 +4073,21 @@ def _write_selected_runtime_target(
             target_schema,
         )
         target_rows = context.read_all_rows(existing_ref) + target_rows
+    if write_mode == "overwrite" and existing_ref is not None:
+        _validate_write_selected_append_schema(
+            existing_ref.schema,
+            target_schema,
+        )
+        if target_type == "memory_table":
+            context.replace_memory_table_rows(existing_ref, target_rows)
+            return existing_ref
+        return context.replace_runtime_table_rows(
+            task,
+            target_ref=existing_ref,
+            output_name=target_table,
+            schema=target_schema,
+            rows=target_rows,
+        )
     if target_type == "memory_table":
         return context.create_memory_table(
             task,

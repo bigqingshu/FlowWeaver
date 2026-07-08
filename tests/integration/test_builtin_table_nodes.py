@@ -5193,6 +5193,209 @@ def test_write_selected_columns_node_can_append_to_memory_table_target(
     ]
 
 
+def test_write_selected_columns_node_overwrites_existing_memory_table_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    first_generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-first",
+            node_instance_id="generate_first",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    second_generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-second",
+            node_instance_id="generate_second",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    first_input_ref = registry.get(first_generate_result.output_refs[0])
+    second_input_ref = registry.get(second_generate_result.output_refs[0])
+
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-memory-first",
+            node_instance_id="write_selected_memory_first",
+            input_refs=[first_input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_type": "memory_table",
+                "target_table": "target_memory",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-memory-second",
+            node_instance_id="write_selected_memory_second",
+            input_refs=[second_input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_type": "memory_table",
+                "target_table": "target_memory",
+                "write_mode": "overwrite",
+                "field_name_mode": "mapping",
+                "field_mappings": [
+                    {"source_field": "amount", "target_field": "total"},
+                ],
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.SUCCEEDED
+    first_target_ref = registry.get(first_result.output_refs[1])
+    second_status_ref = registry.get(second_result.output_refs[0])
+    second_target_ref = registry.get(second_result.output_refs[1])
+    assert second_target_ref.table_ref_id == first_target_ref.table_ref_id
+    assert memory_provider.read_rows(
+        first_target_ref,
+        offset=0,
+        limit=10,
+    ) == [{"total": 1.0}]
+    rows = provider.read_rows(second_status_ref, offset=0, limit=10)
+    assert rows[0]["target_type"] == "memory_table"
+    assert rows[0]["write_mode"] == "overwrite"
+    assert rows[0]["target_table_ref_id"] == first_target_ref.table_ref_id
+    assert rows[0]["affected_rows"] == 1
+
+
+def test_write_selected_columns_node_overwrites_existing_run_table_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    first_generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-first",
+            node_instance_id="generate_first",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    second_generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-second",
+            node_instance_id="generate_second",
+            config={"rows": 2, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    first_input_ref = registry.get(first_generate_result.output_refs[0])
+    second_input_ref = registry.get(second_generate_result.output_refs[0])
+
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-run-first",
+            node_instance_id="write_selected_run_first",
+            input_refs=[first_input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_type": "run_table",
+                "target_transit_table": "target_runtime",
+                "enable_write": True,
+            },
+        )
+    )
+    second_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-run-second",
+            node_instance_id="write_selected_run_second",
+            input_refs=[second_input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_type": "run_table",
+                "target_transit_table": "target_runtime",
+                "write_mode": "overwrite",
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert second_result.status == NodeResultStatus.SUCCEEDED
+    first_target_ref = registry.get(first_result.output_refs[1])
+    second_status_ref = registry.get(second_result.output_refs[0])
+    second_target_ref = registry.get(second_result.output_refs[1])
+    assert second_target_ref.table_ref_id == first_target_ref.table_ref_id
+    assert provider.read_rows(first_target_ref, offset=0, limit=10) == [
+        {"row_id": 1},
+        {"row_id": 2},
+    ]
+    rows = provider.read_rows(second_status_ref, offset=0, limit=10)
+    assert rows[0]["target_type"] == "run_table"
+    assert rows[0]["write_mode"] == "overwrite"
+    assert rows[0]["target_table_ref_id"] == first_target_ref.table_ref_id
+    assert rows[0]["affected_rows"] == 2
+
+
+def test_write_selected_columns_node_failed_run_table_overwrite_keeps_existing_rows(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 1, "columns": ["row_id", "amount"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    first_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-run-first",
+            node_instance_id="write_selected_run_first",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["row_id"],
+                "target_type": "run_table",
+                "target_transit_table": "target_runtime",
+                "enable_write": True,
+            },
+        )
+    )
+    failed_result = executor.execute(
+        make_task(
+            node_type=WRITE_SELECTED_COLUMNS_NODE_TYPE,
+            node_run_id="node-run-write-selected-run-failed",
+            node_instance_id="write_selected_run_failed",
+            input_refs=[input_ref.table_ref_id],
+            config={
+                "selected_fields": ["amount"],
+                "target_type": "run_table",
+                "target_transit_table": "target_runtime",
+                "write_mode": "overwrite",
+                "enable_write": True,
+            },
+        )
+    )
+
+    assert first_result.status == NodeResultStatus.SUCCEEDED
+    assert failed_result.status == NodeResultStatus.FAILED
+    first_target_ref = registry.get(first_result.output_refs[1])
+    assert provider.read_rows(first_target_ref, offset=0, limit=10) == [
+        {"row_id": 1},
+    ]
+
+
 def test_write_selected_columns_node_rejects_create_when_target_exists(
     tmp_path: Path,
 ) -> None:
