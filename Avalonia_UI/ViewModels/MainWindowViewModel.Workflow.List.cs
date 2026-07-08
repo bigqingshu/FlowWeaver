@@ -1,11 +1,25 @@
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private bool isLoadingWorkflows;
+
+    [ObservableProperty]
+    private string workflowMessage = "No workflows loaded.";
+
+    [ObservableProperty]
+    private string? workflowErrorMessage;
+
+    public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
+
     private bool CanRefreshWorkflows()
     {
         return CanUseEngineActions && !IsWorkflowBusy;

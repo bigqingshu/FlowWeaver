@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -6,9 +5,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    [ObservableProperty]
-    private bool isLoadingWorkflows;
-
     [ObservableProperty]
     private bool isStartingWorkflow;
 
@@ -31,18 +27,10 @@ public partial class MainWindowViewModel
     private WorkflowListItemViewModel? selectedWorkflow;
 
     [ObservableProperty]
-    private string workflowMessage = "No workflows loaded.";
-
-    [ObservableProperty]
-    private string? workflowErrorMessage;
-
-    [ObservableProperty]
     private string? lastStartedRunId;
 
     [ObservableProperty]
     private string? lastStartedRunStatus;
-
-    public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
     private static bool IsActiveWorkflowStatus(string? status)
     {
