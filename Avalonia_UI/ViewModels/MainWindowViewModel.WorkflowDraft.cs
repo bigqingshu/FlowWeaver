@@ -200,19 +200,4 @@ public partial class MainWindowViewModel
 
     public string ConfigJsonText => T("definition.config_json");
 
-    private void ResetWorkflowDefinitionDraftSelectionInput()
-    {
-        SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
-        SelectedWorkflowDefinitionDraftConnectionId = string.Empty;
-    }
-
-    private void ResetWorkflowDefinitionStructuredEditInput()
-    {
-        lastSuggestedNewDraftNodeInstanceId = string.Empty;
-        lastSuggestedNewDraftConnectionId = string.Empty;
-        ResetNewDraftNodeInput();
-        ResetNewDraftConnectionInput();
-        ResetWorkflowDefinitionDraftSelectionInput();
-    }
-
 }
