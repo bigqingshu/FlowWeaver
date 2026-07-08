@@ -4,6 +4,7 @@ import fnmatch
 import json
 import math
 import re
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -44,6 +45,12 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.workflow_process.table_output_targets import (
+    TableOutputTarget,
+    TableOutputTargetResolutionStatus,
+    default_current_output_target,
+    resolve_configured_output_targets,
+)
 
 GENERATE_TEST_TABLE_NODE_TYPE = "GenerateTestTableNode"
 FILTER_ROWS_NODE_TYPE = "FilterRowsNode"
@@ -83,6 +90,10 @@ BATCH_RENAME_FILES_NODE_TYPE = "BatchRenameFilesNode"
 PLUGIN_NODE_TYPE = "PluginNode"
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
+_NODE_READABLE_TABLE_STORAGE_KINDS = (
+    TableStorageKind.RUNTIME_SQL,
+    TableStorageKind.MEMORY,
+)
 _SKIP_ROW = object()
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -184,8 +195,9 @@ class FilterRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         field = task.config.get("field")
@@ -204,14 +216,13 @@ class FilterRowsNodeHandler:
                     if _row_matches(row.get(field), operator=operator, value=value)
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=filtered_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=filtered_batches(),
+        )
 
 
 class AddColumnsNodeHandler:
@@ -222,8 +233,9 @@ class AddColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         column_name = _string_config(task.config, "column_name")
@@ -248,14 +260,13 @@ class AddColumnsNodeHandler:
                     for row in rows
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=output_batches(),
+        )
 
 
 class DeleteColumnsNodeHandler:
@@ -266,8 +277,9 @@ class DeleteColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         columns = _string_list_config(
@@ -299,14 +311,13 @@ class DeleteColumnsNodeHandler:
                     for row in rows
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=output_batches(),
+        )
 
 
 class CopyColumnNodeHandler:
@@ -317,8 +328,9 @@ class CopyColumnNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         source_field = _node_string_config(
@@ -368,14 +380,13 @@ class CopyColumnNodeHandler:
                     for row in rows
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=output_batches(),
+        )
 
 
 class ReorderColumnsNodeHandler:
@@ -386,8 +397,9 @@ class ReorderColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         order = _string_list_config(
@@ -452,14 +464,13 @@ class ReorderColumnsNodeHandler:
                     for row in rows
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=output_batches(),
+        )
 
 
 class RenameColumnsNodeHandler:
@@ -470,8 +481,9 @@ class RenameColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         proposed_names = _rename_columns_proposed_names(
@@ -508,14 +520,13 @@ class RenameColumnsNodeHandler:
                     )
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=output_batches(),
+        )
 
 
 class FillCellsNodeHandler:
@@ -526,8 +537,9 @@ class FillCellsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         target_field = _node_string_config(
@@ -592,14 +604,13 @@ class FillCellsNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=output_batches(),
+        )
 
 
 class FillRangeNodeHandler:
@@ -610,8 +621,9 @@ class FillRangeNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         start_field = _node_string_config(
@@ -694,14 +706,13 @@ class FillRangeNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=output_batches(),
+        )
 
 
 class FillSequenceNodeHandler:
@@ -712,8 +723,9 @@ class FillSequenceNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         target_field = _node_string_config(
@@ -805,14 +817,13 @@ class FillSequenceNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class ReplaceTextNodeHandler:
@@ -823,8 +834,9 @@ class ReplaceTextNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         target_field = _node_string_config(
@@ -907,14 +919,13 @@ class ReplaceTextNodeHandler:
                         raise _NodeValidationError(str(exc)) from exc
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=output_batches(),
+        )
 
 
 class DeleteRowsNodeHandler:
@@ -925,8 +936,9 @@ class DeleteRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         delete_mode = _enum_config(
@@ -957,14 +969,13 @@ class DeleteRowsNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=output_batches(),
+        )
 
 
 class CopyRowsNodeHandler:
@@ -975,8 +986,9 @@ class CopyRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         total_rows = context.count_rows(input_ref)
@@ -1068,14 +1080,13 @@ class CopyRowsNodeHandler:
                     batch_size=context.row_batch_size,
                 )
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=input_ref.schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=input_ref.schema,
+            row_batches=output_batches(),
+        )
 
 
 class UnpivotRowsNodeHandler:
@@ -1086,8 +1097,9 @@ class UnpivotRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         config = _unpivot_rows_config(task.config, input_ref=input_ref)
@@ -1120,14 +1132,13 @@ class UnpivotRowsNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class DeduplicateRowsNodeHandler:
@@ -1138,8 +1149,9 @@ class DeduplicateRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         key_fields = _deduplicate_key_fields(task.config, input_ref)
@@ -1227,14 +1239,13 @@ class DeduplicateRowsNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class AdvancedFilterRowsNodeHandler:
@@ -1245,8 +1256,9 @@ class AdvancedFilterRowsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         logic = _enum_config(
@@ -1325,14 +1337,13 @@ class AdvancedFilterRowsNodeHandler:
                 if output_rows:
                     yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class ExtractTextNodeHandler:
@@ -1343,8 +1354,9 @@ class ExtractTextNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         source_field = _node_string_config(
@@ -1425,14 +1437,13 @@ class ExtractTextNodeHandler:
                     output_rows.append(dict(row) | {output_field: extracted})
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class LookupMatchedFieldNameNodeHandler:
@@ -1554,8 +1565,9 @@ class MergeColumnsNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         fields = _string_list_config(
@@ -1612,14 +1624,13 @@ class MergeColumnsNodeHandler:
                     for row in rows
                 ]
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class NumericColumnOperationNodeHandler:
@@ -1630,8 +1641,9 @@ class NumericColumnOperationNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         target_field = _node_string_config(
@@ -1730,14 +1742,13 @@ class NumericColumnOperationNodeHandler:
                     row_number += 1
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class AddCurrentDateTimeColumnNodeHandler:
@@ -1748,8 +1759,9 @@ class AddCurrentDateTimeColumnNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         output_mode = _enum_config(
@@ -1807,14 +1819,13 @@ class AddCurrentDateTimeColumnNodeHandler:
                     output_rows.append(dict(row) | {output_field: value})
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class ParseDateTimeNodeHandler:
@@ -1825,8 +1836,9 @@ class ParseDateTimeNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         source_field = _node_string_config(
@@ -1933,14 +1945,13 @@ class ParseDateTimeNodeHandler:
                     output_rows.append(output_row)
                 yield output_rows
 
-        return [
-            context.publish_row_batches(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=output_schema,
-                row_batches=output_batches(),
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=output_schema,
+            row_batches=output_batches(),
+        )
 
 
 class ConditionFlagNodeHandler:
@@ -3539,6 +3550,108 @@ class SqlMappingNodeHandler:
         except ValueError as exc:
             raise _NodeValidationError(str(exc)) from exc
         return [table_ref]
+
+
+def _primary_input_ref(
+    task: NodeTaskModel,
+    context: BuiltinTableNodeContext,
+    *,
+    node_type: str,
+) -> TableRefModel:
+    if task.input_slot_bindings:
+        return context.require_input_slot(
+            task,
+            "in",
+            node_type=node_type,
+            allowed_storage_kinds=_NODE_READABLE_TABLE_STORAGE_KINDS,
+        )
+    return context.require_single_input_ref(
+        task,
+        node_type=node_type,
+    )
+
+
+def _publish_primary_table_output(
+    task: NodeTaskModel,
+    context: BuiltinTableNodeContext,
+    *,
+    node_type: str,
+    schema: Sequence[FieldSchemaModel],
+    row_batches: Iterable[Sequence[dict[str, Any]]],
+) -> list[TableRefModel]:
+    targets = _primary_output_targets(task.config, node_type=node_type)
+    primary_ref = _write_table_output_target(
+        task,
+        context,
+        target=targets[0],
+        schema=schema,
+        row_batches=row_batches,
+    )
+    output_refs = [primary_ref]
+    for target in targets[1:]:
+        output_refs.append(
+            _write_table_output_target(
+                task,
+                context,
+                target=target,
+                schema=primary_ref.schema,
+                row_batches=context.iter_row_batches(primary_ref),
+            )
+        )
+    return output_refs
+
+
+def _primary_output_targets(
+    config: dict[str, Any],
+    *,
+    node_type: str,
+) -> tuple[TableOutputTarget, ...]:
+    resolution = resolve_configured_output_targets(config)
+    if resolution.status == TableOutputTargetResolutionStatus.NO_CONFIG:
+        return (default_current_output_target("out"),)
+    if resolution.status == TableOutputTargetResolutionStatus.ERROR:
+        issue = resolution.issue
+        message = issue.message if issue is not None else "invalid output target"
+        raise _NodeValidationError(f"{node_type} {message}")
+    targets = list(resolution.targets)
+    if _output_save_enabled(config) and not any(
+        target.slot == "out" for target in targets
+    ):
+        targets.insert(0, default_current_output_target("out"))
+    if not targets:
+        return (default_current_output_target("out"),)
+    return tuple(targets)
+
+
+def _write_table_output_target(
+    task: NodeTaskModel,
+    context: BuiltinTableNodeContext,
+    *,
+    target: TableOutputTarget,
+    schema: Sequence[FieldSchemaModel],
+    row_batches: Iterable[Sequence[dict[str, Any]]],
+) -> TableRefModel:
+    if target.is_existing_target:
+        result = context.replace_output_target_batches(
+            task,
+            target=target,
+            schema=schema,
+            row_batches=row_batches,
+        )
+    else:
+        result = context.publish_output_target_batches(
+            task,
+            target=target,
+            output_name=f"{task.node_instance_id}_output",
+            schema=schema,
+            row_batches=row_batches,
+        )
+    return result.table_ref
+
+
+def _output_save_enabled(config: dict[str, Any]) -> bool:
+    output_save = config.get("output_save")
+    return isinstance(output_save, dict) and output_save.get("enabled") is True
 
 
 class BuiltinTableNodeRunner:

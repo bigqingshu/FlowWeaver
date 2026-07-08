@@ -63,6 +63,10 @@ _READABLE_TABLE_STORAGE_KINDS = (
     TableStorageKind.MEMORY,
     TableStorageKind.EXTERNAL_SQL,
 )
+_NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS = (
+    TableStorageKind.RUNTIME_SQL,
+    TableStorageKind.MEMORY,
+)
 
 
 def create_default_node_registry() -> NodeRegistry:
@@ -94,6 +98,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Filter Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_filter_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -102,6 +108,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Add Column",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_add_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -110,6 +118,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Delete Columns",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_delete_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -118,6 +128,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Copy Column",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_copy_column_schema(),
         ),
         NodeDefinitionSpec(
@@ -126,6 +138,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Reorder Columns",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_reorder_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -134,6 +148,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Rename Columns",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_rename_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -142,6 +158,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Fill Cells",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_fill_cells_schema(),
         ),
         NodeDefinitionSpec(
@@ -150,6 +168,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Fill Range",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_fill_range_schema(),
         ),
         NodeDefinitionSpec(
@@ -158,6 +178,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Fill Sequence",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_fill_sequence_schema(),
         ),
         NodeDefinitionSpec(
@@ -166,6 +188,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Replace Text",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_replace_text_schema(),
         ),
         NodeDefinitionSpec(
@@ -174,6 +198,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Delete Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_delete_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -182,6 +208,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Copy Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_copy_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -190,6 +218,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Unpivot Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_unpivot_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -198,6 +228,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Deduplicate Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_deduplicate_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -206,6 +238,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Advanced Filter Rows",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_advanced_filter_rows_schema(),
         ),
         NodeDefinitionSpec(
@@ -214,6 +248,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Extract Text",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_extract_text_schema(),
         ),
         NodeDefinitionSpec(
@@ -252,6 +288,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Merge Columns",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_merge_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -260,6 +298,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Numeric Column Operation",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_numeric_column_operation_schema(),
         ),
         NodeDefinitionSpec(
@@ -268,6 +308,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Add Current DateTime Column",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_add_current_datetime_column_schema(),
         ),
         NodeDefinitionSpec(
@@ -276,6 +318,8 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Parse DateTime",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=_single_transform_input_table_slots(),
+            output_table_slots=_single_transform_output_table_slots(),
             config_schema=_parse_datetime_schema(),
         ),
         NodeDefinitionSpec(
@@ -452,14 +496,42 @@ def _input_table_slot(
     display_name: str,
     description: str,
     required: bool = True,
+    allowed_storage_kinds: tuple[TableStorageKind, ...] = _READABLE_TABLE_STORAGE_KINDS,
 ) -> NodeTableInputSlotSpec:
     return NodeTableInputSlotSpec(
         name=name,
         display_name=display_name,
         description=description,
         required=required,
-        allowed_storage_kinds=_READABLE_TABLE_STORAGE_KINDS,
+        allowed_storage_kinds=allowed_storage_kinds,
         default_source="upstream_current",
+    )
+
+
+def _single_transform_input_table_slots() -> tuple[NodeTableInputSlotSpec, ...]:
+    return (
+        _input_table_slot(
+            "in",
+            display_name="Input table",
+            description="Workflow-local table to transform.",
+            allowed_storage_kinds=_NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
+        ),
+    )
+
+
+def _single_transform_output_table_slots() -> tuple[NodeTableOutputSlotSpec, ...]:
+    return (
+        NodeTableOutputSlotSpec(
+            name="out",
+            display_name="Result table",
+            description="Primary transformed table for the workflow chain.",
+            default_role=TableRole.CURRENT,
+            allow_current=True,
+            allow_new_memory=True,
+            allow_new_runtime_sql=True,
+            allow_existing_memory=True,
+            allow_existing_runtime_sql=True,
+        ),
     )
 
 

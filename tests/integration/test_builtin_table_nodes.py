@@ -59,6 +59,7 @@ from flowweaver.protocols.enums import (
     TableStorageKind,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.table_ref import FieldSchemaModel
 
 
 def migrate(database_path: Path) -> None:
@@ -149,6 +150,32 @@ def publish_runtime_rows(
     provider.insert_rows(staged_ref, rows)
     registry.register_staging(staged_ref)
     return registry.publish(staged_ref.table_ref_id)
+
+
+def make_basic_table_schema() -> list[FieldSchemaModel]:
+    return [
+        FieldSchemaModel(
+            field_id="row_id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        ),
+        FieldSchemaModel(
+            field_id="amount",
+            name="amount",
+            data_type="FLOAT",
+            nullable=False,
+            ordinal=1,
+        ),
+        FieldSchemaModel(
+            field_id="label",
+            name="label",
+            data_type="TEXT",
+            nullable=True,
+            ordinal=2,
+        ),
+    ]
 
 
 def read_single_output_row(*, registry, provider, result):
@@ -733,6 +760,113 @@ def test_filter_rows_node_publishes_filtered_table_ref_without_mutating_input(
         {"row_id": 3, "amount": 3.0, "label": "label_0_3"},
         {"row_id": 4, "amount": 4.0, "label": "label_0_4"},
         {"row_id": 5, "amount": 5.0, "label": "label_0_5"},
+    ]
+
+
+def test_filter_rows_node_reads_memory_slot_and_saves_runtime_copy(
+    tmp_path: Path,
+) -> None:
+    executor, store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    schema = make_basic_table_schema()
+    memory_ref = memory_provider.create_memory_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-memory-source",
+        logical_table_id="memory_source",
+        schema=schema,
+        rows=[
+            {"row_id": 1, "amount": 1.0, "label": "low"},
+            {"row_id": 2, "amount": 3.0, "label": "keep"},
+            {"row_id": 3, "amount": 4.0, "label": "keep-too"},
+        ],
+    )
+    store.register_table_ref(memory_ref)
+    filter_task = make_task(
+        node_type=FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-filter-memory-slot",
+        node_instance_id="filter_memory_slot",
+        input_slot_bindings={"in": memory_ref.table_ref_id},
+        config={
+            "field": "amount",
+            "operator": "GT",
+            "value": 2.0,
+            "output_save": {
+                "enabled": True,
+                "target_type": "run_table",
+                "table_name": "filtered_saved",
+            },
+        },
+    )
+
+    filter_result = executor.execute(filter_task)
+
+    assert filter_result.status == NodeResultStatus.SUCCEEDED
+    assert len(filter_result.output_refs) == 2
+    current_ref = registry.get(filter_result.output_refs[0])
+    saved_ref = registry.get(filter_result.output_refs[1])
+    assert current_ref.role == TableRole.CURRENT
+    assert current_ref.logical_table_id == "filter_memory_slot_output"
+    assert saved_ref.role == TableRole.AUXILIARY
+    assert saved_ref.storage_kind == TableStorageKind.RUNTIME_SQL
+    assert saved_ref.logical_table_id == "filtered_saved"
+    expected_rows = [
+        {"row_id": 2, "amount": 3.0, "label": "keep"},
+        {"row_id": 3, "amount": 4.0, "label": "keep-too"},
+    ]
+    assert provider.read_rows(current_ref, offset=0, limit=10) == expected_rows
+    assert provider.read_rows(saved_ref, offset=0, limit=10) == expected_rows
+
+
+def test_filter_rows_node_can_overwrite_existing_memory_output_target(
+    tmp_path: Path,
+) -> None:
+    executor, store, _registry, _provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    schema = make_basic_table_schema()
+    source_ref = memory_provider.create_memory_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-memory-source",
+        logical_table_id="memory_source",
+        schema=schema,
+        rows=[
+            {"row_id": 1, "amount": 1.0, "label": "drop"},
+            {"row_id": 2, "amount": 3.0, "label": "keep"},
+        ],
+    )
+    target_ref = memory_provider.create_memory_table(
+        workflow_run_id="run-1",
+        node_run_id="node-run-memory-target",
+        logical_table_id="filtered_existing",
+        schema=schema,
+        rows=[{"row_id": 99, "amount": 99.0, "label": "old"}],
+    )
+    store.register_table_ref(source_ref)
+    store.register_table_ref(target_ref)
+    filter_task = make_task(
+        node_type=FILTER_ROWS_NODE_TYPE,
+        node_run_id="node-run-filter-existing-memory",
+        node_instance_id="filter_existing_memory",
+        input_slot_bindings={"in": source_ref.table_ref_id},
+        config={
+            "field": "amount",
+            "operator": "GT",
+            "value": 2.0,
+            "output_target": {
+                "slot": "out",
+                "target_kind": "existing_memory",
+                "table_name": "filtered_existing",
+            },
+        },
+    )
+
+    filter_result = executor.execute(filter_task)
+
+    assert filter_result.status == NodeResultStatus.SUCCEEDED
+    assert filter_result.output_refs == [target_ref.table_ref_id]
+    assert memory_provider.read_rows(target_ref, offset=0, limit=10) == [
+        {"row_id": 2, "amount": 3.0, "label": "keep"}
     ]
 
 
