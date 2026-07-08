@@ -36,24 +36,6 @@ public partial class MainWindowViewModel
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
 
     [ObservableProperty]
-    private NodeDefinitionListItemViewModel? selectedNewDraftNodeDefinition;
-
-    [ObservableProperty]
-    private string newDraftNodeInstanceId = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftNodeType = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftNodeVersion = "1.0";
-
-    [ObservableProperty]
-    private string newDraftNodeDisplayName = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftNodeConfigJson = "{}";
-
-    [ObservableProperty]
     private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
 
     [ObservableProperty]
@@ -105,8 +87,6 @@ public partial class MainWindowViewModel
     private bool hasWorkflowDefinitionRevisionConflict;
 
     private string originalWorkflowDefinitionJson = string.Empty;
-    private string lastSuggestedNewDraftNodeInstanceId = string.Empty;
-    private string lastSuggestedNewDraftNodeConfigJson = "{}";
     private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
