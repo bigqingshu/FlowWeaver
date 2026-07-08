@@ -33,9 +33,6 @@ public partial class MainWindowViewModel
     private string? workflowDefinitionValidationErrorMessage;
 
     [ObservableProperty]
-    private bool isWorkflowDefinitionDraftDirty;
-
-    [ObservableProperty]
     private bool hasWorkflowDefinitionRevisionConflict;
 
 }
