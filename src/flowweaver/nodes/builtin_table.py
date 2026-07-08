@@ -10,13 +10,8 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from flowweaver.common.time import utc_now
-from flowweaver.engine.memory_table_provider import MemoryTableProvider
-from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
-from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.nodes.builtin_sql import (
     SQL_MAPPING_NODE_TYPE,
-    SqlMappingNodeRunner,
     SqlMappingTaskConfig,
 )
 from flowweaver.nodes.builtin_table_node_types import (
@@ -57,6 +52,9 @@ from flowweaver.nodes.builtin_table_node_types import (
     WRITE_BACK_TABLE_NODE_TYPE,
     WRITE_SELECTED_COLUMNS_NODE_TYPE,
 )
+from flowweaver.nodes.builtin_table_runner import (
+    BuiltinTableNodeRunner as BuiltinTableNodeRunner,
+)
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeHandlerRegistry,
@@ -75,13 +73,11 @@ from flowweaver.nodes.value_sources import (
     parse_value_source,
 )
 from flowweaver.protocols.enums import (
-    ErrorOrigin,
     LifecycleStatus,
-    NodeResultStatus,
     TableRole,
     TableStorageKind,
 )
-from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
     TableOutputTarget,
@@ -95,21 +91,6 @@ DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
 _NODE_READABLE_TABLE_STORAGE_KINDS = (
     TableStorageKind.RUNTIME_SQL,
     TableStorageKind.MEMORY,
-)
-_STATUS_OUTPUT_NODE_TYPES = frozenset(
-    {
-        CONDITION_FLAG_NODE_TYPE,
-        JUMP_ANCHOR_NODE_TYPE,
-        UNCONDITIONAL_JUMP_NODE_TYPE,
-        CONDITIONAL_JUMP_NODE_TYPE,
-        LOOP_START_NODE_TYPE,
-        LOOP_JUDGE_NODE_TYPE,
-        SUB_WORKFLOW_NODE_TYPE,
-        WRITE_SELECTED_COLUMNS_NODE_TYPE,
-        WRITE_BACK_TABLE_NODE_TYPE,
-        BATCH_RENAME_FILES_NODE_TYPE,
-        PLUGIN_NODE_TYPE,
-    }
 )
 _SKIP_ROW = object()
 _NodeValidationError = BuiltinTableNodeValidationError
@@ -3669,71 +3650,6 @@ def _output_save_enabled(config: dict[str, Any]) -> bool:
     return isinstance(output_save, dict) and output_save.get("enabled") is True
 
 
-class BuiltinTableNodeRunner:
-    def __init__(
-        self,
-        *,
-        store: RuntimeStore,
-        registry: RuntimeDataRegistry,
-        table_provider: SQLiteRuntimeTableProvider,
-        memory_provider: MemoryTableProvider | None = None,
-    ) -> None:
-        memory_provider = memory_provider or MemoryTableProvider()
-        self._context = BuiltinTableNodeContext(
-            store=store,
-            registry=registry,
-            table_provider=table_provider,
-            memory_provider=memory_provider,
-            sql_mapping_runner=SqlMappingNodeRunner(store=store),
-        )
-        self._handler_registry = create_builtin_table_node_handler_registry()
-
-    def execute(
-        self,
-        task: NodeTaskModel,
-        *,
-        executor_id: str,
-    ) -> NodeTaskResultModel:
-        started_at = utc_now()
-        try:
-            output_refs = self._execute_node(task)
-        except _NodeValidationError as exc:
-            return NodeTaskResultModel(
-                task_id=task.task_id,
-                node_run_id=task.node_run_id,
-                attempt=task.attempt,
-                executor_id=executor_id,
-                process_generation=task.process_generation,
-                status=NodeResultStatus.FAILED,
-                error={
-                    "error_code": "VALIDATION_ERROR",
-                    "message": str(exc),
-                    "origin": ErrorOrigin.NODE.value,
-                },
-                started_at=started_at,
-                finished_at=utc_now(),
-            )
-        return NodeTaskResultModel(
-            task_id=task.task_id,
-            node_run_id=task.node_run_id,
-            attempt=task.attempt,
-            executor_id=executor_id,
-            process_generation=task.process_generation,
-            status=NodeResultStatus.SUCCEEDED,
-            output_refs=[table_ref.table_ref_id for table_ref in output_refs],
-            output_slot_bindings=_output_slot_bindings_for_result(task, output_refs),
-            summary=_table_output_summary(output_refs),
-            started_at=started_at,
-            finished_at=utc_now(),
-        )
-
-    def _execute_node(self, task: NodeTaskModel) -> list[TableRefModel]:
-        handler = self._handler_registry.get(task.node_type)
-        if handler is not None:
-            return handler.execute(task, self._context)
-        raise _NodeValidationError(f"Unsupported builtin node type: {task.node_type}")
-
-
 def _parse_columns(value: Any) -> list[FieldSchemaModel]:
     if value is None:
         value = ["row_id", "amount"]
@@ -3768,68 +3684,6 @@ def _parse_columns(value: Any) -> list[FieldSchemaModel]:
             )
         )
     return fields
-
-
-def _table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
-    return {
-        "output_ref_count": len(output_refs),
-        "outputs": [
-            {
-                "table_ref_id": table_ref.table_ref_id,
-                "logical_table_id": table_ref.logical_table_id,
-                "role": table_ref.role.value,
-                "storage_kind": table_ref.storage_kind.value,
-            }
-            for table_ref in output_refs
-        ],
-    }
-
-
-def _output_slot_bindings_for_result(
-    task: NodeTaskModel,
-    output_refs: list[TableRefModel],
-) -> dict[str, str]:
-    if not output_refs:
-        return {}
-    output_ref_ids = [table_ref.table_ref_id for table_ref in output_refs]
-    if task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
-        return _sequence_output_slot_bindings(("out", "memory"), output_ref_ids)
-    if task.node_type == SAVE_RUN_TABLE_NODE_TYPE:
-        return _sequence_output_slot_bindings(("out", "transit"), output_ref_ids)
-    if task.node_type in _STATUS_OUTPUT_NODE_TYPES:
-        return _sequence_output_slot_bindings(("status",), output_ref_ids)
-    target_bindings = _primary_output_target_slot_bindings(task, output_refs)
-    if target_bindings:
-        return target_bindings
-    if len(output_ref_ids) == 1:
-        return {"out": output_ref_ids[0]}
-    return {}
-
-
-def _primary_output_target_slot_bindings(
-    task: NodeTaskModel,
-    output_refs: list[TableRefModel],
-) -> dict[str, str]:
-    try:
-        targets = _primary_output_targets(task.config, node_type=task.node_type)
-    except _NodeValidationError:
-        return {}
-    if len(targets) != len(output_refs):
-        return {}
-    return {
-        target.slot: table_ref.table_ref_id
-        for target, table_ref in zip(targets, output_refs, strict=True)
-    }
-
-
-def _sequence_output_slot_bindings(
-    slots: Sequence[str],
-    output_ref_ids: Sequence[str],
-) -> dict[str, str]:
-    return {
-        slot: output_ref_id
-        for slot, output_ref_id in zip(slots, output_ref_ids, strict=False)
-    }
 
 
 def _simple_schema(fields: list[tuple[str, str, bool]]) -> list[FieldSchemaModel]:
