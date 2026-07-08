@@ -2487,12 +2487,11 @@ class SaveMemoryTableNodeHandler:
             raise _NodeValidationError(
                 f"Unsupported SaveMemoryTableNode mode: {mode}"
             )
-        rows = context.read_all_rows(input_ref)
-        memory_ref = context.create_memory_table(
+        memory_ref = context.create_memory_table_from_batches(
             task,
             logical_table_id=table_name,
             schema=input_ref.schema,
-            rows=rows,
+            row_batches=context.iter_row_batches(input_ref),
             role=TableRole.AUXILIARY,
         )
         return [input_ref, memory_ref]
