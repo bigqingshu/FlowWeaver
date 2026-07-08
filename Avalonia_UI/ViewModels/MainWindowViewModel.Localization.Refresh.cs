@@ -15,16 +15,7 @@ public partial class MainWindowViewModel
         NotifyRecentEventsLocalizedTextChanged();
         NotifyNodeCatalogLocalizedTextChanged();
         NotifyAdvancedDraftJsonLocalizedTextChanged();
-        OnPropertyChanged(nameof(WorkflowRunFilterText));
-        OnPropertyChanged(nameof(RunIdWatermarkText));
-        OnPropertyChanged(nameof(NodeRunFilterText));
-        OnPropertyChanged(nameof(NodeRunIdWatermarkText));
-        OnPropertyChanged(nameof(EventTypeFilterText));
-        OnPropertyChanged(nameof(AfterFilterText));
-        OnPropertyChanged(nameof(SequenceWatermarkText));
-        OnPropertyChanged(nameof(RuntimeText));
-        OnPropertyChanged(nameof(LimitText));
-        OnPropertyChanged(nameof(RuntimeEventsSectionText));
+        NotifyRuntimeEventLogLocalizedTextChanged();
         OnPropertyChanged(nameof(TableRefsSectionText));
         OnPropertyChanged(nameof(ShareText));
         OnPropertyChanged(nameof(ShareNameWatermarkText));
