@@ -44,6 +44,12 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private string runtimeOptionsMaskPolicyDraft = RuntimeOptionsDefaults.MaskPolicy;
 
+    [ObservableProperty]
+    private int runtimeOptionsNodeOverrideCount;
+
+    [ObservableProperty]
+    private string? runtimeOptionsEditorErrorMessage;
+
     partial void OnRuntimeOptionsProfileDraftChanged(string value)
     {
         NotifyRuntimeOptionsSummaryChanged();
