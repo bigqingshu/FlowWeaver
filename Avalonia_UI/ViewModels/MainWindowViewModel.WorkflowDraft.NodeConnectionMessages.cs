@@ -74,29 +74,4 @@ public partial class MainWindowViewModel
             addedText);
     }
 
-    private string? FormatMovedRewiredConnectionsMessage(
-        IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections,
-        IReadOnlyList<WorkflowDefinitionDraftConnection> addedConnections)
-    {
-        if (removedConnections.Count == 0 && addedConnections.Count == 0)
-        {
-            return null;
-        }
-
-        var removedText = removedConnections.Count == 0
-            ? "-"
-            : string.Join(
-                Environment.NewLine,
-                removedConnections.Select(FormatRelatedConnectionSummary));
-        var addedText = addedConnections.Count == 0
-            ? "-"
-            : string.Join(
-                Environment.NewLine,
-                addedConnections.Select(FormatRelatedConnectionSummary));
-
-        return F(
-            "definition.node_move_rewired_connections",
-            removedText,
-            addedText);
-    }
 }
