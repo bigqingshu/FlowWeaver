@@ -51,5 +51,4 @@ public partial class MainWindowViewModel
             }
         }
     }
-
 }
