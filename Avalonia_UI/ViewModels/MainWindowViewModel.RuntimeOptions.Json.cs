@@ -17,15 +17,6 @@ public partial class MainWindowViewModel
 
     private bool isSynchronizingRuntimeOptionsJsonDraft;
 
-    public string RuntimeOptionsJsonSectionText =>
-        T("definition.runtime_options_json_section");
-
-    public string RuntimeOptionsJsonRegenerateText =>
-        T("definition.runtime_options_json_regenerate");
-
-    public string RuntimeOptionsJsonWatermarkText =>
-        T("definition.runtime_options_json_watermark");
-
     [RelayCommand(CanExecute = nameof(CanApplyRuntimeOptionsDraft))]
     private void RegenerateRuntimeOptionsJsonDraft()
     {
