@@ -26,6 +26,8 @@ from flowweaver.protocols.enums import WorkflowRunStatus
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow.validation import validate_workflow_definition
 
+SUPPORTED_WORKFLOW_RUN_TRIGGER_SOURCES = {"manual", "background_manual"}
+
 router = APIRouter(
     prefix="/api/v1/workflows",
     tags=["workflows"],
@@ -108,6 +110,7 @@ def start_workflow_run(
             status_code=404,
         )
     run_mode = payload.run_mode if payload is not None else "full"
+    trigger_source = payload.trigger_source if payload is not None else "manual"
     target_node_instance_id = (
         payload.target_node_instance_id if payload is not None else None
     )
@@ -118,6 +121,14 @@ def start_workflow_run(
             message="Workflow run mode is not supported",
             status_code=422,
             details={"run_mode": run_mode},
+        )
+    if trigger_source not in SUPPORTED_WORKFLOW_RUN_TRIGGER_SOURCES:
+        return error_response(
+            request,
+            error_code="WORKFLOW_RUN_TRIGGER_SOURCE_UNSUPPORTED",
+            message="Workflow run trigger_source is not supported",
+            status_code=422,
+            details={"trigger_source": trigger_source},
         )
     if run_mode == "full" and target_node_instance_id is not None:
         return error_response(
@@ -151,6 +162,7 @@ def start_workflow_run(
         revision_id=workflow.revision_id,
         status=WorkflowRunStatus.PENDING,
         run_mode=run_mode,
+        trigger_source=trigger_source,
         target_node_instance_id=target_node_instance_id,
     )
     try:

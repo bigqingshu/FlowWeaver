@@ -102,6 +102,7 @@ class WorkflowRun:
     fencing_token: str | None
     input_snapshot_id: str | None
     run_mode: str
+    trigger_source: str
     target_node_instance_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
@@ -549,6 +550,7 @@ class RuntimeStore:
         status: WorkflowRunStatus = WorkflowRunStatus.PENDING,
         started_at: datetime | None = None,
         run_mode: str = "full",
+        trigger_source: str = "manual",
         target_node_instance_id: str | None = None,
     ) -> WorkflowRun:
         if workflow_version is not None:
@@ -581,6 +583,7 @@ class RuntimeStore:
                 fencing_token=None,
                 input_snapshot_id=None,
                 run_mode=run_mode,
+                trigger_source=trigger_source,
                 target_node_instance_id=target_node_instance_id,
                 started_at=_optional_datetime_to_text(started_at),
                 finished_at=None,
@@ -617,8 +620,15 @@ class RuntimeStore:
         *,
         workflow_id: str | None = None,
         statuses: Iterable[WorkflowRunStatus | str] | None = None,
+        run_mode: str | None = None,
+        trigger_source: str | None = None,
+        offset: int = 0,
+        limit: int | None = None,
     ) -> list[WorkflowRun]:
-        statement = select(WorkflowRunRecord).order_by(WorkflowRunRecord.started_at)
+        statement = select(WorkflowRunRecord).order_by(
+            WorkflowRunRecord.started_at.desc(),
+            WorkflowRunRecord.workflow_run_id,
+        )
         if workflow_id is not None:
             statement = statement.where(WorkflowRunRecord.workflow_id == workflow_id)
         if statuses is not None:
@@ -627,6 +637,16 @@ class RuntimeStore:
                 for status in statuses
             ]
             statement = statement.where(WorkflowRunRecord.status.in_(status_values))
+        if run_mode is not None:
+            statement = statement.where(WorkflowRunRecord.run_mode == run_mode)
+        if trigger_source is not None:
+            statement = statement.where(
+                WorkflowRunRecord.trigger_source == trigger_source
+            )
+        if offset > 0:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
 
         with self._session_factory() as session:
             return [
@@ -2334,6 +2354,7 @@ def _workflow_run_from_record(record: WorkflowRunRecord) -> WorkflowRun:
         fencing_token=record.fencing_token,
         input_snapshot_id=record.input_snapshot_id,
         run_mode=record.run_mode,
+        trigger_source=record.trigger_source,
         target_node_instance_id=record.target_node_instance_id,
         started_at=_optional_datetime_from_text(record.started_at),
         finished_at=_optional_datetime_from_text(record.finished_at),

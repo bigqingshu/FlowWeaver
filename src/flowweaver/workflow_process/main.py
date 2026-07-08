@@ -375,6 +375,7 @@ def _run_workflow_process_loop(
             payload={
                 "process_id": process_id,
                 "run_mode": run.run_mode,
+                "trigger_source": run.trigger_source,
                 "target_node_instance_id": run.target_node_instance_id,
             },
         )

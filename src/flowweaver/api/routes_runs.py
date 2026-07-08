@@ -28,10 +28,37 @@ def list_runs(
     store: Annotated[RuntimeStore, Depends(get_runtime_store)],
     workflow_id: str | None = None,
     status: Annotated[list[str] | None, Query()] = None,
+    run_mode: str | None = None,
+    trigger_source: str | None = None,
+    offset: int = 0,
+    limit: int = 100,
 ):
+    if offset < 0:
+        return error_response(
+            request,
+            error_code="INVALID_PAGINATION",
+            message="offset must be non-negative",
+            status_code=422,
+            details={"offset": offset},
+        )
+    if limit < 1 or limit > 500:
+        return error_response(
+            request,
+            error_code="INVALID_PAGINATION",
+            message="limit must be between 1 and 500",
+            status_code=422,
+            details={"limit": limit},
+        )
     return ok_response(
         request,
-        store.list_workflow_runs(workflow_id=workflow_id, statuses=status),
+        store.list_workflow_runs(
+            workflow_id=workflow_id,
+            statuses=status,
+            run_mode=run_mode,
+            trigger_source=trigger_source,
+            offset=offset,
+            limit=limit,
+        ),
     )
 
 

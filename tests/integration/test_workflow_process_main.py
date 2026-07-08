@@ -1178,6 +1178,7 @@ def test_workflow_process_preview_to_node_runs_only_upstream_closure(
     }
     assert executor.executed_nodes == ["source", "transform"]
     assert started_event.payload["run_mode"] == "preview_to_node"
+    assert started_event.payload["trigger_source"] == "manual"
     assert started_event.payload["target_node_instance_id"] == "transform"
 
 

@@ -72,6 +72,12 @@ class WorkflowRunRecord(Base):
     fencing_token: Mapped[str | None] = mapped_column(Text)
     input_snapshot_id: Mapped[str | None] = mapped_column(Text)
     run_mode: Mapped[str] = mapped_column(Text, nullable=False, default="full")
+    trigger_source: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="manual",
+        index=True,
+    )
     target_node_instance_id: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str | None] = mapped_column(Text)
     finished_at: Mapped[str | None] = mapped_column(Text)

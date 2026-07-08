@@ -101,6 +101,7 @@ def _to_jsonable(value: Any) -> Any:
             "fencing_token": value.fencing_token,
             "input_snapshot_id": value.input_snapshot_id,
             "run_mode": value.run_mode,
+            "trigger_source": value.trigger_source,
             "target_node_instance_id": value.target_node_instance_id,
             "started_at": value.started_at.isoformat() if value.started_at else None,
             "finished_at": value.finished_at.isoformat() if value.finished_at else None,

@@ -183,6 +183,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
     assert "input_slot_bindings_json" in column_names(database_path, "node_tasks")
+    assert "trigger_source" in column_names(database_path, "workflow_runs")
 
 
 def test_runtime_store_round_trips_node_task_input_slot_bindings(
@@ -482,6 +483,7 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
     assert store.get_workflow_run(created.workflow_run_id) is not None
     assert created.revision_id == definition.revision_id
     assert created.definition_hash == definition.definition_hash
+    assert created.trigger_source == "manual"
     assert updated is not None
     assert updated.status == WorkflowRunStatus.SUCCEEDED.value
     assert updated.state_version == 2
@@ -496,6 +498,48 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
         ].workflow_run_id
         == "run-1"
     )
+
+
+def test_runtime_store_filters_workflow_runs_by_mode_source_and_page(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Run source filter workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-1",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        run_mode="full",
+        trigger_source="manual",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-2",
+        run_mode="full",
+        trigger_source="background_manual",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-3",
+        run_mode="preview_to_node",
+        trigger_source="manual",
+        target_node_instance_id="node-1",
+    )
+
+    background_runs = store.list_workflow_runs(
+        trigger_source="background_manual",
+    )
+    preview_runs = store.list_workflow_runs(run_mode="preview_to_node")
+    paged_runs = store.list_workflow_runs(offset=1, limit=1)
+
+    assert [run.workflow_run_id for run in background_runs] == ["run-2"]
+    assert [run.workflow_run_id for run in preview_runs] == ["run-3"]
+    assert [run.workflow_run_id for run in paged_runs] == ["run-2"]
 
 
 def test_runtime_store_persists_workflow_run_completion_reason(

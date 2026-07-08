@@ -37,6 +37,7 @@ class WorkflowUpdateRequest(StrictModel):
 
 class WorkflowRunStartRequest(StrictModel):
     run_mode: str = "full"
+    trigger_source: str = "manual"
     target_node_instance_id: str | None = None
 
 
@@ -136,6 +137,7 @@ class WorkflowRunData(StrictModel):
     fencing_token: str | None
     input_snapshot_id: str | None
     run_mode: str
+    trigger_source: str
     target_node_instance_id: str | None
     started_at: datetime | None
     finished_at: datetime | None

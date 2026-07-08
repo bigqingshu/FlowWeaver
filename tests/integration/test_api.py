@@ -1362,7 +1362,62 @@ def test_run_query_api(tmp_path: Path) -> None:
     assert loaded["workflow_id"] == "workflow-1"
     assert loaded["revision_id"] == workflow.revision_id
     assert loaded["completion_reason"] is None
+    assert loaded["trigger_source"] == "manual"
     assert filtered[0]["status"] == "PENDING"
+
+
+def test_run_query_api_filters_background_runs_and_pages(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Background runs",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-1",
+        trigger_source="manual",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-2",
+        trigger_source="background_manual",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-3",
+        run_mode="preview_to_node",
+        target_node_instance_id="source",
+    )
+
+    background = response_data(
+        client.get(
+            "/api/v1/runs",
+            params={"trigger_source": "background_manual"},
+            headers=auth_headers(),
+        )
+    )
+    preview = response_data(
+        client.get(
+            "/api/v1/runs",
+            params={"run_mode": "preview_to_node"},
+            headers=auth_headers(),
+        )
+    )
+    paged = response_data(
+        client.get(
+            "/api/v1/runs",
+            params={"offset": 1, "limit": 1},
+            headers=auth_headers(),
+        )
+    )
+
+    assert [item["workflow_run_id"] for item in background] == ["run-2"]
+    assert background[0]["trigger_source"] == "background_manual"
+    assert [item["workflow_run_id"] for item in preview] == ["run-3"]
+    assert [item["workflow_run_id"] for item in paged] == ["run-2"]
 
 
 def test_run_query_api_includes_completion_reason(tmp_path: Path) -> None:
@@ -1688,10 +1743,46 @@ def test_start_workflow_run_accepts_preview_to_node_payload(tmp_path: Path) -> N
 
     loaded = store.get_workflow_run(run["workflow_run_id"])
     assert run["run_mode"] == "preview_to_node"
+    assert run["trigger_source"] == "manual"
     assert run["target_node_instance_id"] == "transform"
     assert loaded is not None
     assert loaded.run_mode == "preview_to_node"
+    assert loaded.trigger_source == "manual"
     assert loaded.target_node_instance_id == "transform"
+
+
+def test_start_workflow_run_accepts_background_trigger_source(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={
+                "name": "Background run",
+                "definition": valid_definition(),
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    run = response_data(
+        client.post(
+            f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+            json={
+                "run_mode": "full",
+                "trigger_source": "background_manual",
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    loaded = store.get_workflow_run(run["workflow_run_id"])
+    assert run["run_mode"] == "full"
+    assert run["trigger_source"] == "background_manual"
+    assert loaded is not None
+    assert loaded.run_mode == "full"
+    assert loaded.trigger_source == "background_manual"
 
 
 def test_start_workflow_run_rejects_invalid_preview_payload(tmp_path: Path) -> None:
@@ -1722,6 +1813,11 @@ def test_start_workflow_run_rejects_invalid_preview_payload(tmp_path: Path) -> N
         json={"run_mode": "unknown"},
         headers=auth_headers(),
     )
+    unsupported_trigger_source = client.post(
+        f"/api/v1/workflows/{workflow['workflow_id']}/runs",
+        json={"trigger_source": "background_timer"},
+        headers=auth_headers(),
+    )
     missing_target = client.post(
         f"/api/v1/workflows/{workflow['workflow_id']}/runs",
         json={"run_mode": "preview_to_node"},
@@ -1738,6 +1834,11 @@ def test_start_workflow_run_rejects_invalid_preview_payload(tmp_path: Path) -> N
 
     assert unsupported.status_code == 422
     assert unsupported.json()["error"]["error_code"] == "WORKFLOW_RUN_MODE_UNSUPPORTED"
+    assert unsupported_trigger_source.status_code == 422
+    assert (
+        unsupported_trigger_source.json()["error"]["error_code"]
+        == "WORKFLOW_RUN_TRIGGER_SOURCE_UNSUPPORTED"
+    )
     assert missing_target.status_code == 422
     assert missing_target.json()["error"]["error_code"] == "TARGET_NODE_REQUIRED"
     assert unknown_target.status_code == 404
