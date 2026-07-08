@@ -13,11 +13,11 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
+from flowweaver.api.run_review import build_run_review_payload
 from flowweaver.api.workflow_run_start import start_workflow_run_for_request
 from flowweaver.engine.runtime_store import (
     TERMINAL_WORKFLOW_STATUS_VALUES,
     RuntimeStore,
-    WorkflowRun,
 )
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
@@ -118,7 +118,7 @@ def get_run_review(
     table_refs = store.list_table_refs_by_workflow_run(workflow_run_id)
     return ok_response(
         request,
-        _run_review_payload(
+        build_run_review_payload(
             run=run,
             node_runs=store.list_node_runs(workflow_run_id),
             table_refs=table_refs,
@@ -380,37 +380,6 @@ def _run_not_found(request: Request):
     )
 
 
-def _run_review_payload(
-    *,
-    run: WorkflowRun,
-    node_runs: list,
-    table_refs: list[TableRefModel],
-) -> dict[str, object]:
-    readable_refs = [
-        table_ref
-        for table_ref in table_refs
-        if _table_ref_is_readable(table_ref)
-    ]
-    return {
-        "run": run,
-        "node_runs": node_runs,
-        "table_refs": table_refs,
-        "table_ref_summary": {
-            "total": len(table_refs),
-            "readable": len(readable_refs),
-            "by_storage_kind": _table_ref_counts_by_storage_kind(table_refs),
-            "by_lifecycle_status": _table_ref_counts_by_lifecycle_status(table_refs),
-        },
-        "data_preview": {
-            "uses_paged_rows": True,
-            "row_data_embedded": False,
-            "readable_table_ref_ids": [
-                table_ref.table_ref_id for table_ref in readable_refs
-            ],
-        },
-    }
-
-
 def _cleanup_table_refs_for_run(
     *,
     workflow_run_id: str,
@@ -483,36 +452,6 @@ def _table_cleanup_skip_reason(table_ref: TableRefModel) -> str | None:
     }:
         return "already_unavailable"
     return None
-
-
-def _table_ref_is_readable(table_ref: TableRefModel) -> bool:
-    if "READ" not in table_ref.capabilities:
-        return False
-    return table_ref.lifecycle_status not in {
-        LifecycleStatus.RELEASED,
-        LifecycleStatus.RETIRED,
-        LifecycleStatus.ORPHANED,
-    }
-
-
-def _table_ref_counts_by_storage_kind(
-    table_refs: list[TableRefModel],
-) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for table_ref in table_refs:
-        key = table_ref.storage_kind.value
-        counts[key] = counts.get(key, 0) + 1
-    return counts
-
-
-def _table_ref_counts_by_lifecycle_status(
-    table_refs: list[TableRefModel],
-) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for table_ref in table_refs:
-        key = table_ref.lifecycle_status.value
-        counts[key] = counts.get(key, 0) + 1
-    return counts
 
 
 def _reject_missing_run(
