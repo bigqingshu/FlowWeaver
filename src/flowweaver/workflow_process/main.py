@@ -890,13 +890,14 @@ def dispatch_ready_node_candidate(
     close_executor_on_reject: bool = True,
 ) -> DispatchedNodeTask | None:
     if candidate.input_resolution_issue is not None:
-        return _fail_ready_node_input_resolution(
+        _fail_ready_node_input_resolution(
             workflow_run_id=workflow_run_id,
             workflow_process_id=workflow_process_id,
             process_generation=process_generation,
             candidate=candidate,
             task_manager=task_manager,
         )
+        return None
     task = task_manager.submit_ready_node(
         workflow_run_id=workflow_run_id,
         workflow_process_id=workflow_process_id,
