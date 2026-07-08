@@ -52,6 +52,9 @@ from flowweaver.engine.runtime_models import (
 from flowweaver.engine.runtime_node_run_store import (
     RuntimeNodeRunStoreMixin,
 )
+from flowweaver.engine.runtime_node_task_store import (
+    RuntimeNodeTaskStoreMixin,
+)
 from flowweaver.engine.runtime_read_lease_store import (
     RuntimeReadLeaseStoreMixin,
 )
@@ -91,6 +94,7 @@ class RuntimeStore(
     RuntimeWorkflowRunStoreMixin,
     RuntimeWorkflowProcessStoreMixin,
     RuntimeNodeRunStoreMixin,
+    RuntimeNodeTaskStoreMixin,
     RuntimeLoopStoreMixin,
     RuntimeSharedPublicationStoreMixin,
     RuntimeSharedTableStoreMixin,
