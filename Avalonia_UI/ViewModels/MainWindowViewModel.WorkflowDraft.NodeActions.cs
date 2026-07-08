@@ -84,113 +84,6 @@ public partial class MainWindowViewModel
             targetIndex < WorkflowDefinitionDraftNodes.Count;
     }
 
-    private string? GetWorkflowDefinitionNodeMutationDisabledReason()
-    {
-        if (IsWorkflowDefinitionDraftBusy)
-        {
-            return T("action.disabled.busy");
-        }
-
-        if (!CanUseEngineActions)
-        {
-            return T("action.disabled.engine_not_connected");
-        }
-
-        if (WorkflowDefinitionDetail is null || !HasWorkflowDefinitionDraft)
-        {
-            return T("action.disabled.no_workflow_definition");
-        }
-
-        if (HasWorkflowDefinitionRevisionConflict)
-        {
-            return T("action.disabled.revision_conflict");
-        }
-
-        return null;
-    }
-
-    private string? GetSelectedWorkflowDefinitionNodeMutationDisabledReason()
-    {
-        var commonReason = GetWorkflowDefinitionNodeMutationDisabledReason();
-        if (commonReason is not null)
-        {
-            return commonReason;
-        }
-
-        if (SelectedWorkflowDefinitionNode is null)
-        {
-            return T("action.disabled.no_workflow_node_selected");
-        }
-
-        if (FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is null)
-        {
-            return T("action.disabled.workflow_node_missing");
-        }
-
-        return null;
-    }
-
-    private string? GetSelectedWorkflowDefinitionDraftNodesMutationDisabledReason()
-    {
-        var commonReason = GetWorkflowDefinitionNodeMutationDisabledReason();
-        if (commonReason is not null)
-        {
-            return commonReason;
-        }
-
-        var selectedNodes = WorkflowDefinitionDraftNodes
-            .Where(node => node.IsBatchSelected)
-            .ToArray();
-        if (selectedNodes.Length == 0)
-        {
-            return T("action.disabled.no_workflow_nodes_checked");
-        }
-
-        return selectedNodes.Any(node => FindDraftNode(node.NodeInstanceId) is null)
-            ? T("action.disabled.workflow_node_missing")
-            : null;
-    }
-
-    private string? GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(int offset)
-    {
-        var selectedReason = GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
-        if (selectedReason is not null)
-        {
-            return selectedReason;
-        }
-
-        var index = WorkflowDefinitionDraftNodes.IndexOf(SelectedWorkflowDefinitionNode!);
-        var targetIndex = index + offset;
-        if (index < 0)
-        {
-            return T("action.disabled.workflow_node_missing");
-        }
-
-        if (targetIndex < 0)
-        {
-            return T("action.disabled.workflow_node_at_top");
-        }
-
-        return targetIndex >= WorkflowDefinitionDraftNodes.Count
-            ? T("action.disabled.workflow_node_at_bottom")
-            : null;
-    }
-
-    public string? CopyWorkflowDefinitionDraftNodeDisabledReasonText =>
-        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
-
-    public string? DeleteWorkflowDefinitionDraftNodeDisabledReasonText =>
-        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
-
-    public string? DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText =>
-        GetSelectedWorkflowDefinitionDraftNodesMutationDisabledReason();
-
-    public string? MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText =>
-        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: -1);
-
-    public string? MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText =>
-        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: 1);
-
     [RelayCommand(CanExecute = nameof(CanAddWorkflowDefinitionDraftNode))]
     private void AddWorkflowDefinitionDraftNode()
     {
@@ -425,15 +318,6 @@ public partial class MainWindowViewModel
         MoveSelectedWorkflowDefinitionDraftNodeUpCommand.NotifyCanExecuteChanged();
         MoveSelectedWorkflowDefinitionDraftNodeDownCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
-    }
-
-    private void NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged()
-    {
-        OnPropertyChanged(nameof(CopyWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText));
     }
 
     partial void OnSelectedWorkflowDefinitionDraftNodeInstanceIdChanged(string value)
