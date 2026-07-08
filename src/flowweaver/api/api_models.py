@@ -66,12 +66,35 @@ class NodePortDefinitionView(StrictModel):
     required: bool = False
 
 
+class NodeTableInputSlotView(StrictModel):
+    name: str
+    required: bool = False
+    allowed_storage_kinds: list[str] = []
+    display_name: str | None = None
+    description: str | None = None
+    default_source: str | None = None
+
+
+class NodeTableOutputSlotView(StrictModel):
+    name: str
+    default_role: str
+    allow_current: bool = True
+    allow_new_memory: bool = False
+    allow_new_runtime_sql: bool = False
+    allow_existing_memory: bool = False
+    allow_existing_runtime_sql: bool = False
+    display_name: str | None = None
+    description: str | None = None
+
+
 class NodeDefinitionView(StrictModel):
     node_type: str
     node_version: str
     display_name: str
     input_ports: list[NodePortDefinitionView] = []
     output_ports: list[NodePortDefinitionView] = []
+    input_table_slots: list[NodeTableInputSlotView] = []
+    output_table_slots: list[NodeTableOutputSlotView] = []
     execution_mode: str
     default_timeout_seconds: int
     retry_safe: bool

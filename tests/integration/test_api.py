@@ -401,6 +401,20 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["GenerateTestTableNode"]["output_ports"] == [
         {"name": "out", "required": False}
     ]
+    assert by_type["GenerateTestTableNode"]["input_table_slots"] == []
+    assert by_type["GenerateTestTableNode"]["output_table_slots"] == [
+        {
+            "name": "out",
+            "default_role": "CURRENT",
+            "allow_current": True,
+            "allow_new_memory": False,
+            "allow_new_runtime_sql": False,
+            "allow_existing_memory": False,
+            "allow_existing_runtime_sql": False,
+            "display_name": "Current table",
+            "description": "Generated table for the main workflow chain.",
+        }
+    ]
     assert by_type["ListFilesNode"]["output_ports"] == [
         {"name": "out", "required": False}
     ]
@@ -456,6 +470,24 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["LookupMatchedFieldNameNode"]["input_ports"] == [
         {"name": "in", "required": True},
         {"name": "lookup", "required": True},
+    ]
+    assert by_type["LookupMatchedFieldNameNode"]["input_table_slots"] == [
+        {
+            "name": "in",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "display_name": "Main table",
+            "description": "Main table to annotate with lookup results.",
+            "default_source": "upstream_current",
+        },
+        {
+            "name": "lookup",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "display_name": "Lookup table",
+            "description": "Reference table used for field-name lookup.",
+            "default_source": "upstream_current",
+        },
     ]
     assert by_type["MergeColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
@@ -513,6 +545,40 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["SaveMemoryTableNode"]["output_ports"] == [
         {"name": "out", "required": False},
         {"name": "memory", "required": False},
+    ]
+    assert by_type["SaveMemoryTableNode"]["input_table_slots"] == [
+        {
+            "name": "in",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "display_name": "Input table",
+            "description": "Table to pass through and save as memory output.",
+            "default_source": "upstream_current",
+        }
+    ]
+    assert by_type["SaveMemoryTableNode"]["output_table_slots"] == [
+        {
+            "name": "out",
+            "default_role": "CURRENT",
+            "allow_current": True,
+            "allow_new_memory": False,
+            "allow_new_runtime_sql": False,
+            "allow_existing_memory": False,
+            "allow_existing_runtime_sql": False,
+            "display_name": "Current table",
+            "description": "Original current table passed to the main chain.",
+        },
+        {
+            "name": "memory",
+            "default_role": "AUXILIARY",
+            "allow_current": False,
+            "allow_new_memory": True,
+            "allow_new_runtime_sql": False,
+            "allow_existing_memory": True,
+            "allow_existing_runtime_sql": False,
+            "display_name": "Memory table",
+            "description": "Auxiliary memory table saved by the node.",
+        },
     ]
     assert by_type["SaveRunTableNode"]["input_ports"] == [
         {"name": "in", "required": True}

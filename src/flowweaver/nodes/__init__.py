@@ -11,7 +11,12 @@ from flowweaver.nodes.default_registry import (
     create_default_node_registry,
     default_node_definitions,
 )
-from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
+from flowweaver.nodes.registry import (
+    NodeDefinitionSpec,
+    NodeRegistry,
+    NodeTableInputSlotSpec,
+    NodeTableOutputSlotSpec,
+)
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeHandler,
@@ -40,6 +45,8 @@ __all__ = [
     "default_node_definitions",
     "NodeDefinitionSpec",
     "NodeRegistry",
+    "NodeTableInputSlotSpec",
+    "NodeTableOutputSlotSpec",
     "parse_value_source",
     "PUBLISH_SHARED_TABLES_NODE_TYPE",
     "READ_SHARED_TABLES_NODE_TYPE",

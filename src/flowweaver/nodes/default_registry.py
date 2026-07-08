@@ -52,7 +52,16 @@ from flowweaver.nodes.registry import (
     NodeConfigSchemaSpec,
     NodeDefinitionSpec,
     NodePortSpec,
+    NodeTableInputSlotSpec,
+    NodeTableOutputSlotSpec,
     NodeRegistry,
+)
+from flowweaver.protocols.enums import TableRole, TableStorageKind
+
+_READABLE_TABLE_STORAGE_KINDS = (
+    TableStorageKind.RUNTIME_SQL,
+    TableStorageKind.MEMORY,
+    TableStorageKind.EXTERNAL_SQL,
 )
 
 
@@ -70,6 +79,13 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             node_version="1.0",
             display_name="Generate Test Table",
             output_ports=(NodePortSpec("out"),),
+            output_table_slots=(
+                _current_output_table_slot(
+                    "out",
+                    display_name="Current table",
+                    description="Generated table for the main workflow chain.",
+                ),
+            ),
             config_schema=_generate_test_table_schema(),
         ),
         NodeDefinitionSpec(
@@ -209,6 +225,25 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
                 NodePortSpec("lookup", required=True),
             ),
             output_ports=(NodePortSpec("out"),),
+            input_table_slots=(
+                _input_table_slot(
+                    "in",
+                    display_name="Main table",
+                    description="Main table to annotate with lookup results.",
+                ),
+                _input_table_slot(
+                    "lookup",
+                    display_name="Lookup table",
+                    description="Reference table used for field-name lookup.",
+                ),
+            ),
+            output_table_slots=(
+                _current_output_table_slot(
+                    "out",
+                    display_name="Current table",
+                    description="Main workflow table after lookup matching.",
+                ),
+            ),
             config_schema=_lookup_matched_field_name_schema(),
         ),
         NodeDefinitionSpec(
@@ -304,6 +339,27 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Save Memory Table",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"), NodePortSpec("memory")),
+            input_table_slots=(
+                _input_table_slot(
+                    "in",
+                    display_name="Input table",
+                    description="Table to pass through and save as memory output.",
+                ),
+            ),
+            output_table_slots=(
+                _current_output_table_slot(
+                    "out",
+                    display_name="Current table",
+                    description="Original current table passed to the main chain.",
+                ),
+                _auxiliary_output_table_slot(
+                    "memory",
+                    display_name="Memory table",
+                    description="Auxiliary memory table saved by the node.",
+                    allow_new_memory=True,
+                    allow_existing_memory=True,
+                ),
+            ),
             config_schema=_save_memory_table_schema(),
         ),
         NodeDefinitionSpec(
@@ -387,6 +443,61 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Fault Test",
             output_ports=(NodePortSpec("out"),),
         ),
+    )
+
+
+def _input_table_slot(
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+    required: bool = True,
+) -> NodeTableInputSlotSpec:
+    return NodeTableInputSlotSpec(
+        name=name,
+        display_name=display_name,
+        description=description,
+        required=required,
+        allowed_storage_kinds=_READABLE_TABLE_STORAGE_KINDS,
+        default_source="upstream_current",
+    )
+
+
+def _current_output_table_slot(
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+) -> NodeTableOutputSlotSpec:
+    return NodeTableOutputSlotSpec(
+        name=name,
+        display_name=display_name,
+        description=description,
+        default_role=TableRole.CURRENT,
+        allow_current=True,
+    )
+
+
+def _auxiliary_output_table_slot(
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+    allow_new_memory: bool = False,
+    allow_new_runtime_sql: bool = False,
+    allow_existing_memory: bool = False,
+    allow_existing_runtime_sql: bool = False,
+) -> NodeTableOutputSlotSpec:
+    return NodeTableOutputSlotSpec(
+        name=name,
+        display_name=display_name,
+        description=description,
+        default_role=TableRole.AUXILIARY,
+        allow_current=False,
+        allow_new_memory=allow_new_memory,
+        allow_new_runtime_sql=allow_new_runtime_sql,
+        allow_existing_memory=allow_existing_memory,
+        allow_existing_runtime_sql=allow_existing_runtime_sql,
     )
 
 
