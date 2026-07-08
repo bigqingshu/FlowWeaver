@@ -47,12 +47,7 @@ public partial class MainWindowViewModel
                 return;
             }
 
-            NodeDefinitionCatalogMessage = T("node_catalog.refresh_failed");
-            NodeDefinitionCatalogErrorMessage = DescribeError(response);
-            SelectedNewDraftNodeDefinition = null;
-            OnPropertyChanged(nameof(HasNodeDefinitions));
-            OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-            RefreshSelectedNodeConfigDraftState();
+            ApplyNodeDefinitionsRefreshFailure(response);
         }
         finally
         {
