@@ -31,14 +31,10 @@ from flowweaver.workflow.definition import (
     WorkflowDefinitionModel,
     failure_policy_unavailable_message,
 )
-from flowweaver.workflow.runtime_options import (
-    RuntimeOptionsEventSink,
-    resolve_runtime_options_by_node,
-    resolve_workflow_runtime_options,
-)
 from flowweaver.workflow_process import (
     ipc_events,
     process_cancellation,
+    process_runtime_options,
     process_startup,
     task_dispatch,
 )
@@ -82,6 +78,9 @@ _release_unreleased_read_leases_for_terminal_workflow = (
 _workflow_run_is_terminal = finalization.workflow_run_is_terminal
 _cancel_workflow_process_if_requested = (
     process_cancellation.cancel_workflow_process_if_requested
+)
+_configure_runtime_options_event_sink = (
+    process_runtime_options.configure_runtime_options_event_sink
 )
 _mark_workflow_process_started = process_startup.mark_workflow_process_started
 _cancel_grace_period_expired = supervision.cancel_grace_period_expired
@@ -274,11 +273,9 @@ def _run_workflow_process_loop(
             process_generation=process_generation,
         )
 
-    runtime_options_by_node = resolve_runtime_options_by_node(definition)
-    event_sink = RuntimeOptionsEventSink(
-        event_sink,
-        workflow_options=resolve_workflow_runtime_options(definition),
-        runtime_options_by_node=runtime_options_by_node,
+    runtime_options_by_node, event_sink = _configure_runtime_options_event_sink(
+        definition=definition,
+        event_sink=event_sink,
     )
 
     _mark_workflow_process_started(
