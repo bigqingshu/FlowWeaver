@@ -15,10 +15,7 @@ public partial class MainWindowViewModel
 
         var requestedRunId = SelectedRun.WorkflowRunId;
         var requestedNodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
-        var requestVersion = ++dataPreviewLoadVersion;
-        IsLoadingDataPreview = true;
-        DataPreviewMessage = F("format.loading_data_preview", requestedNodeInstanceId);
-        DataPreviewErrorMessage = null;
+        var requestVersion = BeginNodeDataPreviewRefresh(requestedNodeInstanceId);
 
         try
         {
