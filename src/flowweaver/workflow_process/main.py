@@ -26,14 +26,10 @@ from flowweaver.node_executor import (
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.workflow.definition import (
-    UNAVAILABLE_FAILURE_POLICY_MODES,
-    WorkflowDefinitionModel,
-    failure_policy_unavailable_message,
-)
 from flowweaver.workflow_process import (
     ipc_events,
     process_cancellation,
+    process_definition,
     process_runtime_options,
     process_startup,
     task_dispatch,
@@ -78,6 +74,9 @@ _release_unreleased_read_leases_for_terminal_workflow = (
 _workflow_run_is_terminal = finalization.workflow_run_is_terminal
 _cancel_workflow_process_if_requested = (
     process_cancellation.cancel_workflow_process_if_requested
+)
+_load_workflow_process_definition = (
+    process_definition.load_workflow_process_definition
 )
 _configure_runtime_options_event_sink = (
     process_runtime_options.configure_runtime_options_event_sink
@@ -244,34 +243,21 @@ def _run_workflow_process_loop(
         )
     ):
         return 1
-    run = store.get_workflow_run(workflow_run_id)
-    if run is None or run.revision_id is None:
+    try:
+        loaded_definition = _load_workflow_process_definition(
+            store=store,
+            workflow_run_id=workflow_run_id,
+        )
+    except process_definition.WorkflowProcessDefinitionError as exc:
         return _fail(
             store,
             workflow_run_id,
             process_id,
-            "Workflow run not found",
+            str(exc),
             process_generation=process_generation,
         )
-    revision = store.get_workflow_revision(run.revision_id)
-    if revision is None:
-        return _fail(
-            store,
-            workflow_run_id,
-            process_id,
-            "Workflow revision not found",
-            process_generation=process_generation,
-        )
-
-    definition = WorkflowDefinitionModel.model_validate(revision.definition)
-    if definition.failure_policy.mode in UNAVAILABLE_FAILURE_POLICY_MODES:
-        return _fail(
-            store,
-            workflow_run_id,
-            process_id,
-            failure_policy_unavailable_message(definition.failure_policy.mode),
-            process_generation=process_generation,
-        )
+    run = loaded_definition.run
+    definition = loaded_definition.definition
 
     runtime_options_by_node, event_sink = _configure_runtime_options_event_sink(
         definition=definition,
