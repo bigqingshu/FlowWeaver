@@ -1785,6 +1785,148 @@ def test_start_workflow_run_accepts_background_trigger_source(
     assert loaded.trigger_source == "background_manual"
 
 
+def test_start_background_workflow_run_uses_background_trigger_source(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = response_data(
+        client.post(
+            "/api/v1/workflows",
+            json={
+                "name": "Background entry run",
+                "definition": {
+                    "schema_version": "1.0",
+                    "nodes": [
+                        {
+                            "node_instance_id": "source",
+                            "node_type": "core.source",
+                            "node_version": "1.0",
+                        }
+                    ],
+                    "connections": [],
+                },
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    run = response_data(
+        client.post(
+            f"/api/v1/workflows/{workflow['workflow_id']}/background-runs",
+            json={
+                "run_mode": "preview_to_node",
+                "target_node_instance_id": "source",
+            },
+            headers=auth_headers(),
+        )
+    )
+
+    loaded = store.get_workflow_run(run["workflow_run_id"])
+    assert run["run_mode"] == "preview_to_node"
+    assert run["trigger_source"] == "background_manual"
+    assert run["target_node_instance_id"] == "source"
+    assert loaded is not None
+    assert loaded.run_mode == "preview_to_node"
+    assert loaded.trigger_source == "background_manual"
+    assert loaded.target_node_instance_id == "source"
+
+
+def test_retry_run_creates_new_run_from_same_revision_without_table_refs(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Retryable",
+        definition={
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                }
+            ],
+            "connections": [],
+        },
+        workflow_id="workflow-1",
+    )
+    original = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-original",
+        run_mode="preview_to_node",
+        trigger_source="background_manual",
+        target_node_instance_id="source",
+    )
+    node = store.create_node_run(
+        workflow_run_id=original.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-run-original",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-original",
+        workflow_run_id=original.workflow_run_id,
+        node_run_id=node.node_run_id,
+    )
+    store.register_table_ref(table_ref)
+    updated_workflow = store.update_workflow_definition(
+        workflow.workflow_id,
+        definition={
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "transform",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [
+                {
+                    "connection_id": "c1",
+                    "source_node_id": "source",
+                    "source_port": "out",
+                    "target_node_id": "transform",
+                    "target_port": "in",
+                }
+            ],
+        },
+        base_revision_id=workflow.revision_id,
+    )
+    current_workflow = store.get_workflow_definition(workflow.workflow_id)
+    assert updated_workflow is not None
+    assert current_workflow is not None
+    assert current_workflow.revision_id != original.revision_id
+
+    retried = response_data(
+        client.post(
+            f"/api/v1/runs/{original.workflow_run_id}/retry",
+            headers=auth_headers(),
+        )
+    )
+    retried_table_refs = response_data(
+        client.get(
+            f"/api/v1/runs/{retried['workflow_run_id']}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+
+    loaded = store.get_workflow_run(retried["workflow_run_id"])
+    assert retried["workflow_run_id"] != original.workflow_run_id
+    assert retried["workflow_id"] == original.workflow_id
+    assert retried["revision_id"] == original.revision_id
+    assert retried["run_mode"] == "preview_to_node"
+    assert retried["trigger_source"] == "background_manual"
+    assert retried["target_node_instance_id"] == "source"
+    assert retried_table_refs == []
+    assert loaded is not None
+    assert loaded.revision_id == original.revision_id
+
+
 def test_start_workflow_run_rejects_invalid_preview_payload(tmp_path: Path) -> None:
     client, _store, _container = make_client(tmp_path)
     workflow = response_data(

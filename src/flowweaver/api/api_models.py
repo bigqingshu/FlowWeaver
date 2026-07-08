@@ -41,6 +41,15 @@ class WorkflowRunStartRequest(StrictModel):
     target_node_instance_id: str | None = None
 
 
+class WorkflowRunBackgroundStartRequest(StrictModel):
+    run_mode: str = "full"
+    target_node_instance_id: str | None = None
+
+
+class WorkflowRunRetryRequest(StrictModel):
+    trigger_source: str | None = None
+
+
 class WorkflowDefinitionData(StrictModel):
     workflow_id: str
     name: str
