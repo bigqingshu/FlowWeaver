@@ -62,6 +62,9 @@ from flowweaver.engine.runtime_status_guards import (
 from flowweaver.engine.runtime_workflow_definition_store import (
     RuntimeWorkflowDefinitionStoreMixin,
 )
+from flowweaver.engine.runtime_workflow_process_store import (
+    RuntimeWorkflowProcessStoreMixin,
+)
 from flowweaver.engine.runtime_workflow_run_store import (
     RuntimeWorkflowRunStoreMixin,
 )
@@ -75,6 +78,7 @@ from flowweaver.protocols.table_ref import TableRefModel
 class RuntimeStore(
     RuntimeWorkflowDefinitionStoreMixin,
     RuntimeWorkflowRunStoreMixin,
+    RuntimeWorkflowProcessStoreMixin,
     RuntimeNodeRunStoreMixin,
     RuntimeLoopStoreMixin,
     RuntimeSharedTableStoreMixin,
