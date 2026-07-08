@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
@@ -72,21 +70,6 @@ public partial class MainWindowViewModel
         ShowWorkflowDefinitionNotification(
             "workflow.definition.validate",
             UiNotificationKind.Error);
-    }
-
-    private static string? FormatValidationIssues(WorkflowValidationResultDto result)
-    {
-        var issueLines = result.Errors
-            .Concat(result.Warnings)
-            .Select(issue =>
-                string.IsNullOrWhiteSpace(issue.Path)
-                    ? $"{issue.Code}: {issue.Message}"
-                    : $"{issue.Code} at {issue.Path}: {issue.Message}")
-            .ToArray();
-
-        return issueLines.Length == 0
-            ? null
-            : string.Join(Environment.NewLine, issueLines);
     }
 
     partial void OnIsValidatingWorkflowDefinitionDraftChanged(bool value)
