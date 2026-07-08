@@ -12,7 +12,6 @@ from flowweaver.common.config import (
     resolve_workflow_process_execution_mode,
     resolve_workflow_process_max_concurrent_node_tasks,
 )
-from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import (
     DatabaseEventSink,
     IPCEventSink,
@@ -39,7 +38,7 @@ from flowweaver.workflow.runtime_options import (
     resolve_runtime_options_by_node,
     resolve_workflow_runtime_options,
 )
-from flowweaver.workflow_process import ipc_events, task_dispatch
+from flowweaver.workflow_process import ipc_events, process_cancellation, task_dispatch
 from flowweaver.workflow_process import process_execution_helpers as execution_helpers
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
@@ -65,9 +64,6 @@ from flowweaver.workflow_process.loop_recovery import (
 from flowweaver.workflow_process.loop_runtime_initialization import (
     initialize_enabled_loop_runtime_state,
 )
-from flowweaver.workflow_process.loop_terminal_state import (
-    cancel_active_loop_runs_for_workflow,
-)
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
 )
@@ -83,6 +79,9 @@ _release_unreleased_read_leases_for_terminal_workflow = (
     finalization.release_unreleased_read_leases_for_terminal_workflow
 )
 _workflow_run_is_terminal = finalization.workflow_run_is_terminal
+_cancel_workflow_process_if_requested = (
+    process_cancellation.cancel_workflow_process_if_requested
+)
 _cancel_grace_period_expired = supervision.cancel_grace_period_expired
 _cancelled_task_result = supervision.cancelled_task_result
 _cleanup_staging_for_node = supervision.cleanup_staging_for_node_safely
@@ -398,39 +397,14 @@ def _run_workflow_process_loop(
         )
         if heartbeat is None:
             return 1
-        process = store.get_workflow_process(process_id)
-        if process is not None and process.cancel_requested_at is not None:
-            _request_cancel_for_in_flight_tasks(
-                store=store,
-                execution_pool=execution_pool,
-            )
-            cancel_active_loop_runs_for_workflow(
-                store,
-                workflow_run_id=workflow_run_id,
-                error={
-                    "message": "Workflow run cancelled",
-                    "reason": "WORKFLOW_CANCEL_REQUESTED",
-                },
-            )
-            store.update_workflow_run_status(
-                workflow_run_id,
-                WorkflowRunStatus.CANCELLED,
-                finished_at=utc_now(),
-                allowed_source_statuses=[WorkflowRunStatus.RUNNING],
-                owner_process_id=process_id if process_generation is not None else None,
-                process_generation=process_generation,
-            )
-            event_sink.emit(
-                EventModel(
-                    event_type=EventType.WORKFLOW_CANCELLED,
-                    workflow_run_id=workflow_run_id,
-                    payload={"process_id": process_id},
-                )
-            )
-            _release_unreleased_read_leases_for_terminal_workflow(
-                store,
-                workflow_run_id,
-            )
+        if _cancel_workflow_process_if_requested(
+            store=store,
+            workflow_run_id=workflow_run_id,
+            process_id=process_id,
+            process_generation=process_generation,
+            execution_pool=execution_pool,
+            event_sink=event_sink,
+        ):
             return 0
         if _finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
