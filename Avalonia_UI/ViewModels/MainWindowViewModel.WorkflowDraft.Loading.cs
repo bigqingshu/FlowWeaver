@@ -1,27 +1,12 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    [ObservableProperty]
-    private bool isLoadingWorkflowDefinition;
-
-    [ObservableProperty]
-    private WorkflowDefinitionDetailViewModel? workflowDefinitionDetail;
-
-    [ObservableProperty]
-    private string workflowDefinitionMessage = "Select a workflow to load definition.";
-
-    [ObservableProperty]
-    private string? workflowDefinitionErrorMessage;
-
-    private int workflowDefinitionLoadVersion = 0;
-
     private bool CanLoadSelectedWorkflowDefinition()
     {
         return CanUseEngineActions
@@ -111,10 +96,5 @@ public partial class MainWindowViewModel
                 IsLoadingWorkflowDefinition = false;
             }
         }
-    }
-
-    partial void OnIsLoadingWorkflowDefinitionChanged(bool value)
-    {
-        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
     }
 }
