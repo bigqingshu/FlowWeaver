@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -36,17 +34,6 @@ public partial class MainWindowViewModel
 
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
-
-    private bool CanRefreshNodeDefinitions()
-    {
-        return CanUseEngineActions && !IsLoadingNodeDefinitions;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshNodeDefinitions))]
-    private async Task RefreshNodeDefinitionsAsync()
-    {
-        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: false);
-    }
 
     partial void OnIsLoadingNodeDefinitionsChanged(bool value)
     {
