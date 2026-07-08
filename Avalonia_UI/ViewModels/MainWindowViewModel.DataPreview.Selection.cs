@@ -21,31 +21,6 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<TableRefListItemViewModel> DataPreviewTableOptions { get; } = new();
 
-    private void RebuildDataPreviewStates(
-        string? preferredStateKey = null,
-        string? preferredTableRefId = null)
-    {
-        DataPreviewStates.Clear();
-        foreach (var state in DataPreviewStateListItemViewModel.FromTableRefs(TableRefs))
-        {
-            DataPreviewStates.Add(state);
-        }
-
-        var selectedState =
-            FindDataPreviewStateByKey(preferredStateKey)
-            ?? FindDataPreviewStateByTableRefId(preferredTableRefId)
-            ?? DataPreviewStates.FirstOrDefault();
-        SelectedDataPreviewState = selectedState;
-
-        if (!string.IsNullOrWhiteSpace(preferredTableRefId))
-        {
-            SelectedDataPreviewTableOption =
-                DataPreviewTableOptions.FirstOrDefault(tableRef =>
-                    string.Equals(tableRef.TableRefId, preferredTableRefId, StringComparison.Ordinal))
-                ?? SelectedDataPreviewTableOption;
-        }
-    }
-
     partial void OnSelectedDataPreviewStateChanged(DataPreviewStateListItemViewModel? value)
     {
         var previousTableRefId = SelectedDataPreviewTableOption?.TableRefId;
