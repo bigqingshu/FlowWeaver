@@ -30,7 +30,7 @@ public partial class MainWindowViewModel
                 workflowId,
                 _shutdown.Token);
 
-            if (SelectedWorkflow?.WorkflowId != workflowId || requestVersion != workflowDefinitionLoadVersion)
+            if (IsStaleWorkflowDefinitionLoadRequest(requestVersion, workflowId))
             {
                 return;
             }
@@ -49,7 +49,7 @@ public partial class MainWindowViewModel
                 workflowId,
                 _shutdown.Token);
 
-            if (SelectedWorkflow?.WorkflowId != workflowId || requestVersion != workflowDefinitionLoadVersion)
+            if (IsStaleWorkflowDefinitionLoadRequest(requestVersion, workflowId))
             {
                 return;
             }
