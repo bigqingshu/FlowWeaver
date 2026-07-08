@@ -34,16 +34,4 @@ public partial class MainWindowViewModel
 
     public bool HasNodeDefinitionCatalogEmptyState =>
         !IsLoadingNodeDefinitions && !HasNodeDefinitions;
-
-    partial void OnIsLoadingNodeDefinitionsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
-        RefreshNodeDefinitionsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnNodeDefinitionCatalogErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasNodeDefinitionCatalogError));
-    }
 }
