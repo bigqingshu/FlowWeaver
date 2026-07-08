@@ -61,6 +61,9 @@ from flowweaver.engine.runtime_record_mappers import (
     _json_dumps,
     _table_ref_from_record,
 )
+from flowweaver.engine.runtime_shared_publication_store import (
+    RuntimeSharedPublicationStoreMixin,
+)
 from flowweaver.engine.runtime_shared_table_store import (
     RuntimeSharedTableStoreMixin,
 )
@@ -89,6 +92,7 @@ class RuntimeStore(
     RuntimeWorkflowProcessStoreMixin,
     RuntimeNodeRunStoreMixin,
     RuntimeLoopStoreMixin,
+    RuntimeSharedPublicationStoreMixin,
     RuntimeSharedTableStoreMixin,
     RuntimeInputSnapshotStoreMixin,
     RuntimeReadLeaseStoreMixin,
