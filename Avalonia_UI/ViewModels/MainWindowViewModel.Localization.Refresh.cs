@@ -9,17 +9,7 @@ public partial class MainWindowViewModel
         NotifyWorkflowListAndRunsLocalizedTextChanged();
         NotifyWorkflowDefinitionBasicsLocalizedTextChanged();
         NotifyRuntimeOptionsLocalizedTextChanged();
-        OnPropertyChanged(nameof(StructuredEditSectionText));
-        OnPropertyChanged(nameof(AddNodeText));
-        OnPropertyChanged(nameof(CopyNodeText));
-        OnPropertyChanged(nameof(DeleteNodeText));
-        OnPropertyChanged(nameof(DeleteSelectedNodesText));
-        OnPropertyChanged(nameof(MoveNodeUpText));
-        OnPropertyChanged(nameof(MoveNodeDownText));
-        OnPropertyChanged(nameof(NodeActionsSectionText));
-        OnPropertyChanged(nameof(NodeMoveSemanticsText));
-        OnPropertyChanged(nameof(WorkflowLinearChainStatusText));
-        NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
+        NotifyWorkflowStructuredEditLocalizedTextChanged();
         OnPropertyChanged(nameof(DataPreviewSectionText));
         OnPropertyChanged(nameof(DataPreviewEmptyText));
         OnPropertyChanged(nameof(DataPreviewPendingText));
