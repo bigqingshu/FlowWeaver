@@ -20,7 +20,4 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private bool isWorkflowConnectionsAdvancedVisible;
 
-    [ObservableProperty]
-    private bool isSavingWorkflowDefinitionDraft;
-
 }
