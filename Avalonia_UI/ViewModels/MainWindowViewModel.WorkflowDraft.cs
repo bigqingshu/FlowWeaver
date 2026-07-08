@@ -225,20 +225,4 @@ public partial class MainWindowViewModel
         ResetWorkflowDefinitionDraftSelectionInput();
     }
 
-    partial void OnSelectedWorkflowDefinitionNodeChanged(
-        WorkflowDefinitionNodeListItemViewModel? value)
-    {
-        OnPropertyChanged(nameof(HasSelectedWorkflowDefinitionNode));
-        OnPropertyChanged(nameof(HasNoSelectedWorkflowDefinitionNode));
-        ResetDataPreviewSelectionState();
-        RefreshSelectedNodeDisplayNameDraftState();
-        RefreshSelectedNodeConfigDraftState();
-        SelectedRuntimeOptionsNode = value;
-        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
-        ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-        NotifyWorkflowDefinitionNodeActionCommandsChanged();
-        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-    }
-
 }
