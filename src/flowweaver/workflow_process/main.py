@@ -27,14 +27,9 @@ from flowweaver.node_executor import (
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.protocols.enums import (
-    EventType,
-    NodeResultStatus,
-    NodeRunStatus,
-    WorkflowRunStatus,
-)
+from flowweaver.protocols.enums import EventType, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow.definition import (
     UNAVAILABLE_FAILURE_POLICY_MODES,
     WorkflowDefinitionModel,
@@ -45,7 +40,7 @@ from flowweaver.workflow.runtime_options import (
     resolve_runtime_options_by_node,
     resolve_workflow_runtime_options,
 )
-from flowweaver.workflow_process import ipc_events
+from flowweaver.workflow_process import ipc_events, task_dispatch
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.controller import (
@@ -53,17 +48,14 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import (
-    WorkflowDag,
     build_workflow_dag,
     restrict_workflow_dag_to_upstream_closure,
 )
 from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
-    close_executor,
 )
 from flowweaver.workflow_process.executor_pool import (
     DispatchedNodeTask,
-    ExecutorTaskCompletion,
     ImmediateNodeTaskExecutionPool,
     NodeTaskExecutionPool,
     ThreadedNodeTaskExecutionPool,
@@ -78,14 +70,7 @@ from flowweaver.workflow_process.loop_terminal_state import (
     cancel_active_loop_runs_for_workflow,
 )
 from flowweaver.workflow_process.node_tasks import (
-    NodeTaskApplyResult,
-    NodeTaskApplyStatus,
     NodeTaskManager,
-)
-from flowweaver.workflow_process.ready_queue import (
-    ReadyNodeCandidate,
-    collect_ready_node_candidates,
-    count_in_flight_node_runs,
 )
 
 CleanupStagingForNode = Callable[[str, str], None]
@@ -111,19 +96,15 @@ _workflow_cancel_was_requested = supervision.workflow_cancel_was_requested
 _configure_executor_event_handler = ipc_events.configure_executor_event_handler
 _record_node_task_ipc_event = ipc_events.record_node_task_ipc_event
 
-_HANDLED_NODE_TASK_APPLY_STATUSES = frozenset(
-    {
-        NodeTaskApplyStatus.APPLIED,
-        NodeTaskApplyStatus.ALREADY_APPLIED,
-    }
-)
-_IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
-    {
-        NodeTaskApplyStatus.REJECTED_STALE_ATTEMPT,
-        NodeTaskApplyStatus.REJECTED_STALE_GENERATION,
-        NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
-    }
-)
+_dispatch_ready_nodes = task_dispatch.dispatch_ready_nodes
+_drain_executor_task_completions = task_dispatch.drain_executor_task_completions
+_apply_executor_task_completion = task_dispatch.apply_executor_task_completion
+dispatch_ready_node_candidate = task_dispatch.dispatch_ready_node_candidate
+_fail_ready_node_input_resolution = task_dispatch.fail_ready_node_input_resolution
+_available_ready_dispatch_slots = task_dispatch.available_ready_dispatch_slots
+_apply_node_task_result = task_dispatch.apply_node_task_result
+_timeout_seconds_from_node_config = task_dispatch.timeout_seconds_from_node_config
+_fail_rejected_node_result = task_dispatch.fail_rejected_node_result
 
 
 class _DefaultWorkflowProcessExecutorOwner(DefaultWorkflowProcessExecutorOwner):
@@ -533,316 +514,6 @@ def _build_node_task_execute(
     return execute_task
 
 
-def _dispatch_ready_nodes(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    heartbeat_interval_seconds: float,
-    dag: WorkflowDag,
-    task_manager: NodeTaskManager,
-    executor_factory: NodeExecutorFactory,
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    close_executor_after_task: bool,
-    cancel_grace_seconds: float,
-    max_ready_dispatch_per_cycle: int | None,
-    max_concurrent_node_tasks: int | None,
-    execution_pool: NodeTaskExecutionPool,
-    event_sink: RuntimeEventSink,
-) -> int:
-    if process_generation is None:
-        return 0
-    dispatched_count = 0
-    max_dispatch_count = _available_ready_dispatch_slots(
-        store=store,
-        workflow_run_id=workflow_run_id,
-        max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
-        max_concurrent_node_tasks=max_concurrent_node_tasks,
-    )
-    if max_dispatch_count == 0:
-        return 0
-    ready_candidates = collect_ready_node_candidates(
-        store=store,
-        workflow_run_id=workflow_run_id,
-        dag=dag,
-    )
-    for candidate in ready_candidates:
-        if max_dispatch_count is not None and dispatched_count >= max_dispatch_count:
-            break
-        dispatched = dispatch_ready_node_candidate(
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            candidate=candidate,
-            task_manager=task_manager,
-            executor_factory=executor_factory,
-            close_executor_on_reject=close_executor_after_task,
-        )
-        if dispatched is None:
-            continue
-        _configure_executor_event_handler(
-            dispatched.executor,
-            store=store,
-            workflow_process_id=workflow_process_id,
-            task_manager=task_manager,
-            process_generation=process_generation,
-        )
-        if not execution_pool.submit(dispatched):
-            if close_executor_after_task:
-                close_executor(dispatched.executor)
-            continue
-        completion = execution_pool.pop_completed()
-        if completion is not None:
-            _apply_executor_task_completion(
-                store=store,
-                workflow_run_id=workflow_run_id,
-                workflow_process_id=workflow_process_id,
-                process_generation=process_generation,
-                event_sink=event_sink,
-                task_manager=task_manager,
-                cleanup_staging_for_node=cleanup_staging_for_node,
-                close_executor_after_task=close_executor_after_task,
-                completion=completion,
-            )
-        dispatched_count += 1
-        if _workflow_run_is_terminal(store, workflow_run_id):
-            break
-    return dispatched_count
-
-
-def _drain_executor_task_completions(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    event_sink: RuntimeEventSink,
-    task_manager: NodeTaskManager,
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    close_executor_after_task: bool,
-    execution_pool: NodeTaskExecutionPool,
-) -> int:
-    completed_count = 0
-    while True:
-        completion = execution_pool.pop_completed()
-        if completion is None:
-            return completed_count
-        _apply_executor_task_completion(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            event_sink=event_sink,
-            task_manager=task_manager,
-            cleanup_staging_for_node=cleanup_staging_for_node,
-            close_executor_after_task=close_executor_after_task,
-            completion=completion,
-        )
-        completed_count += 1
-        if _workflow_run_is_terminal(store, workflow_run_id):
-            return completed_count
-
-
-def _apply_executor_task_completion(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    event_sink: RuntimeEventSink,
-    task_manager: NodeTaskManager,
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    close_executor_after_task: bool,
-    completion: ExecutorTaskCompletion,
-) -> None:
-    dispatched = completion.dispatched_task
-    try:
-        result = completion.result
-        if result is None:
-            return
-        apply_result = _apply_node_task_result(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            event_sink=event_sink,
-            task_manager=task_manager,
-            task=dispatched.task,
-            result=result,
-        )
-        if (
-            result.status != NodeResultStatus.SUCCEEDED
-            and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
-        ):
-            _cleanup_staging_for_node(
-                cleanup_staging_for_node,
-                workflow_run_id=workflow_run_id,
-                node_run_id=dispatched.node_run_id,
-            )
-    finally:
-        if close_executor_after_task:
-            close_executor(dispatched.executor)
-
-
-def dispatch_ready_node_candidate(
-    *,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int,
-    candidate: ReadyNodeCandidate,
-    task_manager: NodeTaskManager,
-    executor_factory: NodeExecutorFactory,
-    close_executor_on_reject: bool = True,
-) -> DispatchedNodeTask | None:
-    if candidate.input_resolution_issue is not None:
-        _fail_ready_node_input_resolution(
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            candidate=candidate,
-            task_manager=task_manager,
-        )
-        return None
-    task = task_manager.submit_ready_node(
-        workflow_run_id=workflow_run_id,
-        workflow_process_id=workflow_process_id,
-        process_generation=process_generation,
-        node_instance_id=candidate.node_run.node_instance_id,
-        node_run_id=candidate.node_run.node_run_id,
-        input_refs=list(candidate.input_refs),
-        input_slot_bindings=candidate.input_slot_bindings,
-        timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
-    )
-    if task is None:
-        return None
-    executor = executor_factory(task)
-    accepted = task_manager.accept_task(
-        task_id=task.task_id,
-        executor_id=executor.executor_id,
-    )
-    if accepted is None:
-        if close_executor_on_reject:
-            close_executor(executor)
-        return None
-    return DispatchedNodeTask(
-        task=accepted,
-        executor=executor,
-        node_run_id=accepted.node_run_id,
-        node_instance_id=accepted.node_instance_id,
-        executor_id=executor.executor_id,
-    )
-
-
-def _fail_ready_node_input_resolution(
-    *,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int,
-    candidate: ReadyNodeCandidate,
-    task_manager: NodeTaskManager,
-) -> None:
-    task = task_manager.submit_ready_node(
-        workflow_run_id=workflow_run_id,
-        workflow_process_id=workflow_process_id,
-        process_generation=process_generation,
-        node_instance_id=candidate.node_run.node_instance_id,
-        node_run_id=candidate.node_run.node_run_id,
-        input_refs=list(candidate.input_refs),
-        input_slot_bindings=candidate.input_slot_bindings,
-        timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
-    )
-    if task is None:
-        return None
-    executor_id = "workflow_process.input_resolver"
-    accepted = task_manager.accept_task(
-        task_id=task.task_id,
-        executor_id=executor_id,
-    )
-    if accepted is None:
-        return None
-    issue = candidate.input_resolution_issue
-    message = (
-        issue.message
-        if issue is not None
-        else "Input table selector could not be resolved"
-    )
-    details = issue.details if issue is not None else {}
-    task_manager.apply_result(
-        NodeTaskResultModel(
-            task_id=accepted.task_id,
-            node_run_id=accepted.node_run_id,
-            attempt=accepted.attempt,
-            executor_id=executor_id,
-            process_generation=accepted.process_generation,
-            status=NodeResultStatus.FAILED,
-            error={
-                "code": "INPUT_TABLE_RESOLUTION_FAILED",
-                "message": message,
-                "details": details,
-            },
-        )
-    )
-    return None
-
-
-def _available_ready_dispatch_slots(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    max_ready_dispatch_per_cycle: int | None,
-    max_concurrent_node_tasks: int | None,
-) -> int | None:
-    limits: list[int] = []
-    if max_ready_dispatch_per_cycle is not None:
-        limits.append(max(0, max_ready_dispatch_per_cycle))
-    if max_concurrent_node_tasks is not None:
-        in_flight_count = count_in_flight_node_runs(
-            store=store,
-            workflow_run_id=workflow_run_id,
-        )
-        limits.append(max(0, max_concurrent_node_tasks - in_flight_count))
-    if not limits:
-        return None
-    return min(limits)
-
-
-def _apply_node_task_result(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    event_sink: RuntimeEventSink,
-    task_manager: NodeTaskManager,
-    task: NodeTaskModel,
-    result: NodeTaskResultModel,
-) -> NodeTaskApplyResult:
-    apply_result = task_manager.apply_result(result)
-    if (
-        apply_result.status not in _HANDLED_NODE_TASK_APPLY_STATUSES
-        and apply_result.status not in _IGNORED_NODE_TASK_APPLY_STATUSES
-    ):
-        _fail_rejected_node_result(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            event_sink=event_sink,
-            task=task,
-            result=result,
-            apply_result=apply_result,
-        )
-    return apply_result
-
-
-def _timeout_seconds_from_node_config(config: dict[str, object]) -> int:
-    value = config.get("timeout_seconds")
-    if isinstance(value, bool) or not isinstance(value, int):
-        return 60
-    return max(0, value)
-
-
 def _close_execution_pool(execution_pool: object | None) -> None:
     if execution_pool is None:
         return
@@ -858,85 +529,6 @@ def _close_execution_pool(execution_pool: object | None) -> None:
             pass
     except Exception:
         pass
-
-
-def _fail_rejected_node_result(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    event_sink: RuntimeEventSink,
-    task: NodeTaskModel,
-    result: NodeTaskResultModel,
-    apply_result: NodeTaskApplyResult,
-) -> None:
-    if _workflow_run_is_terminal(store, workflow_run_id):
-        return
-    error = {
-        "message": "Node task result was rejected",
-        "apply_status": apply_result.status.value,
-        "task_id": task.task_id,
-        "result_id": result.result_id,
-        "node_instance_id": task.node_instance_id,
-    }
-    node_run = store.get_node_run(task.node_run_id)
-    failed_node = None
-    if node_run is not None:
-        failed_node = store.update_node_run_status(
-            task.node_run_id,
-            NodeRunStatus.FAILED,
-            finished_at=utc_now(),
-            error=error,
-            expected_state_version=node_run.state_version,
-            allowed_source_statuses=[
-                NodeRunStatus.QUEUED,
-                NodeRunStatus.RUNNING,
-                NodeRunStatus.LONG_RUNNING,
-            ],
-            owner_process_id=(
-                workflow_process_id if process_generation is not None else None
-            ),
-            process_generation=process_generation,
-        )
-    failed_run = store.update_workflow_run_status(
-        workflow_run_id,
-        WorkflowRunStatus.FAILED,
-        finished_at=utc_now(),
-        error=error,
-        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
-        owner_process_id=(
-            workflow_process_id if process_generation is not None else None
-        ),
-        process_generation=process_generation,
-    )
-    if failed_node is not None:
-        event_sink.emit(
-            EventModel(
-                event_type=EventType.NODE_FAILED,
-                workflow_run_id=workflow_run_id,
-                node_run_id=task.node_run_id,
-                payload={
-                    "process_id": workflow_process_id,
-                    "task_id": task.task_id,
-                    "result_id": result.result_id,
-                    "apply_status": apply_result.status.value,
-                },
-            )
-        )
-    if failed_run is not None:
-        event_sink.emit(
-            EventModel(
-                event_type=EventType.WORKFLOW_FAILED,
-                workflow_run_id=workflow_run_id,
-                payload={
-                    "process_id": workflow_process_id,
-                    "task_id": task.task_id,
-                    "result_id": result.result_id,
-                    "apply_status": apply_result.status.value,
-                },
-            )
-        )
 
 
 def _fail(
