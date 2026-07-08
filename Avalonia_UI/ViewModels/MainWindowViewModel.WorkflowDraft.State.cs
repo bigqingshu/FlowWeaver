@@ -1,4 +1,3 @@
-using System;
 using Avalonia_UI.Models;
 
 namespace Avalonia_UI.ViewModels;
