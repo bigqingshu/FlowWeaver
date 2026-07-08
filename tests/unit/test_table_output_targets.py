@@ -88,6 +88,63 @@ def test_resolves_output_save_as_auxiliary_target() -> None:
     assert resolution.targets[0].logical_table_id == "debug_stage"
 
 
+def test_resolves_output_targets_from_list_config_and_aliases() -> None:
+    resolution = resolve_configured_output_targets(
+        {
+            "output_table_targets": [
+                {
+                    "output_slot": "current_out",
+                    "target_type": "current_table",
+                },
+                {
+                    "slot": "memory_out",
+                    "target_type": "memory_table",
+                    "target_table": "memory_stage",
+                },
+                {
+                    "slot": "runtime_out",
+                    "target_type": "run_table",
+                    "table_name": "runtime_stage",
+                },
+            ]
+        }
+    )
+
+    assert resolution.status == TableOutputTargetResolutionStatus.RESOLVED
+    assert [
+        (
+            target.slot,
+            target.target_kind,
+            target.role,
+            target.storage_kind,
+            target.logical_table_id,
+        )
+        for target in resolution.targets
+    ] == [
+        (
+            "current_out",
+            TableOutputTargetKind.CURRENT,
+            TableRole.CURRENT,
+            None,
+            None,
+        ),
+        (
+            "memory_out",
+            TableOutputTargetKind.NEW_MEMORY,
+            TableRole.AUXILIARY,
+            TableStorageKind.MEMORY,
+            "memory_stage",
+        ),
+        (
+            "runtime_out",
+            TableOutputTargetKind.NEW_RUNTIME_SQL,
+            TableRole.AUXILIARY,
+            TableStorageKind.RUNTIME_SQL,
+            "runtime_stage",
+        ),
+    ]
+
+
 def test_current_output_target_rejects_table_name() -> None:
     resolution = resolve_configured_output_targets(
         {
@@ -139,6 +196,39 @@ def test_duplicate_output_target_slots_are_rejected() -> None:
     assert resolution.status == TableOutputTargetResolutionStatus.ERROR
     assert resolution.issue is not None
     assert resolution.issue.message == "duplicate output target slot: memory"
+
+
+def test_output_target_list_requires_slot() -> None:
+    resolution = resolve_configured_output_targets(
+        {
+            "output_targets": [
+                {
+                    "target_kind": "new_memory",
+                    "table_name": "scratch",
+                }
+            ]
+        }
+    )
+
+    assert resolution.status == TableOutputTargetResolutionStatus.ERROR
+    assert resolution.issue is not None
+    assert resolution.issue.message == "output_targets[0] must include slot"
+
+
+def test_unsupported_output_target_kind_is_rejected() -> None:
+    resolution = resolve_configured_output_targets(
+        {
+            "output_target": {
+                "slot": "out",
+                "target_kind": "external_sql",
+                "table_name": "orders",
+            }
+        }
+    )
+
+    assert resolution.status == TableOutputTargetResolutionStatus.ERROR
+    assert resolution.issue is not None
+    assert resolution.issue.message == "unsupported output target kind: external_sql"
 
 
 def test_missing_config_returns_no_config() -> None:

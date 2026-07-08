@@ -187,6 +187,96 @@ def test_replace_output_target_rows_requires_existing_target(
         )
 
 
+def test_input_slot_helpers_read_named_table_refs(
+    tmp_path: Path,
+) -> None:
+    context, task = make_context(tmp_path)
+    schema = make_test_schema()
+    memory_result = context.publish_output_target_rows(
+        task,
+        target=new_memory_target("memory_copy", "scratch"),
+        output_name="unused_memory_output_name",
+        schema=schema,
+        rows=[
+            {"row_id": 1, "amount": 2.0},
+            {"row_id": 2, "amount": 3.0},
+        ],
+    )
+    task_with_slot = task.model_copy(
+        update={
+            "input_slot_bindings": {
+                "main_table": memory_result.table_ref.table_ref_id
+            }
+        }
+    )
+
+    table_ref = context.require_input_slot(
+        task_with_slot,
+        "main_table",
+        node_type="test.node",
+        allowed_storage_kinds=[TableStorageKind.MEMORY],
+    )
+    batches = list(
+        context.iter_slot_batches(
+            task_with_slot,
+            "main_table",
+            node_type="test.node",
+            batch_size=1,
+        )
+    )
+
+    assert table_ref.table_ref_id == memory_result.table_ref.table_ref_id
+    assert batches == [
+        [{"row_id": 1, "amount": 2.0}],
+        [{"row_id": 2, "amount": 3.0}],
+    ]
+
+
+def test_input_slot_helpers_reject_missing_slot_and_wrong_storage_kind(
+    tmp_path: Path,
+) -> None:
+    context, task = make_context(tmp_path)
+    schema = make_test_schema()
+    runtime_result = context.publish_output_target_rows(
+        task,
+        target=new_runtime_target("runtime_copy", "runtime_stage"),
+        output_name="unused_runtime_output_name",
+        schema=schema,
+        rows=[{"row_id": 1, "amount": 2.0}],
+    )
+    task_with_slot = task.model_copy(
+        update={
+            "input_slot_bindings": {
+                "main_table": runtime_result.table_ref.table_ref_id
+            }
+        }
+    )
+
+    with pytest.raises(
+        BuiltinTableNodeValidationError,
+        match="test.node requires input slot: missing_table",
+    ):
+        context.require_input_slot(
+            task_with_slot,
+            "missing_table",
+            node_type="test.node",
+        )
+
+    with pytest.raises(
+        BuiltinTableNodeValidationError,
+        match=(
+            "test.node input slot main_table requires storage kind: MEMORY; "
+            "got RUNTIME_SQL"
+        ),
+    ):
+        context.require_input_slot(
+            task_with_slot,
+            "main_table",
+            node_type="test.node",
+            allowed_storage_kinds=[TableStorageKind.MEMORY],
+        )
+
+
 def make_context(tmp_path: Path) -> tuple[BuiltinTableNodeContext, NodeTaskModel]:
     database_path = tmp_path / "metadata.db"
     migrate(database_path)
