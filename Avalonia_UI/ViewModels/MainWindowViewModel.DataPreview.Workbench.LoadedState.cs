@@ -22,5 +22,4 @@ public partial class MainWindowViewModel
         NotifyDataPreviewWorkbenchDirtyStateChanged();
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
     }
-
 }
