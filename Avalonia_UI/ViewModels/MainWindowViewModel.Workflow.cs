@@ -44,18 +44,6 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<WorkflowListItemViewModel> Workflows { get; } = new();
 
-    public bool HasWorkflowError => !string.IsNullOrWhiteSpace(WorkflowErrorMessage);
-
-    public bool IsWorkflowBusy =>
-        IsLoadingWorkflows
-        || IsStartingWorkflow
-        || IsCreatingWorkflow
-        || IsImportingWorkflow
-        || IsDeletingWorkflow
-        || IsExportingWorkflow;
-
-    public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
-
     private static bool IsActiveWorkflowStatus(string? status)
     {
         return status == "ACTIVE";
