@@ -8,8 +8,10 @@ from typing import Any, TypedDict
 
 from flowweaver.common.time import utc_now
 from flowweaver.nodes.builtin_sql import (
-    SQL_MAPPING_NODE_TYPE,
-    SqlMappingTaskConfig,
+    SQL_MAPPING_NODE_TYPE as SQL_MAPPING_NODE_TYPE,
+)
+from flowweaver.nodes.builtin_sql import (
+    SqlMappingTaskConfig as SqlMappingTaskConfig,
 )
 from flowweaver.nodes.builtin_table_node_types import (
     ADD_COLUMNS_NODE_TYPE,
@@ -66,6 +68,9 @@ from flowweaver.nodes.file_table_nodes import (
 )
 from flowweaver.nodes.plugin_table_node import (
     PluginNodeHandler as PluginNodeHandler,
+)
+from flowweaver.nodes.sql_mapping_table_node import (
+    SqlMappingNodeHandler as SqlMappingNodeHandler,
 )
 from flowweaver.nodes.table_node_common import (
     bool_status as _bool_status,
@@ -2966,32 +2971,6 @@ class WriteBackTableNodeHandler:
             rows=[status_row],
         )
         return [status_ref] if target_ref is None else [status_ref, target_ref]
-
-
-class SqlMappingNodeHandler:
-    node_type = SQL_MAPPING_NODE_TYPE
-
-    def execute(
-        self,
-        task: NodeTaskModel,
-        context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
-        if task.input_refs:
-            raise _NodeValidationError("SqlMappingNode does not accept inputs")
-        if context.sql_mapping_runner is None:
-            raise _NodeValidationError("SqlMappingNode runner is not configured")
-        try:
-            table_ref = context.sql_mapping_runner.execute(
-                SqlMappingTaskConfig(
-                    workflow_run_id=task.workflow_run_id,
-                    node_run_id=task.node_run_id,
-                    node_instance_id=task.node_instance_id,
-                    config=task.config,
-                )
-            )
-        except ValueError as exc:
-            raise _NodeValidationError(str(exc)) from exc
-        return [table_ref]
 
 
 def _parse_columns(value: Any) -> list[FieldSchemaModel]:
