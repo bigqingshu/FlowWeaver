@@ -11,23 +11,7 @@ public partial class MainWindowViewModel
         var workflowFieldState =
             RuntimeOptionsDraftStateMapper.ToWorkflowFieldState(draft.Workflow);
 
-        RuntimeOptionsProfileDraft = workflowFieldState.Profile;
-        RuntimeOptionsStrictValidationDraft = workflowFieldState.StrictValidation;
-        RuntimeOptionsLogLevelDraft = workflowFieldState.LogLevel;
-        RuntimeOptionsEventLevelDraft = workflowFieldState.EventLevel;
-        RuntimeOptionsEventRateLimitPerSecondDraft =
-            workflowFieldState.EventRateLimitPerSecond;
-        RuntimeOptionsProgressEnabledDraft = workflowFieldState.ProgressEnabled;
-        RuntimeOptionsProgressIntervalSecondsDraft =
-            workflowFieldState.ProgressIntervalSeconds;
-        RuntimeOptionsCaptureErrorContextDraft =
-            workflowFieldState.CaptureErrorContext;
-        RuntimeOptionsIncludeMetricsDraft = workflowFieldState.IncludeMetrics;
-        RuntimeOptionsPayloadByteLimitDraft =
-            workflowFieldState.PayloadByteLimit;
-        RuntimeOptionsTtlSecondsDraft = workflowFieldState.TtlSeconds;
-        RuntimeOptionsRedactColumnsDraft = workflowFieldState.RedactColumns;
-        RuntimeOptionsMaskPolicyDraft = workflowFieldState.MaskPolicy;
+        ApplyRuntimeOptionsWorkflowDraftFieldState(workflowFieldState);
         RuntimeOptionsNodeOverrideCount = draft.NodeOverrides.Count;
         RuntimeOptionsEditorErrorMessage =
             readResult.Succeeded
