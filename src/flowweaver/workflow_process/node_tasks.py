@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from flowweaver.common.time import utc_now
@@ -57,6 +57,12 @@ from flowweaver.workflow_process.node_task_results import (
 )
 from flowweaver.workflow_process.node_task_results import (
     NodeTaskTimeoutStatus as NodeTaskTimeoutStatus,
+)
+from flowweaver.workflow_process.node_task_telemetry import (
+    record_task_heartbeat as _record_task_heartbeat,
+)
+from flowweaver.workflow_process.node_task_telemetry import (
+    record_task_progress as _record_task_progress,
 )
 from flowweaver.workflow_process.node_task_timeout import (
     mark_timed_out_task as _mark_timed_out_task,
@@ -142,11 +148,11 @@ class NodeTaskManager:
         executor_id: str,
         attempt: int,
     ) -> NodeRun | None:
-        if attempt != task.attempt:
-            return None
-        return self._store.update_node_task_runtime_state(
-            task,
+        return _record_task_heartbeat(
+            store=self._store,
+            task=task,
             executor_id=executor_id,
+            attempt=attempt,
         )
 
     def record_task_progress(
@@ -158,60 +164,17 @@ class NodeTaskManager:
         current_stage: str | None,
         metrics: dict[str, int | float | str] | None = None,
     ) -> NodeRun | None:
-        runtime_options = self.runtime_options_for_node(task.node_instance_id)
-        if (
-            runtime_options is not None
-            and not runtime_options.telemetry.progress_enabled
-        ):
-            return self._store.update_node_task_runtime_state(
-                task,
-                executor_id=executor_id,
-            )
-        now = utc_now()
-        if (
-            runtime_options is not None
-            and runtime_options.telemetry.progress_interval_seconds > 0
-        ):
-            previous_progress_at = self._last_progress_emitted_at.get(task.task_id)
-            if (
-                previous_progress_at is not None
-                and now - previous_progress_at
-                < timedelta(
-                    seconds=runtime_options.telemetry.progress_interval_seconds
-                )
-            ):
-                return self._store.update_node_task_runtime_state(
-                    task,
-                    executor_id=executor_id,
-                    heartbeat_at=now,
-                )
-        updated = self._store.update_node_task_runtime_state(
-            task,
+        return _record_task_progress(
+            store=self._store,
+            event_sink=self._event_sink,
+            task=task,
             executor_id=executor_id,
-            heartbeat_at=now,
             progress=progress,
             current_stage=current_stage,
+            metrics=metrics,
+            runtime_options=self.runtime_options_for_node(task.node_instance_id),
+            last_progress_emitted_at=self._last_progress_emitted_at,
         )
-        if updated is None:
-            return None
-        self._last_progress_emitted_at[task.task_id] = now
-        self._event_sink.emit(
-            EventModel(
-                event_type=EventType.NODE_PROGRESS,
-                workflow_run_id=task.workflow_run_id,
-                node_run_id=task.node_run_id,
-                payload={
-                    "process_id": task.workflow_process_id,
-                    "task_id": task.task_id,
-                    "executor_id": executor_id,
-                    "node_instance_id": task.node_instance_id,
-                    "progress": progress,
-                    "current_stage": current_stage,
-                    "metrics": metrics or {},
-                },
-            )
-        )
-        return updated
 
     def mark_timed_out_task(
         self,
