@@ -152,7 +152,10 @@ def test_replace_output_target_rows_overwrites_existing_targets(
         rows=[{"row_id": 3, "amount": 4.0}],
     )
 
-    assert replaced_memory.table_ref.table_ref_id == memory_result.table_ref.table_ref_id
+    assert (
+        replaced_memory.table_ref.table_ref_id
+        == memory_result.table_ref.table_ref_id
+    )
     assert replaced_memory.affected_rows == 1
     assert replaced_memory.target_existed is True
     assert replaced_memory.to_summary()["write_mode"] == "overwrite"
