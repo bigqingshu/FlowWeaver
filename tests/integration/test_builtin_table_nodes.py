@@ -232,6 +232,48 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
     ]
 
 
+def test_generate_test_table_node_can_save_memory_output(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    task = make_task(
+        node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+        node_run_id="node-run-generate-save-memory",
+        node_instance_id="generate_save_memory",
+        config={
+            "rows": 2,
+            "columns": ["row_id", "label"],
+            "seed": 3,
+            "output_save": {
+                "enabled": True,
+                "target_type": "memory",
+                "table_name": "generated_memory",
+            },
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert len(result.output_refs) == 2
+    current_ref = registry.get(result.output_refs[0])
+    memory_ref = registry.get(result.output_refs[1])
+    assert current_ref.role == TableRole.CURRENT
+    assert current_ref.storage_kind == TableStorageKind.RUNTIME_SQL
+    assert current_ref.logical_table_id == "generate_save_memory_output"
+    assert memory_ref.role == TableRole.AUXILIARY
+    assert memory_ref.storage_kind == TableStorageKind.MEMORY
+    assert memory_ref.logical_table_id == "generated_memory"
+    expected_rows = [
+        {"row_id": 1, "label": "label_3_1"},
+        {"row_id": 2, "label": "label_3_2"},
+    ]
+    assert provider.read_rows(current_ref, offset=0, limit=10) == expected_rows
+    assert memory_provider.read_rows(memory_ref, offset=0, limit=10) == expected_rows
+
+
 def test_list_files_node_publishes_filtered_file_metadata_table(
     tmp_path: Path,
 ) -> None:
@@ -298,6 +340,48 @@ def test_list_files_node_publishes_filtered_file_metadata_table(
             "size_bytes": 7,
         },
     ]
+
+
+def test_list_files_node_can_write_to_named_runtime_output(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, provider = make_executor(tmp_path)
+    source_dir = tmp_path / "files"
+    source_dir.mkdir()
+    (source_dir / "a.txt").write_text("alpha", encoding="utf-8")
+    (source_dir / "b.txt").write_text("beta", encoding="utf-8")
+    task = make_task(
+        node_type=LIST_FILES_NODE_TYPE,
+        node_run_id="node-run-list-files-runtime-target",
+        node_instance_id="list_files_runtime_target",
+        config={
+            "directory": str(source_dir),
+            "recursive": False,
+            "include_files": True,
+            "include_dirs": False,
+            "output_target": {
+                "slot": "out",
+                "target_kind": "new_runtime_sql",
+                "table_name": "listed_files_runtime",
+            },
+        },
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert len(result.output_refs) == 1
+    output_ref = registry.get(result.output_refs[0])
+    assert output_ref.role == TableRole.AUXILIARY
+    assert output_ref.storage_kind == TableStorageKind.RUNTIME_SQL
+    assert output_ref.logical_table_id == "listed_files_runtime"
+    rows = provider.read_rows(
+        output_ref,
+        offset=0,
+        limit=10,
+        order_by=["name"],
+    )
+    assert [row["name"] for row in rows] == ["a.txt", "b.txt"]
 
 
 def test_list_files_node_can_include_directories_and_limit_rows(

@@ -407,16 +407,29 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
             "name": "out",
             "default_role": "CURRENT",
             "allow_current": True,
-            "allow_new_memory": False,
-            "allow_new_runtime_sql": False,
-            "allow_existing_memory": False,
-            "allow_existing_runtime_sql": False,
+            "allow_new_memory": True,
+            "allow_new_runtime_sql": True,
+            "allow_existing_memory": True,
+            "allow_existing_runtime_sql": True,
             "display_name": "Current table",
             "description": "Generated table for the main workflow chain.",
         }
     ]
     assert by_type["ListFilesNode"]["output_ports"] == [
         {"name": "out", "required": False}
+    ]
+    assert by_type["ListFilesNode"]["output_table_slots"] == [
+        {
+            "name": "out",
+            "default_role": "CURRENT",
+            "allow_current": True,
+            "allow_new_memory": True,
+            "allow_new_runtime_sql": True,
+            "allow_existing_memory": True,
+            "allow_existing_runtime_sql": True,
+            "display_name": "File list table",
+            "description": "Generated file metadata table.",
+        }
     ]
     assert by_type["BatchRenameFilesNode"]["input_ports"] == [
         {"name": "in", "required": True}

@@ -177,14 +177,13 @@ class GenerateTestTableNodeHandler:
             }
             for row_number in range(1, rows_count + 1)
         ]
-        return [
-            context.publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=schema,
-                rows=rows,
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=schema,
+            row_batches=(rows,),
+        )
 
 
 class FilterRowsNodeHandler:
@@ -2960,14 +2959,13 @@ class ListFilesNodeHandler:
             glob_pattern=glob_pattern,
             max_files=max_files,
         )
-        return [
-            context.publish_rows(
-                task,
-                output_name=f"{task.node_instance_id}_output",
-                schema=_list_files_schema(),
-                rows=rows,
-            )
-        ]
+        return _publish_primary_table_output(
+            task,
+            context,
+            node_type=self.node_type,
+            schema=_list_files_schema(),
+            row_batches=(rows,),
+        )
 
 
 class BatchRenameFilesNodeHandler:

@@ -84,7 +84,7 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Generate Test Table",
             output_ports=(NodePortSpec("out"),),
             output_table_slots=(
-                _current_output_table_slot(
+                _source_output_table_slot(
                     "out",
                     display_name="Current table",
                     description="Generated table for the main workflow chain.",
@@ -435,6 +435,13 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             node_version="1.0",
             display_name="List Files",
             output_ports=(NodePortSpec("out"),),
+            output_table_slots=(
+                _source_output_table_slot(
+                    "out",
+                    display_name="File list table",
+                    description="Generated file metadata table.",
+                ),
+            ),
             config_schema=_list_files_schema(),
         ),
         NodeDefinitionSpec(
@@ -547,6 +554,25 @@ def _current_output_table_slot(
         description=description,
         default_role=TableRole.CURRENT,
         allow_current=True,
+    )
+
+
+def _source_output_table_slot(
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+) -> NodeTableOutputSlotSpec:
+    return NodeTableOutputSlotSpec(
+        name=name,
+        display_name=display_name,
+        description=description,
+        default_role=TableRole.CURRENT,
+        allow_current=True,
+        allow_new_memory=True,
+        allow_new_runtime_sql=True,
+        allow_existing_memory=True,
+        allow_existing_runtime_sql=True,
     )
 
 
