@@ -16,27 +16,22 @@ from flowweaver.common.config import (
     resolve_workflow_process_max_concurrent_node_tasks,
 )
 from flowweaver.common.time import utc_now
-from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_event_sink import (
     DatabaseEventSink,
     IPCEventSink,
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
-from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.table_provider_registry import (
     create_default_table_provider_registry,
 )
 from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
-    BuiltinTableNodeExecutor,
     CancellableNodeExecutor,
     NodeExecutor,
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.nodes.builtin_shared_table import is_shared_table_node_type
-from flowweaver.nodes.builtin_table import is_table_node_type
 from flowweaver.protocols.enums import (
     EventType,
     IPCMessageType,
@@ -71,6 +66,10 @@ from flowweaver.workflow_process.dag import (
     WorkflowDag,
     build_workflow_dag,
     restrict_workflow_dag_to_upstream_closure,
+)
+from flowweaver.workflow_process.executor_owner import (
+    DefaultWorkflowProcessExecutorOwner,
+    close_executor,
 )
 from flowweaver.workflow_process.executor_pool import (
     DispatchedNodeTask,
@@ -134,12 +133,6 @@ _CONTINUE_INDEPENDENT_IN_PROGRESS_NODE_STATUSES = frozenset(
 
 
 @runtime_checkable
-class _ClosableExecutor(Protocol):
-    def close(self) -> None:
-        ...
-
-
-@runtime_checkable
 class _NodeTaskIpcEventAwareExecutor(Protocol):
     executor_id: str
 
@@ -150,48 +143,14 @@ class _NodeTaskIpcEventAwareExecutor(Protocol):
         ...
 
 
-class _DefaultWorkflowProcessExecutorOwner:
+class _DefaultWorkflowProcessExecutorOwner(DefaultWorkflowProcessExecutorOwner):
     def __init__(self, *, store: RuntimeStore, runtime_dir: Path) -> None:
-        self._store = store
-        self._runtime_dir = runtime_dir
-        self._data_registry: RuntimeDataRegistry | None = None
-        self._table_provider: SQLiteRuntimeTableProvider | None = None
-        self._table_executor: BuiltinTableNodeExecutor | None = None
-        self._executor: SubprocessNodeExecutorIpcClient | None = None
-
-    def executor_for_task(
-        self,
-        task: NodeTaskModel,
-    ) -> NodeExecutor:
-        if is_table_node_type(task.node_type):
-            return self._builtin_table_executor()
-        if is_shared_table_node_type(task.node_type):
-            return BuiltinSharedTableNodeExecutor(store=self._store)
-        if self._executor is None or getattr(self._executor, "closed", False):
-            self._executor = SubprocessNodeExecutorIpcClient()
-        return self._executor
-
-    def _builtin_table_executor(self) -> BuiltinTableNodeExecutor:
-        if self._table_provider is None:
-            self._table_provider = SQLiteRuntimeTableProvider(self._runtime_dir)
-        if self._data_registry is None:
-            self._data_registry = RuntimeDataRegistry(
-                store=self._store,
-                table_provider=self._table_provider,
-            )
-        if self._table_executor is None:
-            self._table_executor = BuiltinTableNodeExecutor(
-                store=self._store,
-                registry=self._data_registry,
-                table_provider=self._table_provider,
-            )
-        return self._table_executor
-
-    def close(self) -> None:
-        if self._executor is None:
-            return
-        _close_executor(self._executor)
-        self._executor = None
+        super().__init__(
+            store=store,
+            runtime_dir=runtime_dir,
+            default_executor_factory=SubprocessNodeExecutorIpcClient,
+            shared_table_executor_factory=BuiltinSharedTableNodeExecutor,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -785,7 +744,7 @@ def _dispatch_ready_nodes(
         )
         if not execution_pool.submit(dispatched):
             if close_executor_after_task:
-                _close_executor(dispatched.executor)
+                close_executor(dispatched.executor)
             continue
         completion = execution_pool.pop_completed()
         if completion is not None:
@@ -877,7 +836,7 @@ def _apply_executor_task_completion(
             )
     finally:
         if close_executor_after_task:
-            _close_executor(dispatched.executor)
+            close_executor(dispatched.executor)
 
 
 def dispatch_ready_node_candidate(
@@ -918,7 +877,7 @@ def dispatch_ready_node_candidate(
     )
     if accepted is None:
         if close_executor_on_reject:
-            _close_executor(executor)
+            close_executor(executor)
         return None
     return DispatchedNodeTask(
         task=accepted,
@@ -1066,11 +1025,11 @@ def _execute_node_task_with_supervision(
             process_generation=process_generation,
         )
         if heartbeat is None:
-            _close_executor(executor)
+            close_executor(executor)
             return None
         timeout_result = task_manager.mark_timed_out_task(task)
         if timeout_result.status == NodeTaskTimeoutStatus.TIMED_OUT:
-            _close_executor(executor)
+            close_executor(executor)
             _cleanup_staging_for_node(
                 cleanup_staging_for_node,
                 workflow_run_id=workflow_run_id,
@@ -1086,7 +1045,7 @@ def _execute_node_task_with_supervision(
                 task_manager.apply_result(late_result)
             return None
         if _workflow_run_is_terminal(store, workflow_run_id):
-            _close_executor(executor)
+            close_executor(executor)
             return None
         if _workflow_cancel_was_requested(
             store=store,
@@ -1104,7 +1063,7 @@ def _execute_node_task_with_supervision(
                 cancel_requested_at,
                 cancel_grace_seconds=cancel_grace_seconds,
             ):
-                _close_executor(executor)
+                close_executor(executor)
                 worker.join(timeout=0.2)
                 return _cancelled_task_result(
                     task,
@@ -1335,15 +1294,6 @@ def _record_node_task_ipc_event(
             current_stage=progress_payload.current_stage,
             metrics=progress_payload.metrics,
         )
-
-
-def _close_executor(executor: object) -> None:
-    if not isinstance(executor, _ClosableExecutor):
-        return
-    try:
-        executor.close()
-    except Exception:
-        pass
 
 
 def _close_execution_pool(execution_pool: object | None) -> None:
