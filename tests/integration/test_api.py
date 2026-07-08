@@ -2018,6 +2018,18 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
     assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
     assert table_refs[0]["node_run_id"] == node.node_run_id
+    assert table_refs[0]["source_node_run_id"] == node.node_run_id
+    assert table_refs[0]["table_type"] == "current_table"
+    assert table_refs[0]["preview_persistence"] == "workflow_run_sql"
+    assert table_refs[0]["can_read_rows"] is True
+    assert table_refs[0]["supports_paged_rows"] is True
+    assert table_refs[0]["data_endpoints"] == {
+        "detail": f"/api/v1/data/{table_ref.table_ref_id}",
+        "schema": f"/api/v1/data/{table_ref.table_ref_id}/schema",
+        "summary": f"/api/v1/data/{table_ref.table_ref_id}/summary",
+        "rows": f"/api/v1/data/{table_ref.table_ref_id}/rows",
+    }
+    assert "rows" not in table_refs[0]
     assert table_refs[0]["lifecycle_status"] == "PUBLISHED"
     assert [item["publication_id"] for item in publications] == [
         publication.publication_id
