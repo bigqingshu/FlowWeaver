@@ -200,16 +200,6 @@ public partial class MainWindowViewModel
 
     public string ConfigJsonText => T("definition.config_json");
 
-    private void RefreshWorkflowDefinitionDraftStructureState()
-    {
-        WorkflowDefinitionDraftStructure =
-            ReadWorkflowDefinitionDraftStructureFromCache();
-        RefreshWorkflowDefinitionDraftNodes();
-        ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
-        ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
-        ClearSelectedNewDraftConnectionNodesIfMissing();
-    }
-
     private void ResetWorkflowDefinitionDraftSelectionInput()
     {
         SelectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
