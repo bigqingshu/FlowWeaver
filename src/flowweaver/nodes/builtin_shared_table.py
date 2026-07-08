@@ -5,7 +5,8 @@ from datetime import timedelta
 from typing import Any
 
 from flowweaver.common.time import utc_now
-from flowweaver.engine.runtime_store import RuntimeStore, SharedPublication
+from flowweaver.engine.runtime_models import SharedPublication
+from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.shared_table_reader import (
     SharedTableReader,
     SharedTableVersionPolicy,

@@ -21,7 +21,8 @@ from flowweaver.api.dependencies import (
 )
 from flowweaver.api.responses import error_response, ok_response
 from flowweaver.api.workflow_run_start import start_workflow_run_for_request
-from flowweaver.engine.runtime_store import RuntimeStore, WorkflowRevisionConflict
+from flowweaver.engine.runtime_models import WorkflowRevisionConflict
+from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.nodes.registry import NodeRegistry
 from flowweaver.workflow.validation import validate_workflow_definition
