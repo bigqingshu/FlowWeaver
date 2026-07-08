@@ -25,9 +25,11 @@ from flowweaver.engine.runtime_models import (
 )
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
+    _json_dumps,
+)
+from flowweaver.engine.runtime_shared_table_record_mappers import (
     _input_snapshot_from_record,
     _input_snapshot_json,
-    _json_dumps,
     _read_lease_from_record,
     _selected_members_json,
     _shared_publication_from_records,
