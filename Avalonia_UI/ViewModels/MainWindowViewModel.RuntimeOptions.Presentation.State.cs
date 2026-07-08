@@ -6,5 +6,4 @@ public partial class MainWindowViewModel
 
     public bool HasRuntimeOptionsEditorError =>
         !string.IsNullOrWhiteSpace(RuntimeOptionsEditorErrorMessage);
-
 }
