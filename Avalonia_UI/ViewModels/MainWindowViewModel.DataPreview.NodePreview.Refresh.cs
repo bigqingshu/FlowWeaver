@@ -42,14 +42,10 @@ public partial class MainWindowViewModel
                 requestedNodeInstanceId);
             if (nodeRun is null)
             {
-                DataPreviewMessage =
-                    F("format.data_preview_node_run_not_found", requestedNodeInstanceId);
-                if (notifyResult)
-                {
-                    ShowDataPreviewNotification(UiNotificationKind.Warning);
-                }
-
-                return false;
+                return ApplyMissingNodeDataPreviewOutput(
+                    "format.data_preview_node_run_not_found",
+                    requestedNodeInstanceId,
+                    notifyResult);
             }
 
             var tableRefsResponse = await _apiClient.ListTableRefsAsync(
@@ -72,14 +68,10 @@ public partial class MainWindowViewModel
                 nodeRun.NodeRunId);
             if (tableRef is null)
             {
-                DataPreviewMessage =
-                    F("format.data_preview_table_ref_not_found", requestedNodeInstanceId);
-                if (notifyResult)
-                {
-                    ShowDataPreviewNotification(UiNotificationKind.Warning);
-                }
-
-                return false;
+                return ApplyMissingNodeDataPreviewOutput(
+                    "format.data_preview_table_ref_not_found",
+                    requestedNodeInstanceId,
+                    notifyResult);
             }
 
             var rowsResponse = await _apiClient.GetTableDataRowsAsync(

@@ -18,4 +18,18 @@ public partial class MainWindowViewModel
 
         return false;
     }
+
+    private bool ApplyMissingNodeDataPreviewOutput(
+        string messageKey,
+        string nodeInstanceId,
+        bool notifyResult)
+    {
+        DataPreviewMessage = F(messageKey, nodeInstanceId);
+        if (notifyResult)
+        {
+            ShowDataPreviewNotification(UiNotificationKind.Warning);
+        }
+
+        return false;
+    }
 }
