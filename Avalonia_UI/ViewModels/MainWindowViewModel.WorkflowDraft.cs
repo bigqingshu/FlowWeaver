@@ -15,18 +15,6 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private bool isLoadingWorkflowDefinition;
-
-    [ObservableProperty]
-    private WorkflowDefinitionDetailViewModel? workflowDefinitionDetail;
-
-    [ObservableProperty]
-    private string workflowDefinitionMessage = "Select a workflow to load definition.";
-
-    [ObservableProperty]
-    private string? workflowDefinitionErrorMessage;
-
-    [ObservableProperty]
     private string workflowDefinitionDraftJson = string.Empty;
 
     [ObservableProperty]
@@ -57,6 +45,4 @@ public partial class MainWindowViewModel
     private bool hasWorkflowDefinitionRevisionConflict;
 
     private string originalWorkflowDefinitionJson = string.Empty;
-    private int workflowDefinitionLoadVersion = 0;
-
 }
