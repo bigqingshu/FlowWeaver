@@ -1,7 +1,4 @@
-using System;
 using System.Collections.ObjectModel;
-using System.Linq;
-using Avalonia_UI.Api;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -37,32 +34,6 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
-
-    private bool IsStaleDataPreviewRequest(
-        int requestVersion,
-        string requestedRunId,
-        string requestedNodeInstanceId)
-    {
-        return requestVersion != dataPreviewLoadVersion
-            || !string.Equals(
-                SelectedRun?.WorkflowRunId,
-                requestedRunId,
-                StringComparison.Ordinal)
-            || !string.Equals(
-                SelectedWorkflowDefinitionNode?.NodeInstanceId,
-                requestedNodeInstanceId,
-                StringComparison.Ordinal);
-    }
-
-    private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
-    {
-        return string.Equals(
-                tableRef.LifecycleStatus,
-                "PUBLISHED",
-                StringComparison.OrdinalIgnoreCase)
-            && tableRef.Capabilities.Any(capability =>
-                string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
-    }
 
     private void ResetDataPreviewSelectionState()
     {
