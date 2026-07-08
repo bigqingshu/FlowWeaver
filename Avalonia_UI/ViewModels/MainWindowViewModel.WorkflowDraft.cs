@@ -39,30 +39,6 @@ public partial class MainWindowViewModel
     private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
 
     [ObservableProperty]
-    private WorkflowDefinitionDraftNode? selectedNewDraftConnectionSourceNode;
-
-    [ObservableProperty]
-    private WorkflowDefinitionDraftNode? selectedNewDraftConnectionTargetNode;
-
-    [ObservableProperty]
-    private string newDraftConnectionId = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftConnectionSourceNodeId = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftConnectionSourcePort = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftConnectionTargetNodeId = string.Empty;
-
-    [ObservableProperty]
-    private string newDraftConnectionTargetPort = string.Empty;
-
-    [ObservableProperty]
-    private string selectedWorkflowDefinitionDraftConnectionId = string.Empty;
-
-    [ObservableProperty]
     private bool isWorkflowDraftJsonAdvancedVisible;
 
     [ObservableProperty]
@@ -87,7 +63,6 @@ public partial class MainWindowViewModel
     private bool hasWorkflowDefinitionRevisionConflict;
 
     private string originalWorkflowDefinitionJson = string.Empty;
-    private string lastSuggestedNewDraftConnectionId = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
 
     public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
