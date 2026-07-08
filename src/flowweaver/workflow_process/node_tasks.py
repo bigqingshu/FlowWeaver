@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import Any
 
 from flowweaver.common.time import utc_now
@@ -39,38 +37,18 @@ from flowweaver.workflow_process.loop_iteration_scheduling import (
 from flowweaver.workflow_process.loop_terminal_state import (
     close_loop_after_node_terminal_result,
 )
-
-
-class NodeTaskApplyStatus(str, Enum):
-    APPLIED = "APPLIED"
-    ALREADY_APPLIED = "ALREADY_APPLIED"
-    REJECTED_INVALID_TASK = "REJECTED_INVALID_TASK"
-    REJECTED_STALE_ATTEMPT = "REJECTED_STALE_ATTEMPT"
-    REJECTED_STALE_GENERATION = "REJECTED_STALE_GENERATION"
-    REJECTED_EXECUTOR_MISMATCH = "REJECTED_EXECUTOR_MISMATCH"
-    REJECTED_NODE_TERMINAL = "REJECTED_NODE_TERMINAL"
-
-
-class NodeTaskTimeoutStatus(str, Enum):
-    TIMED_OUT = "TIMED_OUT"
-    NOT_TIMED_OUT = "NOT_TIMED_OUT"
-    REJECTED_INVALID_TASK = "REJECTED_INVALID_TASK"
-    REJECTED_WORKFLOW_NOT_RUNNING = "REJECTED_WORKFLOW_NOT_RUNNING"
-    REJECTED_NODE_NOT_RUNNING = "REJECTED_NODE_NOT_RUNNING"
-
-
-@dataclass(frozen=True)
-class NodeTaskApplyResult:
-    status: NodeTaskApplyStatus
-    node_run_id: str | None = None
-    detail: str | None = None
-
-
-@dataclass(frozen=True)
-class NodeTaskTimeoutResult:
-    status: NodeTaskTimeoutStatus
-    node_run_id: str | None = None
-    detail: str | None = None
+from flowweaver.workflow_process.node_task_results import (
+    NodeTaskApplyResult as NodeTaskApplyResult,
+)
+from flowweaver.workflow_process.node_task_results import (
+    NodeTaskApplyStatus as NodeTaskApplyStatus,
+)
+from flowweaver.workflow_process.node_task_results import (
+    NodeTaskTimeoutResult as NodeTaskTimeoutResult,
+)
+from flowweaver.workflow_process.node_task_results import (
+    NodeTaskTimeoutStatus as NodeTaskTimeoutStatus,
+)
 
 
 class NodeTaskManager:

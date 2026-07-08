@@ -24,9 +24,11 @@ from flowweaver.workflow_process.executor_pool import (
     ExecutorTaskCompletion,
     NodeTaskExecutionPool,
 )
-from flowweaver.workflow_process.node_tasks import (
+from flowweaver.workflow_process.node_task_results import (
     NodeTaskApplyResult,
     NodeTaskApplyStatus,
+)
+from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
 )
 from flowweaver.workflow_process.ready_queue import (

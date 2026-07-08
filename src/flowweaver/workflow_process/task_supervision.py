@@ -12,9 +12,9 @@ from flowweaver.protocols.enums import NodeResultStatus, NodeRunStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow_process.executor_owner import close_executor
 from flowweaver.workflow_process.executor_pool import NodeTaskExecutionPool
+from flowweaver.workflow_process.node_task_results import NodeTaskTimeoutStatus
 from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
-    NodeTaskTimeoutStatus,
 )
 from flowweaver.workflow_process.process_finalization import workflow_run_is_terminal
 
