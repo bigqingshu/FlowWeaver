@@ -18,15 +18,6 @@ public partial class MainWindowViewModel
     private int dataPreviewWorkbenchLoadVersion;
 
     [ObservableProperty]
-    private TableRefListItemViewModel? selectedDataPreviewTableRef;
-
-    [ObservableProperty]
-    private DataPreviewStateListItemViewModel? selectedDataPreviewState;
-
-    [ObservableProperty]
-    private TableRefListItemViewModel? selectedDataPreviewTableOption;
-
-    [ObservableProperty]
     private TableRefListItemViewModel? loadedDataPreviewTableRef;
 
     [ObservableProperty]
@@ -64,10 +55,6 @@ public partial class MainWindowViewModel
     private bool dataPreviewWorkbenchHasMore;
 
     private long dataPreviewWorkbenchRowCount;
-
-    public ObservableCollection<DataPreviewStateListItemViewModel> DataPreviewStates { get; } = new();
-
-    public ObservableCollection<TableRefListItemViewModel> DataPreviewTableOptions { get; } = new();
 
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
 
