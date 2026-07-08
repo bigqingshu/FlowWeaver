@@ -54,6 +54,15 @@ from flowweaver.nodes.builtin_table_node_types import (
 from flowweaver.nodes.builtin_table_runner import (
     BuiltinTableNodeRunner as BuiltinTableNodeRunner,
 )
+from flowweaver.nodes.table_node_common import (
+    bool_status as _bool_status,
+)
+from flowweaver.nodes.table_node_common import (
+    require_fields as _require_fields,
+)
+from flowweaver.nodes.table_node_common import (
+    simple_schema as _simple_schema,
+)
 from flowweaver.nodes.table_node_config import (
     bool_config as _bool_config,
 )
@@ -3627,19 +3636,6 @@ def _parse_columns(value: Any) -> list[FieldSchemaModel]:
     return fields
 
 
-def _simple_schema(fields: list[tuple[str, str, bool]]) -> list[FieldSchemaModel]:
-    return [
-        FieldSchemaModel(
-            field_id=name,
-            name=name,
-            data_type=data_type,
-            nullable=nullable,
-            ordinal=index,
-        )
-        for index, (name, data_type, nullable) in enumerate(fields)
-    ]
-
-
 def _subworkflow_loop_node_ids(nodes: list[dict[str, Any]]) -> list[str]:
     loop_node_types = {LOOP_START_NODE_TYPE, LOOP_JUDGE_NODE_TYPE}
     blocked: list[str] = []
@@ -3959,10 +3955,6 @@ def _write_selected_columns_status_schema() -> list[FieldSchemaModel]:
             ("skipped_reason", "TEXT", False),
         ]
     )
-
-
-def _bool_status(value: bool) -> str:
-    return "true" if value else "false"
 
 
 def _condition_flag_result(
@@ -4893,21 +4885,6 @@ def _list_files_schema() -> list[FieldSchemaModel]:
             ("modified_at", "TEXT", True),
         ]
     )
-
-
-def _require_fields(
-    schema: list[FieldSchemaModel],
-    field_names: list[str],
-) -> None:
-    missing_fields = [
-        field_name
-        for field_name in field_names
-        if find_field(schema, field_name) is None
-    ]
-    if missing_fields:
-        raise _NodeValidationError(
-            f"Fields do not exist: {', '.join(missing_fields)}"
-        )
 
 
 def _batch_rename_plan_row(
