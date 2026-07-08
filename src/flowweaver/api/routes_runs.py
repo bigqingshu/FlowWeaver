@@ -13,6 +13,7 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
+from flowweaver.api.run_pagination import pagination_rejection
 from flowweaver.api.run_review import build_run_review_payload
 from flowweaver.api.run_table_cleanup import cleanup_table_refs_for_run
 from flowweaver.api.workflow_run_start import start_workflow_run_for_request
@@ -42,7 +43,7 @@ def list_runs(
     offset: int = 0,
     limit: int = 100,
 ):
-    rejection = _pagination_rejection(request, offset=offset, limit=limit)
+    rejection = pagination_rejection(request, offset=offset, limit=limit)
     if rejection is not None:
         return rejection
     return ok_response(
@@ -68,7 +69,7 @@ def list_background_runs(
     offset: int = 0,
     limit: int = 100,
 ):
-    rejection = _pagination_rejection(request, offset=offset, limit=limit)
+    rejection = pagination_rejection(request, offset=offset, limit=limit)
     if rejection is not None:
         return rejection
     return ok_response(
@@ -339,31 +340,6 @@ def cleanup_run_table_refs(
             provider_registry=provider_registry,
         ),
     )
-
-
-def _pagination_rejection(
-    request: Request,
-    *,
-    offset: int,
-    limit: int,
-):
-    if offset < 0:
-        return error_response(
-            request,
-            error_code="INVALID_PAGINATION",
-            message="offset must be non-negative",
-            status_code=422,
-            details={"offset": offset},
-        )
-    if limit < 1 or limit > 500:
-        return error_response(
-            request,
-            error_code="INVALID_PAGINATION",
-            message="limit must be between 1 and 500",
-            status_code=422,
-            details={"limit": limit},
-        )
-    return None
 
 
 def _run_not_found(request: Request):
