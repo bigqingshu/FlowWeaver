@@ -9,7 +9,7 @@ from flowweaver.nodes.builtin_shared_table import (
     READ_SHARED_TABLES_NODE_TYPE,
 )
 from flowweaver.nodes.builtin_sql import SQL_MAPPING_NODE_TYPE
-from flowweaver.nodes.builtin_table import (
+from flowweaver.nodes.builtin_table_node_types import (
     ADD_COLUMNS_NODE_TYPE,
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
     ADVANCED_FILTER_ROWS_NODE_TYPE,
