@@ -20,13 +20,6 @@ public partial class MainWindowViewModel
             WorkflowDefinitionDraftJson);
     }
 
-    private RuntimeOptionsDraftReadResult
-        ReadWorkflowDefinitionDraftRuntimeOptionsFromCache()
-    {
-        return workflowDefinitionDraftParseCache.GetRuntimeOptions(
-            WorkflowDefinitionDraftJson);
-    }
-
     private void InvalidateWorkflowDefinitionDraftParseCache()
     {
         workflowDefinitionDraftParseCache.Invalidate();
