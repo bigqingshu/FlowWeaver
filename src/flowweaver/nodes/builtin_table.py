@@ -1443,12 +1443,30 @@ class LookupMatchedFieldNameNodeHandler:
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
     ) -> list[TableRefModel]:
-        if len(task.input_refs) != 2:
-            raise _NodeValidationError(
-                "LookupMatchedFieldNameNode requires main and lookup input_refs"
+        allowed_storage_kinds = (
+            TableStorageKind.RUNTIME_SQL,
+            TableStorageKind.MEMORY,
+        )
+        if task.input_slot_bindings:
+            main_ref = context.require_input_slot(
+                task,
+                "in",
+                node_type=self.node_type,
+                allowed_storage_kinds=allowed_storage_kinds,
             )
-        main_ref = context.input_ref(task.input_refs[0])
-        lookup_ref = context.input_ref(task.input_refs[1])
+            lookup_ref = context.require_input_slot(
+                task,
+                "lookup",
+                node_type=self.node_type,
+                allowed_storage_kinds=allowed_storage_kinds,
+            )
+        else:
+            if len(task.input_refs) != 2:
+                raise _NodeValidationError(
+                    "LookupMatchedFieldNameNode requires main and lookup input_refs"
+                )
+            main_ref = context.input_ref(task.input_refs[0])
+            lookup_ref = context.input_ref(task.input_refs[1])
         source_field = _node_string_config(
             task.config,
             "source_field",

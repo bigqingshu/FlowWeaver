@@ -40,6 +40,7 @@ class TableInputResolutionIssue:
 class TableInputResolution:
     status: TableInputResolutionStatus
     input_refs: tuple[str, ...] = ()
+    input_slot_bindings: dict[str, str] | None = None
     issue: TableInputResolutionIssue | None = None
 
 
@@ -57,6 +58,7 @@ def resolve_configured_input_refs(
         return TableInputResolution(TableInputResolutionStatus.NO_CONFIG)
 
     input_refs: list[str] = []
+    input_slot_bindings: dict[str, str] = {}
     for selector in selectors:
         source_node = upstream_node_runs.get(selector.source_node_instance_id)
         if source_node is None:
@@ -92,10 +94,12 @@ def resolve_configured_input_refs(
                 ],
             )
         input_refs.append(matches[0].table_ref_id)
+        input_slot_bindings[selector.slot] = matches[0].table_ref_id
 
     return TableInputResolution(
         TableInputResolutionStatus.RESOLVED,
         input_refs=tuple(input_refs),
+        input_slot_bindings=input_slot_bindings,
     )
 
 
@@ -147,6 +151,12 @@ def _selectors_from_config(
                     return selector
                 if selector is not None:
                     selectors.append(selector)
+
+    seen_slots: set[str] = set()
+    for selector in selectors:
+        if selector.slot in seen_slots:
+            return _config_error(selector.slot, f"duplicate input slot: {selector.slot}")
+        seen_slots.add(selector.slot)
 
     return tuple(selectors)
 

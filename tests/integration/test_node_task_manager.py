@@ -327,6 +327,43 @@ def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
     ]
 
 
+def test_ready_node_submission_preserves_input_slot_bindings(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    run, process, manager = create_running_process(store, linear_definition())
+
+    task = manager.submit_ready_node(
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        input_refs=["table-main", "table-lookup"],
+        input_slot_bindings={
+            "in": "table-main",
+            "lookup": "table-lookup",
+        },
+        timeout_seconds=60,
+    )
+    assert task is not None
+    loaded = store.get_node_task(task.task_id)
+    accepted = manager.accept_task(
+        task_id=task.task_id,
+        executor_id="executor-slot-bindings",
+    )
+
+    assert loaded == task
+    assert accepted == task
+    assert task.input_slot_bindings == {
+        "in": "table-main",
+        "lookup": "table-lookup",
+    }
+    assert accepted.input_slot_bindings == {
+        "in": "table-main",
+        "lookup": "table-lookup",
+    }
+
+
 def test_success_result_is_idempotent_and_advances_downstream(
     tmp_path: Path,
 ) -> None:

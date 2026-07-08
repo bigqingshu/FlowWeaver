@@ -905,6 +905,7 @@ def dispatch_ready_node_candidate(
         node_instance_id=candidate.node_run.node_instance_id,
         node_run_id=candidate.node_run.node_run_id,
         input_refs=list(candidate.input_refs),
+        input_slot_bindings=candidate.input_slot_bindings,
         timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
     )
     if task is None:
@@ -942,6 +943,7 @@ def _fail_ready_node_input_resolution(
         node_instance_id=candidate.node_run.node_instance_id,
         node_run_id=candidate.node_run.node_run_id,
         input_refs=list(candidate.input_refs),
+        input_slot_bindings=candidate.input_slot_bindings,
         timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
     )
     if task is None:

@@ -22,6 +22,7 @@ class NodeTaskModel(StrictModel):
     node_version: str
     attempt: int
     input_refs: list[str]
+    input_slot_bindings: dict[str, str] = Field(default_factory=dict)
     config: dict[str, Any]
     timeout_seconds: int
 

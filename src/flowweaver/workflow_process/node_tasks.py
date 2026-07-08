@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
+from collections.abc import Mapping
 from typing import Any
 
 from flowweaver.common.time import utc_now
@@ -109,6 +110,7 @@ class NodeTaskManager:
         node_run_id: str | None = None,
         config: dict[str, Any] | None = None,
         input_refs: list[str] | None = None,
+        input_slot_bindings: Mapping[str, str] | None = None,
         timeout_seconds: int = 60,
     ) -> NodeTaskModel | None:
         node = self._dag_node(node_instance_id)
@@ -148,6 +150,7 @@ class NodeTaskManager:
             node_version=node.node_version,
             attempt=queued.attempt,
             input_refs=input_refs or [],
+            input_slot_bindings=dict(input_slot_bindings or {}),
             config=node.config if config is None else config,
             timeout_seconds=timeout_seconds,
         )

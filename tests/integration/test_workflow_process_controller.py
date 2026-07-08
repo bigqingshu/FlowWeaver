@@ -905,6 +905,9 @@ def test_ready_queue_resolves_configured_auxiliary_input_source(
 
     assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
     assert candidates[0].input_refs == (auxiliary_ref.table_ref_id,)
+    assert candidates[0].input_slot_bindings == {
+        "in": auxiliary_ref.table_ref_id,
+    }
     assert candidates[0].input_resolution_issue is None
 
 

@@ -47,6 +47,48 @@ class BuiltinTableNodeContext:
             )
         return self.input_ref(task.input_refs[0])
 
+    def require_input_slot(
+        self,
+        task: NodeTaskModel,
+        slot: str,
+        *,
+        node_type: str,
+        allowed_storage_kinds: Sequence[TableStorageKind] | None = None,
+    ) -> TableRefModel:
+        table_ref_id = task.input_slot_bindings.get(slot)
+        if table_ref_id is None:
+            raise BuiltinTableNodeValidationError(
+                f"{node_type} requires input slot: {slot}"
+            )
+        table_ref = self.input_ref(table_ref_id)
+        if (
+            allowed_storage_kinds is not None
+            and table_ref.storage_kind not in allowed_storage_kinds
+        ):
+            allowed = ", ".join(kind.value for kind in allowed_storage_kinds)
+            raise BuiltinTableNodeValidationError(
+                f"{node_type} input slot {slot} requires storage kind: "
+                f"{allowed}; got {table_ref.storage_kind.value}"
+            )
+        return table_ref
+
+    def iter_slot_batches(
+        self,
+        task: NodeTaskModel,
+        slot: str,
+        *,
+        node_type: str,
+        allowed_storage_kinds: Sequence[TableStorageKind] | None = None,
+        batch_size: int | None = None,
+    ) -> Iterable[list[dict[str, Any]]]:
+        table_ref = self.require_input_slot(
+            task,
+            slot,
+            node_type=node_type,
+            allowed_storage_kinds=allowed_storage_kinds,
+        )
+        return self.iter_row_batches(table_ref, batch_size=batch_size)
+
     def read_all_rows(self, table_ref: TableRefModel) -> list[dict[str, Any]]:
         provider = self._reader_for(table_ref)
         return provider.read_rows(

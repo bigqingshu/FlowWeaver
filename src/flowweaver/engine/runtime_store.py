@@ -2461,6 +2461,12 @@ def _node_task_to_record(task: NodeTaskModel) -> NodeTaskRecord:
             sort_keys=True,
             separators=(",", ":"),
         ),
+        input_slot_bindings_json=json.dumps(
+            task.input_slot_bindings,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         config_json=_json_dumps(task.config),
         timeout_seconds=task.timeout_seconds,
         created_at=_datetime_to_text(utc_now()),
@@ -2479,6 +2485,7 @@ def _node_task_from_record(record: NodeTaskRecord) -> NodeTaskModel:
         node_version=record.node_version,
         attempt=record.attempt,
         input_refs=list(json.loads(record.input_refs_json)),
+        input_slot_bindings=dict(json.loads(record.input_slot_bindings_json or "{}")),
         config=json.loads(record.config_json),
         timeout_seconds=record.timeout_seconds,
     )

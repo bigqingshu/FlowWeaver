@@ -182,6 +182,63 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
     }.issubset(table_names(database_path))
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
+    assert "input_slot_bindings_json" in column_names(database_path, "node_tasks")
+
+
+def test_runtime_store_round_trips_node_task_input_slot_bindings(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Node task slot binding workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-node-task-slot-bindings",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-node-task-slot-bindings",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-node-task-slot-bindings",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="lookup",
+        node_type="LookupMatchedFieldNameNode",
+        node_run_id="node-run-lookup",
+        status=NodeRunStatus.QUEUED,
+    )
+    task = NodeTaskModel(
+        task_id="task-slot-bindings",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=["table-main", "table-lookup"],
+        input_slot_bindings={
+            "in": "table-main",
+            "lookup": "table-lookup",
+        },
+        config={},
+        timeout_seconds=60,
+    )
+
+    store.create_node_task(task)
+    loaded = store.get_node_task(task.task_id)
+
+    assert loaded == task
+    assert loaded is not None
+    assert loaded.input_slot_bindings == {
+        "in": "table-main",
+        "lookup": "table-lookup",
+    }
 
 
 def test_shared_publication_prerequisite_schema_is_available(

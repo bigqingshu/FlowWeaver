@@ -114,6 +114,7 @@ def make_task(
     node_instance_id: str,
     config: dict,
     input_refs: list[str] | None = None,
+    input_slot_bindings: dict[str, str] | None = None,
 ) -> NodeTaskModel:
     return NodeTaskModel(
         workflow_run_id="run-1",
@@ -125,6 +126,7 @@ def make_task(
         node_version="1.0",
         attempt=1,
         input_refs=input_refs or [],
+        input_slot_bindings=input_slot_bindings or {},
         config=config,
         timeout_seconds=60,
     )
@@ -2891,7 +2893,11 @@ def test_lookup_matched_field_name_node_outputs_match_metadata(
         node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
         node_run_id="node-run-lookup-matched-field",
         node_instance_id="lookup_matched_field",
-        input_refs=[main_input_ref.table_ref_id, lookup_input_ref.table_ref_id],
+        input_refs=[lookup_input_ref.table_ref_id, main_input_ref.table_ref_id],
+        input_slot_bindings={
+            "in": main_input_ref.table_ref_id,
+            "lookup": lookup_input_ref.table_ref_id,
+        },
         config={
             "source_field": "source",
             "lookup_fields": ["first", "second"],
@@ -6644,6 +6650,95 @@ def test_lookup_matched_field_name_node_requires_lookup_input_ref(
     assert result.error["error_code"] == "VALIDATION_ERROR"
     assert "requires main and lookup input_refs" in result.error["message"]
     assert len(registry.list_by_workflow_run("run-1")) == 2
+
+
+def test_lookup_matched_field_name_node_requires_lookup_input_slot(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider = make_executor(tmp_path)
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate",
+            node_instance_id="generate",
+            config={"rows": 2, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    result = executor.execute(
+        make_task(
+            node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+            node_run_id="node-run-lookup-matched-field",
+            node_instance_id="lookup_matched_field",
+            input_refs=[input_ref.table_ref_id],
+            input_slot_bindings={"in": input_ref.table_ref_id},
+            config={"source_field": "source", "lookup_fields": ["source"]},
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "requires input slot: lookup" in result.error["message"]
+
+
+def test_lookup_matched_field_name_node_rejects_unsupported_slot_storage_kind(
+    tmp_path: Path,
+) -> None:
+    executor, store, registry, _provider = make_executor(tmp_path)
+    main_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-main",
+            node_instance_id="main",
+            config={"rows": 1, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    lookup_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-lookup",
+            node_instance_id="lookup",
+            config={"rows": 1, "columns": ["row_id", "source"], "seed": 0},
+        )
+    )
+    main_ref = registry.get(main_result.output_refs[0])
+    lookup_ref = registry.get(lookup_result.output_refs[0])
+    external_lookup_ref = lookup_ref.model_copy(
+        update={
+            "table_ref_id": "external-lookup-ref",
+            "storage_kind": TableStorageKind.EXTERNAL_SQL,
+            "provider_id": "external_sql",
+            "logical_table_id": "external_lookup",
+            "opaque_handle": {
+                "profile_id": "profile-1",
+                "table_name": "lookup",
+            },
+        }
+    )
+    store.register_table_ref(external_lookup_ref)
+
+    result = executor.execute(
+        make_task(
+            node_type=LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
+            node_run_id="node-run-lookup-matched-field",
+            node_instance_id="lookup_matched_field",
+            input_refs=[main_ref.table_ref_id, external_lookup_ref.table_ref_id],
+            input_slot_bindings={
+                "in": main_ref.table_ref_id,
+                "lookup": external_lookup_ref.table_ref_id,
+            },
+            config={"source_field": "source", "lookup_fields": ["source"]},
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.output_refs == []
+    assert result.error is not None
+    assert result.error["error_code"] == "VALIDATION_ERROR"
+    assert "input slot lookup requires storage kind" in result.error["message"]
 
 
 def test_lookup_matched_field_name_node_rejects_duplicate_output_fields(

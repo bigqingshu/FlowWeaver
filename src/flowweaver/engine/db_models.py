@@ -152,6 +152,11 @@ class NodeTaskRecord(Base):
     node_version: Mapped[str] = mapped_column(Text, nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, nullable=False)
     input_refs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    input_slot_bindings_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="{}",
+    )
     config_json: Mapped[str] = mapped_column(Text, nullable=False)
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
