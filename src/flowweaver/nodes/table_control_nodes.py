@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import (
@@ -17,11 +16,11 @@ from flowweaver.nodes.table_condition_flag_nodes import (
 from flowweaver.nodes.table_condition_flag_nodes import (
     _condition_flag_result as _condition_flag_result,
 )
-from flowweaver.nodes.table_node_common import (
-    bool_status as _bool_status,
+from flowweaver.nodes.table_control_status import (
+    publish_control_status as _publish_control_status,
 )
 from flowweaver.nodes.table_node_common import (
-    simple_schema as _simple_schema,
+    bool_status as _bool_status,
 )
 from flowweaver.nodes.table_node_config import (
     bool_config as _bool_config,
@@ -56,7 +55,7 @@ from flowweaver.nodes.table_node_handlers import (
 )
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -553,60 +552,6 @@ def _subworkflow_loop_node_ids(nodes: list[dict[str, Any]]) -> list[str]:
     return blocked
 
 
-def _control_status_schema() -> list[FieldSchemaModel]:
-    return _simple_schema(
-        [
-            ("signal_type", "TEXT", False),
-            ("signal_status", "TEXT", False),
-            ("source_node_id", "TEXT", False),
-            ("target_node_id", "TEXT", False),
-            ("target_anchor", "TEXT", False),
-            ("condition_result", "TEXT", False),
-            ("selected_branch", "TEXT", False),
-            ("action", "TEXT", False),
-            ("actual_control", "TEXT", False),
-            ("reason", "TEXT", False),
-            ("details", "TEXT", False),
-        ]
-    )
-
-
-def _publish_control_status(
-    context: BuiltinTableNodeContext,
-    task: NodeTaskModel,
-    *,
-    signal_type: str,
-    signal_status: str,
-    source_node_id: str,
-    action: str,
-    target_node_id: str = "",
-    target_anchor: str = "",
-    condition_result: str = "",
-    selected_branch: str = "",
-    reason: str = "",
-    details: dict[str, Any] | None = None,
-) -> TableRefModel:
-    row = {
-        "signal_type": signal_type,
-        "signal_status": signal_status,
-        "source_node_id": source_node_id,
-        "target_node_id": target_node_id,
-        "target_anchor": target_anchor,
-        "condition_result": condition_result,
-        "selected_branch": selected_branch,
-        "action": action,
-        "actual_control": _bool_status(False),
-        "reason": reason,
-        "details": _json_text(details or {}),
-    }
-    return context.publish_rows(
-        task,
-        output_name=f"{task.node_instance_id}_output",
-        schema=_control_status_schema(),
-        rows=[row],
-    )
-
-
 def _conditional_jump_target_config(
     config: dict[str, Any],
     *,
@@ -716,9 +661,5 @@ def _loop_judge_result(
     raise _NodeValidationError(
         f"Unsupported LoopJudgeNode condition_mode: {condition_mode}"
     )
-
-
-def _json_text(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True, default=str)
 
 
