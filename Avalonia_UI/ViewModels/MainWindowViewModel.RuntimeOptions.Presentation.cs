@@ -7,19 +7,6 @@ public partial class MainWindowViewModel
     public bool HasRuntimeOptionsEditorError =>
         !string.IsNullOrWhiteSpace(RuntimeOptionsEditorErrorMessage);
 
-    public string RuntimeOptionsSummaryText =>
-        F(
-            "definition.runtime_options_summary",
-            FormatRuntimeOptionsOptionValue("profile", RuntimeOptionsProfileDraft),
-            FormatRuntimeOptionsOptionValue("event_level", RuntimeOptionsEventLevelDraft),
-            RuntimeOptionsProgressEnabledDraft ? T("common.on") : T("common.off"),
-            RuntimeOptionsNodeOverrideCount);
-
-    public bool HasSelectedRunRuntimeOptionsSummary => SelectedRun is not null;
-
-    public string SelectedRunRuntimeOptionsSummaryText =>
-        FormatSelectedRunRuntimeOptionsSummary();
-
     public string RuntimeOptionsSectionText => T("definition.runtime_options");
 
     public string RuntimeOptionsOpenEditorText =>
@@ -78,10 +65,5 @@ public partial class MainWindowViewModel
 
     public string RuntimeOptionsResetNodeOverrideText =>
         T("definition.runtime_options_reset_node_override");
-
-    private void NotifyRuntimeOptionsSummaryChanged()
-    {
-        OnPropertyChanged(nameof(RuntimeOptionsSummaryText));
-    }
 
 }
