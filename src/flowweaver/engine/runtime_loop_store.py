@@ -12,14 +12,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
-    DataRefRecord,
     LoopIterationNodeRunRecord,
     LoopIterationRunRecord,
     LoopIterationTableRefRecord,
     LoopRunRecord,
-    NodeRunRecord,
 )
 from flowweaver.engine.runtime_loop_run_store import RuntimeLoopRunStoreMixin
+from flowweaver.engine.runtime_loop_validators import (
+    validate_loop_node_run as _validate_loop_node_run,
+)
+from flowweaver.engine.runtime_loop_validators import (
+    validate_loop_table_ref as _validate_loop_table_ref,
+)
 from flowweaver.engine.runtime_models import (
     LoopIterationNodeRun,
     LoopIterationRun,
@@ -423,33 +427,3 @@ class RuntimeLoopStoreMixin(RuntimeLoopRunStoreMixin):
             ]
 
 
-def _validate_loop_table_ref(
-    session: Session,
-    *,
-    loop: LoopRunRecord,
-    table_ref_id: str,
-) -> DataRefRecord:
-    table_ref = session.get(DataRefRecord, table_ref_id)
-    if table_ref is None:
-        raise ValueError(f"Loop table ref not found: {table_ref_id}")
-    if table_ref.workflow_run_id != loop.workflow_run_id:
-        raise ValueError(
-            f"Loop table ref does not belong to workflow run: {table_ref_id}"
-        )
-    return table_ref
-
-
-def _validate_loop_node_run(
-    session: Session,
-    *,
-    loop: LoopRunRecord,
-    node_run_id: str,
-) -> NodeRunRecord:
-    node_run = session.get(NodeRunRecord, node_run_id)
-    if node_run is None:
-        raise ValueError(f"Loop node run not found: {node_run_id}")
-    if node_run.workflow_run_id != loop.workflow_run_id:
-        raise ValueError(
-            f"Loop node run does not belong to workflow run: {node_run_id}"
-        )
-    return node_run
