@@ -21,6 +21,7 @@ from flowweaver.workflow.definition import (
     FailurePolicyMode,
     WorkflowDefinitionModel,
 )
+from flowweaver.workflow.runtime_options import resolve_runtime_options_by_node
 from flowweaver.workflow_process import main as workflow_process_main
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
@@ -239,6 +240,7 @@ def create_running_process(store: RuntimeStore, definition: dict):
         event_sink=DatabaseEventSink(store),
         dag=dag,
         failure_policy_mode=definition_model.failure_policy.mode,
+        runtime_options_by_node=resolve_runtime_options_by_node(definition_model),
     )
     return run, process, manager
 
@@ -535,6 +537,60 @@ def test_task_heartbeat_and_progress_update_node_runtime_state(
     }
 
 
+def test_runtime_options_progress_interval_throttles_progress_feedback(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = linear_definition() | {
+        "runtime_options": {
+            "workflow": {
+                "telemetry": {
+                    "event_level": "verbose",
+                    "progress_enabled": True,
+                    "progress_interval_seconds": 60,
+                }
+            }
+        }
+    }
+    run, process, manager = create_running_process(store, definition)
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+
+    first = manager.record_task_progress(
+        task,
+        executor_id="executor-1",
+        progress=0.25,
+        current_stage="first",
+    )
+    second = manager.record_task_progress(
+        task,
+        executor_id="executor-1",
+        progress=0.75,
+        current_stage="second",
+    )
+
+    loaded = store.get_node_run(task.node_run_id)
+    progress_events = [
+        event
+        for event in store.list_runtime_events()
+        if event.event_type == "NODE_PROGRESS"
+    ]
+    assert first is not None
+    assert second is not None
+    assert loaded is not None
+    assert loaded.progress == 0.25
+    assert loaded.current_stage == "first"
+    assert len(progress_events) == 1
+    assert progress_events[0].payload["progress"] == 0.25
+    assert progress_events[0].payload["current_stage"] == "first"
+
+
 def test_node_task_manager_does_not_timeout_before_deadline(
     tmp_path: Path,
 ) -> None:
@@ -730,6 +786,114 @@ def test_success_result_is_rejected_after_cancel_requested(tmp_path: Path) -> No
         task_id=result.task_id,
         result_id=result.result_id,
     ) is None
+
+
+def test_runtime_options_sanitize_success_result_summary(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = linear_definition() | {
+        "runtime_options": {
+            "workflow": {
+                "diagnostics": {
+                    "include_metrics": False,
+                    "redact_columns": ["password"],
+                    "mask_policy": "full",
+                }
+            }
+        }
+    }
+    run, process, manager = create_running_process(store, definition)
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        output_refs=["table-output"],
+    ).execute(task).model_copy(
+        update={
+            "summary": {
+                "metrics": {"rows": 10},
+                "password": "secret",
+                "kept": "ok",
+                "nested": {"metrics": {"seconds": 1}, "password": "nested-secret"},
+            }
+        }
+    )
+
+    applied = manager.apply_result(result)
+
+    stored = store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    )
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert stored is not None
+    assert stored.output_refs == ["table-output"]
+    assert stored.summary == {
+        "password": "***",
+        "kept": "ok",
+        "nested": {"password": "***"},
+    }
+
+
+def test_runtime_options_sanitize_failure_result_error(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition = linear_definition() | {
+        "runtime_options": {
+            "workflow": {
+                "diagnostics": {
+                    "capture_error_context": False,
+                    "include_metrics": False,
+                    "redact_columns": ["reason"],
+                    "mask_policy": "full",
+                }
+            }
+        }
+    }
+    run, process, manager = create_running_process(store, definition)
+    task = submit_and_accept(
+        store,
+        manager,
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+    )
+    result = FakeNodeExecutor(
+        executor_id="executor-1",
+        status=NodeResultStatus.FAILED,
+        error={
+            "message": "failed",
+            "reason": "private-reason",
+            "metrics": {"rows": 10},
+            "traceback": "stack",
+            "row": {"password": "secret"},
+        },
+    ).execute(task)
+
+    applied = manager.apply_result(result)
+
+    stored = store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    )
+    node = store.get_node_run(task.node_run_id)
+    workflow = store.get_workflow_run(run.workflow_run_id)
+    assert applied.status == NodeTaskApplyStatus.APPLIED
+    assert stored is not None
+    assert node is not None
+    assert workflow is not None
+    assert stored.error == {"message": "failed", "reason": "***"}
+    assert node.error == {"message": "failed", "reason": "***"}
+    assert workflow.error == {"message": "failed", "reason": "***"}
 
 
 def test_failed_result_marks_node_and_workflow_failed(tmp_path: Path) -> None:

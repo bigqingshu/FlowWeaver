@@ -8,6 +8,7 @@ from typing import Any
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow.definition import (
     DiagnosticsRuntimeOptionsOverrideModel,
     RuntimeOptionsOverrideModel,
@@ -85,6 +86,16 @@ _ESSENTIAL_PAYLOAD_KEYS = frozenset(
         "completion_reason",
         "run_mode",
         "target_node_instance_id",
+    }
+)
+_ESSENTIAL_ERROR_KEYS = frozenset(
+    {
+        "message",
+        "error_code",
+        "code",
+        "reason",
+        "origin",
+        "status",
     }
 )
 
@@ -187,6 +198,27 @@ def resolve_runtime_options_by_node(
         )
         for node in definition.nodes
     }
+
+
+def sanitize_node_task_result_for_runtime_options(
+    result: NodeTaskResultModel,
+    options: RuntimeOptionsWorkflowModel | None,
+) -> NodeTaskResultModel:
+    if options is None:
+        return result
+    return result.model_copy(
+        update={
+            "summary": _sanitize_runtime_diagnostics_payload(
+                result.summary,
+                options,
+            ),
+            "error": (
+                None
+                if result.error is None
+                else _sanitize_runtime_error_payload(result.error, options)
+            ),
+        }
+    )
 
 
 def merge_runtime_options(
@@ -303,6 +335,17 @@ def _sanitize_runtime_event(
     options: RuntimeOptionsWorkflowModel,
 ) -> EventModel:
     payload = dict(event.payload)
+    payload = _sanitize_runtime_diagnostics_payload(payload, options)
+    return event.model_copy(update={"payload": payload})
+
+
+def _sanitize_runtime_diagnostics_payload(
+    payload: dict[str, Any],
+    options: RuntimeOptionsWorkflowModel,
+    *,
+    essential_keys: frozenset[str] = _ESSENTIAL_PAYLOAD_KEYS,
+) -> dict[str, Any]:
+    payload = dict(payload)
     if not options.diagnostics.include_metrics:
         payload = _remove_payload_key(payload, "metrics")
     if options.diagnostics.redact_columns:
@@ -311,8 +354,29 @@ def _sanitize_runtime_event(
             {column.lower() for column in options.diagnostics.redact_columns},
             options.diagnostics.mask_policy,
         )
-    payload = _limit_payload_size(payload, options.diagnostics.payload_byte_limit)
-    return event.model_copy(update={"payload": payload})
+    payload = _limit_payload_size(
+        payload,
+        options.diagnostics.payload_byte_limit,
+        essential_keys=essential_keys,
+    )
+    return payload
+
+
+def _sanitize_runtime_error_payload(
+    payload: dict[str, Any],
+    options: RuntimeOptionsWorkflowModel,
+) -> dict[str, Any]:
+    if not options.diagnostics.capture_error_context:
+        payload = {
+            key: value
+            for key, value in payload.items()
+            if key in _ESSENTIAL_ERROR_KEYS
+        }
+    return _sanitize_runtime_diagnostics_payload(
+        payload,
+        options,
+        essential_keys=_ESSENTIAL_PAYLOAD_KEYS | _ESSENTIAL_ERROR_KEYS,
+    )
 
 
 def _event_node_instance_id(event: EventModel) -> str | None:
@@ -365,6 +429,8 @@ def _mask_value(value: Any, mask_policy: str) -> Any:
 def _limit_payload_size(
     payload: dict[str, Any],
     payload_byte_limit: int,
+    *,
+    essential_keys: frozenset[str] = _ESSENTIAL_PAYLOAD_KEYS,
 ) -> dict[str, Any]:
     if payload_byte_limit <= 0:
         return payload
@@ -379,7 +445,7 @@ def _limit_payload_size(
     limited = {
         key: value
         for key, value in payload.items()
-        if key in _ESSENTIAL_PAYLOAD_KEYS
+        if key in essential_keys
     }
     limited["_runtime_options_payload_truncated"] = True
     limited["_runtime_options_payload_original_bytes"] = len(encoded)

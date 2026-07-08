@@ -22,6 +22,9 @@ from flowweaver.workflow.definition import (
     FailurePolicyMode,
     RuntimeOptionsWorkflowModel,
 )
+from flowweaver.workflow.runtime_options import (
+    sanitize_node_task_result_for_runtime_options,
+)
 from flowweaver.workflow_process.control_signal_interpreter import (
     interpret_control_outputs_after_node_success,
 )
@@ -89,6 +92,7 @@ class NodeTaskManager:
         )
         self._runtime_options_by_node = dict(runtime_options_by_node or {})
         self._table_provider_registry = table_provider_registry
+        self._last_progress_emitted_at: dict[str, datetime] = {}
 
     @property
     def failure_policy_mode(self) -> FailurePolicyMode:
@@ -241,14 +245,34 @@ class NodeTaskManager:
                 task,
                 executor_id=executor_id,
             )
+        now = utc_now()
+        if (
+            runtime_options is not None
+            and runtime_options.telemetry.progress_interval_seconds > 0
+        ):
+            previous_progress_at = self._last_progress_emitted_at.get(task.task_id)
+            if (
+                previous_progress_at is not None
+                and now - previous_progress_at
+                < timedelta(
+                    seconds=runtime_options.telemetry.progress_interval_seconds
+                )
+            ):
+                return self._store.update_node_task_runtime_state(
+                    task,
+                    executor_id=executor_id,
+                    heartbeat_at=now,
+                )
         updated = self._store.update_node_task_runtime_state(
             task,
             executor_id=executor_id,
+            heartbeat_at=now,
             progress=progress,
             current_stage=current_stage,
         )
         if updated is None:
             return None
+        self._last_progress_emitted_at[task.task_id] = now
         self._event_sink.emit(
             EventModel(
                 event_type=EventType.NODE_PROGRESS,
@@ -420,6 +444,10 @@ class NodeTaskManager:
                 NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
                 node_run_id=result.node_run_id,
             )
+        result = sanitize_node_task_result_for_runtime_options(
+            result,
+            self.runtime_options_for_node(task.node_instance_id),
+        )
         if result.status == NodeResultStatus.SUCCEEDED:
             return self._apply_success(task, result, node_run)
         return self._apply_terminal_failure(task, result, node_run)
