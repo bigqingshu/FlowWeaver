@@ -29,7 +29,6 @@ from flowweaver.node_executor import (
 )
 from flowweaver.protocols.enums import EventType, WorkflowRunStatus
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow.definition import (
     UNAVAILABLE_FAILURE_POLICY_MODES,
     WorkflowDefinitionModel,
@@ -41,6 +40,7 @@ from flowweaver.workflow.runtime_options import (
     resolve_workflow_runtime_options,
 )
 from flowweaver.workflow_process import ipc_events, task_dispatch
+from flowweaver.workflow_process import process_execution_helpers as execution_helpers
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.controller import (
@@ -55,7 +55,6 @@ from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
 )
 from flowweaver.workflow_process.executor_pool import (
-    DispatchedNodeTask,
     ImmediateNodeTaskExecutionPool,
     NodeTaskExecutionPool,
     ThreadedNodeTaskExecutionPool,
@@ -73,7 +72,7 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
 )
 
-CleanupStagingForNode = Callable[[str, str], None]
+CleanupStagingForNode = execution_helpers.CleanupStagingForNode
 _complete_continue_independent_partial_failure_if_finished = (
     finalization.complete_continue_independent_partial_failure_if_finished
 )
@@ -105,6 +104,8 @@ _available_ready_dispatch_slots = task_dispatch.available_ready_dispatch_slots
 _apply_node_task_result = task_dispatch.apply_node_task_result
 _timeout_seconds_from_node_config = task_dispatch.timeout_seconds_from_node_config
 _fail_rejected_node_result = task_dispatch.fail_rejected_node_result
+_build_node_task_execute = execution_helpers.build_node_task_execute
+_close_execution_pool = execution_helpers.close_execution_pool
 
 
 class _DefaultWorkflowProcessExecutorOwner(DefaultWorkflowProcessExecutorOwner):
@@ -479,56 +480,6 @@ def _run_workflow_process_loop(
             return 0
         if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
-
-
-def _build_node_task_execute(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    process_id: str,
-    process_generation: int | None,
-    heartbeat_interval_seconds: float,
-    task_manager: NodeTaskManager,
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    cancel_grace_seconds: float,
-) -> Callable[[DispatchedNodeTask], NodeTaskResultModel | None]:
-    if process_generation is None:
-        return lambda _dispatched_task: None
-
-    active_generation = process_generation
-
-    def execute_task(dispatched_task: DispatchedNodeTask) -> NodeTaskResultModel | None:
-        return _execute_node_task_with_supervision(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=process_id,
-            process_generation=active_generation,
-            heartbeat_interval_seconds=heartbeat_interval_seconds,
-            task_manager=task_manager,
-            executor=dispatched_task.executor,
-            cleanup_staging_for_node=cleanup_staging_for_node,
-            cancel_grace_seconds=cancel_grace_seconds,
-            task=dispatched_task.task,
-        )
-
-    return execute_task
-
-
-def _close_execution_pool(execution_pool: object | None) -> None:
-    if execution_pool is None:
-        return
-    close = getattr(execution_pool, "close", None)
-    if not callable(close):
-        return
-    try:
-        close(timeout_seconds=0)
-    except TypeError:
-        try:
-            close()
-        except Exception:
-            pass
-    except Exception:
-        pass
 
 
 def _fail(
