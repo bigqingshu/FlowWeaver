@@ -101,11 +101,6 @@ public partial class MainWindowViewModel
             && !IsRunBusy;
     }
 
-    private bool CanRefreshNodeRuns()
-    {
-        return CanUseEngineActions && SelectedRun is not null && !IsNodeRunBusy;
-    }
-
     [RelayCommand(CanExecute = nameof(CanRefreshRuns))]
     private Task RefreshRunsAsync()
     {
@@ -149,63 +144,6 @@ public partial class MainWindowViewModel
 
         RunMessage = T("runs.cancel_failed");
         RunErrorMessage = DescribeError(response);
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshNodeRuns))]
-    private async Task RefreshNodeRunsAsync()
-    {
-        await LoadNodeRunsForSelectedRunAsync();
-    }
-
-    private async Task LoadNodeRunsForSelectedRunAsync()
-    {
-        if (SelectedRun is null)
-        {
-            return;
-        }
-
-        var requestedRunId = SelectedRun.WorkflowRunId;
-        var requestVersion = ++nodeRunsLoadVersion;
-        IsLoadingNodeRuns = true;
-        NodeRunMessage = F("format.loading_nodes_for", requestedRunId);
-        NodeRunErrorMessage = null;
-
-        try
-        {
-            var response = await _apiClient.ListNodeRunsAsync(
-                BuildSettings(),
-                requestedRunId,
-                _shutdown.Token);
-
-            if (
-                SelectedRun?.WorkflowRunId != requestedRunId
-                || requestVersion != nodeRunsLoadVersion)
-            {
-                return;
-            }
-
-            if (response.Ok && response.Data is not null)
-            {
-                NodeRuns.Clear();
-                foreach (var nodeRun in response.Data)
-                {
-                    NodeRuns.Add(new NodeRunListItemViewModel(nodeRun, DisplayTextFormatter));
-                }
-
-                NodeRunMessage = F("format.loaded_node_runs", NodeRuns.Count);
-                return;
-            }
-
-            NodeRunMessage = T("node_runs.refresh_failed");
-            NodeRunErrorMessage = DescribeError(response);
-        }
-        finally
-        {
-            if (requestVersion == nodeRunsLoadVersion)
-            {
-                IsLoadingNodeRuns = false;
-            }
-        }
     }
 
     private async Task LoadRunsAsync(string? selectWorkflowRunId = null)
@@ -258,16 +196,5 @@ public partial class MainWindowViewModel
     partial void OnRunErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasRunError));
-    }
-
-    partial void OnIsLoadingNodeRunsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsNodeRunBusy));
-        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnNodeRunErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasNodeRunError));
     }
 }
