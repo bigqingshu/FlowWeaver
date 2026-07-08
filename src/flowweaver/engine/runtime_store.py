@@ -28,7 +28,6 @@ from flowweaver.engine.db_models import (
     RuntimeEventRecord,
     SharedPublicationMemberRecord,
     SharedPublicationRecord,
-    WorkflowDefinitionRecord,
     WorkflowProcessRecord,
     WorkflowRecord,
     WorkflowRevisionRecord,
@@ -45,16 +44,12 @@ from flowweaver.engine.runtime_models import (
     ReadLease,
     RuntimeEventLog,
     SharedPublication,
-    WorkflowDefinition,
     WorkflowProcess,
-    WorkflowRevision,
-    WorkflowRevisionConflict,
     WorkflowRun,
 )
 from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
-    _definition_hash,
     _input_snapshot_from_record,
     _input_snapshot_json,
     _json_dumps,
@@ -73,9 +68,7 @@ from flowweaver.engine.runtime_record_mappers import (
     _selected_members_json,
     _shared_publication_from_records,
     _table_ref_from_record,
-    _workflow_definition_from_records,
     _workflow_process_from_record,
-    _workflow_revision_from_record,
     _workflow_run_from_record,
 )
 from flowweaver.engine.runtime_status_guards import (
@@ -129,6 +122,9 @@ from flowweaver.engine.runtime_status_guards import (
 from flowweaver.engine.runtime_status_guards import (
     workflow_run_status_values as _workflow_run_status_values,
 )
+from flowweaver.engine.runtime_workflow_definition_store import (
+    RuntimeWorkflowDefinitionStoreMixin,
+)
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     LoopIterationRunStatus,
@@ -150,7 +146,7 @@ class _AtomicNodeTaskResultUpdateRejected(Exception):
     pass
 
 
-class RuntimeStore:
+class RuntimeStore(RuntimeWorkflowDefinitionStoreMixin):
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
         self.engine = create_sqlite_engine(database_url)
@@ -159,167 +155,6 @@ class RuntimeStore:
     @classmethod
     def from_sqlite_path(cls, path: str | Path) -> RuntimeStore:
         return cls(sqlite_url(path))
-
-    def create_workflow_definition(
-        self,
-        *,
-        name: str,
-        definition: dict[str, Any],
-        workflow_id: str | None = None,
-        created_by: str | None = None,
-    ) -> WorkflowDefinition:
-        now = utc_now()
-        workflow_id = workflow_id or new_id()
-        revision_id = new_id()
-        definition_json = _json_dumps(definition)
-        definition_hash = _definition_hash(definition_json)
-        workflow = WorkflowRecord(
-            workflow_id=workflow_id,
-            name=name,
-            current_revision_id=revision_id,
-            status="ACTIVE",
-            created_at=_datetime_to_text(now),
-            updated_at=_datetime_to_text(now),
-        )
-        revision = WorkflowRevisionRecord(
-            revision_id=revision_id,
-            workflow_id=workflow_id,
-            version=1,
-            definition_json=definition_json,
-            definition_hash=definition_hash,
-            created_at=_datetime_to_text(now),
-            created_by=created_by,
-        )
-        legacy = WorkflowDefinitionRecord(
-            workflow_id=workflow_id,
-            name=name,
-            version=1,
-            definition_json=definition_json,
-            created_at=_datetime_to_text(now),
-            updated_at=_datetime_to_text(now),
-        )
-        with self._session_factory.begin() as session:
-            session.add_all([workflow, revision, legacy])
-        return _workflow_definition_from_records(workflow, revision)
-
-    def get_workflow_definition(self, workflow_id: str) -> WorkflowDefinition | None:
-        with self._session_factory() as session:
-            workflow = session.get(WorkflowRecord, workflow_id)
-            if workflow is None or workflow.status == "DELETED":
-                return None
-            revision = session.get(WorkflowRevisionRecord, workflow.current_revision_id)
-            if revision is None:
-                return None
-            return _workflow_definition_from_records(workflow, revision)
-
-    def list_workflow_definitions(self) -> list[WorkflowDefinition]:
-        with self._session_factory() as session:
-            workflows = session.scalars(
-                select(WorkflowRecord)
-                .where(WorkflowRecord.status != "DELETED")
-                .order_by(WorkflowRecord.created_at)
-            ).all()
-            revisions = {
-                revision.revision_id: revision
-                for revision in session.scalars(
-                    select(WorkflowRevisionRecord).where(
-                        WorkflowRevisionRecord.revision_id.in_(
-                            [
-                                workflow.current_revision_id
-                                for workflow in workflows
-                                if workflow.current_revision_id
-                            ]
-                        )
-                    )
-                )
-            }
-            return [
-                _workflow_definition_from_records(
-                    workflow,
-                    revisions[workflow.current_revision_id],
-                )
-                for workflow in workflows
-                if workflow.current_revision_id in revisions
-            ]
-
-    def update_workflow_definition(
-        self,
-        workflow_id: str,
-        *,
-        name: str | None = None,
-        definition: dict[str, Any] | None = None,
-        base_revision_id: str | None = None,
-        created_by: str | None = None,
-    ) -> WorkflowDefinition | WorkflowRevisionConflict | None:
-        updated: WorkflowDefinition | WorkflowRevisionConflict | None = None
-        with self._session_factory.begin() as session:
-            workflow = session.get(WorkflowRecord, workflow_id)
-            if workflow is None or workflow.status == "DELETED":
-                return None
-            if (
-                base_revision_id is not None
-                and workflow.current_revision_id != base_revision_id
-            ):
-                return WorkflowRevisionConflict(
-                    workflow_id=workflow_id,
-                    expected_revision_id=base_revision_id,
-                    current_revision_id=workflow.current_revision_id,
-                )
-            if name is not None:
-                workflow.name = name
-            current_revision = session.get(
-                WorkflowRevisionRecord,
-                workflow.current_revision_id,
-            )
-            if current_revision is None:
-                return None
-            if definition is not None:
-                revision = WorkflowRevisionRecord(
-                    revision_id=new_id(),
-                    workflow_id=workflow_id,
-                    version=current_revision.version + 1,
-                    definition_json=_json_dumps(definition),
-                    definition_hash=_definition_hash(_json_dumps(definition)),
-                    created_at=_datetime_to_text(utc_now()),
-                    created_by=created_by,
-                )
-                session.add(revision)
-                workflow.current_revision_id = revision.revision_id
-                current_revision = revision
-            workflow.updated_at = _datetime_to_text(utc_now())
-            legacy = session.get(WorkflowDefinitionRecord, workflow_id)
-            if legacy is not None:
-                legacy.name = workflow.name
-                legacy.version = current_revision.version
-                legacy.definition_json = current_revision.definition_json
-                legacy.updated_at = workflow.updated_at
-            updated = _workflow_definition_from_records(workflow, current_revision)
-        return updated
-
-    def delete_workflow_definition(self, workflow_id: str) -> bool:
-        with self._session_factory.begin() as session:
-            workflow = session.get(WorkflowRecord, workflow_id)
-            if workflow is None or workflow.status == "DELETED":
-                return False
-            workflow.status = "DELETED"
-            workflow.updated_at = _datetime_to_text(utc_now())
-        return True
-
-    def list_workflow_revisions(self, workflow_id: str) -> list[WorkflowRevision]:
-        with self._session_factory() as session:
-            records = session.scalars(
-                select(WorkflowRevisionRecord)
-                .where(WorkflowRevisionRecord.workflow_id == workflow_id)
-                .order_by(WorkflowRevisionRecord.version)
-            ).all()
-            return [_workflow_revision_from_record(record) for record in records]
-
-    def get_workflow_revision(self, revision_id: str) -> WorkflowRevision | None:
-        with self._session_factory() as session:
-            record = session.get(WorkflowRevisionRecord, revision_id)
-            if record is None:
-                return None
-            return _workflow_revision_from_record(record)
 
     def create_workflow_run(
         self,
