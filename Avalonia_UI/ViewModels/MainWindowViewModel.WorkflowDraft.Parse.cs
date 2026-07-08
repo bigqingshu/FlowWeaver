@@ -13,13 +13,6 @@ public partial class MainWindowViewModel
             DisplayTextFormatter);
     }
 
-    private WorkflowDefinitionLinearChainAnalysis?
-        ReadWorkflowDefinitionLinearChainAnalysisFromCache()
-    {
-        return workflowDefinitionDraftParseCache.GetLinearChainAnalysis(
-            WorkflowDefinitionDraftJson);
-    }
-
     private void InvalidateWorkflowDefinitionDraftParseCache()
     {
         workflowDefinitionDraftParseCache.Invalidate();
