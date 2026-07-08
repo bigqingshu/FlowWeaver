@@ -34,6 +34,12 @@ from flowweaver.engine.runtime_shared_table_record_mappers import (
     _selected_members_json,
     _shared_publication_from_records,
 )
+from flowweaver.engine.runtime_shared_table_store_helpers import (
+    get_shared_publication_member_records as _get_shared_publication_member_records,
+)
+from flowweaver.engine.runtime_shared_table_store_helpers import (
+    validate_input_snapshot_publications as _validate_input_snapshot_publications,
+)
 from flowweaver.protocols.enums import LifecycleStatus, TableMutability
 
 
@@ -408,35 +414,3 @@ class RuntimeSharedTableStoreMixin:
                 record.released_at = _datetime_to_text(now)
             session.flush()
             return [_read_lease_from_record(record) for record in records]
-
-
-def _get_shared_publication_member_records(
-    session: Session,
-    publication_id: str,
-) -> list[SharedPublicationMemberRecord]:
-    return list(
-        session.scalars(
-            select(SharedPublicationMemberRecord)
-            .where(SharedPublicationMemberRecord.publication_id == publication_id)
-            .order_by(SharedPublicationMemberRecord.export_name)
-        ).all()
-    )
-
-
-def _validate_input_snapshot_publications(
-    session: Session,
-    inputs: tuple[InputSnapshotEntry, ...],
-) -> None:
-    for item in inputs:
-        publication = session.get(
-            SharedPublicationRecord,
-            item.publication_id,
-        )
-        if publication is None:
-            raise ValueError(
-                f"Input snapshot publication not found: {item.publication_id}"
-            )
-        if publication.publication_version != item.publication_version:
-            raise ValueError(
-                f"Input snapshot publication version mismatch: {item.publication_id}"
-            )
