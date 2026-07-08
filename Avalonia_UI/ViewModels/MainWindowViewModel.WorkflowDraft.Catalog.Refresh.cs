@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
 
@@ -44,36 +43,7 @@ public partial class MainWindowViewModel
 
             if (response.Ok && response.Data is not null)
             {
-                SelectedNewDraftNodeDefinition = null;
-                NodeDefinitions.Clear();
-                nodeDefinitionByKey.Clear();
-                var schemaCatalogKey = PrepareNodeConfigSchemaCache(
-                    connectionKey,
-                    catalogState);
-                foreach (var definition in response.Data
-                    .OrderBy(definition => definition.DisplayName)
-                    .ThenBy(definition => definition.NodeType)
-                    .ThenBy(definition => definition.NodeVersion))
-                {
-                    var item = new NodeDefinitionListItemViewModel(
-                        definition,
-                        DisplayTextFormatter,
-                        GetOrParseNodeConfigSchema(definition, schemaCatalogKey));
-                    NodeDefinitions.Add(item);
-                    nodeDefinitionByKey[NodeDefinitionCatalogCacheState.BuildLookupKey(
-                            item.NodeType,
-                            item.NodeVersion)] =
-                        item;
-                }
-
-                nodeDefinitionCatalogCacheState.RecordLoadedCatalog(connectionKey, catalogState);
-                RefreshNodeEditorSchemaFallbackNodes();
-                OnPropertyChanged(nameof(HasNodeDefinitions));
-                OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
-                RefreshWorkflowDefinitionDraftStructureState();
-                RefreshSelectedNodeConfigDraftState();
-                NodeDefinitionCatalogMessage =
-                    F("format.loaded_node_definitions", NodeDefinitions.Count);
+                ApplyLoadedNodeDefinitions(response.Data, connectionKey, catalogState);
                 return;
             }
 
