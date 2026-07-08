@@ -124,19 +124,11 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            LoadDataPreviewRows(rowsResponse.Data);
-            UpdateDataPreviewSource(
+            ApplySuccessfulNodeDataPreviewRefresh(
                 requestedRunId,
                 requestedNodeInstanceId,
-                tableRef.LogicalTableId,
-                tableRef.TableRefId,
-                SelectedRun?.RunMode,
-                SelectedRun?.TargetNodeInstanceId);
-            DataPreviewMessage = F(
-                "format.loaded_data_preview",
-                rowsResponse.Data.Rows.Length,
-                rowsResponse.Data.RowCount,
-                tableRef.LogicalTableId);
+                tableRef,
+                rowsResponse.Data);
             if (notifyResult)
             {
                 ShowDataPreviewNotification(UiNotificationKind.Success);
