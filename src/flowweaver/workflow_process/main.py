@@ -26,8 +26,6 @@ from flowweaver.node_executor import (
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
-from flowweaver.protocols.enums import EventType, WorkflowRunStatus
-from flowweaver.protocols.events import EventModel
 from flowweaver.workflow.definition import (
     UNAVAILABLE_FAILURE_POLICY_MODES,
     WorkflowDefinitionModel,
@@ -38,7 +36,12 @@ from flowweaver.workflow.runtime_options import (
     resolve_runtime_options_by_node,
     resolve_workflow_runtime_options,
 )
-from flowweaver.workflow_process import ipc_events, process_cancellation, task_dispatch
+from flowweaver.workflow_process import (
+    ipc_events,
+    process_cancellation,
+    process_startup,
+    task_dispatch,
+)
 from flowweaver.workflow_process import process_execution_helpers as execution_helpers
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
@@ -82,6 +85,7 @@ _workflow_run_is_terminal = finalization.workflow_run_is_terminal
 _cancel_workflow_process_if_requested = (
     process_cancellation.cancel_workflow_process_if_requested
 )
+_mark_workflow_process_started = process_startup.mark_workflow_process_started
 _cancel_grace_period_expired = supervision.cancel_grace_period_expired
 _cancelled_task_result = supervision.cancelled_task_result
 _cleanup_staging_for_node = supervision.cleanup_staging_for_node_safely
@@ -278,32 +282,13 @@ def _run_workflow_process_loop(
         runtime_options_by_node=runtime_options_by_node,
     )
 
-    store.record_workflow_process_heartbeat(
-        process_id,
+    _mark_workflow_process_started(
+        store=store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
         process_generation=process_generation,
-    )
-    if (
-        current_run := store.get_workflow_run(workflow_run_id)
-    ) is not None and current_run.status == WorkflowRunStatus.PENDING.value:
-        store.update_workflow_run_status(
-            workflow_run_id,
-            WorkflowRunStatus.RUNNING,
-            expected_state_version=current_run.state_version,
-            allowed_source_statuses=[WorkflowRunStatus.PENDING],
-            owner_process_id=process_id if process_generation is not None else None,
-            process_generation=process_generation,
-        )
-    event_sink.emit(
-        EventModel(
-            event_type=EventType.WORKFLOW_STARTED,
-            workflow_run_id=workflow_run_id,
-            payload={
-                "process_id": process_id,
-                "run_mode": run.run_mode,
-                "trigger_source": run.trigger_source,
-                "target_node_instance_id": run.target_node_instance_id,
-            },
-        )
+        run=run,
+        event_sink=event_sink,
     )
 
     dag = build_workflow_dag(definition)
