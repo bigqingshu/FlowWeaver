@@ -77,6 +77,7 @@ _complete_continue_independent_partial_failure_if_finished = (
     finalization.complete_continue_independent_partial_failure_if_finished
 )
 _complete_empty_workflow = finalization.complete_empty_workflow
+_fail = finalization.fail_workflow_process
 _finalize_if_workflow_run_terminal = finalization.finalize_if_workflow_run_terminal
 _release_unreleased_read_leases_for_terminal_workflow = (
     finalization.release_unreleased_read_leases_for_terminal_workflow
@@ -481,29 +482,6 @@ def _run_workflow_process_loop(
             return 0
         if completed_count == 0 and dispatched_count == 0:
             sleep_func(heartbeat_interval_seconds)
-
-
-def _fail(
-    store: RuntimeStore,
-    workflow_run_id: str,
-    process_id: str,
-    message: str,
-    process_generation: int | None = None,
-) -> int:
-    store.update_workflow_run_status(
-        workflow_run_id,
-        WorkflowRunStatus.FAILED,
-        finished_at=utc_now(),
-        error={"message": message},
-        allowed_source_statuses=[
-            WorkflowRunStatus.PENDING,
-            WorkflowRunStatus.RUNNING,
-        ],
-        owner_process_id=process_id if process_generation is not None else None,
-        process_generation=process_generation,
-    )
-    _release_unreleased_read_leases_for_terminal_workflow(store, workflow_run_id)
-    return 1
 
 
 def _exit() -> NoReturn:

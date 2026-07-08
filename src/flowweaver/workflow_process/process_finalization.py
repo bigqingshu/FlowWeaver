@@ -57,6 +57,29 @@ def release_unreleased_read_leases_for_terminal_workflow(
     store.release_unreleased_read_leases_for_workflow_run(workflow_run_id)
 
 
+def fail_workflow_process(
+    store: RuntimeStore,
+    workflow_run_id: str,
+    process_id: str,
+    message: str,
+    process_generation: int | None = None,
+) -> int:
+    store.update_workflow_run_status(
+        workflow_run_id,
+        WorkflowRunStatus.FAILED,
+        finished_at=utc_now(),
+        error={"message": message},
+        allowed_source_statuses=[
+            WorkflowRunStatus.PENDING,
+            WorkflowRunStatus.RUNNING,
+        ],
+        owner_process_id=process_id if process_generation is not None else None,
+        process_generation=process_generation,
+    )
+    release_unreleased_read_leases_for_terminal_workflow(store, workflow_run_id)
+    return 1
+
+
 def complete_continue_independent_partial_failure_if_finished(
     *,
     store: RuntimeStore,
