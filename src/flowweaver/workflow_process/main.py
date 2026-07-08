@@ -29,6 +29,7 @@ from flowweaver.node_executor import (
 from flowweaver.workflow_process import (
     ipc_events,
     process_cancellation,
+    process_dag,
     process_definition,
     process_runtime_options,
     process_startup,
@@ -40,10 +41,6 @@ from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
     recover_ready_nodes,
-)
-from flowweaver.workflow_process.dag import (
-    build_workflow_dag,
-    restrict_workflow_dag_to_upstream_closure,
 )
 from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
@@ -78,6 +75,7 @@ _cancel_workflow_process_if_requested = (
 _load_workflow_process_definition = (
     process_definition.load_workflow_process_definition
 )
+_prepare_workflow_process_dag = process_dag.prepare_workflow_process_dag
 _configure_runtime_options_event_sink = (
     process_runtime_options.configure_runtime_options_event_sink
 )
@@ -273,29 +271,19 @@ def _run_workflow_process_loop(
         event_sink=event_sink,
     )
 
-    dag = build_workflow_dag(definition)
-    if run.run_mode == "preview_to_node":
-        if not run.target_node_instance_id:
-            return _fail(
-                store,
-                workflow_run_id,
-                process_id,
-                "target_node_instance_id is required for preview_to_node",
-                process_generation=process_generation,
-            )
-        try:
-            dag = restrict_workflow_dag_to_upstream_closure(
-                dag,
-                run.target_node_instance_id,
-            )
-        except ValueError as exc:
-            return _fail(
-                store,
-                workflow_run_id,
-                process_id,
-                str(exc),
-                process_generation=process_generation,
-            )
+    try:
+        dag = _prepare_workflow_process_dag(
+            definition=definition,
+            run=run,
+        )
+    except process_dag.WorkflowProcessDagError as exc:
+        return _fail(
+            store,
+            workflow_run_id,
+            process_id,
+            str(exc),
+            process_generation=process_generation,
+        )
     if not dag.nodes:
         return _complete_empty_workflow(
             store,
