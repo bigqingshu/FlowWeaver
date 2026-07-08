@@ -1,4 +1,3 @@
-using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia_UI.Models;
@@ -56,21 +55,6 @@ public partial class MainWindowViewModel
 
         SynchronizeSelectedShellPageIndex(SelectedShellPageKey);
         NotifyShellNavigationItemsChanged();
-    }
-
-    private string ResolveShellPageHeaderText(ShellPageDescriptor descriptor)
-    {
-        return descriptor.HeaderPropertyName switch
-        {
-            nameof(WorkflowsSectionText) => WorkflowsSectionText,
-            nameof(DataPreviewTabText) => DataPreviewTabText,
-            nameof(RunsSectionText) => RunsSectionText,
-            nameof(DataTabText) => DataTabText,
-            nameof(LogsTabText) => LogsTabText,
-            nameof(SettingsMenuText) => SettingsMenuText,
-            _ => throw new InvalidOperationException(
-                $"Unknown shell page header property '{descriptor.HeaderPropertyName}'."),
-        };
     }
 
 }
