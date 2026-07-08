@@ -13,13 +13,7 @@ public partial class MainWindowViewModel
         NotifyWorkflowDraftEditorLocalizedTextChanged();
         NotifyWorkflowConnectionsLocalizedTextChanged();
         NotifyRecentEventsLocalizedTextChanged();
-        OnPropertyChanged(nameof(NodeCatalogSectionText));
-        OnPropertyChanged(nameof(NodeText));
-        OnPropertyChanged(nameof(NodeCatalogEmptyStateText));
-        OnPropertyChanged(nameof(InputsText));
-        OnPropertyChanged(nameof(OutputsText));
-        OnPropertyChanged(nameof(ModeText));
-        OnPropertyChanged(nameof(TimeoutText));
+        NotifyNodeCatalogLocalizedTextChanged();
         OnPropertyChanged(nameof(DraftJsonSectionText));
         OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
         OnPropertyChanged(nameof(ValidateText));
