@@ -1,7 +1,11 @@
+using Avalonia_UI.Localization;
+
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
+
     public string ExecutionTabText => T("tab.execution");
 
     public string DefinitionTabText => T("tab.definition");

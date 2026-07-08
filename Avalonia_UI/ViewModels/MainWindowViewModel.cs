@@ -93,6 +93,4 @@ public partial class MainWindowViewModel : ViewModelBase
         RefreshShellNavigationItems();
         RefreshSelectedNodeConfigDraftState();
     }
-
-    private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
 }
