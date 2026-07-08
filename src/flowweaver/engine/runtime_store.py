@@ -12,6 +12,9 @@ from flowweaver.engine.db_models import (
     DataRefRecord,
     RuntimeEventRecord,
 )
+from flowweaver.engine.runtime_event_record_mappers import (
+    _runtime_event_from_record,
+)
 from flowweaver.engine.runtime_loop_store import (
     RuntimeLoopStoreMixin,
 )
@@ -50,7 +53,6 @@ from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
     _json_dumps,
-    _runtime_event_from_record,
     _table_ref_from_record,
 )
 from flowweaver.engine.runtime_shared_table_store import (

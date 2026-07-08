@@ -20,8 +20,6 @@ from flowweaver.engine.runtime_models import WorkflowProcess, WorkflowRun
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _json_dumps,
-    _workflow_process_from_record,
-    _workflow_run_from_record,
 )
 from flowweaver.engine.runtime_status_guards import (
     ACTIVE_WORKFLOW_PROCESS_STATUSES as _ACTIVE_WORKFLOW_PROCESS_STATUSES,
@@ -31,6 +29,10 @@ from flowweaver.engine.runtime_status_guards import (
 )
 from flowweaver.engine.runtime_status_guards import (
     TERMINAL_WORKFLOW_STATUSES as _TERMINAL_WORKFLOW_STATUSES,
+)
+from flowweaver.engine.runtime_workflow_record_mappers import (
+    _workflow_process_from_record,
+    _workflow_run_from_record,
 )
 from flowweaver.protocols.enums import (
     NodeRunStatus,

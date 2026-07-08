@@ -21,6 +21,8 @@ from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _definition_hash,
     _json_dumps,
+)
+from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_definition_from_records,
     _workflow_revision_from_record,
 )
