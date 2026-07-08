@@ -77,44 +77,6 @@ public partial class MainWindowViewModel
         throw new InvalidOperationException($"Shell navigation item '{key}' was not found.");
     }
 
-    private void SynchronizeSelectedShellPageIndex(ShellPageKey key)
-    {
-        var index = GetShellNavigationItemIndex(key);
-        if (SelectedShellPageIndex == index)
-        {
-            return;
-        }
-
-        isSynchronizingShellSelection = true;
-        try
-        {
-            SelectedShellPageIndex = index;
-        }
-        finally
-        {
-            isSynchronizingShellSelection = false;
-        }
-    }
-
-    private void SynchronizeSelectedShellPageKey(int index)
-    {
-        var key = ShellNavigationItems[index].Key;
-        if (SelectedShellPageKey == key)
-        {
-            return;
-        }
-
-        isSynchronizingShellSelection = true;
-        try
-        {
-            SelectedShellPageKey = key;
-        }
-        finally
-        {
-            isSynchronizingShellSelection = false;
-        }
-    }
-
     private void NotifyShellNavigationItemsChanged()
     {
         OnPropertyChanged(nameof(ShellNavigationItems));

@@ -16,6 +16,44 @@ public partial class MainWindowViewModel
         return index >= 0 && index < ShellNavigationItems.Count;
     }
 
+    private void SynchronizeSelectedShellPageIndex(ShellPageKey key)
+    {
+        var index = GetShellNavigationItemIndex(key);
+        if (SelectedShellPageIndex == index)
+        {
+            return;
+        }
+
+        isSynchronizingShellSelection = true;
+        try
+        {
+            SelectedShellPageIndex = index;
+        }
+        finally
+        {
+            isSynchronizingShellSelection = false;
+        }
+    }
+
+    private void SynchronizeSelectedShellPageKey(int index)
+    {
+        var key = ShellNavigationItems[index].Key;
+        if (SelectedShellPageKey == key)
+        {
+            return;
+        }
+
+        isSynchronizingShellSelection = true;
+        try
+        {
+            SelectedShellPageKey = key;
+        }
+        finally
+        {
+            isSynchronizingShellSelection = false;
+        }
+    }
+
     partial void OnSelectedShellPageKeyChanging(ShellPageKey value)
     {
         if (!IsKnownShellPageKey(value))
