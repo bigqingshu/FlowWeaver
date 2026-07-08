@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
@@ -59,32 +58,6 @@ public partial class MainWindowViewModel
                                 columnIndex,
                                 updatedValue)))
                 .ToArray());
-    }
-
-    private void UpdateDataPreviewWorkbenchCell(
-        int rowIndex,
-        int columnIndex,
-        string value)
-    {
-        if (rowIndex < 0
-            || rowIndex >= dataPreviewWorkbenchEditableCellRows.Length
-            || columnIndex < 0
-            || columnIndex >= dataPreviewWorkbenchEditableCellRows[rowIndex].Length)
-        {
-            return;
-        }
-
-        if (string.Equals(
-                dataPreviewWorkbenchEditableCellRows[rowIndex][columnIndex],
-                value,
-                StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        dataPreviewWorkbenchEditableCellRows[rowIndex][columnIndex] = value;
-        DataPreviewWorkbenchClipboardText = string.Empty;
-        NotifyDataPreviewWorkbenchDirtyStateChanged();
     }
 
     private string BuildDataPreviewWorkbenchTsv()
