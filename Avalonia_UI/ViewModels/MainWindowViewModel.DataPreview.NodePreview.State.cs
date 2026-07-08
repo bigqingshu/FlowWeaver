@@ -91,29 +91,6 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(DataPreviewSourceText));
     }
 
-    private void LoadDataPreviewRows(TableDataRowsDto rows)
-    {
-        var grid = DataPreviewTableGridBuilder.BuildGrid(rows);
-
-        DataPreviewColumns.Clear();
-        foreach (var column in grid.Columns)
-        {
-            DataPreviewColumns.Add(new TableDataPreviewColumnViewModel(column));
-        }
-
-        DataPreviewRows.Clear();
-        foreach (var row in grid.CellRows)
-        {
-            DataPreviewRows.Add(
-                new TableDataPreviewRowViewModel(
-                    row
-                        .Select(value => new TableDataPreviewCellViewModel(value))
-                        .ToArray()));
-        }
-
-        NotifyDataPreviewRowsChanged();
-    }
-
     private void UpdateDataPreviewSource(
         string workflowRunId,
         string nodeInstanceId,
@@ -130,12 +107,6 @@ public partial class MainWindowViewModel
         dataPreviewSourceTargetNodeInstanceId = targetNodeInstanceId;
         OnPropertyChanged(nameof(DataPreviewSourceText));
         ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
-    }
-
-    private void NotifyDataPreviewRowsChanged()
-    {
-        OnPropertyChanged(nameof(HasDataPreviewColumns));
-        OnPropertyChanged(nameof(HasDataPreviewRows));
     }
 
     partial void OnIsLoadingDataPreviewChanged(bool value)
