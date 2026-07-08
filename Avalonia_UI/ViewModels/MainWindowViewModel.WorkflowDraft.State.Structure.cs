@@ -1,10 +1,14 @@
 using System.Linq;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
+
     public bool HasWorkflowDefinitionDraftStructure =>
         WorkflowDefinitionDraftStructure?.IsSupported == true;
 

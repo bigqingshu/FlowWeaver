@@ -15,9 +15,6 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
-
-    [ObservableProperty]
     private bool isWorkflowDraftJsonAdvancedVisible;
 
     [ObservableProperty]
