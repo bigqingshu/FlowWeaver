@@ -15,18 +15,7 @@ public partial class MainWindowViewModel
 
     private readonly Func<CancellationToken, Task> _dataPreviewRunRefreshDelay;
 
-    private int dataPreviewLoadVersion;
     private int dataPreviewWorkbenchLoadVersion;
-
-    [ObservableProperty]
-    private bool isLoadingDataPreview;
-
-    [ObservableProperty]
-    private string dataPreviewMessage =
-        "Select a run and workflow node to load data preview.";
-
-    [ObservableProperty]
-    private string? dataPreviewErrorMessage;
 
     [ObservableProperty]
     private TableRefListItemViewModel? selectedDataPreviewTableRef;
@@ -62,18 +51,6 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private bool isDataPreviewWorkbenchDraft;
 
-    private string? dataPreviewSourceWorkflowRunId;
-
-    private string? dataPreviewSourceNodeInstanceId;
-
-    private string? dataPreviewSourceLogicalTableId;
-
-    private string? dataPreviewSourceTableRefId;
-
-    private string? dataPreviewSourceRunMode;
-
-    private string? dataPreviewSourceTargetNodeInstanceId;
-
     private string[] dataPreviewWorkbenchLoadedColumns = [];
 
     private JsonElement[] dataPreviewWorkbenchLoadedRows = [];
@@ -91,11 +68,6 @@ public partial class MainWindowViewModel
     public ObservableCollection<DataPreviewStateListItemViewModel> DataPreviewStates { get; } = new();
 
     public ObservableCollection<TableRefListItemViewModel> DataPreviewTableOptions { get; } = new();
-
-    public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewColumns { get; } = new();
-
-    public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
-        new();
 
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
 
