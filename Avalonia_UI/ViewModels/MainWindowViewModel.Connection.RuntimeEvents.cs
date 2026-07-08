@@ -1,12 +1,45 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia_UI.Api;
+using Avalonia_UI.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private readonly IEngineHostRuntimeEventStreamClient _runtimeEventStreamClient;
+    private readonly Func<CancellationToken, Task> _runtimeEventReconnectDelay;
+
+    private CancellationTokenSource? _runtimeEventStreamCancellation;
+    private Task? _runtimeEventStreamTask;
+    private bool runtimeEventStreamAutoConnect;
+
+    [ObservableProperty]
+    private bool isRuntimeEventStreamRunning;
+
+    [ObservableProperty]
+    private bool isRuntimeEventStreamConnected;
+
+    [ObservableProperty]
+    private string runtimeEventStreamMessage = "Event stream disconnected.";
+
+    [ObservableProperty]
+    private string? runtimeEventStreamErrorMessage;
+
+    [ObservableProperty]
+    private long? lastRuntimeEventSequenceNumber;
+
+    public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
+
+    public bool HasRuntimeEventStreamError =>
+        !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
+
+    public bool HasRuntimeEvents => RuntimeEvents.Count > 0;
+
     private bool CanStartRuntimeEventStream()
     {
         return !IsRuntimeEventStreamRunning && !string.IsNullOrWhiteSpace(BaseUrl);
