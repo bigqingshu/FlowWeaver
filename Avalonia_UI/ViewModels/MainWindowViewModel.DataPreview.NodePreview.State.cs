@@ -75,40 +75,6 @@ public partial class MainWindowViewModel
         ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
     }
 
-    private void ClearDataPreviewSourceIfNoPreviewRows()
-    {
-        if (HasDataPreviewColumns || HasDataPreviewRows)
-        {
-            return;
-        }
-
-        dataPreviewSourceWorkflowRunId = null;
-        dataPreviewSourceNodeInstanceId = null;
-        dataPreviewSourceLogicalTableId = null;
-        dataPreviewSourceTableRefId = null;
-        dataPreviewSourceRunMode = null;
-        dataPreviewSourceTargetNodeInstanceId = null;
-        OnPropertyChanged(nameof(DataPreviewSourceText));
-    }
-
-    private void UpdateDataPreviewSource(
-        string workflowRunId,
-        string nodeInstanceId,
-        string logicalTableId,
-        string tableRefId,
-        string? runMode,
-        string? targetNodeInstanceId)
-    {
-        dataPreviewSourceWorkflowRunId = workflowRunId;
-        dataPreviewSourceNodeInstanceId = nodeInstanceId;
-        dataPreviewSourceLogicalTableId = logicalTableId;
-        dataPreviewSourceTableRefId = tableRefId;
-        dataPreviewSourceRunMode = runMode;
-        dataPreviewSourceTargetNodeInstanceId = targetNodeInstanceId;
-        OnPropertyChanged(nameof(DataPreviewSourceText));
-        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
-    }
-
     partial void OnIsLoadingDataPreviewChanged(bool value)
     {
         OnPropertyChanged(nameof(IsDataPreviewBusy));
