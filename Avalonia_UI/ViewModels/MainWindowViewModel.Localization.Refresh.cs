@@ -11,15 +11,7 @@ public partial class MainWindowViewModel
         NotifyRuntimeOptionsLocalizedTextChanged();
         NotifyWorkflowStructuredEditLocalizedTextChanged();
         NotifyWorkflowDraftEditorLocalizedTextChanged();
-        OnPropertyChanged(nameof(ConnectionsSectionText));
-        OnPropertyChanged(nameof(ShowConnectionsText));
-        OnPropertyChanged(nameof(AddConnectionText));
-        OnPropertyChanged(nameof(DeleteConnectionText));
-        OnPropertyChanged(nameof(ConnectionIdText));
-        OnPropertyChanged(nameof(SourceNodeText));
-        OnPropertyChanged(nameof(SourcePortText));
-        OnPropertyChanged(nameof(TargetNodeText));
-        OnPropertyChanged(nameof(TargetPortText));
+        NotifyWorkflowConnectionsLocalizedTextChanged();
         OnPropertyChanged(nameof(RecentEventsSectionText));
         OnPropertyChanged(nameof(RecentEventsEmptyText));
         OnPropertyChanged(nameof(RecentEventsViewAllText));
