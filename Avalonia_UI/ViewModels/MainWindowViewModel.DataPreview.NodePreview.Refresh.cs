@@ -85,13 +85,9 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            var tableRef = tableRefsResponse.Data
-                .Where(item =>
-                    string.Equals(item.NodeRunId, nodeRun.NodeRunId, StringComparison.Ordinal)
-                    && IsReadablePublishedTableRef(item))
-                .OrderByDescending(item => item.Version)
-                .ThenByDescending(item => item.CreatedAt)
-                .FirstOrDefault();
+            var tableRef = FindLatestReadableNodeRunTableRef(
+                tableRefsResponse.Data,
+                nodeRun.NodeRunId);
             if (tableRef is null)
             {
                 DataPreviewMessage =
