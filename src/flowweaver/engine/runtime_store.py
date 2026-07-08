@@ -15,6 +15,9 @@ from flowweaver.engine.db_models import (
 from flowweaver.engine.runtime_event_record_mappers import (
     _runtime_event_from_record,
 )
+from flowweaver.engine.runtime_input_snapshot_store import (
+    RuntimeInputSnapshotStoreMixin,
+)
 from flowweaver.engine.runtime_loop_store import (
     RuntimeLoopStoreMixin,
 )
@@ -87,6 +90,7 @@ class RuntimeStore(
     RuntimeNodeRunStoreMixin,
     RuntimeLoopStoreMixin,
     RuntimeSharedTableStoreMixin,
+    RuntimeInputSnapshotStoreMixin,
     RuntimeReadLeaseStoreMixin,
 ):
     def __init__(self, database_url: str) -> None:
