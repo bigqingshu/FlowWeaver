@@ -13,6 +13,10 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
+from flowweaver.api.run_lookup import load_loop as _load_loop
+from flowweaver.api.run_lookup import load_loop_iteration as _load_loop_iteration
+from flowweaver.api.run_lookup import reject_missing_run as _reject_missing_run
+from flowweaver.api.run_lookup import run_not_found as _run_not_found
 from flowweaver.api.run_pagination import pagination_rejection
 from flowweaver.api.run_review import build_run_review_payload
 from flowweaver.api.run_table_cleanup import cleanup_table_refs_for_run
@@ -340,64 +344,3 @@ def cleanup_run_table_refs(
             provider_registry=provider_registry,
         ),
     )
-
-
-def _run_not_found(request: Request):
-    return error_response(
-        request,
-        error_code="WORKFLOW_RUN_NOT_FOUND",
-        message="Workflow run not found",
-        status_code=404,
-    )
-
-
-def _reject_missing_run(
-    request: Request,
-    store: RuntimeStore,
-    workflow_run_id: str,
-):
-    run = store.get_workflow_run(workflow_run_id)
-    if run is None:
-        return _run_not_found(request)
-    return None
-
-
-def _load_loop(
-    request: Request,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    loop_run_id: str,
-):
-    rejection = _reject_missing_run(request, store, workflow_run_id)
-    if rejection is not None:
-        return None, rejection
-    loop = store.get_loop_run(loop_run_id)
-    if loop is None or loop.workflow_run_id != workflow_run_id:
-        return None, error_response(
-            request,
-            error_code="LOOP_RUN_NOT_FOUND",
-            message="Loop run not found",
-            status_code=404,
-        )
-    return loop, None
-
-
-def _load_loop_iteration(
-    request: Request,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    loop_run_id: str,
-    loop_iteration_id: str,
-):
-    _loop, rejection = _load_loop(request, store, workflow_run_id, loop_run_id)
-    if rejection is not None:
-        return None, rejection
-    iteration = store.get_loop_iteration_run(loop_iteration_id)
-    if iteration is None or iteration.loop_run_id != loop_run_id:
-        return None, error_response(
-            request,
-            error_code="LOOP_ITERATION_NOT_FOUND",
-            message="Loop iteration not found",
-            status_code=404,
-        )
-    return iteration, None
