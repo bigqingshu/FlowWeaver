@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.protocols.enums import NodeRunStatus, TableRole
 from flowweaver.workflow_process.dag import DagNode, WorkflowDag
+from flowweaver.workflow_process.table_input_resolver import (
+    TableInputResolutionIssue,
+    TableInputResolutionStatus,
+    resolve_configured_input_refs,
+)
 
 _IN_FLIGHT_NODE_RUN_STATUSES = frozenset(
     {
@@ -21,6 +26,14 @@ class ReadyNodeCandidate:
     dag_node: DagNode
     input_refs: tuple[str, ...]
     dependency_count: int
+    input_resolution_issue: TableInputResolutionIssue | None = None
+
+
+@dataclass(frozen=True)
+class ReadyInputRefsResult:
+    input_refs: tuple[str, ...] = ()
+    waiting: bool = False
+    issue: TableInputResolutionIssue | None = None
 
 
 def collect_ready_node_candidates(
@@ -41,20 +54,21 @@ def collect_ready_node_candidates(
         dag_node = dag_nodes_by_instance.get(node_run.node_instance_id)
         if dag_node is None:
             continue
-        input_refs = _input_refs_for_ready_node(
+        input_result = _input_refs_for_ready_node(
             store=store,
             node_runs=node_runs,
             node_run=node_run,
             dag_node=dag_node,
         )
-        if input_refs is None:
+        if input_result.waiting:
             continue
         candidates.append(
             ReadyNodeCandidate(
                 node_run=node_run,
                 dag_node=dag_node,
-                input_refs=tuple(input_refs),
+                input_refs=input_result.input_refs,
                 dependency_count=len(dag_node.upstream_node_ids),
+                input_resolution_issue=input_result.issue,
             )
         )
     candidates.sort(
@@ -83,7 +97,7 @@ def _input_refs_for_ready_node(
     node_runs: list[NodeRun],
     node_run: NodeRun,
     dag_node: DagNode,
-) -> list[str] | None:
+) -> ReadyInputRefsResult:
     loop_links = store.list_loop_iteration_node_runs_by_node_run(node_run.node_run_id)
     if loop_links:
         return _loop_iteration_input_refs_for_ready_node(
@@ -104,27 +118,34 @@ def _root_input_refs_for_ready_node(
     store: RuntimeStore,
     node_runs: list[NodeRun],
     dag_node: DagNode,
-) -> list[str] | None:
+) -> ReadyInputRefsResult:
     input_refs: list[str] = []
+    upstream_node_runs: dict[str, NodeRun] = {}
     for upstream_node_id in dag_node.upstream_node_ids:
         upstream_node = _latest_succeeded_node_run_for_instance(
             node_runs,
             upstream_node_id,
         )
         if upstream_node is None:
-            return None
+            return ReadyInputRefsResult(waiting=True)
+        upstream_node_runs[upstream_node_id] = upstream_node
         result = store.get_latest_succeeded_node_task_result_for_node_run(
             upstream_node.node_run_id
         )
         if result is None:
-            return None
+            return ReadyInputRefsResult(waiting=True)
         input_refs.extend(
             _current_input_refs_from_output_refs(
                 store=store,
                 output_refs=result.output_refs,
             )
         )
-    return input_refs
+    return _configured_or_default_input_refs(
+        store=store,
+        config=dag_node.config,
+        upstream_node_runs=upstream_node_runs,
+        default_input_refs=tuple(input_refs),
+    )
 
 
 def _loop_iteration_input_refs_for_ready_node(
@@ -133,8 +154,9 @@ def _loop_iteration_input_refs_for_ready_node(
     node_runs: list[NodeRun],
     loop_iteration_id: str,
     dag_node: DagNode,
-) -> list[str] | None:
+) -> ReadyInputRefsResult:
     input_refs: list[str] = []
+    upstream_node_runs: dict[str, NodeRun] = {}
     for upstream_node_id in dag_node.upstream_node_ids:
         upstream_node = _succeeded_loop_iteration_node_run(
             store,
@@ -147,19 +169,46 @@ def _loop_iteration_input_refs_for_ready_node(
                 upstream_node_id,
             )
         if upstream_node is None:
-            return None
+            return ReadyInputRefsResult(waiting=True)
+        upstream_node_runs[upstream_node_id] = upstream_node
         result = store.get_latest_succeeded_node_task_result_for_node_run(
             upstream_node.node_run_id
         )
         if result is None:
-            return None
+            return ReadyInputRefsResult(waiting=True)
         input_refs.extend(
             _current_input_refs_from_output_refs(
                 store=store,
                 output_refs=result.output_refs,
             )
         )
-    return input_refs
+    return _configured_or_default_input_refs(
+        store=store,
+        config=dag_node.config,
+        upstream_node_runs=upstream_node_runs,
+        default_input_refs=tuple(input_refs),
+    )
+
+
+def _configured_or_default_input_refs(
+    *,
+    store: RuntimeStore,
+    config: dict,
+    upstream_node_runs: dict[str, NodeRun],
+    default_input_refs: tuple[str, ...],
+) -> ReadyInputRefsResult:
+    resolution = resolve_configured_input_refs(
+        store=store,
+        config=config,
+        upstream_node_runs=upstream_node_runs,
+    )
+    if resolution.status == TableInputResolutionStatus.NO_CONFIG:
+        return ReadyInputRefsResult(input_refs=default_input_refs)
+    if resolution.status == TableInputResolutionStatus.RESOLVED:
+        return ReadyInputRefsResult(input_refs=resolution.input_refs)
+    if resolution.status == TableInputResolutionStatus.WAITING:
+        return ReadyInputRefsResult(waiting=True)
+    return ReadyInputRefsResult(issue=resolution.issue)
 
 
 def _succeeded_loop_iteration_node_run(

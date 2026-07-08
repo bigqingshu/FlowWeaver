@@ -889,6 +889,14 @@ def dispatch_ready_node_candidate(
     executor_factory: NodeExecutorFactory,
     close_executor_on_reject: bool = True,
 ) -> DispatchedNodeTask | None:
+    if candidate.input_resolution_issue is not None:
+        return _fail_ready_node_input_resolution(
+            workflow_run_id=workflow_run_id,
+            workflow_process_id=workflow_process_id,
+            process_generation=process_generation,
+            candidate=candidate,
+            task_manager=task_manager,
+        )
     task = task_manager.submit_ready_node(
         workflow_run_id=workflow_run_id,
         workflow_process_id=workflow_process_id,
@@ -916,6 +924,57 @@ def dispatch_ready_node_candidate(
         node_instance_id=accepted.node_instance_id,
         executor_id=executor.executor_id,
     )
+
+
+def _fail_ready_node_input_resolution(
+    *,
+    workflow_run_id: str,
+    workflow_process_id: str,
+    process_generation: int,
+    candidate: ReadyNodeCandidate,
+    task_manager: NodeTaskManager,
+) -> None:
+    task = task_manager.submit_ready_node(
+        workflow_run_id=workflow_run_id,
+        workflow_process_id=workflow_process_id,
+        process_generation=process_generation,
+        node_instance_id=candidate.node_run.node_instance_id,
+        node_run_id=candidate.node_run.node_run_id,
+        input_refs=list(candidate.input_refs),
+        timeout_seconds=_timeout_seconds_from_node_config(candidate.dag_node.config),
+    )
+    if task is None:
+        return None
+    executor_id = "workflow_process.input_resolver"
+    accepted = task_manager.accept_task(
+        task_id=task.task_id,
+        executor_id=executor_id,
+    )
+    if accepted is None:
+        return None
+    issue = candidate.input_resolution_issue
+    message = (
+        issue.message
+        if issue is not None
+        else "Input table selector could not be resolved"
+    )
+    details = issue.details if issue is not None else {}
+    task_manager.apply_result(
+        NodeTaskResultModel(
+            task_id=accepted.task_id,
+            node_run_id=accepted.node_run_id,
+            attempt=accepted.attempt,
+            executor_id=executor_id,
+            process_generation=accepted.process_generation,
+            status=NodeResultStatus.FAILED,
+            error={
+                "code": "INPUT_TABLE_RESOLUTION_FAILED",
+                "message": message,
+                "details": details,
+            },
+        )
+    )
+    return None
 
 
 def _available_ready_dispatch_slots(

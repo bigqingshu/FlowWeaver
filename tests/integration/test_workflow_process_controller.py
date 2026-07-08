@@ -29,6 +29,8 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
+import flowweaver.workflow_process.main as workflow_process_main
+from flowweaver.workflow_process.node_tasks import NodeTaskManager
 from flowweaver.workflow_process.ready_queue import (
     collect_ready_node_candidates,
     count_in_flight_node_runs,
@@ -124,6 +126,12 @@ def definition() -> dict:
             }
         ],
     }
+
+
+def definition_with_transform_config(config: dict) -> dict:
+    data = definition()
+    data["nodes"][1]["config"] = config
+    return data
 
 
 def fork_definition() -> dict:
@@ -819,6 +827,206 @@ def test_ready_queue_passes_only_current_table_refs_to_downstream_inputs(
     ]
     assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
     assert candidates[0].input_refs == (current_ref.table_ref_id,)
+
+
+def test_ready_queue_resolves_configured_auxiliary_input_source(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition_data = definition_with_transform_config(
+        {
+            "input_source": {
+                "type": "upstream_table",
+                "source_node_instance_id": "source",
+                "output_role": "AUXILIARY",
+                "storage_kind": "MEMORY",
+                "logical_table_id": "table-auxiliary",
+            }
+        }
+    )
+    run, process, dag = create_run_from_definition(
+        store,
+        definition_data=definition_data,
+        workflow_id="workflow-configured-input-source",
+        workflow_run_id="run-configured-input-source",
+        process_id="process-configured-input-source",
+    )
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        dag=dag,
+    )
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    assert source is not None
+    assert transform is not None
+    current_ref = make_ready_queue_table_ref(
+        table_ref_id="table-current",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+    )
+    auxiliary_ref = make_ready_queue_table_ref(
+        table_ref_id="table-auxiliary",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+        role=TableRole.AUXILIARY,
+    )
+    store.register_table_ref(current_ref)
+    store.register_table_ref(auxiliary_ref)
+    record_successful_node_result(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        output_refs=[current_ref.table_ref_id, auxiliary_ref.table_ref_id],
+    )
+    ready_transform = store.update_node_run_status(
+        transform.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=transform.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert ready_transform is not None
+
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    assert [item.node_run.node_instance_id for item in candidates] == ["transform"]
+    assert candidates[0].input_refs == (auxiliary_ref.table_ref_id,)
+    assert candidates[0].input_resolution_issue is None
+
+
+def test_configured_input_resolution_error_fails_node_before_executor(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition_data = definition_with_transform_config(
+        {
+            "input_source": {
+                "type": "upstream_table",
+                "source_node_instance_id": "source",
+                "output_role": "AUXILIARY",
+                "storage_kind": "MEMORY",
+                "logical_table_id": "missing-table",
+            }
+        }
+    )
+    workflow = store.create_workflow_definition(
+        name="Configured input error workflow",
+        definition=definition_data,
+        workflow_id="workflow-configured-input-error",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-configured-input-error",
+    )
+    running_run = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+        allowed_source_statuses=[WorkflowRunStatus.PENDING],
+    )
+    assert running_run is not None
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-configured-input-error",
+    )
+    assert process is not None
+    dag = build_workflow_dag(WorkflowDefinitionModel.model_validate(definition_data))
+    initialize_node_runs(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        dag=dag,
+    )
+    source = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+    )
+    transform = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="transform",
+    )
+    assert source is not None
+    assert transform is not None
+    current_ref = make_ready_queue_table_ref(
+        table_ref_id="table-current",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+    )
+    store.register_table_ref(current_ref)
+    record_successful_node_result(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_instance_id="source",
+        output_refs=[current_ref.table_ref_id],
+    )
+    ready_transform = store.update_node_run_status(
+        transform.node_run_id,
+        NodeRunStatus.READY,
+        expected_state_version=transform.state_version,
+        allowed_source_statuses=[NodeRunStatus.WAITING_DEPENDENCY],
+    )
+    assert ready_transform is not None
+    event_sink = DatabaseEventSink(store)
+    task_manager = NodeTaskManager(store=store, event_sink=event_sink, dag=dag)
+    candidates = collect_ready_node_candidates(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        dag=dag,
+    )
+
+    dispatched = workflow_process_main.dispatch_ready_node_candidate(
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        candidate=candidates[0],
+        task_manager=task_manager,
+        executor_factory=lambda _task: (_ for _ in ()).throw(
+            AssertionError("executor should not be created")
+        ),
+    )
+
+    transform_after = store.get_node_run(transform.node_run_id)
+    workflow_after = store.get_workflow_run(run.workflow_run_id)
+    result = store.get_latest_succeeded_node_task_result_for_node_run(
+        transform.node_run_id
+    )
+    assert dispatched is None
+    assert candidates[0].input_resolution_issue is not None
+    assert transform_after is not None
+    assert transform_after.status == NodeRunStatus.FAILED.value
+    assert workflow_after is not None
+    assert workflow_after.status == WorkflowRunStatus.FAILED.value
+    assert result is None
+    assert transform_after.error == {
+        "code": "INPUT_TABLE_RESOLUTION_FAILED",
+        "message": "Input table selector did not match any upstream table",
+        "details": {
+            "slot": "in",
+            "source_node_instance_id": "source",
+            "output_role": "AUXILIARY",
+            "storage_kind": "MEMORY",
+            "logical_table_id": "missing-table",
+            "output_slot": None,
+        },
+    }
 
 
 def test_ready_queue_counts_in_flight_node_runs(tmp_path: Path) -> None:
