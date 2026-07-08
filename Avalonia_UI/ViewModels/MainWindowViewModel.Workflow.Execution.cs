@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -7,6 +8,15 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     private const int WorkflowRunTerminalRefreshAttemptCount = 40;
+
+    [ObservableProperty]
+    private bool isStartingWorkflow;
+
+    [ObservableProperty]
+    private string? lastStartedRunId;
+
+    [ObservableProperty]
+    private string? lastStartedRunStatus;
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
     private async Task StartSelectedWorkflowAsync()
