@@ -17,14 +17,6 @@ public partial class MainWindowViewModel
         NotifyAdvancedDraftJsonLocalizedTextChanged();
         NotifyRuntimeEventLogLocalizedTextChanged();
         NotifySharedDataLocalizedTextChanged();
-        foreach (var nodeDefinition in NodeDefinitions)
-        {
-            nodeDefinition.RefreshLocalizedText();
-        }
-
-        RefreshShellNavigationItems();
-        InvalidateWorkflowDefinitionDraftParseCache();
-        RefreshWorkflowDefinitionDraftStructureState();
-        RefreshSelectedNodeConfigDraftState();
+        RefreshLocalizedDerivedState();
     }
 }
