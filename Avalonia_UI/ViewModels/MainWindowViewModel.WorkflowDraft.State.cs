@@ -7,15 +7,6 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(HasWorkflowDefinitionError));
     }
 
-    partial void OnIsWorkflowDefinitionDraftDirtyChanged(bool value)
-    {
-        RestoreWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
-        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
-        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(WorkflowRunGuardText));
-    }
-
     partial void OnIsWorkflowDraftJsonAdvancedVisibleChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
