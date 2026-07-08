@@ -60,11 +60,4 @@ public partial class MainWindowViewModel
                 .ToArray());
     }
 
-    private string BuildDataPreviewWorkbenchTsv()
-    {
-        return DataPreviewTableGridBuilder.BuildTsv(
-            DataPreviewWorkbenchColumns.Select(column => column.Name),
-            DataPreviewWorkbenchRows.Select(
-                row => row.Cells.Select(cell => cell.Text)));
-    }
 }
