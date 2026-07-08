@@ -18,14 +18,16 @@ from flowweaver.engine.db_models import (
     WorkflowRunRecord,
 )
 from flowweaver.engine.runtime_models import NodeRun
-from flowweaver.engine.runtime_record_mappers import (
-    _datetime_to_text,
-    _json_dumps,
+from flowweaver.engine.runtime_node_task_record_mappers import (
     _node_run_from_record,
     _node_task_from_record,
     _node_task_result_from_record,
     _node_task_result_to_record,
     _node_task_to_record,
+)
+from flowweaver.engine.runtime_record_mappers import (
+    _datetime_to_text,
+    _json_dumps,
 )
 from flowweaver.engine.runtime_status_guards import (
     NODE_RUN_STATUS_SOURCES as _NODE_RUN_STATUS_SOURCES,
