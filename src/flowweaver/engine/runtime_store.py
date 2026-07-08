@@ -258,13 +258,16 @@ class ReadLease:
     released_at: datetime | None
 
 
-_TERMINAL_WORKFLOW_STATUSES = frozenset(
+TERMINAL_WORKFLOW_STATUS_VALUES = frozenset(
     {
         WorkflowRunStatus.SUCCEEDED.value,
         WorkflowRunStatus.FAILED.value,
         WorkflowRunStatus.CANCELLED.value,
         WorkflowRunStatus.ABORTED.value,
     }
+)
+_TERMINAL_WORKFLOW_STATUSES = frozenset(
+    TERMINAL_WORKFLOW_STATUS_VALUES
 )
 _TERMINAL_NODE_STATUSES = frozenset(
     {
@@ -1883,6 +1886,23 @@ class RuntimeStore:
                 record is None
                 or record.lifecycle_status != LifecycleStatus.STAGING.value
             ):
+                return None
+            record.lifecycle_status = LifecycleStatus.RELEASED.value
+            record.released_at = _datetime_to_text(now)
+            return _table_ref_from_record(record)
+
+    def mark_table_ref_released(
+        self,
+        table_ref_id: str,
+    ) -> TableRefModel | None:
+        now = utc_now()
+        with self._session_factory.begin() as session:
+            record = session.get(DataRefRecord, table_ref_id)
+            if record is None or record.lifecycle_status in {
+                LifecycleStatus.RELEASED.value,
+                LifecycleStatus.RETIRED.value,
+                LifecycleStatus.ORPHANED.value,
+            }:
                 return None
             record.lifecycle_status = LifecycleStatus.RELEASED.value
             record.released_at = _datetime_to_text(now)

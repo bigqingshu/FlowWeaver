@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import Request
@@ -66,6 +67,10 @@ def error_response(
 def _to_jsonable(value: Any) -> Any:
     if isinstance(value, list):
         return [_to_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, datetime):
+        return value.isoformat()
     if isinstance(value, WorkflowDefinition):
         return {
             "workflow_id": value.workflow_id,

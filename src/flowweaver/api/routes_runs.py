@@ -9,18 +9,31 @@ from flowweaver.api.dependencies import (
     check_origin,
     get_runtime_store,
     get_supervisor,
+    get_table_provider_registry,
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
 from flowweaver.api.workflow_run_start import start_workflow_run_for_request
-from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_store import (
+    TERMINAL_WORKFLOW_STATUS_VALUES,
+    RuntimeStore,
+    WorkflowRun,
+)
 from flowweaver.engine.supervisor import Supervisor
+from flowweaver.engine.table_provider_registry import TableProviderRegistry
+from flowweaver.protocols.enums import LifecycleStatus, TableStorageKind
+from flowweaver.protocols.table_ref import TableRefModel
 
 router = APIRouter(
     prefix="/api/v1/runs",
     tags=["runs"],
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
+_BACKGROUND_TRIGGER_SOURCE = "background_manual"
+_INTERNAL_CLEANUP_STORAGE_KINDS = {
+    TableStorageKind.RUNTIME_SQL,
+    TableStorageKind.MEMORY,
+}
 
 
 @router.get("", response_model=APIResponseModel)
@@ -34,22 +47,9 @@ def list_runs(
     offset: int = 0,
     limit: int = 100,
 ):
-    if offset < 0:
-        return error_response(
-            request,
-            error_code="INVALID_PAGINATION",
-            message="offset must be non-negative",
-            status_code=422,
-            details={"offset": offset},
-        )
-    if limit < 1 or limit > 500:
-        return error_response(
-            request,
-            error_code="INVALID_PAGINATION",
-            message="limit must be between 1 and 500",
-            status_code=422,
-            details={"limit": limit},
-        )
+    rejection = _pagination_rejection(request, offset=offset, limit=limit)
+    if rejection is not None:
+        return rejection
     return ok_response(
         request,
         store.list_workflow_runs(
@@ -57,6 +57,32 @@ def list_runs(
             statuses=status,
             run_mode=run_mode,
             trigger_source=trigger_source,
+            offset=offset,
+            limit=limit,
+        ),
+    )
+
+
+@router.get("/background", response_model=APIResponseModel)
+def list_background_runs(
+    request: Request,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    workflow_id: str | None = None,
+    status: Annotated[list[str] | None, Query()] = None,
+    run_mode: str | None = None,
+    offset: int = 0,
+    limit: int = 100,
+):
+    rejection = _pagination_rejection(request, offset=offset, limit=limit)
+    if rejection is not None:
+        return rejection
+    return ok_response(
+        request,
+        store.list_workflow_runs(
+            workflow_id=workflow_id,
+            statuses=status,
+            run_mode=run_mode,
+            trigger_source=_BACKGROUND_TRIGGER_SOURCE,
             offset=offset,
             limit=limit,
         ),
@@ -78,6 +104,26 @@ def get_run(
             status_code=404,
         )
     return ok_response(request, run)
+
+
+@router.get("/{workflow_run_id}/review", response_model=APIResponseModel)
+def get_run_review(
+    request: Request,
+    workflow_run_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+):
+    run = store.get_workflow_run(workflow_run_id)
+    if run is None:
+        return _run_not_found(request)
+    table_refs = store.list_table_refs_by_workflow_run(workflow_run_id)
+    return ok_response(
+        request,
+        _run_review_payload(
+            run=run,
+            node_runs=store.list_node_runs(workflow_run_id),
+            table_refs=table_refs,
+        ),
+    )
 
 
 @router.post(
@@ -151,12 +197,7 @@ def list_run_nodes(
 ):
     run = store.get_workflow_run(workflow_run_id)
     if run is None:
-        return error_response(
-            request,
-            error_code="WORKFLOW_RUN_NOT_FOUND",
-            message="Workflow run not found",
-            status_code=404,
-        )
+        return _run_not_found(request)
     return ok_response(request, store.list_node_runs(workflow_run_id))
 
 
@@ -270,13 +311,208 @@ def list_run_table_refs(
 ):
     run = store.get_workflow_run(workflow_run_id)
     if run is None:
+        return _run_not_found(request)
+    return ok_response(request, store.list_table_refs_by_workflow_run(workflow_run_id))
+
+
+@router.delete("/{workflow_run_id}/table-refs", response_model=APIResponseModel)
+def cleanup_run_table_refs(
+    request: Request,
+    workflow_run_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    provider_registry: Annotated[
+        TableProviderRegistry,
+        Depends(get_table_provider_registry),
+    ],
+):
+    run = store.get_workflow_run(workflow_run_id)
+    if run is None:
+        return _run_not_found(request)
+    if run.status not in TERMINAL_WORKFLOW_STATUS_VALUES:
         return error_response(
             request,
-            error_code="WORKFLOW_RUN_NOT_FOUND",
-            message="Workflow run not found",
-            status_code=404,
+            error_code="WORKFLOW_RUN_NOT_TERMINAL",
+            message="Workflow run must be terminal before table refs can be cleaned",
+            status_code=409,
+            details={"workflow_run_id": workflow_run_id, "status": run.status},
         )
-    return ok_response(request, store.list_table_refs_by_workflow_run(workflow_run_id))
+    return ok_response(
+        request,
+        _cleanup_table_refs_for_run(
+            workflow_run_id=workflow_run_id,
+            store=store,
+            provider_registry=provider_registry,
+        ),
+    )
+
+
+def _pagination_rejection(
+    request: Request,
+    *,
+    offset: int,
+    limit: int,
+):
+    if offset < 0:
+        return error_response(
+            request,
+            error_code="INVALID_PAGINATION",
+            message="offset must be non-negative",
+            status_code=422,
+            details={"offset": offset},
+        )
+    if limit < 1 or limit > 500:
+        return error_response(
+            request,
+            error_code="INVALID_PAGINATION",
+            message="limit must be between 1 and 500",
+            status_code=422,
+            details={"limit": limit},
+        )
+    return None
+
+
+def _run_not_found(request: Request):
+    return error_response(
+        request,
+        error_code="WORKFLOW_RUN_NOT_FOUND",
+        message="Workflow run not found",
+        status_code=404,
+    )
+
+
+def _run_review_payload(
+    *,
+    run: WorkflowRun,
+    node_runs: list,
+    table_refs: list[TableRefModel],
+) -> dict[str, object]:
+    readable_refs = [
+        table_ref
+        for table_ref in table_refs
+        if _table_ref_is_readable(table_ref)
+    ]
+    return {
+        "run": run,
+        "node_runs": node_runs,
+        "table_refs": table_refs,
+        "table_ref_summary": {
+            "total": len(table_refs),
+            "readable": len(readable_refs),
+            "by_storage_kind": _table_ref_counts_by_storage_kind(table_refs),
+            "by_lifecycle_status": _table_ref_counts_by_lifecycle_status(table_refs),
+        },
+        "data_preview": {
+            "uses_paged_rows": True,
+            "row_data_embedded": False,
+            "readable_table_ref_ids": [
+                table_ref.table_ref_id for table_ref in readable_refs
+            ],
+        },
+    }
+
+
+def _cleanup_table_refs_for_run(
+    *,
+    workflow_run_id: str,
+    store: RuntimeStore,
+    provider_registry: TableProviderRegistry,
+) -> dict[str, object]:
+    cleaned: list[TableRefModel] = []
+    skipped: list[dict[str, str]] = []
+    failed: list[dict[str, str]] = []
+    for table_ref in store.list_table_refs_by_workflow_run(workflow_run_id):
+        skip_reason = _table_cleanup_skip_reason(table_ref)
+        if skip_reason is not None:
+            skipped.append(
+                {
+                    "table_ref_id": table_ref.table_ref_id,
+                    "reason": skip_reason,
+                }
+            )
+            continue
+        provider = provider_registry.get(table_ref.provider_id)
+        if provider is None or not provider_registry.supports_storage_kind(
+            table_ref.provider_id,
+            table_ref.storage_kind,
+        ):
+            skipped.append(
+                {
+                    "table_ref_id": table_ref.table_ref_id,
+                    "reason": "provider_unsupported",
+                }
+            )
+            continue
+        try:
+            provider.drop_table(table_ref)
+        except ValueError as exc:
+            failed.append(
+                {
+                    "table_ref_id": table_ref.table_ref_id,
+                    "reason": str(exc),
+                }
+            )
+            continue
+        released = store.mark_table_ref_released(table_ref.table_ref_id)
+        if released is None:
+            skipped.append(
+                {
+                    "table_ref_id": table_ref.table_ref_id,
+                    "reason": "already_unavailable",
+                }
+            )
+            continue
+        cleaned.append(released)
+    return {
+        "workflow_run_id": workflow_run_id,
+        "cleaned_count": len(cleaned),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "cleaned_table_refs": cleaned,
+        "skipped": skipped,
+        "failed": failed,
+    }
+
+
+def _table_cleanup_skip_reason(table_ref: TableRefModel) -> str | None:
+    if table_ref.storage_kind not in _INTERNAL_CLEANUP_STORAGE_KINDS:
+        return "external_or_unsupported_storage"
+    if table_ref.lifecycle_status in {
+        LifecycleStatus.RELEASED,
+        LifecycleStatus.RETIRED,
+        LifecycleStatus.ORPHANED,
+    }:
+        return "already_unavailable"
+    return None
+
+
+def _table_ref_is_readable(table_ref: TableRefModel) -> bool:
+    if "READ" not in table_ref.capabilities:
+        return False
+    return table_ref.lifecycle_status not in {
+        LifecycleStatus.RELEASED,
+        LifecycleStatus.RETIRED,
+        LifecycleStatus.ORPHANED,
+    }
+
+
+def _table_ref_counts_by_storage_kind(
+    table_refs: list[TableRefModel],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table_ref in table_refs:
+        key = table_ref.storage_kind.value
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _table_ref_counts_by_lifecycle_status(
+    table_refs: list[TableRefModel],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table_ref in table_refs:
+        key = table_ref.lifecycle_status.value
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _reject_missing_run(
@@ -286,12 +522,7 @@ def _reject_missing_run(
 ):
     run = store.get_workflow_run(workflow_run_id)
     if run is None:
-        return error_response(
-            request,
-            error_code="WORKFLOW_RUN_NOT_FOUND",
-            message="Workflow run not found",
-            status_code=404,
-        )
+        return _run_not_found(request)
     return None
 
 

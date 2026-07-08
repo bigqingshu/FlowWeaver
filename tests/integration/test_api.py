@@ -1412,6 +1412,12 @@ def test_run_query_api_filters_background_runs_and_pages(
             headers=auth_headers(),
         )
     )
+    background_direct = response_data(
+        client.get(
+            "/api/v1/runs/background",
+            headers=auth_headers(),
+        )
+    )
     preview = response_data(
         client.get(
             "/api/v1/runs",
@@ -1428,9 +1434,67 @@ def test_run_query_api_filters_background_runs_and_pages(
     )
 
     assert [item["workflow_run_id"] for item in background] == ["run-2"]
+    assert [item["workflow_run_id"] for item in background_direct] == ["run-2"]
     assert background[0]["trigger_source"] == "background_manual"
     assert [item["workflow_run_id"] for item in preview] == ["run-3"]
     assert [item["workflow_run_id"] for item in paged] == ["run-2"]
+
+
+def test_run_review_api_returns_lightweight_table_directory(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Background review",
+        definition=valid_definition(),
+        workflow_id="workflow-1",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-background",
+        status=WorkflowRunStatus.SUCCEEDED,
+        trigger_source="background_manual",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-1",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-1",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+    )
+    store.register_table_ref(table_ref)
+
+    review = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/review",
+            headers=auth_headers(),
+        )
+    )
+
+    assert review["run"]["workflow_run_id"] == run.workflow_run_id
+    assert review["run"]["trigger_source"] == "background_manual"
+    assert [item["node_run_id"] for item in review["node_runs"]] == [
+        node.node_run_id
+    ]
+    assert [item["table_ref_id"] for item in review["table_refs"]] == [
+        table_ref.table_ref_id
+    ]
+    assert "rows" not in review["table_refs"][0]
+    assert review["table_ref_summary"] == {
+        "total": 1,
+        "readable": 1,
+        "by_storage_kind": {"RUNTIME_SQL": 1},
+        "by_lifecycle_status": {"PUBLISHED": 1},
+    }
+    assert review["data_preview"] == {
+        "uses_paged_rows": True,
+        "row_data_embedded": False,
+        "readable_table_ref_ids": [table_ref.table_ref_id],
+    }
 
 
 def test_run_query_api_includes_completion_reason(tmp_path: Path) -> None:
@@ -2317,6 +2381,96 @@ def test_data_api_reads_table_ref_schema_summary_and_limited_rows(
         "rows": [{"row_id": 2, "amount": 3.0}],
         "has_more": True,
     }
+
+
+def test_cleanup_run_table_refs_releases_internal_tables_after_terminal_run(
+    tmp_path: Path,
+) -> None:
+    client, store, container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cleanup data preview",
+        definition=valid_definition(),
+        workflow_id="workflow-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cleanup",
+        status=WorkflowRunStatus.SUCCEEDED,
+        trigger_source="background_manual",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-cleanup",
+    )
+    provider = SQLiteRuntimeTableProvider(container.config.resolved_runtime_dir())
+    schema = [
+        FieldSchemaModel(
+            field_id="orders-row-id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        )
+    ]
+    staging = provider.create_staging_table(
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        output_name="orders",
+        schema=schema,
+    )
+    provider.insert_rows(staging, [{"row_id": 1}])
+    published = provider.published_ref_from_staging(staging)
+    provider.publish_staging(staging, published)
+    store.register_table_ref(published)
+
+    cleanup = response_data(
+        client.delete(
+            f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+    released = store.get_table_ref(published.table_ref_id)
+    unavailable = client.get(
+        f"/api/v1/data/{published.table_ref_id}/rows",
+        headers=auth_headers(),
+    )
+
+    assert cleanup["workflow_run_id"] == run.workflow_run_id
+    assert cleanup["cleaned_count"] == 1
+    assert cleanup["skipped_count"] == 0
+    assert cleanup["failed_count"] == 0
+    assert cleanup["cleaned_table_refs"][0]["table_ref_id"] == published.table_ref_id
+    assert cleanup["cleaned_table_refs"][0]["can_read_rows"] is False
+    assert released is not None
+    assert released.lifecycle_status == LifecycleStatus.RELEASED
+    assert unavailable.status_code == 409
+    assert response_error(unavailable)["error_code"] == "TABLE_REF_NOT_AVAILABLE"
+
+
+def test_cleanup_run_table_refs_rejects_running_run(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Running cleanup",
+        definition=valid_definition(),
+        workflow_id="workflow-running-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-running-cleanup",
+        status=WorkflowRunStatus.RUNNING,
+    )
+
+    response = client.delete(
+        f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 409
+    assert response_error(response)["error_code"] == "WORKFLOW_RUN_NOT_TERMINAL"
 
 
 def test_data_api_rejects_missing_and_invalid_table_ref_reads(
