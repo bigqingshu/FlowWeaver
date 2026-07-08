@@ -12,5 +12,4 @@ public partial class MainWindowViewModel
             && !HasWorkflowDefinitionRevisionConflict
             && FindDraftNode(SelectedWorkflowDefinitionNode.NodeInstanceId) is not null;
     }
-
 }
