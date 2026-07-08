@@ -5,7 +5,7 @@ import time
 import traceback
 from collections.abc import Callable
 from pathlib import Path
-from typing import NoReturn, Protocol, runtime_checkable
+from typing import NoReturn
 
 from flowweaver.common.config import (
     WorkflowProcessExecutionMode,
@@ -29,17 +29,11 @@ from flowweaver.node_executor import (
 )
 from flowweaver.protocols.enums import (
     EventType,
-    IPCMessageType,
     NodeResultStatus,
     NodeRunStatus,
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.ipc_messages import (
-    IPCEnvelope,
-    NodeTaskHeartbeatPayload,
-    NodeTaskProgressPayload,
-)
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.workflow.definition import (
     UNAVAILABLE_FAILURE_POLICY_MODES,
@@ -51,6 +45,7 @@ from flowweaver.workflow.runtime_options import (
     resolve_runtime_options_by_node,
     resolve_workflow_runtime_options,
 )
+from flowweaver.workflow_process import ipc_events
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.controller import (
@@ -113,6 +108,8 @@ _request_cancel = supervision.request_cancel
 _request_cancel_for_in_flight_tasks = supervision.request_cancel_for_in_flight_tasks
 _task_supervision_poll_seconds = supervision.task_supervision_poll_seconds
 _workflow_cancel_was_requested = supervision.workflow_cancel_was_requested
+_configure_executor_event_handler = ipc_events.configure_executor_event_handler
+_record_node_task_ipc_event = ipc_events.record_node_task_ipc_event
 
 _HANDLED_NODE_TASK_APPLY_STATUSES = frozenset(
     {
@@ -127,17 +124,6 @@ _IGNORED_NODE_TASK_APPLY_STATUSES = frozenset(
         NodeTaskApplyStatus.REJECTED_NODE_TERMINAL,
     }
 )
-
-
-@runtime_checkable
-class _NodeTaskIpcEventAwareExecutor(Protocol):
-    executor_id: str
-
-    def set_event_handler(
-        self,
-        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
-    ) -> None:
-        ...
 
 
 class _DefaultWorkflowProcessExecutorOwner(DefaultWorkflowProcessExecutorOwner):
@@ -855,60 +841,6 @@ def _timeout_seconds_from_node_config(config: dict[str, object]) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         return 60
     return max(0, value)
-
-
-def _configure_executor_event_handler(
-    executor: object,
-    *,
-    store: RuntimeStore,
-    task_manager: NodeTaskManager,
-    workflow_process_id: str,
-    process_generation: int,
-) -> None:
-    if not isinstance(executor, _NodeTaskIpcEventAwareExecutor):
-        return
-
-    def handle_event(task: NodeTaskModel, envelope: IPCEnvelope) -> None:
-        store.record_workflow_process_heartbeat(
-            workflow_process_id,
-            process_generation=process_generation,
-        )
-        _record_node_task_ipc_event(
-            task_manager=task_manager,
-            executor_id=executor.executor_id,
-            task=task,
-            envelope=envelope,
-        )
-
-    executor.set_event_handler(handle_event)
-
-
-def _record_node_task_ipc_event(
-    *,
-    task_manager: NodeTaskManager,
-    executor_id: str,
-    task: NodeTaskModel,
-    envelope: IPCEnvelope,
-) -> None:
-    if envelope.message_type == IPCMessageType.NODE_TASK_HEARTBEAT:
-        heartbeat_payload = NodeTaskHeartbeatPayload.model_validate(envelope.payload)
-        if heartbeat_payload.task_id != task.task_id:
-            return
-        task_manager.record_task_heartbeat(
-            task,
-            executor_id=heartbeat_payload.executor_id,
-            attempt=heartbeat_payload.attempt,
-        )
-        return
-    if envelope.message_type == IPCMessageType.NODE_TASK_PROGRESS:
-        progress_payload = NodeTaskProgressPayload.model_validate(envelope.payload)
-        task_manager.record_task_progress(
-            task,
-            executor_id=executor_id,
-            progress=progress_payload.progress,
-            current_stage=progress_payload.current_stage,
-            metrics=progress_payload.metrics,
-        )
 
 
 def _close_execution_pool(execution_pool: object | None) -> None:
