@@ -18,9 +18,6 @@ from flowweaver.engine.runtime_event_sink import (
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.engine.table_provider_registry import (
-    create_default_table_provider_registry,
-)
 from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
     NodeExecutorFactory,
@@ -31,6 +28,7 @@ from flowweaver.workflow_process import (
     process_cancellation,
     process_dag,
     process_definition,
+    process_runtime_initialization,
     process_runtime_options,
     process_startup,
     task_dispatch,
@@ -38,24 +36,11 @@ from flowweaver.workflow_process import (
 from flowweaver.workflow_process import process_execution_helpers as execution_helpers
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process import task_supervision as supervision
-from flowweaver.workflow_process.controller import (
-    initialize_node_runs,
-    recover_ready_nodes,
-)
 from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
 )
 from flowweaver.workflow_process.executor_pool import (
     NodeTaskExecutionPool,
-)
-from flowweaver.workflow_process.loop_recovery import (
-    recover_serial_loop_runtime_state,
-)
-from flowweaver.workflow_process.loop_runtime_initialization import (
-    initialize_enabled_loop_runtime_state,
-)
-from flowweaver.workflow_process.node_tasks import (
-    NodeTaskManager,
 )
 
 CleanupStagingForNode = execution_helpers.CleanupStagingForNode
@@ -78,6 +63,9 @@ _load_workflow_process_definition = (
 _prepare_workflow_process_dag = process_dag.prepare_workflow_process_dag
 _configure_runtime_options_event_sink = (
     process_runtime_options.configure_runtime_options_event_sink
+)
+_initialize_workflow_process_runtime = (
+    process_runtime_initialization.initialize_workflow_process_runtime
 )
 _mark_workflow_process_started = process_startup.mark_workflow_process_started
 _cancel_grace_period_expired = supervision.cancel_grace_period_expired
@@ -292,43 +280,18 @@ def _run_workflow_process_loop(
             process_generation=process_generation,
             event_sink=event_sink,
         )
-    initialize_node_runs(
-        store,
-        workflow_run_id=workflow_run_id,
-        process_id=process_id,
-        process_generation=process_generation,
-        dag=dag,
-    )
-    initialize_enabled_loop_runtime_state(
-        store,
-        definition=definition,
-        workflow_run_id=workflow_run_id,
-        dag=dag,
-    )
-    recover_ready_nodes(
-        store,
-        workflow_run_id=workflow_run_id,
-        process_id=process_id,
-        process_generation=process_generation,
-        dag=dag,
-    )
-    table_provider_registry = create_default_table_provider_registry(runtime_dir)
-    recover_serial_loop_runtime_state(
-        store,
-        table_provider_registry,
-        workflow_run_id=workflow_run_id,
-        dag=dag,
-        process_id=process_id,
-        process_generation=process_generation,
-    )
-    task_manager = NodeTaskManager(
+    runtime_initialization = _initialize_workflow_process_runtime(
         store=store,
         event_sink=event_sink,
+        definition=definition,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
         dag=dag,
-        failure_policy_mode=definition.failure_policy.mode,
+        runtime_dir=runtime_dir,
         runtime_options_by_node=runtime_options_by_node,
-        table_provider_registry=table_provider_registry,
     )
+    task_manager = runtime_initialization.task_manager
     if execution_pool is None:
         execute_task = _build_node_task_execute(
             store=store,
