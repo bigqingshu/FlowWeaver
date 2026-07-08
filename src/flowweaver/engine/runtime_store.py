@@ -5,9 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
-from sqlalchemy.engine import CursorResult, Engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.database import create_sqlite_engine, sqlite_url
@@ -16,27 +15,33 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
     DataRefRecord,
     InputSnapshotRecord,
-    LoopIterationNodeRunRecord,
-    LoopIterationRunRecord,
-    LoopIterationTableRefRecord,
-    LoopRunRecord,
-    NodeRunRecord,
     ReadLeaseRecord,
     RuntimeEventRecord,
     SharedPublicationMemberRecord,
     SharedPublicationRecord,
     WorkflowRunRecord,
 )
+from flowweaver.engine.runtime_loop_store import (
+    RuntimeLoopStoreMixin,
+)
 from flowweaver.engine.runtime_models import (
     InputSnapshot,
     InputSnapshotEntry,
-    LoopIterationNodeRun,
-    LoopIterationRun,
-    LoopIterationTableRef,
-    LoopRun,
     ReadLease,
     RuntimeEventLog,
     SharedPublication,
+)
+from flowweaver.engine.runtime_models import (
+    LoopIterationNodeRun as LoopIterationNodeRun,
+)
+from flowweaver.engine.runtime_models import (
+    LoopIterationRun as LoopIterationRun,
+)
+from flowweaver.engine.runtime_models import (
+    LoopIterationTableRef as LoopIterationTableRef,
+)
+from flowweaver.engine.runtime_models import (
+    LoopRun as LoopRun,
 )
 from flowweaver.engine.runtime_models import (
     NodeRun as NodeRun,
@@ -56,11 +61,6 @@ from flowweaver.engine.runtime_record_mappers import (
     _input_snapshot_from_record,
     _input_snapshot_json,
     _json_dumps,
-    _loop_iteration_node_run_from_record,
-    _loop_iteration_run_from_record,
-    _loop_iteration_table_ref_from_record,
-    _loop_run_from_record,
-    _optional_datetime_to_text,
     _read_lease_from_record,
     _runtime_event_from_record,
     _selected_members_json,
@@ -68,25 +68,7 @@ from flowweaver.engine.runtime_record_mappers import (
     _table_ref_from_record,
 )
 from flowweaver.engine.runtime_status_guards import (
-    LOOP_ITERATION_STATUS_SOURCES as _LOOP_ITERATION_STATUS_SOURCES,
-)
-from flowweaver.engine.runtime_status_guards import (
-    LOOP_RUN_STATUS_SOURCES as _LOOP_RUN_STATUS_SOURCES,
-)
-from flowweaver.engine.runtime_status_guards import (
-    TERMINAL_LOOP_ITERATION_STATUSES as _TERMINAL_LOOP_ITERATION_STATUSES,
-)
-from flowweaver.engine.runtime_status_guards import (
-    TERMINAL_LOOP_RUN_STATUSES as _TERMINAL_LOOP_RUN_STATUSES,
-)
-from flowweaver.engine.runtime_status_guards import (
     TERMINAL_WORKFLOW_STATUS_VALUES as TERMINAL_WORKFLOW_STATUS_VALUES,
-)
-from flowweaver.engine.runtime_status_guards import (
-    loop_iteration_status_values as _loop_iteration_status_values,
-)
-from flowweaver.engine.runtime_status_guards import (
-    loop_run_status_values as _loop_run_status_values,
 )
 from flowweaver.engine.runtime_workflow_definition_store import (
     RuntimeWorkflowDefinitionStoreMixin,
@@ -96,9 +78,6 @@ from flowweaver.engine.runtime_workflow_run_store import (
 )
 from flowweaver.protocols.enums import (
     LifecycleStatus,
-    LoopIterationRunStatus,
-    LoopIterationTableRefRole,
-    LoopRunStatus,
     TableMutability,
 )
 from flowweaver.protocols.events import EventModel
@@ -109,6 +88,7 @@ class RuntimeStore(
     RuntimeWorkflowDefinitionStoreMixin,
     RuntimeWorkflowRunStoreMixin,
     RuntimeNodeRunStoreMixin,
+    RuntimeLoopStoreMixin,
 ):
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
@@ -118,517 +98,6 @@ class RuntimeStore(
     @classmethod
     def from_sqlite_path(cls, path: str | Path) -> RuntimeStore:
         return cls(sqlite_url(path))
-
-    def create_loop_run(
-        self,
-        *,
-        workflow_run_id: str,
-        loop_id: str,
-        start_node_instance_id: str,
-        judge_node_instance_id: str,
-        max_iterations: int,
-        loop_run_id: str | None = None,
-        status: LoopRunStatus = LoopRunStatus.PENDING,
-        started_at: datetime | None = None,
-    ) -> LoopRun | None:
-        if max_iterations < 1:
-            raise ValueError("Loop run max_iterations must be at least 1")
-        now = utc_now()
-        record = LoopRunRecord(
-            loop_run_id=loop_run_id or new_id(),
-            workflow_run_id=workflow_run_id,
-            loop_id=loop_id,
-            start_node_instance_id=start_node_instance_id,
-            judge_node_instance_id=judge_node_instance_id,
-            status=status.value,
-            state_version=0,
-            current_iteration=0,
-            max_iterations=max_iterations,
-            exit_reason=None,
-            started_at=_optional_datetime_to_text(started_at),
-            finished_at=None,
-            error_json=None,
-            created_at=_datetime_to_text(now),
-        )
-        try:
-            with self._session_factory.begin() as session:
-                if session.get(WorkflowRunRecord, workflow_run_id) is None:
-                    raise ValueError(f"Workflow run not found: {workflow_run_id}")
-                session.add(record)
-            return _loop_run_from_record(record)
-        except IntegrityError:
-            return self.get_loop_run_for_workflow_loop(
-                workflow_run_id=workflow_run_id,
-                loop_id=loop_id,
-            )
-
-    def get_loop_run(self, loop_run_id: str) -> LoopRun | None:
-        with self._session_factory() as session:
-            record = session.get(LoopRunRecord, loop_run_id)
-            if record is None:
-                return None
-            return _loop_run_from_record(record)
-
-    def get_loop_run_for_workflow_loop(
-        self,
-        *,
-        workflow_run_id: str,
-        loop_id: str,
-    ) -> LoopRun | None:
-        with self._session_factory() as session:
-            record = session.scalar(
-                select(LoopRunRecord)
-                .where(LoopRunRecord.workflow_run_id == workflow_run_id)
-                .where(LoopRunRecord.loop_id == loop_id)
-            )
-            if record is None:
-                return None
-            return _loop_run_from_record(record)
-
-    def list_loop_runs(
-        self,
-        workflow_run_id: str,
-        *,
-        statuses: Iterable[LoopRunStatus | str] | None = None,
-    ) -> list[LoopRun]:
-        statement = (
-            select(LoopRunRecord)
-            .where(LoopRunRecord.workflow_run_id == workflow_run_id)
-            .order_by(LoopRunRecord.created_at, LoopRunRecord.loop_run_id)
-        )
-        if statuses is not None:
-            statement = statement.where(
-                LoopRunRecord.status.in_(_loop_run_status_values(statuses))
-            )
-        with self._session_factory() as session:
-            return [
-                _loop_run_from_record(record) for record in session.scalars(statement)
-            ]
-
-    def update_loop_run_status(
-        self,
-        loop_run_id: str,
-        status: LoopRunStatus,
-        *,
-        current_iteration: int | None = None,
-        exit_reason: str | None = None,
-        started_at: datetime | None = None,
-        finished_at: datetime | None = None,
-        error: dict[str, Any] | None = None,
-        expected_state_version: int | None = None,
-        allowed_source_statuses: Iterable[LoopRunStatus | str] | None = None,
-    ) -> LoopRun | None:
-        if current_iteration is not None and current_iteration < 0:
-            raise ValueError("Loop run current_iteration cannot be negative")
-        with self._session_factory.begin() as session:
-            source_statuses = (
-                _loop_run_status_values(allowed_source_statuses)
-                if allowed_source_statuses is not None
-                else list(_LOOP_RUN_STATUS_SOURCES.get(status.value, ()))
-            )
-            values: dict[str, Any] = {
-                "status": status.value,
-                "state_version": LoopRunRecord.state_version + 1,
-                "error_json": _json_dumps(error) if error is not None else None,
-            }
-            if current_iteration is not None:
-                values["current_iteration"] = current_iteration
-            if exit_reason is not None:
-                values["exit_reason"] = exit_reason
-            if started_at is not None:
-                values["started_at"] = _datetime_to_text(started_at)
-            if finished_at is not None:
-                values["finished_at"] = _datetime_to_text(finished_at)
-
-            statement = (
-                update(LoopRunRecord)
-                .where(LoopRunRecord.loop_run_id == loop_run_id)
-                .where(LoopRunRecord.status.notin_(_TERMINAL_LOOP_RUN_STATUSES))
-                .where(LoopRunRecord.status.in_(source_statuses))
-                .values(**values)
-            )
-            if expected_state_version is not None:
-                statement = statement.where(
-                    LoopRunRecord.state_version == expected_state_version
-                )
-            result = cast(CursorResult[Any], session.execute(statement))
-            if result.rowcount != 1:
-                return None
-            record = session.get(LoopRunRecord, loop_run_id)
-            if record is None:
-                return None
-            return _loop_run_from_record(record)
-
-    def create_loop_iteration_run(
-        self,
-        *,
-        loop_run_id: str,
-        iteration_index: int,
-        loop_iteration_id: str | None = None,
-        status: LoopIterationRunStatus = LoopIterationRunStatus.PENDING,
-        input_table_ref_id: str | None = None,
-        input_selector: Mapping[str, Any] | None = None,
-        started_at: datetime | None = None,
-    ) -> LoopIterationRun | None:
-        if iteration_index < 0:
-            raise ValueError("Loop iteration index cannot be negative")
-        now = utc_now()
-        record = LoopIterationRunRecord(
-            loop_iteration_id=loop_iteration_id or new_id(),
-            loop_run_id=loop_run_id,
-            iteration_index=iteration_index,
-            status=status.value,
-            state_version=0,
-            input_table_ref_id=input_table_ref_id,
-            input_selector_json=(
-                _json_dumps(dict(input_selector))
-                if input_selector is not None
-                else None
-            ),
-            output_table_ref_id=None,
-            failed_node_run_id=None,
-            started_at=_optional_datetime_to_text(started_at),
-            finished_at=None,
-            error_json=None,
-            created_at=_datetime_to_text(now),
-        )
-        try:
-            with self._session_factory.begin() as session:
-                loop = session.get(LoopRunRecord, loop_run_id)
-                if loop is None:
-                    raise ValueError(f"Loop run not found: {loop_run_id}")
-                if input_table_ref_id is not None:
-                    _validate_loop_table_ref(
-                        session,
-                        loop=loop,
-                        table_ref_id=input_table_ref_id,
-                    )
-                session.add(record)
-            return _loop_iteration_run_from_record(record)
-        except IntegrityError:
-            return self.get_loop_iteration_run_for_index(
-                loop_run_id=loop_run_id,
-                iteration_index=iteration_index,
-            )
-
-    def get_loop_iteration_run(
-        self,
-        loop_iteration_id: str,
-    ) -> LoopIterationRun | None:
-        with self._session_factory() as session:
-            record = session.get(LoopIterationRunRecord, loop_iteration_id)
-            if record is None:
-                return None
-            return _loop_iteration_run_from_record(record)
-
-    def get_loop_iteration_run_for_index(
-        self,
-        *,
-        loop_run_id: str,
-        iteration_index: int,
-    ) -> LoopIterationRun | None:
-        with self._session_factory() as session:
-            record = session.scalar(
-                select(LoopIterationRunRecord)
-                .where(LoopIterationRunRecord.loop_run_id == loop_run_id)
-                .where(LoopIterationRunRecord.iteration_index == iteration_index)
-            )
-            if record is None:
-                return None
-            return _loop_iteration_run_from_record(record)
-
-    def list_loop_iteration_runs(
-        self,
-        loop_run_id: str,
-        *,
-        statuses: Iterable[LoopIterationRunStatus | str] | None = None,
-    ) -> list[LoopIterationRun]:
-        statement = (
-            select(LoopIterationRunRecord)
-            .where(LoopIterationRunRecord.loop_run_id == loop_run_id)
-            .order_by(LoopIterationRunRecord.iteration_index)
-        )
-        if statuses is not None:
-            statement = statement.where(
-                LoopIterationRunRecord.status.in_(
-                    _loop_iteration_status_values(statuses)
-                )
-            )
-        with self._session_factory() as session:
-            return [
-                _loop_iteration_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
-
-    def update_loop_iteration_run_status(
-        self,
-        loop_iteration_id: str,
-        status: LoopIterationRunStatus,
-        *,
-        output_table_ref_id: str | None = None,
-        failed_node_run_id: str | None = None,
-        started_at: datetime | None = None,
-        finished_at: datetime | None = None,
-        error: dict[str, Any] | None = None,
-        expected_state_version: int | None = None,
-        allowed_source_statuses: Iterable[LoopIterationRunStatus | str] | None = None,
-    ) -> LoopIterationRun | None:
-        with self._session_factory.begin() as session:
-            iteration = session.get(LoopIterationRunRecord, loop_iteration_id)
-            if iteration is None:
-                return None
-            loop = session.get(LoopRunRecord, iteration.loop_run_id)
-            if loop is None:
-                return None
-            if output_table_ref_id is not None:
-                _validate_loop_table_ref(
-                    session,
-                    loop=loop,
-                    table_ref_id=output_table_ref_id,
-                )
-            if failed_node_run_id is not None:
-                _validate_loop_node_run(
-                    session,
-                    loop=loop,
-                    node_run_id=failed_node_run_id,
-                )
-
-            source_statuses = (
-                _loop_iteration_status_values(allowed_source_statuses)
-                if allowed_source_statuses is not None
-                else list(_LOOP_ITERATION_STATUS_SOURCES.get(status.value, ()))
-            )
-            values: dict[str, Any] = {
-                "status": status.value,
-                "state_version": LoopIterationRunRecord.state_version + 1,
-                "error_json": _json_dumps(error) if error is not None else None,
-            }
-            if output_table_ref_id is not None:
-                values["output_table_ref_id"] = output_table_ref_id
-            if failed_node_run_id is not None:
-                values["failed_node_run_id"] = failed_node_run_id
-            if started_at is not None:
-                values["started_at"] = _datetime_to_text(started_at)
-            if finished_at is not None:
-                values["finished_at"] = _datetime_to_text(finished_at)
-
-            statement = (
-                update(LoopIterationRunRecord)
-                .where(LoopIterationRunRecord.loop_iteration_id == loop_iteration_id)
-                .where(
-                    LoopIterationRunRecord.status.notin_(
-                        _TERMINAL_LOOP_ITERATION_STATUSES
-                    )
-                )
-                .where(LoopIterationRunRecord.status.in_(source_statuses))
-                .values(**values)
-            )
-            if expected_state_version is not None:
-                statement = statement.where(
-                    LoopIterationRunRecord.state_version == expected_state_version
-                )
-            result = cast(CursorResult[Any], session.execute(statement))
-            if result.rowcount != 1:
-                return None
-            record = session.get(LoopIterationRunRecord, loop_iteration_id)
-            if record is None:
-                return None
-            return _loop_iteration_run_from_record(record)
-
-    def add_loop_iteration_table_ref(
-        self,
-        *,
-        loop_iteration_id: str,
-        table_ref_id: str,
-        role: LoopIterationTableRefRole | str,
-    ) -> LoopIterationTableRef | None:
-        role_value = role.value if isinstance(role, LoopIterationTableRefRole) else role
-        now = utc_now()
-        record = LoopIterationTableRefRecord(
-            loop_iteration_id=loop_iteration_id,
-            table_ref_id=table_ref_id,
-            role=role_value,
-            created_at=_datetime_to_text(now),
-        )
-        try:
-            with self._session_factory.begin() as session:
-                iteration = session.get(LoopIterationRunRecord, loop_iteration_id)
-                if iteration is None:
-                    raise ValueError(f"Loop iteration not found: {loop_iteration_id}")
-                loop = session.get(LoopRunRecord, iteration.loop_run_id)
-                if loop is None:
-                    raise ValueError(f"Loop run not found: {iteration.loop_run_id}")
-                _validate_loop_table_ref(
-                    session,
-                    loop=loop,
-                    table_ref_id=table_ref_id,
-                )
-                session.add(record)
-            return _loop_iteration_table_ref_from_record(record)
-        except IntegrityError:
-            return self.get_loop_iteration_table_ref(
-                loop_iteration_id=loop_iteration_id,
-                table_ref_id=table_ref_id,
-                role=role_value,
-            )
-
-    def get_loop_iteration_table_ref(
-        self,
-        *,
-        loop_iteration_id: str,
-        table_ref_id: str,
-        role: LoopIterationTableRefRole | str,
-    ) -> LoopIterationTableRef | None:
-        role_value = role.value if isinstance(role, LoopIterationTableRefRole) else role
-        with self._session_factory() as session:
-            record = session.get(
-                LoopIterationTableRefRecord,
-                {
-                    "loop_iteration_id": loop_iteration_id,
-                    "table_ref_id": table_ref_id,
-                    "role": role_value,
-                },
-            )
-            if record is None:
-                return None
-            return _loop_iteration_table_ref_from_record(record)
-
-    def list_loop_iteration_table_refs(
-        self,
-        loop_iteration_id: str,
-        *,
-        role: LoopIterationTableRefRole | str | None = None,
-    ) -> list[LoopIterationTableRef]:
-        statement = (
-            select(LoopIterationTableRefRecord)
-            .where(LoopIterationTableRefRecord.loop_iteration_id == loop_iteration_id)
-            .order_by(
-                LoopIterationTableRefRecord.role,
-                LoopIterationTableRefRecord.table_ref_id,
-            )
-        )
-        if role is not None:
-            role_value = (
-                role.value if isinstance(role, LoopIterationTableRefRole) else role
-            )
-            statement = statement.where(LoopIterationTableRefRecord.role == role_value)
-        with self._session_factory() as session:
-            return [
-                _loop_iteration_table_ref_from_record(record)
-                for record in session.scalars(statement)
-            ]
-
-    def add_loop_iteration_node_run(
-        self,
-        *,
-        loop_iteration_id: str,
-        node_run_id: str,
-        node_instance_id: str | None = None,
-        role: str = "BODY",
-    ) -> LoopIterationNodeRun | None:
-        if not role:
-            raise ValueError("Loop iteration node run role cannot be empty")
-        now = utc_now()
-        try:
-            with self._session_factory.begin() as session:
-                iteration = session.get(LoopIterationRunRecord, loop_iteration_id)
-                if iteration is None:
-                    raise ValueError(f"Loop iteration not found: {loop_iteration_id}")
-                loop = session.get(LoopRunRecord, iteration.loop_run_id)
-                if loop is None:
-                    raise ValueError(f"Loop run not found: {iteration.loop_run_id}")
-                node_run = _validate_loop_node_run(
-                    session,
-                    loop=loop,
-                    node_run_id=node_run_id,
-                )
-                resolved_node_instance_id = (
-                    node_instance_id
-                    if node_instance_id is not None
-                    else node_run.node_instance_id
-                )
-                if resolved_node_instance_id != node_run.node_instance_id:
-                    raise ValueError(
-                        "Loop node instance id does not match node run: "
-                        f"{resolved_node_instance_id}"
-                    )
-                record = LoopIterationNodeRunRecord(
-                    loop_iteration_id=loop_iteration_id,
-                    node_run_id=node_run_id,
-                    node_instance_id=resolved_node_instance_id,
-                    role=role,
-                    created_at=_datetime_to_text(now),
-                )
-                session.add(record)
-            return _loop_iteration_node_run_from_record(record)
-        except IntegrityError:
-            return self.get_loop_iteration_node_run(
-                loop_iteration_id=loop_iteration_id,
-                node_run_id=node_run_id,
-            )
-
-    def get_loop_iteration_node_run(
-        self,
-        *,
-        loop_iteration_id: str,
-        node_run_id: str,
-    ) -> LoopIterationNodeRun | None:
-        with self._session_factory() as session:
-            record = session.get(
-                LoopIterationNodeRunRecord,
-                {
-                    "loop_iteration_id": loop_iteration_id,
-                    "node_run_id": node_run_id,
-                },
-            )
-            if record is None:
-                return None
-            return _loop_iteration_node_run_from_record(record)
-
-    def list_loop_iteration_node_runs(
-        self,
-        loop_iteration_id: str,
-        *,
-        node_instance_id: str | None = None,
-        role: str | None = None,
-    ) -> list[LoopIterationNodeRun]:
-        statement = (
-            select(LoopIterationNodeRunRecord)
-            .where(LoopIterationNodeRunRecord.loop_iteration_id == loop_iteration_id)
-            .order_by(
-                LoopIterationNodeRunRecord.node_instance_id,
-                LoopIterationNodeRunRecord.node_run_id,
-            )
-        )
-        if node_instance_id is not None:
-            statement = statement.where(
-                LoopIterationNodeRunRecord.node_instance_id == node_instance_id
-            )
-        if role is not None:
-            statement = statement.where(LoopIterationNodeRunRecord.role == role)
-        with self._session_factory() as session:
-            return [
-                _loop_iteration_node_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
-
-    def list_loop_iteration_node_runs_by_node_run(
-        self,
-        node_run_id: str,
-    ) -> list[LoopIterationNodeRun]:
-        statement = (
-            select(LoopIterationNodeRunRecord)
-            .where(LoopIterationNodeRunRecord.node_run_id == node_run_id)
-            .order_by(
-                LoopIterationNodeRunRecord.loop_iteration_id,
-                LoopIterationNodeRunRecord.role,
-            )
-        )
-        with self._session_factory() as session:
-            return [
-                _loop_iteration_node_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
 
     def register_table_ref(self, table_ref: TableRefModel) -> None:
         with self._session_factory.begin() as session:
@@ -1154,37 +623,3 @@ def _validate_input_snapshot_publications(
             raise ValueError(
                 f"Input snapshot publication version mismatch: {item.publication_id}"
             )
-
-
-def _validate_loop_table_ref(
-    session: Session,
-    *,
-    loop: LoopRunRecord,
-    table_ref_id: str,
-) -> DataRefRecord:
-    table_ref = session.get(DataRefRecord, table_ref_id)
-    if table_ref is None:
-        raise ValueError(f"Loop table ref not found: {table_ref_id}")
-    if table_ref.workflow_run_id != loop.workflow_run_id:
-        raise ValueError(
-            f"Loop table ref does not belong to workflow run: {table_ref_id}"
-        )
-    return table_ref
-
-
-def _validate_loop_node_run(
-    session: Session,
-    *,
-    loop: LoopRunRecord,
-    node_run_id: str,
-) -> NodeRunRecord:
-    node_run = session.get(NodeRunRecord, node_run_id)
-    if node_run is None:
-        raise ValueError(f"Loop node run not found: {node_run_id}")
-    if node_run.workflow_run_id != loop.workflow_run_id:
-        raise ValueError(
-            f"Loop node run does not belong to workflow run: {node_run_id}"
-        )
-    return node_run
-
-
