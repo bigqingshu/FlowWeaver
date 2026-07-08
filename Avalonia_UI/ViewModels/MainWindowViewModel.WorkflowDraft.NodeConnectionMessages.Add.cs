@@ -7,22 +7,7 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private string? FormatRemovedConnectionsMessage(
-        IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections)
-    {
-        if (removedConnections.Count == 0)
-        {
-            return null;
-        }
-
-        return F(
-            "definition.node_delete_removed_connections",
-            string.Join(
-                Environment.NewLine,
-                removedConnections.Select(FormatRelatedConnectionSummary)));
-    }
-
-    private string? FormatDeletedRewiredConnectionsMessage(
+    private string? FormatAutoWiredConnectionsMessage(
         IReadOnlyList<WorkflowDefinitionDraftConnection> removedConnections,
         IReadOnlyList<WorkflowDefinitionDraftConnection> addedConnections)
     {
@@ -43,9 +28,8 @@ public partial class MainWindowViewModel
                 addedConnections.Select(FormatRelatedConnectionSummary));
 
         return F(
-            "definition.node_delete_rewired_connections",
+            "definition.node_add_rewired_connections",
             removedText,
             addedText);
     }
-
 }
