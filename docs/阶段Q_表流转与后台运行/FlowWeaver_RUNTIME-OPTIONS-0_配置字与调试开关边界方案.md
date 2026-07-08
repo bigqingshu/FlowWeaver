@@ -8,9 +8,9 @@
 
 节点自身必须具备的计算参数，仍然归属于节点 `config_schema` 和节点实例 `config`。这部分决定节点如何完成业务处理，例如新增列的列名、默认值和数据类型。
 
-配置字用于控制非业务能力，例如日志等级、运行反馈、进度上报、诊断上下文、后台工作流的反馈降噪等。它不应侵入节点业务配置，也不应要求每个普通节点都写一套 UI 专用逻辑。
+配置字用于控制非业务能力，例如日志等级、运行反馈、进度上报、诊断上下文、反馈降噪等。它不应侵入节点业务配置，也不应要求每个普通节点都写一套 UI 专用逻辑。
 
-目标是让后台工作流可以通过一个独立入口快速切换运行反馈强度：默认高速、必要时可追踪、问题定位时可提高日志和事件细节。
+目标是让任何工作流运行状态都可以通过一个独立入口切换运行反馈强度：前期测试保留普通可观测信息，后台稳定运行时降低反馈量，问题定位时提高日志和事件细节。
 
 ## 2. 当前主程序事实
 
@@ -39,6 +39,14 @@
 
 配置字控制的是“运行时附加行为”：记录多少、反馈多少、是否保留错误上下文、是否限制诊断 payload。节点业务参数控制的是“业务怎么处理数据”。这两个通道需要隔离。
 
+配置字只做减法，不做加法。它只能限制、降低、过滤当前已经存在的记录与反馈能力，不能凭空增加节点能力，不能改变节点核心计算结果，也不能替代副作用节点自己的业务配置。
+
+主程序和节点都需要真实按照配置字运行：
+
+* 主程序负责统一过滤 runtime events、progress、metrics、payload、脱敏和限流。
+* 节点如果会上报 progress、metrics 或诊断信息，应通过统一通道上报，让配置字真实生效。
+* 节点不得用配置字改变核心计算、当前表输出、外部写入、文件改名、插件调用等业务行为。
+
 建议边界如下：
 
 ```text
@@ -50,7 +58,7 @@
 运行时配置字 runtime_options
   - 由主程序统一声明和合并
   - 由调度层、事件层、诊断模块和可选节点能力读取
-  - 决定日志、反馈、进度、诊断策略
+  - 限制日志、反馈、进度、诊断记录强度
 ```
 
 ## 4. UI 入口方案
@@ -70,22 +78,22 @@
 
 ## 5. 配置字字段建议
 
-配置字字段分为“第一版建议启用”和“后续可扩展”。第一版先覆盖后台工作流最容易产生性能和噪音的功能。
+配置字字段分为“第一版建议启用”和“后续可扩展”。第一版先覆盖运行过程中最容易产生性能和噪音的反馈能力。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `version` | string | `1.0` | 配置字结构版本，用于后续兼容 |
-| `profile` | enum | `background_fast` | 快速切换预设，可选 `background_fast`、`normal`、`diagnostic`、`custom` |
+| `profile` | enum | `normal` | 快速切换预设，可选 `background_fast`、`normal`、`diagnostic`、`custom` |
 | `strict_validation` | boolean | `true` | 配置字非法时是否阻止保存/运行；关闭时可回退默认值 |
-| `telemetry.log_level` | enum | `WARN` | 控制节点和主程序附加日志等级 |
-| `telemetry.event_level` | enum | `basic` | 控制 runtime event 详细程度，可选 `none`、`basic`、`progress`、`verbose` |
-| `telemetry.event_rate_limit_per_second` | integer | `10` | 限制高频事件写入和推送 |
-| `telemetry.progress_enabled` | boolean | `false` | 是否接收节点进度反馈 |
-| `telemetry.progress_interval_seconds` | number | `5` | 进度最小上报间隔 |
+| `telemetry.log_level` | enum | `INFO` | 控制节点和主程序附加日志等级 |
+| `telemetry.event_level` | enum | `progress` | 控制 runtime event 详细程度，可选 `none`、`basic`、`progress`、`verbose` |
+| `telemetry.event_rate_limit_per_second` | integer | `0` | 限制高频事件写入和推送，`0` 表示不限制 |
+| `telemetry.progress_enabled` | boolean | `true` | 是否接收节点进度反馈 |
+| `telemetry.progress_interval_seconds` | number | `0` | 进度最小上报间隔，`0` 表示不限制 |
 | `diagnostics.capture_error_context` | boolean | `true` | 失败时保留错误上下文 |
-| `diagnostics.include_metrics` | boolean | `false` | 是否保留节点上报的 metrics |
-| `diagnostics.payload_byte_limit` | integer | `65536` | 限制单次诊断 payload 大小 |
-| `diagnostics.ttl_seconds` | integer | `604800` | 诊断事件保留建议时间，默认 7 天 |
+| `diagnostics.include_metrics` | boolean | `true` | 是否保留节点上报的 metrics |
+| `diagnostics.payload_byte_limit` | integer | `0` | 限制单次诊断 payload 大小，`0` 表示不限制 |
+| `diagnostics.ttl_seconds` | integer | `0` | 诊断事件保留建议时间；当前不负责清理业务输出数据 |
 | `diagnostics.redact_columns` | array | `[]` | 需要脱敏的字段名列表 |
 | `diagnostics.mask_policy` | enum | `none` | 可选 `none`、`partial`、`full` |
 
@@ -98,7 +106,7 @@
 | `performance.max_event_queue_size` | integer | 限制事件缓冲队列大小 |
 | `performance.defer_ui_updates` | boolean | 后台高速运行时降低 UI 刷新频率 |
 
-不建议第一版加入：权限、审计、细粒度安全策略、外部存储清理策略。这些会把当前配置字方案拖回高耦合设计。
+不建议第一版加入：权限、审计、细粒度安全策略、外部存储清理策略、业务输出表自动清理策略。这些会把当前配置字方案拖回高耦合设计。
 
 ## 6. 建议数据结构
 
@@ -112,20 +120,20 @@
   "runtime_options": {
     "version": "1.0",
     "workflow": {
-      "profile": "background_fast",
+      "profile": "normal",
       "strict_validation": true,
       "telemetry": {
-        "log_level": "WARN",
-        "event_level": "basic",
-        "event_rate_limit_per_second": 10,
-        "progress_enabled": false,
-        "progress_interval_seconds": 5
+        "log_level": "INFO",
+        "event_level": "progress",
+        "event_rate_limit_per_second": 0,
+        "progress_enabled": true,
+        "progress_interval_seconds": 0
       },
       "diagnostics": {
         "capture_error_context": true,
-        "include_metrics": false,
-        "payload_byte_limit": 65536,
-        "ttl_seconds": 604800,
+        "include_metrics": true,
+        "payload_byte_limit": 0,
+        "ttl_seconds": 0,
         "redact_columns": [],
         "mask_policy": "none"
       }
@@ -157,7 +165,7 @@ resolved_runtime_options(node_001)
 最终下发给执行层时，建议进入独立字段，例如：
 
 ```text
-NodeTaskModel.runtime_options
+workflow process 内部 resolved runtime options
 ```
 
 不建议把运行时配置直接塞进：
@@ -166,7 +174,7 @@ NodeTaskModel.runtime_options
 NodeTaskModel.config.__runtime
 ```
 
-原因是这样会污染节点业务配置，并让 schema 表单、节点实现、诊断功能互相耦合。
+原因是这样会污染节点业务配置，并让 schema 表单、节点实现、诊断功能互相耦合。第一版也不要求扩大 `NodeTaskModel` 协议；如果后续确实需要让外部执行器直接读取配置字，再单独评估 `NodeTaskModel.runtime_options`。
 
 ## 7. 同步与保存规则
 
@@ -189,6 +197,7 @@ NodeTaskModel.config.__runtime
 | 配置回放 | 如确实需要，保存当次 `resolved_runtime_options` 快照 |
 | 判断配置变化 | 使用 workflow revision 或直接比较 JSON 内容 |
 | 调度缓存 | 第一版不缓存，配置字很小，合并成本可忽略 |
+| 业务输出清理 | 当前先由用户手动清理，不由配置字自动删除 TableRef 或 runtime sqlite 表 |
 
 ## 8. 反馈边界
 
@@ -201,7 +210,7 @@ NodeTaskModel.config.__runtime
 | `event_level=verbose` | 保存进度、阶段、metrics 等详细事件 |
 | `event_rate_limit_per_second` | 对高频事件做限流，避免后台运行时事件写入放大 |
 
-这样后台速度优先，同时保留必要的运行状态可观察性。
+这样可以在手动运行、预览运行和后台运行中统一控制反馈量，同时保留必要的运行状态可观察性。
 
 ## 9. 诊断能力边界
 
@@ -214,7 +223,7 @@ NodeTaskModel.config.__runtime
 | 错误上下文 | 节点失败时记录错误类型、错误消息、阶段、关键配置摘要 |
 | metrics | 节点主动上报时，可按 `include_metrics` 控制是否保留 |
 | payload 限制 | 通过 `payload_byte_limit` 限制诊断信息大小 |
-| 保留建议 | 通过 `ttl_seconds` 表达建议保留时间，具体清理由后续生命周期能力承接 |
+| 保留建议 | 通过 `ttl_seconds` 表达诊断记录保留建议；业务输出表当前先按用户手动清理 |
 | 脱敏 | 通过 `redact_columns` 和 `mask_policy` 避免日志/事件携带敏感字段 |
 
 ## 10. 推荐实现顺序
@@ -252,10 +261,11 @@ NodeTaskModel.config.__runtime
 范围：
 
 * 增加 resolver：`system defaults + workflow + node override`。
-* 下发到 `NodeTaskModel.runtime_options`。
-* 不缓存合并结果。
+* 运行开始时生成工作流进程内部的 resolved runtime options。
+* 第一版不写入 `NodeTaskModel.config`，也不强制扩大 `NodeTaskModel` 协议。
+* 不缓存跨运行结果。
 
-验收：无覆盖节点继承工作流默认值；有覆盖节点得到正确的最终配置字。
+验收：无覆盖节点继承工作流默认值；有覆盖节点得到正确的最终配置字；节点业务 config 不被污染。
 
 ### RUNTIME-OPTIONS-4：事件、日志、进度控制
 
@@ -303,7 +313,9 @@ NodeTaskModel.config.__runtime
 * 配置字进入工作流级 `runtime_options`。
 * 节点覆盖只保存差异。
 * 真实配置直接保存、合并、下发。
-* 主程序负责事件、进度、日志和诊断上下文控制。
-* 节点只在必要时读取运行时选项，不承担统一诊断管理职责。
+* 主程序负责事件、进度、日志、metrics、payload、脱敏和诊断上下文控制。
+* 节点已有的 progress、metrics、诊断输出需要走统一通道，让配置字真实生效。
+* 节点不使用配置字改变业务计算、当前表输出或副作用行为。
+* 运行数据当前保持持久化记录，UI 通过查询记录读取；清理先由用户手动执行。
 
-这个方向适合后台工作流：默认快、反馈少；需要排查时，用配置字提高局部诊断等级，而不是把所有节点长期变成高反馈、高 IO 模式。
+这个方向适合所有运行状态：普通运行默认可观测，后台运行可降噪，问题排查可提高局部诊断等级，而不是把所有节点长期变成高反馈、高 IO 模式。
