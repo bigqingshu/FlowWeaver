@@ -14,6 +14,10 @@ from flowweaver.engine.db_models import (
 from flowweaver.engine.runtime_loop_iteration_run_store import (
     RuntimeLoopIterationRunStoreMixin,
 )
+from flowweaver.engine.runtime_loop_record_mappers import (
+    _loop_iteration_node_run_from_record,
+    _loop_iteration_table_ref_from_record,
+)
 from flowweaver.engine.runtime_loop_validators import (
     validate_loop_node_run as _validate_loop_node_run,
 )
@@ -26,8 +30,6 @@ from flowweaver.engine.runtime_models import (
 )
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
-    _loop_iteration_node_run_from_record,
-    _loop_iteration_table_ref_from_record,
 )
 from flowweaver.protocols.enums import (
     LoopIterationTableRefRole,

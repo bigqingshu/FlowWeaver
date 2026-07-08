@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import LoopRunRecord, WorkflowRunRecord
+from flowweaver.engine.runtime_loop_record_mappers import _loop_run_from_record
 from flowweaver.engine.runtime_models import LoopRun
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _json_dumps,
-    _loop_run_from_record,
     _optional_datetime_to_text,
 )
 from flowweaver.engine.runtime_status_guards import (
