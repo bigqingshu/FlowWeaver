@@ -21,9 +21,6 @@ public partial class MainWindowViewModel
     private WorkflowDefinitionDetailViewModel? workflowDefinitionDetail;
 
     [ObservableProperty]
-    private WorkflowDefinitionNodeListItemViewModel? selectedWorkflowDefinitionNode;
-
-    [ObservableProperty]
     private string workflowDefinitionMessage = "Select a workflow to load definition.";
 
     [ObservableProperty]
@@ -67,9 +64,5 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
         WorkflowDefinitionDraftNodes { get; } = new();
-
-    public bool HasSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is not null;
-
-    public bool HasNoSelectedWorkflowDefinitionNode => SelectedWorkflowDefinitionNode is null;
 
 }
