@@ -1,6 +1,4 @@
 using System;
-using System.Linq;
-using Avalonia_UI.Api;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -22,13 +20,4 @@ public partial class MainWindowViewModel
                 StringComparison.Ordinal);
     }
 
-    private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
-    {
-        return string.Equals(
-                tableRef.LifecycleStatus,
-                "PUBLISHED",
-                StringComparison.OrdinalIgnoreCase)
-            && tableRef.Capabilities.Any(capability =>
-                string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
-    }
 }

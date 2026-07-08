@@ -7,6 +7,16 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private static bool IsReadablePublishedTableRef(TableRefDto tableRef)
+    {
+        return string.Equals(
+                tableRef.LifecycleStatus,
+                "PUBLISHED",
+                StringComparison.OrdinalIgnoreCase)
+            && tableRef.Capabilities.Any(capability =>
+                string.Equals(capability, "READ", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static TableRefDto? FindLatestReadableNodeRunTableRef(
         IEnumerable<TableRefDto> tableRefs,
         string nodeRunId)
