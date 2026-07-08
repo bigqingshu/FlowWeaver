@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from collections.abc import Mapping
 from typing import Any
 
 from flowweaver.common.time import utc_now

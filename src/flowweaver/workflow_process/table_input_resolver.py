@@ -155,7 +155,10 @@ def _selectors_from_config(
     seen_slots: set[str] = set()
     for selector in selectors:
         if selector.slot in seen_slots:
-            return _config_error(selector.slot, f"duplicate input slot: {selector.slot}")
+            return _config_error(
+                selector.slot,
+                f"duplicate input slot: {selector.slot}",
+            )
         seen_slots.add(selector.slot)
 
     return tuple(selectors)
