@@ -55,6 +55,54 @@ from flowweaver.nodes.builtin_table_node_types import (
 from flowweaver.nodes.builtin_table_runner import (
     BuiltinTableNodeRunner as BuiltinTableNodeRunner,
 )
+from flowweaver.nodes.table_node_config import (
+    bool_config as _bool_config,
+)
+from flowweaver.nodes.table_node_config import (
+    enum_config as _enum_config,
+)
+from flowweaver.nodes.table_node_config import (
+    int_config as _int_config,
+)
+from flowweaver.nodes.table_node_config import (
+    named_output_config as _named_output_config,
+)
+from flowweaver.nodes.table_node_config import (
+    node_string_config as _node_string_config,
+)
+from flowweaver.nodes.table_node_config import (
+    non_negative_int_config as _non_negative_int_config,
+)
+from flowweaver.nodes.table_node_config import (
+    object_config as _object_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_node_string_config as _optional_node_string_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_non_negative_int_config as _optional_non_negative_int_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_object_list_config as _optional_object_list_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_positive_int_config as _optional_positive_int_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_string_config as _optional_string_config,
+)
+from flowweaver.nodes.table_node_config import (
+    optional_string_list_config as _optional_string_list_config,
+)
+from flowweaver.nodes.table_node_config import (
+    positive_int_config as _positive_int_config,
+)
+from flowweaver.nodes.table_node_config import (
+    string_config as _string_config,
+)
+from flowweaver.nodes.table_node_config import (
+    string_list_config as _string_list_config,
+)
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeHandlerRegistry,
@@ -3697,259 +3745,6 @@ def _simple_schema(fields: list[tuple[str, str, bool]]) -> list[FieldSchemaModel
         )
         for index, (name, data_type, nullable) in enumerate(fields)
     ]
-
-
-def _int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: int | None = None,
-) -> int:
-    value = config.get(key, default)
-    if not isinstance(value, int):
-        raise _NodeValidationError(f"config.{key} must be an integer")
-    if value < 0:
-        raise _NodeValidationError(f"config.{key} must be non-negative")
-    return value
-
-
-def _positive_int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: int,
-    node_type: str,
-) -> int:
-    value = config.get(key, default)
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
-    if value < 1:
-        raise _NodeValidationError(f"{node_type} config.{key} must be positive")
-    return value
-
-
-def _non_negative_int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: int,
-    node_type: str,
-) -> int:
-    value = config.get(key, default)
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
-    if value < 0:
-        raise _NodeValidationError(f"{node_type} config.{key} must be non-negative")
-    return value
-
-
-def _optional_positive_int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> int | None:
-    value = config.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
-    if value < 1:
-        raise _NodeValidationError(f"{node_type} config.{key} must be positive")
-    return value
-
-
-def _optional_non_negative_int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> int | None:
-    value = config.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an integer")
-    if value < 0:
-        raise _NodeValidationError(f"{node_type} config.{key} must be non-negative")
-    return value
-
-
-def _string_config(config: dict[str, Any], key: str) -> str:
-    value = config.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError(f"AddColumnsNode config.{key} is required")
-    return value.strip()
-
-
-def _node_string_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> str:
-    value = config.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError(f"{node_type} config.{key} is required")
-    return value.strip()
-
-
-def _optional_node_string_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: str,
-    node_type: str,
-) -> str:
-    value = config.get(key, default)
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError(f"{node_type} config.{key} is required")
-    return value.strip()
-
-
-def _bool_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: bool,
-) -> bool:
-    value = config.get(key, default)
-    if not isinstance(value, bool):
-        raise _NodeValidationError(f"config.{key} must be a boolean")
-    return value
-
-
-def _enum_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: str,
-    allowed: set[str],
-    node_type: str,
-) -> str:
-    value = config.get(key, default)
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError(f"{node_type} config.{key} is required")
-    normalized = value.strip().lower()
-    if normalized not in allowed:
-        raise _NodeValidationError(
-            f"Unsupported {node_type} config.{key}: {value}"
-        )
-    return normalized
-
-
-def _named_output_config(
-    config: dict[str, Any],
-    *,
-    node_type: str,
-    keys: tuple[str, ...],
-) -> str:
-    for key in keys:
-        value = config.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    joined_keys = " or ".join(f"config.{key}" for key in keys)
-    raise _NodeValidationError(f"{node_type} {joined_keys} is required")
-
-
-def _string_list_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> list[str]:
-    value = config.get(key)
-    if not isinstance(value, list) or not value:
-        raise _NodeValidationError(
-            f"{node_type} config.{key} must be a non-empty string list"
-        )
-    items: list[str] = []
-    for item in value:
-        if not isinstance(item, str) or not item.strip():
-            raise _NodeValidationError(
-                f"{node_type} config.{key} must be a non-empty string list"
-            )
-        normalized = item.strip()
-        if normalized in items:
-            raise _NodeValidationError(
-                f"{node_type} config.{key} contains duplicate field: {normalized}"
-            )
-        items.append(normalized)
-    return items
-
-
-def _optional_string_list_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> list[str]:
-    value = config.get(key, [])
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise _NodeValidationError(f"{node_type} config.{key} must be a string list")
-    items: list[str] = []
-    for item in value:
-        if not isinstance(item, str) or not item.strip():
-            raise _NodeValidationError(
-                f"{node_type} config.{key} must be a string list"
-            )
-        normalized = item.strip()
-        if normalized in items:
-            raise _NodeValidationError(
-                f"{node_type} config.{key} contains duplicate field: {normalized}"
-            )
-        items.append(normalized)
-    return items
-
-
-def _optional_string_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: str = "",
-    node_type: str,
-) -> str:
-    value = config.get(key, default)
-    if not isinstance(value, str):
-        raise _NodeValidationError(f"{node_type} config.{key} must be a string")
-    return value
-
-
-def _object_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> dict[str, Any]:
-    value = config.get(key, {})
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an object")
-    return value
-
-
-def _optional_object_list_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    node_type: str,
-) -> list[dict[str, Any]]:
-    value = config.get(key, [])
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise _NodeValidationError(f"{node_type} config.{key} must be an object list")
-    items: list[dict[str, Any]] = []
-    for item in value:
-        if not isinstance(item, dict):
-            raise _NodeValidationError(
-                f"{node_type} config.{key} must be an object list"
-            )
-        items.append(item)
-    return items
 
 
 def _subworkflow_loop_node_ids(nodes: list[dict[str, Any]]) -> list[str]:
