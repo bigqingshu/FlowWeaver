@@ -31,6 +31,9 @@ def collect_ready_node_candidates(
 ) -> tuple[ReadyNodeCandidate, ...]:
     node_runs = store.list_node_runs(workflow_run_id)
     dag_nodes_by_instance = {node.node_instance_id: node for node in dag.nodes}
+    dag_order_by_instance = {
+        node.node_instance_id: index for index, node in enumerate(dag.nodes)
+    }
     candidates: list[ReadyNodeCandidate] = []
     for node_run in node_runs:
         if node_run.status != NodeRunStatus.READY.value:
@@ -54,6 +57,11 @@ def collect_ready_node_candidates(
                 dependency_count=len(dag_node.upstream_node_ids),
             )
         )
+    candidates.sort(
+        key=lambda candidate: (
+            dag_order_by_instance[candidate.node_run.node_instance_id],
+        )
+    )
     return tuple(candidates)
 
 

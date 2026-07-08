@@ -7,6 +7,7 @@ from typing import Any
 
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
+from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.table_ref import TableRefModel
 from flowweaver.workflow_process.loop_control import (
     ControlSignal,
@@ -69,6 +70,8 @@ def _signal_from_table(
     registry: TableProviderRegistry,
     table_ref: TableRefModel,
 ) -> ControlSignal | None:
+    if table_ref.role != TableRole.CURRENT:
+        return None
     provider = registry.get(table_ref.provider_id)
     if provider is None:
         return None
