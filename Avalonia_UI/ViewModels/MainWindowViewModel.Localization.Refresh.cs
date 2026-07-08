@@ -16,10 +16,7 @@ public partial class MainWindowViewModel
         NotifyNodeCatalogLocalizedTextChanged();
         NotifyAdvancedDraftJsonLocalizedTextChanged();
         NotifyRuntimeEventLogLocalizedTextChanged();
-        OnPropertyChanged(nameof(TableRefsSectionText));
-        OnPropertyChanged(nameof(ShareText));
-        OnPropertyChanged(nameof(ShareNameWatermarkText));
-        OnPropertyChanged(nameof(VersionsText));
+        NotifySharedDataLocalizedTextChanged();
         foreach (var nodeDefinition in NodeDefinitions)
         {
             nodeDefinition.RefreshLocalizedText();
