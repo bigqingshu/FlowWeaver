@@ -2,7 +2,6 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia_UI.Api;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -63,11 +62,6 @@ public partial class MainWindowViewModel
 
     public bool HasLastStartedRun => !string.IsNullOrWhiteSpace(LastStartedRunId);
 
-    private bool CanRefreshWorkflows()
-    {
-        return CanUseEngineActions && !IsWorkflowBusy;
-    }
-
     private bool CanStartSelectedWorkflow()
     {
         return CanUseEngineActions
@@ -87,53 +81,6 @@ public partial class MainWindowViewModel
             && !IsWorkflowBusy
             && !IsDataPreviewBusy
             && !HasWorkflowDefinitionRevisionConflict;
-    }
-
-    [RelayCommand(CanExecute = nameof(CanRefreshWorkflows))]
-    private async Task RefreshWorkflowsAsync()
-    {
-        IsLoadingWorkflows = true;
-        WorkflowMessage = T("workflow.loading");
-        WorkflowErrorMessage = null;
-
-        var response = await _apiClient.ListWorkflowsAsync(
-            BuildSettings(),
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            var previousWorkflowId = SelectedWorkflow?.WorkflowId;
-            Workflows.Clear();
-            foreach (var workflow in response.Data)
-            {
-                Workflows.Add(new WorkflowListItemViewModel(workflow));
-            }
-
-            SelectedWorkflow = Workflows.FirstOrDefault(
-                workflow => workflow.WorkflowId == previousWorkflowId)
-                ?? Workflows.FirstOrDefault();
-            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
-            IsLoadingWorkflows = false;
-            return;
-        }
-
-        WorkflowMessage = T("workflow.refresh_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        IsLoadingWorkflows = false;
-    }
-
-    private async Task RefreshWorkflowsAfterHealthyConnectionAsync()
-    {
-        if (Workflows.Count > 0 || !CanRefreshWorkflows())
-        {
-            return;
-        }
-
-        await RefreshWorkflowsAsync();
-        if (CanLoadSelectedWorkflowDefinition())
-        {
-            await LoadSelectedWorkflowDefinitionAsync();
-        }
     }
 
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
@@ -308,36 +255,6 @@ public partial class MainWindowViewModel
                 await _dataPreviewRunRefreshDelay(_shutdown.Token);
             }
         }
-    }
-
-    private async Task RefreshWorkflowsSelectingAsync(string workflowId)
-    {
-        IsLoadingWorkflows = true;
-        WorkflowMessage = T("workflow.refreshing");
-        WorkflowErrorMessage = null;
-
-        var response = await _apiClient.ListWorkflowsAsync(
-            BuildSettings(),
-            _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
-        {
-            Workflows.Clear();
-            foreach (var workflow in response.Data)
-            {
-                Workflows.Add(new WorkflowListItemViewModel(workflow));
-            }
-
-            SelectedWorkflow = Workflows.FirstOrDefault(workflow => workflow.WorkflowId == workflowId)
-                ?? Workflows.FirstOrDefault();
-            WorkflowMessage = F("format.loaded_workflows", Workflows.Count);
-            IsLoadingWorkflows = false;
-            return;
-        }
-
-        WorkflowMessage = T("workflow.refresh_failed");
-        WorkflowErrorMessage = DescribeError(response);
-        IsLoadingWorkflows = false;
     }
 
     partial void OnIsLoadingWorkflowsChanged(bool value)
