@@ -35,17 +35,6 @@ public partial class MainWindowViewModel
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
 
-    private void ResetDataPreviewSelectionState()
-    {
-        dataPreviewLoadVersion++;
-        IsLoadingDataPreview = false;
-        DataPreviewMessage = T("status.select_run_and_workflow_node_data_preview");
-        DataPreviewErrorMessage = null;
-        ClearDataPreviewSourceIfNoPreviewRows();
-        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
-    }
-
     partial void OnIsLoadingDataPreviewChanged(bool value)
     {
         OnPropertyChanged(nameof(IsDataPreviewBusy));
