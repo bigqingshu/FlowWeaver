@@ -34,14 +34,7 @@ public partial class MainWindowViewModel
 
             if (!nodeRunsResponse.Ok || nodeRunsResponse.Data is null)
             {
-                DataPreviewMessage = T("data_preview.refresh_failed");
-                DataPreviewErrorMessage = DescribeError(nodeRunsResponse);
-                if (notifyResult)
-                {
-                    ShowDataPreviewNotification(UiNotificationKind.Error);
-                }
-
-                return false;
+                return ApplyFailedNodeDataPreviewResponse(nodeRunsResponse, notifyResult);
             }
 
             var nodeRun = FindNodeRunByInstanceId(
@@ -71,14 +64,7 @@ public partial class MainWindowViewModel
 
             if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
             {
-                DataPreviewMessage = T("data_preview.refresh_failed");
-                DataPreviewErrorMessage = DescribeError(tableRefsResponse);
-                if (notifyResult)
-                {
-                    ShowDataPreviewNotification(UiNotificationKind.Error);
-                }
-
-                return false;
+                return ApplyFailedNodeDataPreviewResponse(tableRefsResponse, notifyResult);
             }
 
             var tableRef = FindLatestReadableNodeRunTableRef(
@@ -110,14 +96,7 @@ public partial class MainWindowViewModel
 
             if (!rowsResponse.Ok || rowsResponse.Data is null)
             {
-                DataPreviewMessage = T("data_preview.refresh_failed");
-                DataPreviewErrorMessage = DescribeError(rowsResponse);
-                if (notifyResult)
-                {
-                    ShowDataPreviewNotification(UiNotificationKind.Error);
-                }
-
-                return false;
+                return ApplyFailedNodeDataPreviewResponse(rowsResponse, notifyResult);
             }
 
             ApplySuccessfulNodeDataPreviewRefresh(
