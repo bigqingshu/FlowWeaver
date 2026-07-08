@@ -16,23 +16,6 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(WorkflowRunGuardText));
     }
 
-    partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
-    {
-        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
-        ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-        ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
-        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
-        ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
-        AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
-        NotifyWorkflowDefinitionNodeActionCommandsChanged();
-        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
-        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(WorkflowRunGuardText));
-    }
-
     partial void OnIsWorkflowDraftJsonAdvancedVisibleChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
