@@ -45,44 +45,12 @@ public partial class MainWindowViewModel
     public string SimplifiedChineseLanguageText => T("language.zh-Hans");
 
     [RelayCommand]
-    private async Task ChangeLanguageAsync(string? languageCode)
-    {
-        await ApplyLanguageAsync(
-            languageCode ?? SupportedLanguage.Default.Code,
-            save: true,
-            _shutdown.Token);
-    }
-
-    [RelayCommand]
     private async Task ChangeThemeAsync(string? themeVariantStr)
     {
         await ApplyThemeAsync(
             themeVariantStr ?? PersistedUiSettings.SystemThemeVariant,
             save: true,
             _shutdown.Token);
-    }
-
-    private async Task ApplyLanguageAsync(
-        string languageCode,
-        bool save,
-        CancellationToken cancellationToken)
-    {
-        var previousDefaults = CaptureDefaultMessageSnapshot();
-        await _localizationService.SetLanguageAsync(languageCode, cancellationToken);
-        CurrentLanguageCode = _localizationService.CurrentLanguageCode;
-        foreach (var language in Languages)
-        {
-            language.IsSelected = language.Code == CurrentLanguageCode;
-        }
-
-        NotifyLocalizedTextChanged();
-        RefreshDefaultMessagesForCurrentLanguage(previousDefaults);
-        if (save)
-        {
-            await _uiSettingsStore.SaveAsync(
-                PersistedUiSettings.FromSettings(CurrentLanguageCode, CurrentThemeVariant),
-                cancellationToken);
-        }
     }
 
     private async Task ApplyThemeAsync(
