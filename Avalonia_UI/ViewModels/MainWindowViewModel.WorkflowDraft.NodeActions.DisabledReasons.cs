@@ -4,21 +4,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    public string? CopyWorkflowDefinitionDraftNodeDisabledReasonText =>
-        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
-
-    public string? DeleteWorkflowDefinitionDraftNodeDisabledReasonText =>
-        GetSelectedWorkflowDefinitionNodeMutationDisabledReason();
-
-    public string? DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText =>
-        GetSelectedWorkflowDefinitionDraftNodesMutationDisabledReason();
-
-    public string? MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText =>
-        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: -1);
-
-    public string? MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText =>
-        GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: 1);
-
     private string? GetWorkflowDefinitionNodeMutationDisabledReason()
     {
         if (IsWorkflowDefinitionDraftBusy)
@@ -109,14 +94,5 @@ public partial class MainWindowViewModel
         return targetIndex >= WorkflowDefinitionDraftNodes.Count
             ? T("action.disabled.workflow_node_at_bottom")
             : null;
-    }
-
-    private void NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged()
-    {
-        OnPropertyChanged(nameof(CopyWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText));
     }
 }
