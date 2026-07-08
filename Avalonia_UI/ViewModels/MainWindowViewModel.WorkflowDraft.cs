@@ -33,9 +33,6 @@ public partial class MainWindowViewModel
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
 
     [ObservableProperty]
-    private string selectedWorkflowDefinitionDraftNodeInstanceId = string.Empty;
-
-    [ObservableProperty]
     private bool isWorkflowDraftJsonAdvancedVisible;
 
     [ObservableProperty]
@@ -61,8 +58,5 @@ public partial class MainWindowViewModel
 
     private string originalWorkflowDefinitionJson = string.Empty;
     private int workflowDefinitionLoadVersion = 0;
-
-    public ObservableCollection<WorkflowDefinitionNodeListItemViewModel>
-        WorkflowDefinitionDraftNodes { get; } = new();
 
 }
