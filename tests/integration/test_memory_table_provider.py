@@ -172,6 +172,63 @@ def test_memory_table_provider_reads_registered_rows() -> None:
     ) == [{"amount": 12.5}, {"amount": 7.0}]
 
 
+def test_memory_table_provider_creates_table_from_batches() -> None:
+    provider = MemoryTableProvider(tables={})
+
+    table_ref = provider.create_memory_table_from_batches(
+        workflow_run_id="run-memory",
+        node_run_id="node-run-memory",
+        logical_table_id="batched",
+        schema=make_schema(),
+        row_batches=(
+            [{"row_id": 1, "amount": 12.5}],
+            [{"row_id": 2, "amount": 7.0}],
+        ),
+    )
+
+    assert table_ref.logical_table_id == "batched"
+    assert provider.count_rows(table_ref) == 2
+    assert provider.read_rows(table_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 12.5},
+        {"row_id": 2, "amount": 7.0},
+    ]
+
+
+def test_memory_table_provider_replaces_rows_atomically() -> None:
+    provider = MemoryTableProvider(tables={})
+    table_ref = create_memory_ref(provider)
+
+    provider.replace_row_batches(
+        table_ref,
+        (
+            [{"row_id": 3, "amount": 20.0}],
+            [{"row_id": 4, "amount": 30.0}],
+        ),
+    )
+
+    assert provider.count_rows(table_ref) == 2
+    assert provider.read_rows(table_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 3, "amount": 20.0},
+        {"row_id": 4, "amount": 30.0},
+    ]
+
+
+def test_memory_table_provider_failed_replace_keeps_existing_rows() -> None:
+    provider = MemoryTableProvider(tables={})
+    table_ref = create_memory_ref(provider)
+
+    with pytest.raises(ValueError, match="row contains columns not declared"):
+        provider.replace_rows(
+            table_ref,
+            [{"row_id": 3, "amount": 20.0, "unexpected": "nope"}],
+        )
+
+    assert provider.read_rows(table_ref, offset=0, limit=10, order_by=["row_id"]) == [
+        {"row_id": 1, "amount": 12.5},
+        {"row_id": 2, "amount": 7.0},
+    ]
+
+
 def test_memory_table_provider_rejects_missing_memory_table() -> None:
     provider = MemoryTableProvider(tables={})
     table_ref = create_memory_ref(provider)

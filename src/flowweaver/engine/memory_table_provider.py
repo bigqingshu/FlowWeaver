@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Iterable, MutableMapping, Sequence
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any
@@ -52,6 +52,27 @@ class MemoryTableProvider:
         role: TableRole = TableRole.AUXILIARY,
         version: int = 1,
     ) -> TableRefModel:
+        return self.create_memory_table_from_batches(
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
+            logical_table_id=logical_table_id,
+            schema=schema,
+            row_batches=(rows,),
+            role=role,
+            version=version,
+        )
+
+    def create_memory_table_from_batches(
+        self,
+        *,
+        workflow_run_id: str,
+        node_run_id: str,
+        logical_table_id: str,
+        schema: Sequence[FieldSchemaModel],
+        row_batches: Iterable[Sequence[dict[str, Any]]],
+        role: TableRole = TableRole.AUXILIARY,
+        version: int = 1,
+    ) -> TableRefModel:
         schema_copy = list(schema)
         memory_table_id = new_id()
         table_ref = TableRefModel(
@@ -72,13 +93,41 @@ class MemoryTableProvider:
             created_by_node_run_id=node_run_id,
             created_at=utc_now(),
         )
-        cleaned_rows = _normalize_rows(schema_copy, rows)
+        cleaned_rows: list[dict[str, Any]] = []
+        for rows in row_batches:
+            cleaned_rows.extend(_normalize_rows(schema_copy, rows))
         with self._lock:
             self._tables[memory_table_id] = _MemoryTable(
                 schema=schema_copy,
                 rows=cleaned_rows,
             )
         return table_ref
+
+    def replace_rows(
+        self,
+        table_ref: TableRefModel,
+        rows: Sequence[dict[str, Any]],
+    ) -> None:
+        self.replace_row_batches(table_ref, (rows,))
+
+    def replace_row_batches(
+        self,
+        table_ref: TableRefModel,
+        row_batches: Iterable[Sequence[dict[str, Any]]],
+    ) -> None:
+        self._validate_ref(table_ref)
+        memory_table_id = _memory_table_id(table_ref)
+        schema_copy = list(table_ref.schema)
+        cleaned_rows: list[dict[str, Any]] = []
+        for rows in row_batches:
+            cleaned_rows.extend(_normalize_rows(schema_copy, rows))
+        with self._lock:
+            if memory_table_id not in self._tables:
+                raise ValueError("memory table is not available")
+            self._tables[memory_table_id] = _MemoryTable(
+                schema=schema_copy,
+                rows=cleaned_rows,
+            )
 
     def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
         return list(self._load_table(table_ref).schema)

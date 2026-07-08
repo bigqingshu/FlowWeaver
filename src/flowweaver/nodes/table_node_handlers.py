@@ -144,6 +144,42 @@ class BuiltinTableNodeContext:
         self.store.register_table_ref(memory_ref)
         return memory_ref
 
+    def create_memory_table_from_batches(
+        self,
+        task: NodeTaskModel,
+        *,
+        logical_table_id: str,
+        schema: Sequence[FieldSchemaModel],
+        row_batches: Iterable[Sequence[dict[str, Any]]],
+        role: TableRole = TableRole.AUXILIARY,
+        version: int = 1,
+    ) -> TableRefModel:
+        memory_ref = self.memory_provider.create_memory_table_from_batches(
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            logical_table_id=logical_table_id,
+            schema=schema,
+            row_batches=row_batches,
+            role=role,
+            version=version,
+        )
+        self.store.register_table_ref(memory_ref)
+        return memory_ref
+
+    def replace_memory_table_rows(
+        self,
+        table_ref: TableRefModel,
+        rows: Sequence[dict[str, Any]],
+    ) -> None:
+        self.memory_provider.replace_rows(table_ref, rows)
+
+    def replace_memory_table_batches(
+        self,
+        table_ref: TableRefModel,
+        row_batches: Iterable[Sequence[dict[str, Any]]],
+    ) -> None:
+        self.memory_provider.replace_row_batches(table_ref, row_batches)
+
     def _reader_for(self, table_ref: TableRefModel):
         if table_ref.storage_kind == TableStorageKind.MEMORY:
             return self.memory_provider
