@@ -149,7 +149,11 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
         executor_id="executor-1",
         process_generation=task.process_generation,
         status=NodeResultStatus.SUCCEEDED,
-        output_refs=[],
+        output_refs=["table-result", "table-errors"],
+        output_slot_bindings={
+            "out": "table-result",
+            "errors": "table-errors",
+        },
         summary={
             "affected_rows": 3,
             "warnings": [],
@@ -167,6 +171,10 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
     }
     assert restored_result == result
     assert restored_result.task_id == task.task_id
+    assert restored_result.output_slot_bindings == {
+        "out": "table-result",
+        "errors": "table-errors",
+    }
     assert restored_result.summary["affected_rows"] == 3
 
 

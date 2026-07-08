@@ -36,6 +36,7 @@ class NodeTaskResultModel(StrictModel):
     process_generation: int
     status: NodeResultStatus
     output_refs: list[str] = []
+    output_slot_bindings: dict[str, str] = Field(default_factory=dict)
     summary: dict[str, Any] = {}
     error: dict[str, Any] | None = None
     started_at: datetime = Field(default_factory=utc_now)

@@ -183,6 +183,10 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
     assert "input_slot_bindings_json" in column_names(database_path, "node_tasks")
+    assert "output_slot_bindings_json" in column_names(
+        database_path,
+        "node_task_results",
+    )
     assert "trigger_source" in column_names(database_path, "workflow_runs")
 
 
@@ -951,6 +955,7 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
         process_generation=process.process_generation,
         status=NodeResultStatus.SUCCEEDED,
         output_refs=["table-1"],
+        output_slot_bindings={"out": "table-1"},
         summary={
             "affected_rows": 1,
             "warnings": [],
@@ -977,6 +982,12 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
         )
         == result
     )
+    loaded = store.get_node_task_result(
+        task_id=result.task_id,
+        result_id=result.result_id,
+    )
+    assert loaded is not None
+    assert loaded.output_slot_bindings == {"out": "table-1"}
 
 
 def test_runtime_store_records_cancelled_result_from_cancel_requested_node(

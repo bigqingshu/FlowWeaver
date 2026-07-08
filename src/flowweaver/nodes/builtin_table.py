@@ -94,6 +94,21 @@ _NODE_READABLE_TABLE_STORAGE_KINDS = (
     TableStorageKind.RUNTIME_SQL,
     TableStorageKind.MEMORY,
 )
+_STATUS_OUTPUT_NODE_TYPES = frozenset(
+    {
+        CONDITION_FLAG_NODE_TYPE,
+        JUMP_ANCHOR_NODE_TYPE,
+        UNCONDITIONAL_JUMP_NODE_TYPE,
+        CONDITIONAL_JUMP_NODE_TYPE,
+        LOOP_START_NODE_TYPE,
+        LOOP_JUDGE_NODE_TYPE,
+        SUB_WORKFLOW_NODE_TYPE,
+        WRITE_SELECTED_COLUMNS_NODE_TYPE,
+        WRITE_BACK_TABLE_NODE_TYPE,
+        BATCH_RENAME_FILES_NODE_TYPE,
+        PLUGIN_NODE_TYPE,
+    }
+)
 _SKIP_ROW = object()
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -3704,6 +3719,7 @@ class BuiltinTableNodeRunner:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=[table_ref.table_ref_id for table_ref in output_refs],
+            output_slot_bindings=_output_slot_bindings_for_result(task, output_refs),
             summary=_table_output_summary(output_refs),
             started_at=started_at,
             finished_at=utc_now(),
@@ -3764,6 +3780,53 @@ def _table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
             }
             for table_ref in output_refs
         ],
+    }
+
+
+def _output_slot_bindings_for_result(
+    task: NodeTaskModel,
+    output_refs: list[TableRefModel],
+) -> dict[str, str]:
+    if not output_refs:
+        return {}
+    output_ref_ids = [table_ref.table_ref_id for table_ref in output_refs]
+    if task.node_type == SAVE_MEMORY_TABLE_NODE_TYPE:
+        return _sequence_output_slot_bindings(("out", "memory"), output_ref_ids)
+    if task.node_type == SAVE_RUN_TABLE_NODE_TYPE:
+        return _sequence_output_slot_bindings(("out", "transit"), output_ref_ids)
+    if task.node_type in _STATUS_OUTPUT_NODE_TYPES:
+        return _sequence_output_slot_bindings(("status",), output_ref_ids)
+    target_bindings = _primary_output_target_slot_bindings(task, output_refs)
+    if target_bindings:
+        return target_bindings
+    if len(output_ref_ids) == 1:
+        return {"out": output_ref_ids[0]}
+    return {}
+
+
+def _primary_output_target_slot_bindings(
+    task: NodeTaskModel,
+    output_refs: list[TableRefModel],
+) -> dict[str, str]:
+    try:
+        targets = _primary_output_targets(task.config, node_type=task.node_type)
+    except _NodeValidationError:
+        return {}
+    if len(targets) != len(output_refs):
+        return {}
+    return {
+        target.slot: table_ref.table_ref_id
+        for target, table_ref in zip(targets, output_refs, strict=True)
+    }
+
+
+def _sequence_output_slot_bindings(
+    slots: Sequence[str],
+    output_ref_ids: Sequence[str],
+) -> dict[str, str]:
+    return {
+        slot: output_ref_id
+        for slot, output_ref_id in zip(slots, output_ref_ids, strict=False)
     }
 
 

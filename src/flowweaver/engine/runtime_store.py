@@ -2529,6 +2529,12 @@ def _node_task_result_to_record(
             sort_keys=True,
             separators=(",", ":"),
         ),
+        output_slot_bindings_json=json.dumps(
+            result.output_slot_bindings,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
         summary_json=_json_dumps(result.summary),
         error_json=_json_dumps(result.error) if result.error is not None else None,
         started_at=_datetime_to_text(result.started_at),
@@ -2548,6 +2554,9 @@ def _node_task_result_from_record(
         process_generation=record.process_generation,
         status=NodeResultStatus(record.status),
         output_refs=list(json.loads(record.output_refs_json)),
+        output_slot_bindings=dict(
+            json.loads(record.output_slot_bindings_json or "{}")
+        ),
         summary=json.loads(record.summary_json) if record.summary_json else {},
         error=json.loads(record.error_json) if record.error_json else None,
         started_at=_datetime_from_text(record.started_at),

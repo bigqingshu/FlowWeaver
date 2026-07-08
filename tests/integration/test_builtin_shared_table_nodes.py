@@ -181,6 +181,7 @@ def test_publish_shared_tables_node_creates_publication(
             f"daily_report:1:{publication.publication_id}"
         )
     ]
+    assert result.output_slot_bindings == {"out": result.output_refs[0]}
     assert publication.retention_policy == {"retention_seconds": 3600}
     assert [
         (member.export_name, member.table_ref_id)
@@ -261,6 +262,10 @@ def test_read_shared_tables_node_returns_fixed_table_refs(
 
     assert result.status == NodeResultStatus.SUCCEEDED
     assert result.output_refs == ["table-customers-v1", "table-orders-v1"]
+    assert result.output_slot_bindings == {
+        "customers": "table-customers-v1",
+        "orders": "table-orders-v1",
+    }
     loaded_run = store.get_workflow_run("run-consumer")
     assert loaded_run is not None
     assert loaded_run.input_snapshot_id is not None

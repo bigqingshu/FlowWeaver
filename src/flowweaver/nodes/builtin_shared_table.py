@@ -37,8 +37,9 @@ class BuiltinSharedTableNodeRunner:
         try:
             if task.node_type == PUBLISH_SHARED_TABLES_NODE_TYPE:
                 output_refs = self._execute_publish(task)
+                output_slot_bindings = _single_out_binding(output_refs)
             elif task.node_type == READ_SHARED_TABLES_NODE_TYPE:
-                output_refs = self._execute_read(task)
+                output_refs, output_slot_bindings = self._execute_read(task)
             else:
                 raise _NodeValidationError(
                     f"Unsupported builtin shared table node type: {task.node_type}"
@@ -67,6 +68,7 @@ class BuiltinSharedTableNodeRunner:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=output_refs,
+            output_slot_bindings=output_slot_bindings,
             started_at=started_at,
             finished_at=utc_now(),
         )
@@ -101,7 +103,7 @@ class BuiltinSharedTableNodeRunner:
         )
         return [_shared_publication_ref(publication)]
 
-    def _execute_read(self, task: NodeTaskModel) -> list[str]:
+    def _execute_read(self, task: NodeTaskModel) -> tuple[list[str], dict[str, str]]:
         if task.input_refs:
             raise _NodeValidationError("ReadSharedTablesNode does not accept inputs")
         share_name = _required_str_config(task.config, "share_name")
@@ -116,7 +118,12 @@ class BuiltinSharedTableNodeRunner:
             selected_members=selected_members,
             lease_expires_at=utc_now() + timedelta(seconds=task.timeout_seconds),
         )
-        return [table_ref.table_ref_id for table_ref in result.table_refs]
+        output_refs = [table_ref.table_ref_id for table_ref in result.table_refs]
+        selected_member_names = result.input_snapshot.inputs[0].selected_members
+        return (
+            output_refs,
+            dict(zip(selected_member_names, output_refs, strict=True)),
+        )
 
 
 class _NodeValidationError(ValueError):
@@ -195,6 +202,12 @@ def _shared_publication_ref(publication: SharedPublication) -> str:
         f"{publication.publication_version}:"
         f"{publication.publication_id}"
     )
+
+
+def _single_out_binding(output_refs: list[str]) -> dict[str, str]:
+    if not output_refs:
+        return {}
+    return {"out": output_refs[0]}
 
 
 def shared_table_node_types() -> tuple[str, str]:

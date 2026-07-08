@@ -260,6 +260,10 @@ def test_generate_test_table_node_can_save_memory_output(
     assert len(result.output_refs) == 2
     current_ref = registry.get(result.output_refs[0])
     memory_ref = registry.get(result.output_refs[1])
+    assert result.output_slot_bindings == {
+        "out": current_ref.table_ref_id,
+        "saved_table": memory_ref.table_ref_id,
+    }
     assert current_ref.role == TableRole.CURRENT
     assert current_ref.storage_kind == TableStorageKind.RUNTIME_SQL
     assert current_ref.logical_table_id == "generate_save_memory_output"
@@ -305,6 +309,7 @@ def test_list_files_node_publishes_filtered_file_metadata_table(
 
     assert result.status == NodeResultStatus.SUCCEEDED
     output_ref = registry.get(result.output_refs[0])
+    assert result.output_slot_bindings == {"out": output_ref.table_ref_id}
     assert output_ref.logical_table_id == "list_files_output"
     rows = provider.read_rows(
         output_ref,
@@ -372,6 +377,7 @@ def test_list_files_node_can_write_to_named_runtime_output(
     assert result.status == NodeResultStatus.SUCCEEDED
     assert len(result.output_refs) == 1
     output_ref = registry.get(result.output_refs[0])
+    assert result.output_slot_bindings == {"out": output_ref.table_ref_id}
     assert output_ref.role == TableRole.AUXILIARY
     assert output_ref.storage_kind == TableStorageKind.RUNTIME_SQL
     assert output_ref.logical_table_id == "listed_files_runtime"
@@ -889,6 +895,10 @@ def test_filter_rows_node_reads_memory_slot_and_saves_runtime_copy(
     assert len(filter_result.output_refs) == 2
     current_ref = registry.get(filter_result.output_refs[0])
     saved_ref = registry.get(filter_result.output_refs[1])
+    assert filter_result.output_slot_bindings == {
+        "out": current_ref.table_ref_id,
+        "saved_table": saved_ref.table_ref_id,
+    }
     assert current_ref.role == TableRole.CURRENT
     assert current_ref.logical_table_id == "filter_memory_slot_output"
     assert saved_ref.role == TableRole.AUXILIARY
@@ -949,6 +959,7 @@ def test_filter_rows_node_can_overwrite_existing_memory_output_target(
 
     assert filter_result.status == NodeResultStatus.SUCCEEDED
     assert filter_result.output_refs == [target_ref.table_ref_id]
+    assert filter_result.output_slot_bindings == {"out": target_ref.table_ref_id}
     assert memory_provider.read_rows(target_ref, offset=0, limit=10) == [
         {"row_id": 2, "amount": 3.0, "label": "keep"}
     ]
@@ -3710,6 +3721,9 @@ def test_condition_flag_node_evaluates_row_count_true_and_false(
     )
 
     assert true_result.status == NodeResultStatus.SUCCEEDED
+    assert true_result.output_slot_bindings == {
+        "status": true_result.output_refs[0]
+    }
     _true_ref, true_row = read_single_output_row(
         registry=registry,
         provider=provider,
@@ -4423,6 +4437,7 @@ def test_preview_control_nodes_use_stable_status_schema(
         subworkflow_result,
     ]:
         assert result.status == NodeResultStatus.SUCCEEDED
+        assert result.output_slot_bindings == {"status": result.output_refs[0]}
         output_ref, row = read_single_output_row(
             registry=registry,
             provider=provider,
@@ -5039,6 +5054,10 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     assert save_result.output_refs[0] == input_ref.table_ref_id
     assert len(save_result.output_refs) == 2
     memory_ref = registry.get(save_result.output_refs[1])
+    assert save_result.output_slot_bindings == {
+        "out": input_ref.table_ref_id,
+        "memory": memory_ref.table_ref_id,
+    }
     assert memory_ref.provider_id == MEMORY_PROVIDER_ID
     assert memory_ref.storage_kind == TableStorageKind.MEMORY
     assert memory_ref.role == TableRole.AUXILIARY
@@ -5093,6 +5112,10 @@ def test_save_run_table_node_outputs_current_ref_and_named_transit_ref(
     assert save_result.output_refs[0] == input_ref.table_ref_id
     assert len(save_result.output_refs) == 2
     transit_ref = registry.get(save_result.output_refs[1])
+    assert save_result.output_slot_bindings == {
+        "out": input_ref.table_ref_id,
+        "transit": transit_ref.table_ref_id,
+    }
     assert transit_ref.provider_id == MEMORY_PROVIDER_ID
     assert transit_ref.storage_kind == TableStorageKind.MEMORY
     assert transit_ref.role == TableRole.AUXILIARY
@@ -5137,6 +5160,7 @@ def test_save_run_table_node_can_pass_through_without_memory_save(
 
     assert save_result.status == NodeResultStatus.SUCCEEDED
     assert save_result.output_refs == [input_ref.table_ref_id]
+    assert save_result.output_slot_bindings == {"out": input_ref.table_ref_id}
 
 
 def test_write_selected_columns_node_outputs_write_plan_status_table(
