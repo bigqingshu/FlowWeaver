@@ -1,13 +1,28 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private int tableRefsLoadVersion;
+
+    [ObservableProperty]
+    private bool isLoadingTableRefs;
+
+    [ObservableProperty]
+    private string tableRefMessage = "Select a run to load table refs.";
+
+    [ObservableProperty]
+    private string? tableRefErrorMessage;
+
+    public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
+
     private bool CanRefreshTableRefs()
     {
         return CanUseEngineActions && SelectedRun is not null && !IsLoadingTableRefs;

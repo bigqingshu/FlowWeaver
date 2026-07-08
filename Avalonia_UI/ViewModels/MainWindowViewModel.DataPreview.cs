@@ -15,19 +15,8 @@ public partial class MainWindowViewModel
 
     private readonly Func<CancellationToken, Task> _dataPreviewRunRefreshDelay;
 
-    private int tableRefsLoadVersion;
-
     private int dataPreviewLoadVersion;
     private int dataPreviewWorkbenchLoadVersion;
-
-    [ObservableProperty]
-    private bool isLoadingTableRefs;
-
-    [ObservableProperty]
-    private string tableRefMessage = "Select a run to load table refs.";
-
-    [ObservableProperty]
-    private string? tableRefErrorMessage;
 
     [ObservableProperty]
     private bool isLoadingDataPreview;
@@ -98,8 +87,6 @@ public partial class MainWindowViewModel
     private bool dataPreviewWorkbenchHasMore;
 
     private long dataPreviewWorkbenchRowCount;
-
-    public ObservableCollection<TableRefListItemViewModel> TableRefs { get; } = new();
 
     public ObservableCollection<DataPreviewStateListItemViewModel> DataPreviewStates { get; } = new();
 
