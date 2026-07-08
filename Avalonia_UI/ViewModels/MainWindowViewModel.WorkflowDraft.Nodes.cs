@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using System.Linq;
 using Avalonia_UI.Models;
 
@@ -66,34 +65,6 @@ public partial class MainWindowViewModel
                 node.NodeInstanceId,
                 nodeInstanceId,
                 StringComparison.Ordinal));
-    }
-
-    private void ClearWorkflowDefinitionDraftBatchSelection()
-    {
-        foreach (var node in WorkflowDefinitionDraftNodes)
-        {
-            node.IsBatchSelected = false;
-        }
-
-        RefreshWorkflowDefinitionBatchSelectionState();
-    }
-
-    private void OnWorkflowDefinitionDraftNodeItemPropertyChanged(
-        object? sender,
-        PropertyChangedEventArgs args)
-    {
-        if (args.PropertyName == nameof(WorkflowDefinitionNodeListItemViewModel.IsBatchSelected))
-        {
-            RefreshWorkflowDefinitionBatchSelectionState();
-        }
-    }
-
-    private void RefreshWorkflowDefinitionBatchSelectionState()
-    {
-        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCount));
-        OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
-        DeleteSelectedWorkflowDefinitionDraftNodesCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
     }
 
     private void ClearSelectedWorkflowDefinitionDraftNodeIfMissing()
