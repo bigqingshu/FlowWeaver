@@ -16,16 +16,6 @@ public partial class MainWindowViewModel
     private Task? _runtimeEventStreamTask;
     private bool runtimeEventStreamAutoConnect;
 
-    private bool CanStartRuntimeEventStream()
-    {
-        return !IsRuntimeEventStreamRunning && !string.IsNullOrWhiteSpace(BaseUrl);
-    }
-
-    private bool CanStopRuntimeEventStream()
-    {
-        return IsRuntimeEventStreamRunning;
-    }
-
     [RelayCommand(CanExecute = nameof(CanStartRuntimeEventStream))]
     private async Task StartRuntimeEventStreamAsync()
     {
