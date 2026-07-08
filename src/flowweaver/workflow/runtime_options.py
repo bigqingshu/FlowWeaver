@@ -17,6 +17,47 @@ from flowweaver.workflow.definition import (
 )
 
 SYSTEM_DEFAULT_RUNTIME_OPTIONS = RuntimeOptionsWorkflowModel()
+_PROFILE_PRESET_OVERRIDES: dict[str, dict[str, object]] = {
+    "normal": SYSTEM_DEFAULT_RUNTIME_OPTIONS.model_dump(mode="json"),
+    "background_fast": {
+        "profile": "background_fast",
+        "strict_validation": True,
+        "telemetry": {
+            "log_level": "WARN",
+            "event_level": "basic",
+            "event_rate_limit_per_second": 10,
+            "progress_enabled": False,
+            "progress_interval_seconds": 5,
+        },
+        "diagnostics": {
+            "capture_error_context": True,
+            "include_metrics": False,
+            "payload_byte_limit": 65536,
+            "ttl_seconds": 604800,
+            "redact_columns": [],
+            "mask_policy": "partial",
+        },
+    },
+    "diagnostic": {
+        "profile": "diagnostic",
+        "strict_validation": True,
+        "telemetry": {
+            "log_level": "DEBUG",
+            "event_level": "verbose",
+            "event_rate_limit_per_second": 0,
+            "progress_enabled": True,
+            "progress_interval_seconds": 0,
+        },
+        "diagnostics": {
+            "capture_error_context": True,
+            "include_metrics": True,
+            "payload_byte_limit": 262144,
+            "ttl_seconds": 86400,
+            "redact_columns": [],
+            "mask_policy": "partial",
+        },
+    },
+}
 _CRITICAL_EVENT_TYPES = frozenset(
     {
         EventType.WORKFLOW_STARTED,
@@ -154,18 +195,16 @@ def merge_runtime_options(
     node_override: RuntimeOptionsOverrideModel | None = None,
 ) -> RuntimeOptionsWorkflowModel:
     workflow_options = workflow_options or RuntimeOptionsWorkflowModel()
-    merged = RuntimeOptionsWorkflowModel.model_validate(
-        _merge_dicts(
-            system_defaults.model_dump(mode="json"),
-            workflow_options.model_dump(mode="json"),
-        )
+    merged_data = _merge_runtime_options_overlay(
+        system_defaults.model_dump(mode="json"),
+        workflow_options.model_dump(mode="json", exclude_unset=True),
     )
     if node_override is None:
-        return merged
+        return RuntimeOptionsWorkflowModel.model_validate(merged_data)
     override_data = node_override.model_dump(mode="json", exclude_none=True)
     return RuntimeOptionsWorkflowModel.model_validate(
-        _merge_dicts(
-            merged.model_dump(mode="json"),
+        _merge_runtime_options_overlay(
+            merged_data,
             _normalize_node_override_data(override_data),
         )
     )
@@ -222,6 +261,22 @@ def _merge_dicts(
             continue
         result[key] = value
     return result
+
+
+def _merge_runtime_options_overlay(
+    base: Mapping[str, object],
+    overlay: Mapping[str, object],
+) -> dict[str, object]:
+    profile = overlay.get("profile")
+    result = dict(base)
+    if isinstance(profile, str):
+        result = _merge_dicts(result, _profile_preset_data(profile))
+    return _merge_dicts(result, overlay)
+
+
+def _profile_preset_data(profile: str) -> dict[str, object]:
+    preset = _PROFILE_PRESET_OVERRIDES.get(profile)
+    return dict(preset or {})
 
 
 def _runtime_options_should_emit_event(

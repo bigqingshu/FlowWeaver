@@ -45,6 +45,64 @@ def test_resolve_runtime_options_uses_current_compatible_defaults() -> None:
     assert resolved.diagnostics.include_metrics is True
 
 
+def test_resolve_runtime_options_applies_profile_presets() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "diagnose",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "profile": "background_fast",
+                },
+                "node_overrides": {
+                    "diagnose": {
+                        "profile": "diagnostic",
+                        "telemetry": {
+                            "event_rate_limit_per_second": 2,
+                        },
+                    }
+                },
+            },
+        }
+    )
+
+    workflow = resolve_workflow_runtime_options(definition)
+    source = resolve_runtime_options_for_node(definition, "source")
+    diagnose = resolve_runtime_options_for_node(definition, "diagnose")
+
+    assert workflow.profile == "background_fast"
+    assert workflow.telemetry.log_level == "WARN"
+    assert workflow.telemetry.event_level == "basic"
+    assert workflow.telemetry.event_rate_limit_per_second == 10
+    assert workflow.telemetry.progress_enabled is False
+    assert workflow.telemetry.progress_interval_seconds == 5
+    assert workflow.diagnostics.include_metrics is False
+    assert workflow.diagnostics.payload_byte_limit == 65536
+    assert workflow.diagnostics.ttl_seconds == 604800
+    assert workflow.diagnostics.mask_policy == "partial"
+    assert source == workflow
+    assert diagnose.profile == "diagnostic"
+    assert diagnose.telemetry.log_level == "DEBUG"
+    assert diagnose.telemetry.event_level == "verbose"
+    assert diagnose.telemetry.event_rate_limit_per_second == 2
+    assert diagnose.telemetry.progress_enabled is True
+    assert diagnose.diagnostics.include_metrics is True
+    assert diagnose.diagnostics.payload_byte_limit == 262144
+    assert diagnose.diagnostics.ttl_seconds == 86400
+
+
 def test_resolve_runtime_options_merges_workflow_and_node_override() -> None:
     definition = WorkflowDefinitionModel.model_validate(
         {

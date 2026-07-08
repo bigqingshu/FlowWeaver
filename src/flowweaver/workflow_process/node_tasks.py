@@ -232,6 +232,15 @@ class NodeTaskManager:
         current_stage: str | None,
         metrics: dict[str, int | float | str] | None = None,
     ) -> NodeRun | None:
+        runtime_options = self.runtime_options_for_node(task.node_instance_id)
+        if (
+            runtime_options is not None
+            and not runtime_options.telemetry.progress_enabled
+        ):
+            return self._store.update_node_task_runtime_state(
+                task,
+                executor_id=executor_id,
+            )
         updated = self._store.update_node_task_runtime_state(
             task,
             executor_id=executor_id,

@@ -123,8 +123,9 @@ class InjectedRaisingExecutor:
 class InjectedReportingExecutor:
     executor_id = "injected-reporting-executor"
 
-    def __init__(self) -> None:
+    def __init__(self, *, output_refs: list[str] | None = None) -> None:
         self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
+        self._output_refs = list(output_refs or [])
 
     def set_event_handler(
         self,
@@ -168,6 +169,7 @@ class InjectedReportingExecutor:
             executor_id=self.executor_id,
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
+            output_refs=list(self._output_refs),
             started_at=now,
             finished_at=now,
         )
@@ -3374,6 +3376,64 @@ def test_workflow_process_records_executor_heartbeat_and_progress(
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_workflow_process_background_fast_filters_progress_feedback(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition_data = single_node_definition() | {
+        "runtime_options": {
+            "workflow": {
+                "profile": "background_fast",
+            }
+        }
+    }
+    workflow = store.create_workflow_definition(
+        name="Background fast reporting workflow",
+        definition=definition_data,
+        workflow_id="workflow-background-fast-reporting",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-background-fast-reporting",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-background-fast-reporting",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedReportingExecutor(
+            output_refs=["source-output"]
+        ),
+    )
+
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    result = store.get_latest_succeeded_node_task_result_for_node_run(
+        node_run.node_run_id
+    )
+    events = store.list_runtime_events()
+    assert exit_code == 0
+    assert node_run.status == "SUCCEEDED"
+    assert node_run.last_heartbeat is not None
+    assert node_run.progress is None
+    assert node_run.current_stage is None
+    assert result is not None
+    assert result.output_refs == ["source-output"]
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
 
 
 def test_workflow_process_records_task_events_while_executor_is_still_running(
