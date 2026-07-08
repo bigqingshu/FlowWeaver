@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from flowweaver.common.time import utc_now
-from flowweaver.nodes.builtin_table_node_types import (
-    ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
-    PARSE_DATETIME_NODE_TYPE,
+from flowweaver.nodes.builtin_table_node_types import PARSE_DATETIME_NODE_TYPE
+from flowweaver.nodes.table_current_datetime_nodes import (
+    AddCurrentDateTimeColumnNodeHandler as AddCurrentDateTimeColumnNodeHandler,
 )
 from flowweaver.nodes.table_node_config import (
     bool_config as _bool_config,
@@ -40,83 +39,6 @@ from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
-
-
-class AddCurrentDateTimeColumnNodeHandler:
-    node_type = ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE
-
-    def execute(
-        self,
-        task: NodeTaskModel,
-        context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
-        input_ref = _primary_input_ref(
-            task,
-            context,
-            node_type=self.node_type,
-        )
-        output_mode = _enum_config(
-            task.config,
-            "output_mode",
-            default="new_field",
-            allowed={"new_field", "overwrite"},
-            node_type=self.node_type,
-        )
-        output_field = _datetime_output_field(
-            task.config,
-            input_ref=input_ref,
-            output_mode=output_mode,
-        )
-        output_schema = _datetime_output_schema(
-            input_ref.schema,
-            output_field=output_field,
-            output_mode=output_mode,
-        )
-        time_mode = _enum_config(
-            task.config,
-            "time_mode",
-            default="fixed",
-            allowed={"fixed", "per_row"},
-            node_type=self.node_type,
-        )
-        format_mode = _enum_config(
-            task.config,
-            "format_mode",
-            default="iso",
-            allowed={"iso", "strftime", "template"},
-            node_type=self.node_type,
-        )
-        fixed_value = (
-            _datetime_formatted_value(
-                utc_now(),
-                config=task.config,
-                format_mode=format_mode,
-            )
-            if time_mode == "fixed"
-            else None
-        )
-
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    value = fixed_value
-                    if value is None:
-                        value = _datetime_formatted_value(
-                            utc_now(),
-                            config=task.config,
-                            format_mode=format_mode,
-                        )
-                    output_rows.append(dict(row) | {output_field: value})
-                yield output_rows
-
-        return _publish_primary_table_output(
-            task,
-            context,
-            node_type=self.node_type,
-            schema=output_schema,
-            row_batches=output_batches(),
-        )
 
 
 class ParseDateTimeNodeHandler:
@@ -243,88 +165,6 @@ class ParseDateTimeNodeHandler:
             schema=output_schema,
             row_batches=output_batches(),
         )
-
-
-def _datetime_output_field(
-    config: dict[str, Any],
-    *,
-    input_ref: TableRefModel,
-    output_mode: str,
-) -> str:
-    key = "new_field" if output_mode == "new_field" else "target_field"
-    output_field = _optional_node_string_config(
-        config,
-        key,
-        default="current_datetime" if output_mode == "new_field" else "",
-        node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
-    )
-    if output_mode == "new_field":
-        if has_field(input_ref.schema, output_field):
-            raise _NodeValidationError(f"Field already exists: {output_field}")
-    elif find_field(input_ref.schema, output_field) is None:
-        raise _NodeValidationError(f"Field does not exist: {output_field}")
-    return output_field
-
-
-def _datetime_output_schema(
-    input_schema: list[FieldSchemaModel],
-    *,
-    output_field: str,
-    output_mode: str,
-) -> list[FieldSchemaModel]:
-    if output_mode == "new_field":
-        return append_field(
-            input_schema,
-            name=output_field,
-            data_type="TEXT",
-            nullable=False,
-        )
-    return replace_field_schema(
-        input_schema,
-        output_field,
-        data_type="TEXT",
-        nullable=False,
-    )
-
-
-def _datetime_formatted_value(
-    value,
-    *,
-    config: dict[str, Any],
-    format_mode: str,
-) -> str:
-    if format_mode == "iso":
-        return value.isoformat()
-    if format_mode == "strftime":
-        template = _optional_node_string_config(
-            config,
-            "strftime_template",
-            default="%Y-%m-%d %H:%M:%S",
-            node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
-        )
-        return value.strftime(template)
-    template = _optional_node_string_config(
-        config,
-        "template",
-        default="{datetime}",
-        node_type=ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
-    )
-    replacements = {
-        "iso": value.isoformat(),
-        "date": value.date().isoformat(),
-        "time": value.strftime("%H:%M:%S"),
-        "datetime": value.strftime("%Y-%m-%d %H:%M:%S"),
-        "year": f"{value.year:04d}",
-        "month": f"{value.month:02d}",
-        "day": f"{value.day:02d}",
-        "hour": f"{value.hour:02d}",
-        "minute": f"{value.minute:02d}",
-        "second": f"{value.second:02d}",
-    }
-    try:
-        return template.format(**replacements)
-    except (KeyError, ValueError) as exc:
-        raise _NodeValidationError(str(exc)) from exc
 
 
 def _parse_datetime_output_field(
