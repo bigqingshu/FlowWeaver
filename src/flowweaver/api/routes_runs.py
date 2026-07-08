@@ -14,6 +14,7 @@ from flowweaver.api.dependencies import (
 )
 from flowweaver.api.responses import error_response, ok_response
 from flowweaver.api.run_review import build_run_review_payload
+from flowweaver.api.run_table_cleanup import cleanup_table_refs_for_run
 from flowweaver.api.workflow_run_start import start_workflow_run_for_request
 from flowweaver.engine.runtime_store import (
     TERMINAL_WORKFLOW_STATUS_VALUES,
@@ -21,8 +22,6 @@ from flowweaver.engine.runtime_store import (
 )
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
-from flowweaver.protocols.enums import LifecycleStatus, TableStorageKind
-from flowweaver.protocols.table_ref import TableRefModel
 
 router = APIRouter(
     prefix="/api/v1/runs",
@@ -30,10 +29,6 @@ router = APIRouter(
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
 _BACKGROUND_TRIGGER_SOURCE = "background_manual"
-_INTERNAL_CLEANUP_STORAGE_KINDS = {
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
-}
 
 
 @router.get("", response_model=APIResponseModel)
@@ -338,7 +333,7 @@ def cleanup_run_table_refs(
         )
     return ok_response(
         request,
-        _cleanup_table_refs_for_run(
+        cleanup_table_refs_for_run(
             workflow_run_id=workflow_run_id,
             store=store,
             provider_registry=provider_registry,
@@ -378,80 +373,6 @@ def _run_not_found(request: Request):
         message="Workflow run not found",
         status_code=404,
     )
-
-
-def _cleanup_table_refs_for_run(
-    *,
-    workflow_run_id: str,
-    store: RuntimeStore,
-    provider_registry: TableProviderRegistry,
-) -> dict[str, object]:
-    cleaned: list[TableRefModel] = []
-    skipped: list[dict[str, str]] = []
-    failed: list[dict[str, str]] = []
-    for table_ref in store.list_table_refs_by_workflow_run(workflow_run_id):
-        skip_reason = _table_cleanup_skip_reason(table_ref)
-        if skip_reason is not None:
-            skipped.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": skip_reason,
-                }
-            )
-            continue
-        provider = provider_registry.get(table_ref.provider_id)
-        if provider is None or not provider_registry.supports_storage_kind(
-            table_ref.provider_id,
-            table_ref.storage_kind,
-        ):
-            skipped.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": "provider_unsupported",
-                }
-            )
-            continue
-        try:
-            provider.drop_table(table_ref)
-        except ValueError as exc:
-            failed.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": str(exc),
-                }
-            )
-            continue
-        released = store.mark_table_ref_released(table_ref.table_ref_id)
-        if released is None:
-            skipped.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": "already_unavailable",
-                }
-            )
-            continue
-        cleaned.append(released)
-    return {
-        "workflow_run_id": workflow_run_id,
-        "cleaned_count": len(cleaned),
-        "skipped_count": len(skipped),
-        "failed_count": len(failed),
-        "cleaned_table_refs": cleaned,
-        "skipped": skipped,
-        "failed": failed,
-    }
-
-
-def _table_cleanup_skip_reason(table_ref: TableRefModel) -> str | None:
-    if table_ref.storage_kind not in _INTERNAL_CLEANUP_STORAGE_KINDS:
-        return "external_or_unsupported_storage"
-    if table_ref.lifecycle_status in {
-        LifecycleStatus.RELEASED,
-        LifecycleStatus.RETIRED,
-        LifecycleStatus.ORPHANED,
-    }:
-        return "already_unavailable"
-    return None
 
 
 def _reject_missing_run(
