@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from flowweaver.common.config import WorkflowProcessExecutionMode
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutor
 from flowweaver.protocols.node_task import NodeTaskResultModel
@@ -10,7 +11,12 @@ from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
 )
-from flowweaver.workflow_process.executor_pool import DispatchedNodeTask
+from flowweaver.workflow_process.executor_pool import (
+    DispatchedNodeTask,
+    ImmediateNodeTaskExecutionPool,
+    NodeTaskExecutionPool,
+    ThreadedNodeTaskExecutionPool,
+)
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
 
 CleanupStagingForNode = Callable[[str, str], None]
@@ -62,6 +68,16 @@ def build_node_task_execute(
         )
 
     return execute_task
+
+
+def create_node_task_execution_pool(
+    *,
+    execution_mode: WorkflowProcessExecutionMode,
+    execute_task: Callable[[DispatchedNodeTask], NodeTaskResultModel | None],
+) -> NodeTaskExecutionPool:
+    if execution_mode == "threaded":
+        return ThreadedNodeTaskExecutionPool(execute_task=execute_task)
+    return ImmediateNodeTaskExecutionPool(execute_task=execute_task)
 
 
 def close_execution_pool(execution_pool: object | None) -> None:

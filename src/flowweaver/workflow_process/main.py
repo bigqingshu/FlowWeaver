@@ -57,9 +57,7 @@ from flowweaver.workflow_process.executor_owner import (
     DefaultWorkflowProcessExecutorOwner,
 )
 from flowweaver.workflow_process.executor_pool import (
-    ImmediateNodeTaskExecutionPool,
     NodeTaskExecutionPool,
-    ThreadedNodeTaskExecutionPool,
 )
 from flowweaver.workflow_process.loop_recovery import (
     recover_serial_loop_runtime_state,
@@ -109,6 +107,7 @@ _apply_node_task_result = task_dispatch.apply_node_task_result
 _timeout_seconds_from_node_config = task_dispatch.timeout_seconds_from_node_config
 _fail_rejected_node_result = task_dispatch.fail_rejected_node_result
 _build_node_task_execute = execution_helpers.build_node_task_execute
+_create_node_task_execution_pool = execution_helpers.create_node_task_execution_pool
 _close_execution_pool = execution_helpers.close_execution_pool
 
 
@@ -370,10 +369,10 @@ def _run_workflow_process_loop(
             cleanup_staging_for_node=cleanup_staging_for_node,
             cancel_grace_seconds=cancel_grace_seconds,
         )
-        if execution_mode == "threaded":
-            execution_pool = ThreadedNodeTaskExecutionPool(execute_task=execute_task)
-        else:
-            execution_pool = ImmediateNodeTaskExecutionPool(execute_task=execute_task)
+        execution_pool = _create_node_task_execution_pool(
+            execution_mode=execution_mode,
+            execute_task=execute_task,
+        )
 
     while True:
         heartbeat = store.record_workflow_process_heartbeat(
