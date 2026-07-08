@@ -2,12 +2,19 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private string newWorkflowName = "Generated table workflow";
+
+    [ObservableProperty]
+    private bool isCreatingWorkflow;
+
     private bool CanCreateTemplateWorkflow()
     {
         return CanUseEngineActions
