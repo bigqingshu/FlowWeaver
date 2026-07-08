@@ -8,15 +8,6 @@ public partial class MainWindowViewModel
 {
     private const int WorkflowRunTerminalRefreshAttemptCount = 40;
 
-    private bool CanStartSelectedWorkflow()
-    {
-        return CanUseEngineActions
-            && SelectedWorkflow is not null
-            && IsActiveWorkflowStatus(SelectedWorkflow.Status)
-            && !IsWorkflowBusy
-            && !HasWorkflowDefinitionRevisionConflict;
-    }
-
     [RelayCommand(CanExecute = nameof(CanStartSelectedWorkflow))]
     private async Task StartSelectedWorkflowAsync()
     {
