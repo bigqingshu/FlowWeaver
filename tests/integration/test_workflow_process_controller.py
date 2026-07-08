@@ -5,6 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -29,7 +30,6 @@ from flowweaver.workflow_process.controller import (
     recover_ready_nodes,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
-import flowweaver.workflow_process.main as workflow_process_main
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
 from flowweaver.workflow_process.ready_queue import (
     collect_ready_node_candidates,

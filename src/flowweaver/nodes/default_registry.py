@@ -52,9 +52,9 @@ from flowweaver.nodes.registry import (
     NodeConfigSchemaSpec,
     NodeDefinitionSpec,
     NodePortSpec,
+    NodeRegistry,
     NodeTableInputSlotSpec,
     NodeTableOutputSlotSpec,
-    NodeRegistry,
 )
 from flowweaver.protocols.enums import TableRole, TableStorageKind
 
