@@ -15,9 +15,6 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private string workflowDefinitionDraftJson = string.Empty;
-
-    [ObservableProperty]
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
 
     [ObservableProperty]
@@ -44,5 +41,4 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private bool hasWorkflowDefinitionRevisionConflict;
 
-    private string originalWorkflowDefinitionJson = string.Empty;
 }
