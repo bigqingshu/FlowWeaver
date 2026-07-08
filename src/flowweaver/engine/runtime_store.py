@@ -78,6 +78,57 @@ from flowweaver.engine.runtime_record_mappers import (
     _workflow_revision_from_record,
     _workflow_run_from_record,
 )
+from flowweaver.engine.runtime_status_guards import (
+    ACTIVE_WORKFLOW_PROCESS_STATUSES as _ACTIVE_WORKFLOW_PROCESS_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    INTERRUPTED_NODE_STATUSES as _INTERRUPTED_NODE_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    LOOP_ITERATION_STATUS_SOURCES as _LOOP_ITERATION_STATUS_SOURCES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    LOOP_RUN_STATUS_SOURCES as _LOOP_RUN_STATUS_SOURCES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    NODE_RUN_STATUS_SOURCES as _NODE_RUN_STATUS_SOURCES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    TERMINAL_LOOP_ITERATION_STATUSES as _TERMINAL_LOOP_ITERATION_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    TERMINAL_LOOP_RUN_STATUSES as _TERMINAL_LOOP_RUN_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    TERMINAL_NODE_STATUSES as _TERMINAL_NODE_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    TERMINAL_WORKFLOW_STATUS_VALUES as TERMINAL_WORKFLOW_STATUS_VALUES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    TERMINAL_WORKFLOW_STATUSES as _TERMINAL_WORKFLOW_STATUSES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    WORKFLOW_RUN_STATUS_SOURCES as _WORKFLOW_RUN_STATUS_SOURCES,
+)
+from flowweaver.engine.runtime_status_guards import (
+    loop_iteration_status_values as _loop_iteration_status_values,
+)
+from flowweaver.engine.runtime_status_guards import (
+    loop_run_status_values as _loop_run_status_values,
+)
+from flowweaver.engine.runtime_status_guards import (
+    node_run_status_values as _node_run_status_values,
+)
+from flowweaver.engine.runtime_status_guards import (
+    optional_completion_reason_value as _optional_completion_reason_value,
+)
+from flowweaver.engine.runtime_status_guards import (
+    workflow_run_matches_owner as _workflow_run_matches_owner,
+)
+from flowweaver.engine.runtime_status_guards import (
+    workflow_run_status_values as _workflow_run_status_values,
+)
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     LoopIterationRunStatus,
@@ -93,115 +144,6 @@ from flowweaver.protocols.enums import (
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import TableRefModel
-
-TERMINAL_WORKFLOW_STATUS_VALUES = frozenset(
-    {
-        WorkflowRunStatus.SUCCEEDED.value,
-        WorkflowRunStatus.FAILED.value,
-        WorkflowRunStatus.CANCELLED.value,
-        WorkflowRunStatus.ABORTED.value,
-    }
-)
-_TERMINAL_WORKFLOW_STATUSES = frozenset(
-    TERMINAL_WORKFLOW_STATUS_VALUES
-)
-_TERMINAL_NODE_STATUSES = frozenset(
-    {
-        NodeRunStatus.TIMED_OUT.value,
-        NodeRunStatus.SUCCEEDED.value,
-        NodeRunStatus.FAILED.value,
-        NodeRunStatus.CANCELLED.value,
-        NodeRunStatus.SKIPPED.value,
-    }
-)
-_TERMINAL_LOOP_RUN_STATUSES = frozenset(
-    {
-        LoopRunStatus.ENDED.value,
-        LoopRunStatus.FAILED.value,
-        LoopRunStatus.CANCELLED.value,
-        LoopRunStatus.MAX_ITERATIONS_REACHED.value,
-    }
-)
-_TERMINAL_LOOP_ITERATION_STATUSES = frozenset(
-    {
-        LoopIterationRunStatus.SUCCEEDED.value,
-        LoopIterationRunStatus.FAILED.value,
-        LoopIterationRunStatus.CANCELLED.value,
-        LoopIterationRunStatus.SKIPPED.value,
-    }
-)
-_WORKFLOW_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
-    WorkflowRunStatus.RUNNING.value: (WorkflowRunStatus.PENDING.value,),
-    WorkflowRunStatus.SUCCEEDED.value: (WorkflowRunStatus.RUNNING.value,),
-    WorkflowRunStatus.FAILED.value: (WorkflowRunStatus.RUNNING.value,),
-    WorkflowRunStatus.CANCELLED.value: (WorkflowRunStatus.RUNNING.value,),
-    WorkflowRunStatus.ABORTED.value: (WorkflowRunStatus.RUNNING.value,),
-}
-_NODE_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
-    NodeRunStatus.READY.value: (NodeRunStatus.WAITING_DEPENDENCY.value,),
-    NodeRunStatus.QUEUED.value: (NodeRunStatus.READY.value,),
-    NodeRunStatus.RUNNING.value: (NodeRunStatus.QUEUED.value,),
-    NodeRunStatus.LONG_RUNNING.value: (NodeRunStatus.RUNNING.value,),
-    NodeRunStatus.SUCCEEDED.value: (
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-    ),
-    NodeRunStatus.FAILED.value: (
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-    ),
-    NodeRunStatus.CANCELLED.value: (
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-        NodeRunStatus.CANCEL_REQUESTED.value,
-    ),
-    NodeRunStatus.CANCEL_REQUESTED.value: (
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-    ),
-    NodeRunStatus.TIMED_OUT.value: (
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-        NodeRunStatus.CANCEL_REQUESTED.value,
-    ),
-    NodeRunStatus.SKIPPED.value: (
-        NodeRunStatus.PENDING.value,
-        NodeRunStatus.READY.value,
-        NodeRunStatus.WAITING_DEPENDENCY.value,
-    ),
-}
-_LOOP_RUN_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
-    LoopRunStatus.RUNNING.value: (LoopRunStatus.PENDING.value,),
-    LoopRunStatus.ENDED.value: (LoopRunStatus.RUNNING.value,),
-    LoopRunStatus.FAILED.value: (LoopRunStatus.RUNNING.value,),
-    LoopRunStatus.CANCELLED.value: (
-        LoopRunStatus.PENDING.value,
-        LoopRunStatus.RUNNING.value,
-    ),
-    LoopRunStatus.MAX_ITERATIONS_REACHED.value: (LoopRunStatus.RUNNING.value,),
-}
-_LOOP_ITERATION_STATUS_SOURCES: dict[str, tuple[str, ...]] = {
-    LoopIterationRunStatus.RUNNING.value: (LoopIterationRunStatus.PENDING.value,),
-    LoopIterationRunStatus.SUCCEEDED.value: (LoopIterationRunStatus.RUNNING.value,),
-    LoopIterationRunStatus.FAILED.value: (LoopIterationRunStatus.RUNNING.value,),
-    LoopIterationRunStatus.CANCELLED.value: (LoopIterationRunStatus.RUNNING.value,),
-    LoopIterationRunStatus.SKIPPED.value: (LoopIterationRunStatus.PENDING.value,),
-}
-_ACTIVE_WORKFLOW_PROCESS_STATUSES = frozenset(
-    {
-        WorkflowProcessStatus.STARTING.value,
-        WorkflowProcessStatus.RUNNING.value,
-        WorkflowProcessStatus.CANCEL_REQUESTED.value,
-    }
-)
-_INTERRUPTED_NODE_STATUSES = frozenset(
-    {
-        NodeRunStatus.QUEUED.value,
-        NodeRunStatus.RUNNING.value,
-        NodeRunStatus.LONG_RUNNING.value,
-        NodeRunStatus.CANCEL_REQUESTED.value,
-    }
-)
 
 
 class _AtomicNodeTaskResultUpdateRejected(Exception):
@@ -2199,59 +2141,6 @@ def _validate_input_snapshot_publications(
             )
 
 
-def _workflow_run_matches_owner(
-    session,
-    *,
-    workflow_run_id: str,
-    owner_process_id: str | None,
-    process_generation: int | None,
-) -> bool:
-    statement = select(WorkflowRunRecord.workflow_run_id).where(
-        WorkflowRunRecord.workflow_run_id == workflow_run_id
-    )
-    if owner_process_id is not None:
-        statement = statement.where(
-            WorkflowRunRecord.owner_process_id == owner_process_id
-        )
-    if process_generation is not None:
-        statement = statement.where(
-            WorkflowRunRecord.process_generation == process_generation
-        )
-    return session.scalar(statement) is not None
-
-
-def _workflow_run_status_values(
-    statuses: Iterable[WorkflowRunStatus | str],
-) -> list[str]:
-    return [
-        status.value if isinstance(status, WorkflowRunStatus) else status
-        for status in statuses
-    ]
-
-
-def _node_run_status_values(statuses: Iterable[NodeRunStatus | str]) -> list[str]:
-    return [
-        status.value if isinstance(status, NodeRunStatus) else status
-        for status in statuses
-    ]
-
-
-def _loop_run_status_values(statuses: Iterable[LoopRunStatus | str]) -> list[str]:
-    return [
-        status.value if isinstance(status, LoopRunStatus) else status
-        for status in statuses
-    ]
-
-
-def _loop_iteration_status_values(
-    statuses: Iterable[LoopIterationRunStatus | str],
-) -> list[str]:
-    return [
-        status.value if isinstance(status, LoopIterationRunStatus) else status
-        for status in statuses
-    ]
-
-
 def _validate_loop_table_ref(
     session: Session,
     *,
@@ -2284,9 +2173,3 @@ def _validate_loop_node_run(
     return node_run
 
 
-def _optional_completion_reason_value(
-    value: WorkflowRunCompletionReason | str | None,
-) -> str | None:
-    if isinstance(value, WorkflowRunCompletionReason):
-        return value.value
-    return value
