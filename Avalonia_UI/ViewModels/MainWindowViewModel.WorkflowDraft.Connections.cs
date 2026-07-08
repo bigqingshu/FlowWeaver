@@ -1,11 +1,15 @@
 using System;
 using System.Linq;
 using Avalonia_UI.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private bool isWorkflowConnectionsAdvancedVisible;
+
     public string ConnectionsSectionText => T("definition.connections");
 
     public string ShowConnectionsText => IsWorkflowConnectionsAdvancedVisible
