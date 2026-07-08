@@ -32,7 +32,4 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private string? workflowDefinitionValidationErrorMessage;
 
-    [ObservableProperty]
-    private bool hasWorkflowDefinitionRevisionConflict;
-
 }

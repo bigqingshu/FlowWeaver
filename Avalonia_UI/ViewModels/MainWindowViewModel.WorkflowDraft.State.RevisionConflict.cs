@@ -1,7 +1,12 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private bool hasWorkflowDefinitionRevisionConflict;
+
     partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
     {
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
