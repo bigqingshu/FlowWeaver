@@ -12,10 +12,7 @@ public partial class MainWindowViewModel
         NotifyWorkflowStructuredEditLocalizedTextChanged();
         NotifyWorkflowDraftEditorLocalizedTextChanged();
         NotifyWorkflowConnectionsLocalizedTextChanged();
-        OnPropertyChanged(nameof(RecentEventsSectionText));
-        OnPropertyChanged(nameof(RecentEventsEmptyText));
-        OnPropertyChanged(nameof(RecentEventsViewAllText));
-        OnPropertyChanged(nameof(RecentEventsToggleText));
+        NotifyRecentEventsLocalizedTextChanged();
         OnPropertyChanged(nameof(NodeCatalogSectionText));
         OnPropertyChanged(nameof(NodeText));
         OnPropertyChanged(nameof(NodeCatalogEmptyStateText));
