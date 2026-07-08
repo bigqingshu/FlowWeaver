@@ -102,10 +102,7 @@ public partial class MainWindowViewModel
         }
         finally
         {
-            if (requestVersion == dataPreviewLoadVersion)
-            {
-                IsLoadingDataPreview = false;
-            }
+            EndNodeDataPreviewRefresh(requestVersion);
         }
     }
 }

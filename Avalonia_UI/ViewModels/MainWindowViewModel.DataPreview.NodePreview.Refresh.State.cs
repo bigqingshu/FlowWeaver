@@ -10,4 +10,12 @@ public partial class MainWindowViewModel
         DataPreviewErrorMessage = null;
         return requestVersion;
     }
+
+    private void EndNodeDataPreviewRefresh(int requestVersion)
+    {
+        if (requestVersion == dataPreviewLoadVersion)
+        {
+            IsLoadingDataPreview = false;
+        }
+    }
 }
