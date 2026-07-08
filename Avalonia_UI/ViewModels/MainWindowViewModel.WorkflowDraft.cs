@@ -21,15 +21,6 @@ public partial class MainWindowViewModel
     private bool isWorkflowConnectionsAdvancedVisible;
 
     [ObservableProperty]
-    private bool isValidatingWorkflowDefinitionDraft;
-
-    [ObservableProperty]
     private bool isSavingWorkflowDefinitionDraft;
-
-    [ObservableProperty]
-    private string workflowDefinitionValidationMessage = "Load definition to edit draft JSON.";
-
-    [ObservableProperty]
-    private string? workflowDefinitionValidationErrorMessage;
 
 }
