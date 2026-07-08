@@ -28,6 +28,9 @@ from flowweaver.workflow_process.control_signal_interpreter import (
 )
 from flowweaver.workflow_process.controller import advance_after_node_success
 from flowweaver.workflow_process.dag import WorkflowDag
+from flowweaver.workflow_process.failure_policy_propagation import (
+    mark_blocked_descendants_skipped,
+)
 from flowweaver.workflow_process.loop_iteration_nodes import (
     ensure_loop_iteration_entry_node_run,
 )
@@ -535,7 +538,9 @@ class NodeTaskManager:
             result.status == NodeResultStatus.FAILED
             and self._failure_policy_mode == FailurePolicyMode.CONTINUE_INDEPENDENT
         ):
-            self._mark_blocked_descendants_skipped(
+            mark_blocked_descendants_skipped(
+                store=self._store,
+                dag=self._dag,
                 workflow_run_id=task.workflow_run_id,
                 process_id=task.workflow_process_id,
                 process_generation=task.process_generation,
@@ -600,57 +605,6 @@ class NodeTaskManager:
             NodeTaskApplyStatus.APPLIED,
             node_run_id=result.node_run_id,
         )
-
-    def _mark_blocked_descendants_skipped(
-        self,
-        *,
-        workflow_run_id: str,
-        process_id: str,
-        process_generation: int,
-        failed_node: NodeRun,
-        finished_at: datetime,
-    ) -> None:
-        dag_nodes_by_id = {node.node_instance_id: node for node in self._dag.nodes}
-        node_runs_by_instance = {
-            node.node_instance_id: node
-            for node in self._store.list_node_runs(workflow_run_id)
-        }
-        failed_dag_node = dag_nodes_by_id.get(failed_node.node_instance_id)
-        if failed_dag_node is None:
-            return
-        stack = list(failed_dag_node.downstream_node_ids)
-        visited: set[str] = set()
-        while stack:
-            node_instance_id = stack.pop()
-            if node_instance_id in visited:
-                continue
-            visited.add(node_instance_id)
-            dag_node = dag_nodes_by_id.get(node_instance_id)
-            if dag_node is not None:
-                stack.extend(dag_node.downstream_node_ids)
-            node_run = node_runs_by_instance.get(node_instance_id)
-            if node_run is None:
-                continue
-            skipped = self._store.update_node_run_status(
-                node_run.node_run_id,
-                NodeRunStatus.SKIPPED,
-                finished_at=finished_at,
-                error={
-                    "reason": "UPSTREAM_FAILED",
-                    "failed_node_instance_id": failed_node.node_instance_id,
-                    "failed_node_run_id": failed_node.node_run_id,
-                },
-                expected_state_version=node_run.state_version,
-                allowed_source_statuses=[
-                    NodeRunStatus.PENDING,
-                    NodeRunStatus.READY,
-                    NodeRunStatus.WAITING_DEPENDENCY,
-                ],
-                owner_process_id=process_id,
-                process_generation=process_generation,
-            )
-            if skipped is not None:
-                node_runs_by_instance[node_instance_id] = skipped
 
     def _result_already_applied_or_terminal(
         self,
