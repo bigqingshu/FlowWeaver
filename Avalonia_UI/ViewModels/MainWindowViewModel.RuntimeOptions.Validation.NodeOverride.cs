@@ -4,42 +4,29 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private bool TryValidateRuntimeOptionsDraft(
-        RuntimeOptionsDraft draft,
-        out string errorMessage)
-    {
-        if (!TryValidateRuntimeOptionsWorkflowDraft(draft.Workflow, out errorMessage))
-        {
-            return false;
-        }
-
-        foreach (var nodeOverride in draft.NodeOverrides.Values)
-        {
-            if (!TryValidateRuntimeOptionsNodeOverrideDraft(
-                nodeOverride,
-                out errorMessage))
-            {
-                return false;
-            }
-        }
-
-        errorMessage = string.Empty;
-        return true;
-    }
-
-    private bool TryValidateRuntimeOptionsWorkflowDraft(
-        RuntimeOptionsWorkflowDraft draft,
+    private bool TryValidateRuntimeOptionsNodeOverrideDraft(
+        RuntimeOptionsNodeOverrideDraft draft,
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
             RuntimeOptionsProfileValues,
             draft.Profile,
             RuntimeOptionsProfileText,
-            out errorMessage) ||
-            !TryValidateRuntimeOptionsTelemetryDraft(
+            out errorMessage))
+        {
+            return false;
+        }
+
+        if (draft.Telemetry is not null &&
+            !TryValidateRuntimeOptionsTelemetryOverrideDraft(
                 draft.Telemetry,
-                out errorMessage) ||
-            !TryValidateRuntimeOptionsDiagnosticsDraft(
+                out errorMessage))
+        {
+            return false;
+        }
+
+        if (draft.Diagnostics is not null &&
+            !TryValidateRuntimeOptionsDiagnosticsOverrideDraft(
                 draft.Diagnostics,
                 out errorMessage))
         {
@@ -50,8 +37,8 @@ public partial class MainWindowViewModel
         return true;
     }
 
-    private bool TryValidateRuntimeOptionsTelemetryDraft(
-        RuntimeOptionsTelemetryDraft draft,
+    private bool TryValidateRuntimeOptionsTelemetryOverrideDraft(
+        RuntimeOptionsTelemetryOverrideDraft draft,
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsOption(
@@ -80,8 +67,8 @@ public partial class MainWindowViewModel
         return true;
     }
 
-    private bool TryValidateRuntimeOptionsDiagnosticsDraft(
-        RuntimeOptionsDiagnosticsDraft draft,
+    private bool TryValidateRuntimeOptionsDiagnosticsOverrideDraft(
+        RuntimeOptionsDiagnosticsOverrideDraft draft,
         out string errorMessage)
     {
         if (!TryValidateRuntimeOptionsNonNegative(
@@ -104,5 +91,4 @@ public partial class MainWindowViewModel
         errorMessage = string.Empty;
         return true;
     }
-
 }
