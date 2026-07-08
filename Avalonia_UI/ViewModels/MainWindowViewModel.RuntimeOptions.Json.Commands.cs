@@ -23,5 +23,4 @@ public partial class MainWindowViewModel
         RuntimeOptionsEditorErrorMessage = null;
         OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
     }
-
 }
