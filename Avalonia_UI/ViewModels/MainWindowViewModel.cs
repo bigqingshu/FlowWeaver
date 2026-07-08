@@ -96,25 +96,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private DisplayTextFormatter DisplayTextFormatter => new(_localizationService);
 
-    public async Task LoadUiSettingsAsync(
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var settings = await _uiSettingsStore.LoadAsync(cancellationToken);
-            await ApplyThemeAsync(settings.ThemeVariant, save: false, cancellationToken);
-            await ApplyLanguageAsync(settings.LanguageCode, save: false, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = F("format.ui_settings_load_failed", ex.Message);
-        }
-    }
-
     private void NotifyEngineActionStateChanged()
     {
         OnPropertyChanged(nameof(CanUseEngineActions));
