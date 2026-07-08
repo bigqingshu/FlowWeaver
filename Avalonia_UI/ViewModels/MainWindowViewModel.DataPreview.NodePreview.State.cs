@@ -35,15 +35,4 @@ public partial class MainWindowViewModel
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
 
-    partial void OnIsLoadingDataPreviewChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsDataPreviewBusy));
-        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnDataPreviewErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasDataPreviewError));
-    }
 }
