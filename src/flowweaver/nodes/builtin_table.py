@@ -4,7 +4,6 @@ import fnmatch
 import json
 import math
 import re
-from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -108,6 +107,12 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeHandlerRegistry,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.table_node_io import (
+    primary_input_ref as _primary_input_ref,
+)
+from flowweaver.nodes.table_node_io import (
+    publish_primary_table_output as _publish_primary_table_output,
+)
 from flowweaver.nodes.table_ops import (
     append_field,
     find_field,
@@ -127,19 +132,9 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
-from flowweaver.workflow_process.table_output_targets import (
-    TableOutputTarget,
-    TableOutputTargetResolutionStatus,
-    default_current_output_target,
-    resolve_configured_output_targets,
-)
 
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 DEFAULT_COPY_ROWS_MAX_OUTPUT_ROWS = 100_000
-_NODE_READABLE_TABLE_STORAGE_KINDS = (
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
-)
 _SKIP_ROW = object()
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -3594,108 +3589,6 @@ class SqlMappingNodeHandler:
         except ValueError as exc:
             raise _NodeValidationError(str(exc)) from exc
         return [table_ref]
-
-
-def _primary_input_ref(
-    task: NodeTaskModel,
-    context: BuiltinTableNodeContext,
-    *,
-    node_type: str,
-) -> TableRefModel:
-    if task.input_slot_bindings:
-        return context.require_input_slot(
-            task,
-            "in",
-            node_type=node_type,
-            allowed_storage_kinds=_NODE_READABLE_TABLE_STORAGE_KINDS,
-        )
-    return context.require_single_input_ref(
-        task,
-        node_type=node_type,
-    )
-
-
-def _publish_primary_table_output(
-    task: NodeTaskModel,
-    context: BuiltinTableNodeContext,
-    *,
-    node_type: str,
-    schema: Sequence[FieldSchemaModel],
-    row_batches: Iterable[Sequence[dict[str, Any]]],
-) -> list[TableRefModel]:
-    targets = _primary_output_targets(task.config, node_type=node_type)
-    primary_ref = _write_table_output_target(
-        task,
-        context,
-        target=targets[0],
-        schema=schema,
-        row_batches=row_batches,
-    )
-    output_refs = [primary_ref]
-    for target in targets[1:]:
-        output_refs.append(
-            _write_table_output_target(
-                task,
-                context,
-                target=target,
-                schema=primary_ref.schema,
-                row_batches=context.iter_row_batches(primary_ref),
-            )
-        )
-    return output_refs
-
-
-def _primary_output_targets(
-    config: dict[str, Any],
-    *,
-    node_type: str,
-) -> tuple[TableOutputTarget, ...]:
-    resolution = resolve_configured_output_targets(config)
-    if resolution.status == TableOutputTargetResolutionStatus.NO_CONFIG:
-        return (default_current_output_target("out"),)
-    if resolution.status == TableOutputTargetResolutionStatus.ERROR:
-        issue = resolution.issue
-        message = issue.message if issue is not None else "invalid output target"
-        raise _NodeValidationError(f"{node_type} {message}")
-    targets = list(resolution.targets)
-    if _output_save_enabled(config) and not any(
-        target.slot == "out" for target in targets
-    ):
-        targets.insert(0, default_current_output_target("out"))
-    if not targets:
-        return (default_current_output_target("out"),)
-    return tuple(targets)
-
-
-def _write_table_output_target(
-    task: NodeTaskModel,
-    context: BuiltinTableNodeContext,
-    *,
-    target: TableOutputTarget,
-    schema: Sequence[FieldSchemaModel],
-    row_batches: Iterable[Sequence[dict[str, Any]]],
-) -> TableRefModel:
-    if target.is_existing_target:
-        result = context.replace_output_target_batches(
-            task,
-            target=target,
-            schema=schema,
-            row_batches=row_batches,
-        )
-    else:
-        result = context.publish_output_target_batches(
-            task,
-            target=target,
-            output_name=f"{task.node_instance_id}_output",
-            schema=schema,
-            row_batches=row_batches,
-        )
-    return result.table_ref
-
-
-def _output_save_enabled(config: dict[str, Any]) -> bool:
-    output_save = config.get("output_save")
-    return isinstance(output_save, dict) and output_save.get("enabled") is True
 
 
 def _parse_columns(value: Any) -> list[FieldSchemaModel]:
