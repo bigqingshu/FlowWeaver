@@ -1,11 +1,15 @@
 using System.Linq;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    [ObservableProperty]
+    private bool isDeletingWorkflow;
+
     private bool CanDeleteSelectedWorkflowCore()
     {
         return CanUseEngineActions
