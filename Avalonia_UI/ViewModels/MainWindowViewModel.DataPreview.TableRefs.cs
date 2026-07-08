@@ -1,6 +1,4 @@
-using System.Linq;
 using System.Threading.Tasks;
-using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -37,24 +35,7 @@ public partial class MainWindowViewModel
 
             if (response.Ok && response.Data is not null)
             {
-                var previousSelectedTableRefId = SelectedDataPreviewTableRef?.TableRefId;
-                var previousSelectedStateKey = SelectedDataPreviewState?.StateKey;
-                var previousSelectedTableOptionId =
-                    SelectedDataPreviewTableOption?.TableRefId ?? previousSelectedTableRefId;
-                TableRefs.Clear();
-                foreach (var tableRef in response.Data)
-                {
-                    TableRefs.Add(new TableRefListItemViewModel(tableRef));
-                }
-
-                RebuildDataPreviewStates(
-                    previousSelectedStateKey,
-                    previousSelectedTableOptionId);
-                SelectedDataPreviewTableRef = TableRefs.FirstOrDefault(
-                    tableRef => tableRef.TableRefId == previousSelectedTableRefId)
-                    ?? SelectedDataPreviewTableOption
-                    ?? TableRefs.FirstOrDefault();
-
+                ApplyRefreshedTableRefs(response.Data);
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
                 return;
             }
