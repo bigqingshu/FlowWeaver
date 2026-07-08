@@ -13,8 +13,4 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(HasTableRefError));
     }
 
-    partial void OnDataPreviewWorkbenchErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasDataPreviewWorkbenchError));
-    }
 }
