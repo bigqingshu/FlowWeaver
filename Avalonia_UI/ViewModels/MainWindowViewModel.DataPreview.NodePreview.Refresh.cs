@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
 
@@ -46,11 +44,9 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            var nodeRun = nodeRunsResponse.Data.FirstOrDefault(item =>
-                string.Equals(
-                    item.NodeInstanceId,
-                    requestedNodeInstanceId,
-                    StringComparison.Ordinal));
+            var nodeRun = FindNodeRunByInstanceId(
+                nodeRunsResponse.Data,
+                requestedNodeInstanceId);
             if (nodeRun is null)
             {
                 DataPreviewMessage =
