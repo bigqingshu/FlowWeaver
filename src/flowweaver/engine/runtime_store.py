@@ -49,6 +49,9 @@ from flowweaver.engine.runtime_models import (
 from flowweaver.engine.runtime_node_run_store import (
     RuntimeNodeRunStoreMixin,
 )
+from flowweaver.engine.runtime_read_lease_store import (
+    RuntimeReadLeaseStoreMixin,
+)
 from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
@@ -84,6 +87,7 @@ class RuntimeStore(
     RuntimeNodeRunStoreMixin,
     RuntimeLoopStoreMixin,
     RuntimeSharedTableStoreMixin,
+    RuntimeReadLeaseStoreMixin,
 ):
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
