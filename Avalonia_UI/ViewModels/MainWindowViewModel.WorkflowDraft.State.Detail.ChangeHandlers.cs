@@ -13,17 +13,6 @@ public partial class MainWindowViewModel
         RefreshSelectedNodeDisplayNameDraftState();
         RefreshSelectedNodeConfigDraftState();
         RefreshRuntimeOptionsDraftState();
-        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
-        ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-        ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
-        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
-        ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
-        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
-        AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
-        NotifyWorkflowDefinitionNodeActionCommandsChanged();
-        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
+        NotifyWorkflowDefinitionDetailChangedCommands();
     }
 }
