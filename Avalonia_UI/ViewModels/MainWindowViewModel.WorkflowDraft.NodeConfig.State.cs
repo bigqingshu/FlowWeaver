@@ -53,24 +53,4 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(SelectedNodeConfigDraftSummaryText));
     }
 
-    private void RebuildSelectedNodeConfigEditableInputFields(
-        NodeConfigEditableDraft? editableDraft)
-    {
-        SelectedNodeConfigEditableInputFields.Clear();
-        if (editableDraft is not null)
-        {
-            var nodeType = SelectedWorkflowDefinitionNode?.NodeType ?? string.Empty;
-            foreach (var field in editableDraft.Fields)
-            {
-                SelectedNodeConfigEditableInputFields.Add(
-                    new NodeConfigEditableFieldInputViewModel(
-                        field,
-                        nodeType,
-                        DisplayTextFormatter));
-            }
-        }
-
-        OnPropertyChanged(nameof(HasSelectedNodeConfigEditableInputFields));
-        ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-    }
 }
