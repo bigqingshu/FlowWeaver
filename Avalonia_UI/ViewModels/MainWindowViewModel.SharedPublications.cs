@@ -8,9 +8,6 @@ public partial class MainWindowViewModel
     private int sharedPublicationsLoadVersion;
 
     [ObservableProperty]
-    private bool isLoadingSharedPublications;
-
-    [ObservableProperty]
     private SharedPublicationListItemViewModel? selectedSharedPublication;
 
     [ObservableProperty]
@@ -30,12 +27,6 @@ public partial class MainWindowViewModel
     public string ShareNameWatermarkText => T("data.share_name_watermark");
 
     public string VersionsText => T("data.versions");
-
-    partial void OnIsLoadingSharedPublicationsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsDataBusy));
-        RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
-    }
 
     partial void OnSharedPublicationErrorMessageChanged(string? value)
     {
