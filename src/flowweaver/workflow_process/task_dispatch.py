@@ -30,6 +30,9 @@ from flowweaver.workflow_process.task_completion import (
 from flowweaver.workflow_process.task_completion import (
     fail_rejected_node_result as fail_rejected_node_result,
 )
+from flowweaver.workflow_process.task_completion_drain import (
+    drain_executor_task_completions as drain_executor_task_completions,
+)
 from flowweaver.workflow_process.task_dispatch_config import (
     timeout_seconds_from_node_config as timeout_seconds_from_node_config,
 )
@@ -119,39 +122,6 @@ def dispatch_ready_nodes(
         if _workflow_run_is_terminal(store, workflow_run_id):
             break
     return dispatched_count
-
-
-def drain_executor_task_completions(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int | None,
-    event_sink: RuntimeEventSink,
-    task_manager: NodeTaskManager,
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    close_executor_after_task: bool,
-    execution_pool: NodeTaskExecutionPool,
-) -> int:
-    completed_count = 0
-    while True:
-        completion = execution_pool.pop_completed()
-        if completion is None:
-            return completed_count
-        apply_executor_task_completion(
-            store=store,
-            workflow_run_id=workflow_run_id,
-            workflow_process_id=workflow_process_id,
-            process_generation=process_generation,
-            event_sink=event_sink,
-            task_manager=task_manager,
-            cleanup_staging_for_node=cleanup_staging_for_node,
-            close_executor_after_task=close_executor_after_task,
-            completion=completion,
-        )
-        completed_count += 1
-        if _workflow_run_is_terminal(store, workflow_run_id):
-            return completed_count
 
 
 def dispatch_ready_node_candidate(
