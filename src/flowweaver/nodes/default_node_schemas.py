@@ -70,15 +70,6 @@ from flowweaver.nodes.default_row_node_schemas import (
     _unpivot_rows_schema as _unpivot_rows_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
-    _add_columns_schema as _add_columns_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
-    _copy_column_schema as _copy_column_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
-    _delete_columns_schema as _delete_columns_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
     _fill_cells_schema as _fill_cells_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
@@ -93,10 +84,19 @@ from flowweaver.nodes.default_table_basic_node_schemas import (
 from flowweaver.nodes.default_table_basic_node_schemas import (
     _generate_test_table_schema as _generate_test_table_schema,
 )
-from flowweaver.nodes.default_table_basic_node_schemas import (
+from flowweaver.nodes.default_table_column_node_schemas import (
+    _add_columns_schema as _add_columns_schema,
+)
+from flowweaver.nodes.default_table_column_node_schemas import (
+    _copy_column_schema as _copy_column_schema,
+)
+from flowweaver.nodes.default_table_column_node_schemas import (
+    _delete_columns_schema as _delete_columns_schema,
+)
+from flowweaver.nodes.default_table_column_node_schemas import (
     _rename_columns_schema as _rename_columns_schema,
 )
-from flowweaver.nodes.default_table_basic_node_schemas import (
+from flowweaver.nodes.default_table_column_node_schemas import (
     _reorder_columns_schema as _reorder_columns_schema,
 )
 from flowweaver.nodes.default_text_node_schemas import (
