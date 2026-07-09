@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import threading
@@ -14,6 +13,18 @@ from flowweaver.common.subprocess_command import python_module_command
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
+from flowweaver.engine.supervisor_paths import (
+    child_environment as _child_environment,
+)
+from flowweaver.engine.supervisor_paths import (
+    executor_process_log_paths as _executor_process_log_paths,
+)
+from flowweaver.engine.supervisor_paths import (
+    workflow_process_log_paths as _workflow_process_log_paths,
+)
+from flowweaver.engine.supervisor_paths import (
+    workflow_process_runtime_event_path as _workflow_process_runtime_event_path,
+)
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
@@ -308,40 +319,24 @@ class Supervisor:
         return self._runtime_events.drain_all()
 
     def _child_environment(self) -> dict[str, str]:
-        env = os.environ.copy()
-        src_path = Path(__file__).resolve().parents[2]
-        existing_pythonpath = env.get("PYTHONPATH")
-        env["PYTHONPATH"] = (
-            str(src_path)
-            if not existing_pythonpath
-            else f"{src_path}{os.pathsep}{existing_pythonpath}"
-        )
-        return env
+        return _child_environment(src_path=Path(__file__).resolve().parents[2])
 
     def _workflow_process_log_paths(self, workflow_run_id: str) -> tuple[Path, Path]:
-        log_dir = self._config.resolved_log_dir() / "workflow_runs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        return (
-            log_dir / f"{workflow_run_id}.stdout.log",
-            log_dir / f"{workflow_run_id}.stderr.log",
-        )
+        return _workflow_process_log_paths(self._config, workflow_run_id)
 
     def _executor_process_log_paths(self, executor_id: str) -> tuple[Path, Path]:
-        log_dir = self._config.resolved_log_dir() / "executors"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        return (
-            log_dir / f"{executor_id}.stdout.log",
-            log_dir / f"{executor_id}.stderr.log",
-        )
+        return _executor_process_log_paths(self._config, executor_id)
 
     def _workflow_process_runtime_event_path(
         self,
         workflow_run_id: str,
         process_id: str,
     ) -> Path:
-        event_dir = self._config.data_dir / "ipc" / "workflow_runs"
-        event_dir.mkdir(parents=True, exist_ok=True)
-        return event_dir / f"{workflow_run_id}.{process_id}.events.jsonl"
+        return _workflow_process_runtime_event_path(
+            self._config,
+            workflow_run_id,
+            process_id,
+        )
 
     def _drain_runtime_events_for_process(self, process_id: str) -> list[RuntimeEvent]:
         return self._runtime_events.drain_process(process_id)
