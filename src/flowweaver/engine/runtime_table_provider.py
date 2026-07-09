@@ -7,6 +7,12 @@ from typing import Any
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
+from flowweaver.engine.runtime_table_connections import (
+    connect_runtime_table as _connect_runtime_table,
+)
+from flowweaver.engine.runtime_table_connections import (
+    validate_runtime_table_ref as _validate_runtime_table_ref,
+)
 from flowweaver.engine.runtime_table_sql import (
     identifier_token as _identifier_token,
 )
@@ -132,7 +138,7 @@ class SQLiteRuntimeTableProvider:
         )
 
     def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
-        self._validate_ref(table_ref)
+        _validate_runtime_table_ref(table_ref, provider_id=self.provider_id)
         return list(table_ref.schema)
 
     def count_rows(self, table_ref: TableRefModel) -> int:
@@ -174,7 +180,7 @@ class SQLiteRuntimeTableProvider:
             return [dict(row) for row in cursor.fetchall()]
 
     def create_table(self, table_ref: TableRefModel) -> None:
-        self._validate_ref(table_ref)
+        _validate_runtime_table_ref(table_ref, provider_id=self.provider_id)
         _, table_name = _table_location(table_ref)
         columns = ", ".join(
             f"{_quote_identifier(field.name)} {_sqlite_type(field.data_type)}"
@@ -279,19 +285,8 @@ class SQLiteRuntimeTableProvider:
         )
 
     def _connect(self, table_ref: TableRefModel) -> sqlite3.Connection:
-        self._validate_ref(table_ref)
-        database_path, _ = _table_location(table_ref)
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
-        connection.execute("PRAGMA journal_mode = WAL")
-        connection.execute("PRAGMA synchronous = NORMAL")
-        return connection
-
-    def _validate_ref(self, table_ref: TableRefModel) -> None:
-        if table_ref.provider_id != self.provider_id:
-            raise ValueError("table_ref belongs to a different provider")
-        if table_ref.storage_kind != TableStorageKind.RUNTIME_SQL:
-            raise ValueError("SQLiteRuntimeTableProvider only supports RUNTIME_SQL")
+        return _connect_runtime_table(
+            table_ref,
+            provider_id=self.provider_id,
+            busy_timeout_ms=self._busy_timeout_ms,
+        )
