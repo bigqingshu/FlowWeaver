@@ -4,13 +4,21 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import LoopIterationRunRecord, LoopRunRecord
+from flowweaver.engine.runtime_loop_iteration_run_queries import (
+    get_loop_iteration_run_for_index_from_session as _get_iteration_for_index,
+)
+from flowweaver.engine.runtime_loop_iteration_run_queries import (
+    get_loop_iteration_run_from_session as _get_iteration,
+)
+from flowweaver.engine.runtime_loop_iteration_run_queries import (
+    list_loop_iteration_runs_from_session as _list_iterations,
+)
 from flowweaver.engine.runtime_loop_iteration_status_update import (
     update_loop_iteration_run_status_in_session as _update_loop_iteration_run_status,
 )
@@ -26,9 +34,6 @@ from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _json_dumps,
     _optional_datetime_to_text,
-)
-from flowweaver.engine.runtime_status_guards import (
-    loop_iteration_status_values as _loop_iteration_status_values,
 )
 from flowweaver.protocols.enums import LoopIterationRunStatus
 
@@ -93,10 +98,7 @@ class RuntimeLoopIterationRunStoreMixin(RuntimeLoopRunStoreMixin):
         loop_iteration_id: str,
     ) -> LoopIterationRun | None:
         with self._session_factory() as session:
-            record = session.get(LoopIterationRunRecord, loop_iteration_id)
-            if record is None:
-                return None
-            return _loop_iteration_run_from_record(record)
+            return _get_iteration(session, loop_iteration_id)
 
     def get_loop_iteration_run_for_index(
         self,
@@ -105,14 +107,11 @@ class RuntimeLoopIterationRunStoreMixin(RuntimeLoopRunStoreMixin):
         iteration_index: int,
     ) -> LoopIterationRun | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(LoopIterationRunRecord)
-                .where(LoopIterationRunRecord.loop_run_id == loop_run_id)
-                .where(LoopIterationRunRecord.iteration_index == iteration_index)
+            return _get_iteration_for_index(
+                session,
+                loop_run_id=loop_run_id,
+                iteration_index=iteration_index,
             )
-            if record is None:
-                return None
-            return _loop_iteration_run_from_record(record)
 
     def list_loop_iteration_runs(
         self,
@@ -120,22 +119,8 @@ class RuntimeLoopIterationRunStoreMixin(RuntimeLoopRunStoreMixin):
         *,
         statuses: Iterable[LoopIterationRunStatus | str] | None = None,
     ) -> list[LoopIterationRun]:
-        statement = (
-            select(LoopIterationRunRecord)
-            .where(LoopIterationRunRecord.loop_run_id == loop_run_id)
-            .order_by(LoopIterationRunRecord.iteration_index)
-        )
-        if statuses is not None:
-            statement = statement.where(
-                LoopIterationRunRecord.status.in_(
-                    _loop_iteration_status_values(statuses)
-                )
-            )
         with self._session_factory() as session:
-            return [
-                _loop_iteration_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
+            return _list_iterations(session, loop_run_id, statuses=statuses)
 
     def update_loop_iteration_run_status(
         self,
