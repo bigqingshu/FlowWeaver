@@ -12,10 +12,10 @@ from flowweaver.nodes.table_jump_control_nodes import (
 from flowweaver.nodes.table_jump_control_nodes import (
     UnconditionalJumpNodeHandler as UnconditionalJumpNodeHandler,
 )
-from flowweaver.nodes.table_loop_control_nodes import (
+from flowweaver.nodes.table_loop_judge_node import (
     LoopJudgeNodeHandler as LoopJudgeNodeHandler,
 )
-from flowweaver.nodes.table_loop_control_nodes import (
+from flowweaver.nodes.table_loop_start_node import (
     LoopStartNodeHandler as LoopStartNodeHandler,
 )
 from flowweaver.nodes.table_subworkflow_control_nodes import (
