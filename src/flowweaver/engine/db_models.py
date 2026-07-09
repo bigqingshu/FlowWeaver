@@ -22,6 +22,10 @@ from flowweaver.engine.db_node_task_models import (
 from flowweaver.engine.db_runtime_event_models import (
     RuntimeEventRecord as RuntimeEventRecord,
 )
+from flowweaver.engine.db_table_ref_models import DataRefRecord as DataRefRecord
+from flowweaver.engine.db_table_ref_models import (
+    TableLeaseRecord as TableLeaseRecord,
+)
 from flowweaver.engine.db_workflow_definition_models import (
     WorkflowDefinitionRecord as WorkflowDefinitionRecord,
 )
@@ -37,31 +41,6 @@ from flowweaver.engine.db_workflow_runtime_models import (
 from flowweaver.engine.db_workflow_runtime_models import (
     WorkflowRunRecord as WorkflowRunRecord,
 )
-
-
-class DataRefRecord(Base):
-    __tablename__ = "data_refs"
-
-    table_ref_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    workflow_run_id: Mapped[str] = mapped_column(Text, nullable=False)
-    node_run_id: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[str] = mapped_column(Text, nullable=False)
-    storage_kind: Mapped[str] = mapped_column(Text, nullable=False)
-    scope: Mapped[str] = mapped_column(Text, nullable=False)
-    mutability: Mapped[str] = mapped_column(Text, nullable=False)
-    provider_id: Mapped[str] = mapped_column(Text, nullable=False)
-    resource_profile_id: Mapped[str | None] = mapped_column(Text)
-    mount_id: Mapped[str | None] = mapped_column(Text)
-    logical_table_id: Mapped[str] = mapped_column(Text, nullable=False)
-    opaque_handle_json: Mapped[str] = mapped_column(Text, nullable=False)
-    schema_json: Mapped[str] = mapped_column(Text, nullable=False)
-    schema_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    capabilities_json: Mapped[str] = mapped_column(Text, nullable=False)
-    lifecycle_status: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[str] = mapped_column(Text, nullable=False)
-    published_at: Mapped[str | None] = mapped_column(Text)
-    released_at: Mapped[str | None] = mapped_column(Text)
 
 
 class SharedPublicationRecord(Base):
@@ -118,23 +97,5 @@ class ReadLeaseRecord(Base):
     released_at: Mapped[str | None] = mapped_column(Text)
 
 
-class TableLeaseRecord(Base):
-    __tablename__ = "table_leases"
-
-    lease_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    table_ref_id: Mapped[str] = mapped_column(
-        Text,
-        ForeignKey("data_refs.table_ref_id"),
-        nullable=False,
-        index=True,
-    )
-    lease_type: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    acquired_at: Mapped[str] = mapped_column(Text, nullable=False)
-    last_heartbeat_at: Mapped[str] = mapped_column(Text, nullable=False)
-    expires_at: Mapped[str] = mapped_column(Text, nullable=False, index=True)
-    released_at: Mapped[str | None] = mapped_column(Text)
-    metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
