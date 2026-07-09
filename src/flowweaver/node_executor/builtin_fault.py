@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
-from typing import Any, Protocol
 
 from flowweaver.common.time import utc_now
+from flowweaver.node_executor.builtin_fault_helpers import (
+    TaskEventEmitter as TaskEventEmitter,
+)
+from flowweaver.node_executor.builtin_fault_helpers import (
+    cancelled_task_result as _cancelled_task_result,
+)
+from flowweaver.node_executor.builtin_fault_helpers import (
+    emit_delay_progress as _emit_delay_progress,
+)
+from flowweaver.node_executor.builtin_fault_helpers import (
+    float_config as _float_config,
+)
+from flowweaver.node_executor.builtin_fault_helpers import int_config as _int_config
 from flowweaver.protocols.enums import NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
@@ -19,30 +30,6 @@ BUILTIN_FAULT_NODE_TYPES = frozenset(
         FAULT_TEST_NODE_TYPE,
     }
 )
-
-
-class TaskEventEmitter(Protocol):
-    def emit_task_heartbeat(
-        self,
-        task: NodeTaskModel,
-        *,
-        correlation_id: str | None = None,
-    ) -> None:
-        ...
-
-    def emit_task_progress(
-        self,
-        task: NodeTaskModel,
-        *,
-        progress: float | None,
-        current_stage: str | None = None,
-        metrics: dict[str, int | float | str] | None = None,
-        correlation_id: str | None = None,
-    ) -> None:
-        ...
-
-    def task_is_cancelled(self, task: NodeTaskModel) -> bool:
-        ...
 
 
 class BuiltinFaultNodeExecutor:
@@ -89,10 +76,19 @@ class BuiltinFaultNodeExecutor:
                 self._event_emitter.emit_task_heartbeat(task)
                 next_heartbeat_at = now_monotonic + heartbeat_interval
             if now_monotonic >= next_progress_at:
-                self._emit_delay_progress(task, elapsed, duration_seconds)
+                _emit_delay_progress(
+                    self._event_emitter,
+                    task,
+                    elapsed_seconds=elapsed,
+                    duration_seconds=duration_seconds,
+                )
                 next_progress_at = now_monotonic + progress_interval
             if self._event_emitter.task_is_cancelled(task):
-                return self._cancelled_result(task, started_at=started_at)
+                return _cancelled_task_result(
+                    task,
+                    executor_id=self.executor_id,
+                    started_at=started_at,
+                )
             if now_monotonic >= deadline:
                 break
             sleep_seconds = min(
@@ -161,66 +157,9 @@ class BuiltinFaultNodeExecutor:
                 )
                 next_progress_at = now_monotonic + progress_interval
             if self._event_emitter.task_is_cancelled(task):
-                return self._cancelled_result(task, started_at=started_at)
+                return _cancelled_task_result(
+                    task,
+                    executor_id=self.executor_id,
+                    started_at=started_at,
+                )
             time.sleep(0.01)
-
-    def _emit_delay_progress(
-        self,
-        task: NodeTaskModel,
-        elapsed_seconds: float,
-        duration_seconds: float,
-    ) -> None:
-        progress = 1.0 if duration_seconds == 0 else elapsed_seconds / duration_seconds
-        self._event_emitter.emit_task_progress(
-            task,
-            progress=max(0.0, min(1.0, progress)),
-            current_stage="running",
-            metrics={"elapsed_seconds": round(elapsed_seconds, 6)},
-        )
-
-    def _cancelled_result(
-        self,
-        task: NodeTaskModel,
-        *,
-        started_at: datetime,
-    ) -> NodeTaskResultModel:
-        return NodeTaskResultModel(
-            task_id=task.task_id,
-            node_run_id=task.node_run_id,
-            attempt=task.attempt,
-            executor_id=self.executor_id,
-            process_generation=task.process_generation,
-            status=NodeResultStatus.CANCELLED,
-            error={
-                "message": "Node task cancelled",
-                "reason": "NODE_TASK_CANCEL_REQUEST",
-            },
-            started_at=started_at,
-            finished_at=utc_now(),
-        )
-
-
-def _float_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: float,
-) -> float:
-    value = config.get(key, default)
-    if not isinstance(value, int | float):
-        raise ValueError(f"config.{key} must be a number")
-    if value < 0:
-        raise ValueError(f"config.{key} must be non-negative")
-    return float(value)
-
-
-def _int_config(
-    config: dict[str, Any],
-    key: str,
-    *,
-    default: int,
-) -> int:
-    value = config.get(key, default)
-    if not isinstance(value, int):
-        raise ValueError(f"config.{key} must be an integer")
-    return value
