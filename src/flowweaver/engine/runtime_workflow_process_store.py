@@ -12,13 +12,11 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine import runtime_workflow_process_abort as _process_abort
 from flowweaver.engine import runtime_workflow_process_claim as _process_claim
+from flowweaver.engine import runtime_workflow_process_lifecycle as _process_lifecycle
 from flowweaver.engine.db_models import WorkflowProcessRecord
 from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import WorkflowProcess, WorkflowRun
-from flowweaver.engine.runtime_record_mappers import (
-    _datetime_to_text,
-    _json_dumps,
-)
+from flowweaver.engine.runtime_record_mappers import _datetime_to_text
 from flowweaver.engine.runtime_status_guards import (
     ACTIVE_WORKFLOW_PROCESS_STATUSES as _ACTIVE_WORKFLOW_PROCESS_STATUSES,
 )
@@ -106,11 +104,11 @@ class RuntimeWorkflowProcessStoreMixin:
         os_pid: int,
     ) -> WorkflowProcess | None:
         with self._session_factory.begin() as session:
-            record = session.get(WorkflowProcessRecord, process_id)
-            if record is None:
-                return None
-            record.os_pid = os_pid
-            return _workflow_process_from_record(record)
+            return _process_lifecycle.update_workflow_process_pid_in_session(
+                session,
+                process_id,
+                os_pid,
+            )
 
     def record_workflow_process_heartbeat(
         self,
@@ -120,20 +118,12 @@ class RuntimeWorkflowProcessStoreMixin:
     ) -> WorkflowProcess | None:
         now = utc_now()
         with self._session_factory.begin() as session:
-            record = session.get(WorkflowProcessRecord, process_id)
-            if record is None:
-                return None
-            if (
-                process_generation is not None
-                and record.process_generation != process_generation
-            ):
-                return None
-            if record.status not in _ACTIVE_WORKFLOW_PROCESS_STATUSES:
-                return None
-            if record.status == WorkflowProcessStatus.STARTING.value:
-                record.status = WorkflowProcessStatus.RUNNING.value
-            record.last_heartbeat_at = _datetime_to_text(now)
-            return _workflow_process_from_record(record)
+            return _process_lifecycle.record_workflow_process_heartbeat_in_session(
+                session,
+                process_id,
+                process_generation=process_generation,
+                now=now,
+            )
 
     def request_workflow_process_cancel(
         self,
@@ -141,20 +131,11 @@ class RuntimeWorkflowProcessStoreMixin:
     ) -> WorkflowProcess | None:
         now = utc_now()
         with self._session_factory.begin() as session:
-            record = session.scalar(
-                select(WorkflowProcessRecord)
-                .where(WorkflowProcessRecord.workflow_run_id == workflow_run_id)
-                .order_by(WorkflowProcessRecord.started_at.desc())
+            return _process_lifecycle.request_workflow_process_cancel_in_session(
+                session,
+                workflow_run_id,
+                now=now,
             )
-            if record is None:
-                return None
-            if record.status in {
-                WorkflowProcessStatus.STARTING.value,
-                WorkflowProcessStatus.RUNNING.value,
-            }:
-                record.status = WorkflowProcessStatus.CANCEL_REQUESTED.value
-                record.cancel_requested_at = _datetime_to_text(now)
-            return _workflow_process_from_record(record)
 
     def mark_workflow_process_exited(
         self,
@@ -165,18 +146,13 @@ class RuntimeWorkflowProcessStoreMixin:
     ) -> WorkflowProcess | None:
         now = utc_now()
         with self._session_factory.begin() as session:
-            record = session.get(WorkflowProcessRecord, process_id)
-            if record is None:
-                return None
-            record.status = (
-                WorkflowProcessStatus.EXITED.value
-                if exit_code == 0
-                else WorkflowProcessStatus.FAILED.value
+            return _process_lifecycle.mark_workflow_process_exited_in_session(
+                session,
+                process_id,
+                exit_code=exit_code,
+                error=error,
+                now=now,
             )
-            record.exited_at = _datetime_to_text(now)
-            record.exit_code = exit_code
-            record.error_json = _json_dumps(error) if error else None
-            return _workflow_process_from_record(record)
 
     def mark_lost_workflow_processes(
         self,
