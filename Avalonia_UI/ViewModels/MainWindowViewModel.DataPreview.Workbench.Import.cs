@@ -23,20 +23,12 @@ public partial class MainWindowViewModel
 
         LoadedDataPreviewTableRef = null;
         LoadDataPreviewWorkbenchRows(
-            new TableDataRowsDto
-            {
-                TableRefId = "local-draft",
-                Offset = 0,
-                Limit = rows.Length,
-                RowCount = rows.Length,
-                Columns = columns,
-                Rows = rows,
-                HasMore = false,
-            },
+            CreateDataPreviewWorkbenchDraftRows(columns, rows),
             isDraft: true);
         DataPreviewWorkbenchMessage = F(
             "format.data_preview_imported_rows",
             rows.Length,
             columns.Length);
     }
+
 }
