@@ -14,9 +14,9 @@ from flowweaver.common.subprocess_command import python_module_command
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
-from flowweaver.protocols.enums import EventType, IPCMessageType
+from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
+from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
-from flowweaver.protocols.ipc_messages import IPCEnvelope
 
 
 class Supervisor:
@@ -34,9 +34,7 @@ class Supervisor:
         self._python_executable = python_executable or sys.executable
         self._children: dict[str, subprocess.Popen] = {}
         self._executor_children: dict[str, subprocess.Popen] = {}
-        self._runtime_event_paths: dict[str, Path] = {}
-        self._runtime_event_offsets: dict[str, int] = {}
-        self._runtime_event_lock = threading.Lock()
+        self._runtime_events = SupervisorRuntimeEventChannels(event_router)
         self._stop_event = threading.Event()
         self._maintenance_thread: threading.Thread | None = None
 
@@ -51,8 +49,7 @@ class Supervisor:
             workflow_run_id,
             process.process_id,
         )
-        self._runtime_event_paths[process.process_id] = runtime_event_path
-        self._runtime_event_offsets[process.process_id] = 0
+        self._runtime_events.register(process.process_id, runtime_event_path)
         command = [
             *python_module_command(
                 python_executable=self._python_executable,
@@ -102,8 +99,7 @@ class Supervisor:
                 process.process_id,
                 reason="WORKFLOW_PROCESS_START_FAILED",
             )
-            self._runtime_event_paths.pop(process.process_id, None)
-            self._runtime_event_offsets.pop(process.process_id, None)
+            self._runtime_events.forget(process.process_id)
             raise
         finally:
             if not stdout_file.closed:
@@ -309,10 +305,7 @@ class Supervisor:
         return lost
 
     def drain_runtime_events(self) -> list[RuntimeEvent]:
-        events: list[RuntimeEvent] = []
-        for process_id in list(self._runtime_event_paths):
-            events.extend(self._drain_runtime_events_for_process(process_id))
-        return events
+        return self._runtime_events.drain_all()
 
     def _child_environment(self) -> dict[str, str]:
         env = os.environ.copy()
@@ -351,30 +344,10 @@ class Supervisor:
         return event_dir / f"{workflow_run_id}.{process_id}.events.jsonl"
 
     def _drain_runtime_events_for_process(self, process_id: str) -> list[RuntimeEvent]:
-        with self._runtime_event_lock:
-            if self._event_router is None:
-                return []
-            path = self._runtime_event_paths.get(process_id)
-            if path is None or not path.exists():
-                return []
-            offset = self._runtime_event_offsets.get(process_id, 0)
-            published: list[RuntimeEvent] = []
-            with path.open("r", encoding="utf-8") as stream:
-                stream.seek(offset)
-                for line in stream:
-                    if not line.strip():
-                        continue
-                    envelope = IPCEnvelope.model_validate_json(line)
-                    if envelope.message_type != IPCMessageType.RUNTIME_EVENT:
-                        continue
-                    event = EventModel.model_validate(envelope.payload)
-                    published.append(self._event_router.publish_event(event))
-                self._runtime_event_offsets[process_id] = stream.tell()
-            return published
+        return self._runtime_events.drain_process(process_id)
 
     def _forget_runtime_event_channel(self, process_id: str) -> None:
-        self._runtime_event_paths.pop(process_id, None)
-        self._runtime_event_offsets.pop(process_id, None)
+        self._runtime_events.forget(process_id)
 
     def _finish_workflow_process(
         self,
