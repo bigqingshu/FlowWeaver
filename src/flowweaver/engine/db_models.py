@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from sqlalchemy import Float, ForeignKey, Index, Integer, Text, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    pass
+from flowweaver.engine.db_base import Base as Base
+from flowweaver.engine.db_runtime_event_models import (
+    RuntimeEventRecord as RuntimeEventRecord,
+)
 
 
 class WorkflowDefinitionRecord(Base):
@@ -418,19 +419,3 @@ class TableLeaseRecord(Base):
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
-class RuntimeEventRecord(Base):
-    __tablename__ = "runtime_events"
-    __table_args__ = {"sqlite_autoincrement": True}
-
-    sequence_number: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-    )
-    event_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    event_version: Mapped[str] = mapped_column(Text, nullable=False)
-    event_type: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[str] = mapped_column(Text, nullable=False)
-    workflow_run_id: Mapped[str | None] = mapped_column(Text, index=True)
-    node_run_id: Mapped[str | None] = mapped_column(Text, index=True)
-    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
