@@ -14,20 +14,4 @@ public partial class MainWindowViewModel
     private bool isRuntimeOptionsJsonDraftDirty;
 
     private bool isSynchronizingRuntimeOptionsJsonDraft;
-
-    partial void OnIsRuntimeOptionsJsonEditorExpandedChanged(bool value)
-    {
-        if (value && !IsRuntimeOptionsJsonDraftDirty)
-        {
-            RefreshRuntimeOptionsJsonDraftFromStructuredInputsIfClean();
-        }
-    }
-
-    partial void OnRuntimeOptionsJsonDraftChanged(string value)
-    {
-        if (!isSynchronizingRuntimeOptionsJsonDraft)
-        {
-            IsRuntimeOptionsJsonDraftDirty = true;
-        }
-    }
 }
