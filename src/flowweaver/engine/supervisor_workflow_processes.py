@@ -4,6 +4,7 @@ import subprocess
 from collections.abc import Callable, MutableMapping
 
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
+from flowweaver.engine.supervisor_child_processes import terminate_child_process
 
 
 def finish_workflow_process(
@@ -41,3 +42,37 @@ def handle_lost_workflow_process(
         process.process_id,
         reason="WORKFLOW_PROCESS_LOST",
     )
+
+
+def close_workflow_children(
+    runtime_store: RuntimeStore,
+    children: MutableMapping[str, subprocess.Popen],
+    *,
+    graceful_timeout_seconds: float,
+    drain_runtime_events_for_process: Callable[[str], object],
+    forget_runtime_event_channel: Callable[[str], None],
+) -> None:
+    for process_id, child in list(children.items()):
+        forced = False
+        if child.poll() is None:
+            forced = True
+            terminate_child_process(
+                child,
+                graceful_timeout_seconds=graceful_timeout_seconds,
+            )
+        drain_runtime_events_for_process(process_id)
+        exit_code = child.returncode if child.returncode is not None else 1
+        if forced and exit_code == 0:
+            exit_code = 1
+        children.pop(process_id, None)
+        finish_workflow_process(
+            runtime_store,
+            process_id,
+            exit_code=exit_code,
+            error=(
+                {"message": "Workflow process terminated during supervisor close"}
+                if forced
+                else None
+            ),
+        )
+        forget_runtime_event_channel(process_id)

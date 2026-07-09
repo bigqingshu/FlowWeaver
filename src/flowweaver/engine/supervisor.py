@@ -39,6 +39,9 @@ from flowweaver.engine.supervisor_process_launch import (
 )
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
 from flowweaver.engine.supervisor_workflow_processes import (
+    close_workflow_children as _close_workflow_children,
+)
+from flowweaver.engine.supervisor_workflow_processes import (
     finish_workflow_process as _finish_workflow_process,
 )
 from flowweaver.engine.supervisor_workflow_processes import (
@@ -164,31 +167,15 @@ class Supervisor:
         if self._maintenance_thread is not None:
             self._maintenance_thread.join(timeout=2)
             self._maintenance_thread = None
-        for process_id, child in list(self._children.items()):
-            forced = False
-            if child.poll() is None:
-                forced = True
-                terminate_child_process(
-                    child,
-                    graceful_timeout_seconds=(
-                        self._config.workflow_process_cancel_grace_seconds
-                    ),
-                )
-            self._drain_runtime_events_for_process(process_id)
-            exit_code = child.returncode if child.returncode is not None else 1
-            if forced and exit_code == 0:
-                exit_code = 1
-            self._children.pop(process_id, None)
-            self._finish_workflow_process(
-                process_id,
-                exit_code=exit_code,
-                error=(
-                    {"message": "Workflow process terminated during supervisor close"}
-                    if forced
-                    else None
-                ),
-            )
-            self._forget_runtime_event_channel(process_id)
+        _close_workflow_children(
+            self._runtime_store,
+            self._children,
+            graceful_timeout_seconds=(
+                self._config.workflow_process_cancel_grace_seconds
+            ),
+            drain_runtime_events_for_process=self._drain_runtime_events_for_process,
+            forget_runtime_event_channel=self._forget_runtime_event_channel,
+        )
         for executor_id, child in list(self._executor_children.items()):
             if child.poll() is None:
                 terminate_child_process(child, graceful_timeout_seconds=2)
