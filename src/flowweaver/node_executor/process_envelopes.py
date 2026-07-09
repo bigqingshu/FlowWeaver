@@ -4,10 +4,12 @@ from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
+    NodeTaskCompletedPayload,
+    NodeTaskFailedPayload,
     NodeTaskHeartbeatPayload,
     NodeTaskProgressPayload,
 )
-from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
 def ready_envelope(executor_id: str) -> IPCEnvelope:
@@ -68,4 +70,57 @@ def task_progress_envelope(
             current_stage=current_stage,
             metrics=metrics,
         ).model_dump(mode="json"),
+    )
+
+
+def task_accepted_envelope(
+    executor_id: str,
+    task: NodeTaskModel,
+    *,
+    correlation_id: str,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_ACCEPTED,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        correlation_id=correlation_id,
+        payload={
+            "executor_id": executor_id,
+            "task_id": task.task_id,
+            "node_run_id": task.node_run_id,
+        },
+    )
+
+
+def task_failed_envelope(
+    task: NodeTaskModel,
+    *,
+    result: NodeTaskResultModel,
+    error_type: str,
+    correlation_id: str,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_FAILED,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        correlation_id=correlation_id,
+        payload=NodeTaskFailedPayload(
+            result=result,
+            error_type=error_type,
+        ).model_dump(mode="json"),
+    )
+
+
+def task_completed_envelope(
+    task: NodeTaskModel,
+    *,
+    result: NodeTaskResultModel,
+    correlation_id: str,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_COMPLETED,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        correlation_id=correlation_id,
+        payload=NodeTaskCompletedPayload(result=result).model_dump(mode="json"),
     )

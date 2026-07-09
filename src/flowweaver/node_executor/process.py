@@ -20,6 +20,15 @@ from flowweaver.node_executor.process_envelopes import (
     ready_envelope as _ready_envelope,
 )
 from flowweaver.node_executor.process_envelopes import (
+    task_accepted_envelope as _task_accepted_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
+    task_completed_envelope as _task_completed_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
+    task_failed_envelope as _task_failed_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
     task_heartbeat_envelope as _task_heartbeat_envelope,
 )
 from flowweaver.node_executor.process_envelopes import (
@@ -41,8 +50,6 @@ from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
     NodeTaskCancelRequestPayload,
-    NodeTaskCompletedPayload,
-    NodeTaskFailedPayload,
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
@@ -157,16 +164,10 @@ class NodeExecutorProcess:
                 cancel_token
             )
         self._pending_task_events = []
-        accepted = IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_ACCEPTED,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        accepted = _task_accepted_envelope(
+            self.executor_id,
+            task,
             correlation_id=envelope.message_id,
-            payload={
-                "executor_id": self.executor_id,
-                "task_id": task.task_id,
-                "node_run_id": task.node_run_id,
-            },
         )
         accepted_events = self._emit_or_return(accepted)
         try:
@@ -174,19 +175,15 @@ class NodeExecutorProcess:
             task_events = tuple(self._pending_task_events)
         except Exception as exc:
             task_events = tuple(self._pending_task_events)
-            failed = IPCEnvelope(
-                message_type=IPCMessageType.NODE_TASK_FAILED,
-                workflow_run_id=task.workflow_run_id,
-                node_run_id=task.node_run_id,
+            failed = _task_failed_envelope(
+                task,
+                result=_failed_task_result(
+                    task,
+                    executor_id=self.executor_id,
+                    error=exc,
+                ),
+                error_type=type(exc).__name__,
                 correlation_id=envelope.message_id,
-                payload=NodeTaskFailedPayload(
-                    result=_failed_task_result(
-                        task,
-                        executor_id=self.executor_id,
-                        error=exc,
-                    ),
-                    error_type=type(exc).__name__,
-                ).model_dump(mode="json"),
             )
             return (*accepted_events, *task_events, failed)
         finally:
@@ -196,12 +193,10 @@ class NodeExecutorProcess:
                 self._cancel_tokens.pop(task.task_id, None)
                 self._execution_contexts.pop(task.task_id, None)
             self._pending_task_events = []
-        completed = IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_COMPLETED,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        completed = _task_completed_envelope(
+            task,
+            result=result,
             correlation_id=envelope.message_id,
-            payload=NodeTaskCompletedPayload(result=result).model_dump(mode="json"),
         )
         return (*accepted_events, *task_events, completed)
 
