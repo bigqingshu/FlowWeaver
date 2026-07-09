@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
-from flowweaver.nodes.value_sources import ValueSource
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
+from flowweaver.nodes.value_sources import ValueSource, ValueSourceError
+from flowweaver.protocols.table_ref import TableRefModel
+
+_NodeValidationError = BuiltinTableNodeValidationError
 
 
 def replace_text_value(
@@ -53,6 +61,44 @@ def replace_text_value(
         count=count,
         flags=re.IGNORECASE,
     )
+
+
+def replace_text_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    target_field: str,
+    match_mode: str,
+    match_source: ValueSource,
+    replace_source: ValueSource,
+    replace_mode: str,
+    case_sensitive: bool,
+    replace_count: int,
+    skip_empty_match_value: bool,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        output_rows: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                output_rows.append(
+                    row
+                    | {
+                        target_field: replace_text_value(
+                            row.get(target_field),
+                            row=row,
+                            match_mode=match_mode,
+                            match_source=match_source,
+                            replace_source=replace_source,
+                            replace_mode=replace_mode,
+                            case_sensitive=case_sensitive,
+                            replace_count=replace_count,
+                            skip_empty_match_value=skip_empty_match_value,
+                        )
+                    }
+                )
+            except (ValueSourceError, re.error) as exc:
+                raise _NodeValidationError(str(exc)) from exc
+        yield output_rows
 
 
 def _text_cell_matches(

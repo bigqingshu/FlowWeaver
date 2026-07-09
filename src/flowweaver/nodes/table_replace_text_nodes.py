@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import re
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import REPLACE_TEXT_NODE_TYPE
 from flowweaver.nodes.table_node_config import (
     bool_config as _bool_config,
@@ -28,12 +25,11 @@ from flowweaver.nodes.table_node_io import (
 )
 from flowweaver.nodes.table_ops import has_field
 from flowweaver.nodes.table_replace_text_helpers import (
-    replace_text_value as _replace_text_value,
+    replace_text_output_batches as _replace_text_output_batches,
 )
 from flowweaver.nodes.table_value_source_config import (
     value_source_config as _value_source_config,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -109,34 +105,21 @@ class ReplaceTextNodeHandler:
             fallback_key="replace_value",
         )
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    try:
-                        output_rows.append(
-                            row | {
-                                target_field: _replace_text_value(
-                                    row.get(target_field),
-                                    row=row,
-                                    match_mode=match_mode,
-                                    match_source=match_source,
-                                    replace_source=replace_source,
-                                    replace_mode=replace_mode,
-                                    case_sensitive=case_sensitive,
-                                    replace_count=replace_count,
-                                    skip_empty_match_value=skip_empty_match_value,
-                                )
-                            }
-                        )
-                    except (ValueSourceError, re.error) as exc:
-                        raise _NodeValidationError(str(exc)) from exc
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=input_ref.schema,
-            row_batches=output_batches(),
+            row_batches=_replace_text_output_batches(
+                context,
+                input_ref,
+                target_field=target_field,
+                match_mode=match_mode,
+                match_source=match_source,
+                replace_source=replace_source,
+                replace_mode=replace_mode,
+                case_sensitive=case_sensitive,
+                replace_count=replace_count,
+                skip_empty_match_value=skip_empty_match_value,
+            ),
         )
