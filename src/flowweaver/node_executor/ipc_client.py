@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
@@ -14,6 +13,21 @@ from flowweaver.node_executor.ipc_client_messages import (
     cancel_request_envelope,
     ipc_failure_result,
     missing_result,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    child_environment as _child_environment,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    read_response_from_child as _read_response_from_child,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    src_path as _src_path,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    subprocess_failure_error as _subprocess_failure_error,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    write_envelope_to_child as _write_envelope_to_child,
 )
 from flowweaver.node_executor.process import NodeExecutorProcess
 from flowweaver.protocols.enums import IPCMessageType
@@ -188,30 +202,14 @@ class SubprocessNodeExecutorIpcClient:
         raise RuntimeError("Node executor subprocess did not become ready")
 
     def _write_envelope(self, envelope: IPCEnvelope) -> bool:
-        if self._closed or self._child.poll() is not None:
-            return False
-        stdin = self._child.stdin
-        if stdin is None or stdin.closed:
-            return False
-        try:
-            stdin.write(envelope.model_dump_json())
-            stdin.write("\n")
-            stdin.flush()
-        except OSError:
-            return False
-        return True
+        return _write_envelope_to_child(
+            self._child,
+            closed=self._closed,
+            envelope=envelope,
+        )
 
     def _read_response(self) -> IPCEnvelope | None:
-        stdout = self._child.stdout
-        if stdout is None or stdout.closed:
-            return None
-        line = stdout.readline()
-        if not line:
-            return None
-        try:
-            return IPCEnvelope.model_validate_json(line)
-        except ValueError:
-            return None
+        return _read_response_from_child(self._child)
 
     def _emit_event(self, task: NodeTaskModel, envelope: IPCEnvelope) -> None:
         if self._event_handler is not None:
@@ -225,48 +223,4 @@ class SubprocessNodeExecutorIpcClient:
         )
 
     def _failure_error(self) -> dict[str, Any]:
-        exit_code = self._child.poll()
-        if exit_code is None:
-            try:
-                exit_code = self._child.wait(timeout=0.2)
-            except subprocess.TimeoutExpired:
-                return {
-                    "message": "Node executor IPC response did not include a result"
-                }
-        if exit_code is None:
-            return {"message": "Node executor IPC response did not include a result"}
-        error: dict[str, Any] = {
-            "message": "Node executor subprocess exited before completing task",
-            "exit_code": exit_code,
-        }
-        stderr = self._read_stderr_tail()
-        if stderr:
-            error["stderr"] = stderr
-        return error
-
-    def _read_stderr_tail(self) -> str:
-        if self._child.poll() is None:
-            return ""
-        stderr = self._child.stderr
-        if stderr is None or stderr.closed:
-            return ""
-        try:
-            output = stderr.read().strip()
-        except OSError:
-            return ""
-        return output[-2000:]
-
-def _src_path() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _child_environment(base_env: Mapping[str, str] | None = None) -> dict[str, str]:
-    env = dict(base_env) if base_env is not None else os.environ.copy()
-    src_path = _src_path()
-    existing_pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        str(src_path)
-        if not existing_pythonpath
-        else f"{src_path}{os.pathsep}{existing_pythonpath}"
-    )
-    return env
+        return _subprocess_failure_error(self._child)
