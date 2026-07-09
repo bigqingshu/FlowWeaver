@@ -11,12 +11,7 @@ public partial class MainWindowViewModel
     {
         if (SelectedWorkflowDefinitionNode is null)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.node_config",
-                UiNotificationKind.Error);
+            ApplySelectedNodeConfigDraftMissingSelectionFailure();
             return;
         }
 
@@ -25,12 +20,7 @@ public partial class MainWindowViewModel
             SelectedNodeConfigEditableInputFields);
         if (!configResult.Succeeded)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                FormatNodeConfigApplyErrors(configResult);
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.node_config",
-                UiNotificationKind.Error);
+            ApplySelectedNodeConfigDraftConfigBuildFailure(configResult);
             return;
         }
 
@@ -41,11 +31,7 @@ public partial class MainWindowViewModel
             config.RootElement);
         if (!patchResult.Succeeded)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
-            WorkflowDefinitionValidationErrorMessage = patchResult.Warning;
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.node_config",
-                UiNotificationKind.Error);
+            ApplySelectedNodeConfigDraftPatchFailure(patchResult);
             return;
         }
 
