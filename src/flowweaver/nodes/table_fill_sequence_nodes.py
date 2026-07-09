@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import FILL_SEQUENCE_NODE_TYPE
 from flowweaver.nodes.table_fill_sequence_output import (
-    fill_sequence_output_schema as _fill_sequence_output_schema,
+    fill_sequence_output_batches as _fill_sequence_output_batches,
 )
 from flowweaver.nodes.table_fill_sequence_output import (
-    format_sequence_value as _format_sequence_value,
-)
-from flowweaver.nodes.table_fill_sequence_selection import (
-    fill_sequence_selected_index as _fill_sequence_selected_index,
+    fill_sequence_output_schema as _fill_sequence_output_schema,
 )
 from flowweaver.nodes.table_fill_sequence_selection import (
     fill_sequence_selector as _fill_sequence_selector,
 )
-from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
 from flowweaver.nodes.table_node_config import (
     enum_config as _enum_config,
 )
@@ -113,45 +107,21 @@ class FillSequenceNodeHandler:
             formatted=bool(prefix or suffix or zero_pad),
         )
 
-        def output_batches():
-            row_number = 1
-            sequence_index = 0
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    selected_index = _fill_sequence_selected_index(
-                        row,
-                        row_number=row_number,
-                        selector=selector,
-                    )
-                    should_fill = selected_index is not None and (
-                        overwrite_rule == "all"
-                        or _is_empty_cell(row.get(target_field))
-                    )
-                    if should_fill:
-                        assert selected_index is not None
-                        if selected_index <= 0:
-                            sequence_index += 1
-                            selected_index = sequence_index
-                        output_rows.append(
-                            dict(row) | {
-                                target_field: _format_sequence_value(
-                                    start_value + (selected_index - 1) * step,
-                                    zero_pad=zero_pad,
-                                    prefix=prefix,
-                                    suffix=suffix,
-                                )
-                            }
-                        )
-                    else:
-                        output_rows.append(dict(row))
-                    row_number += 1
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_fill_sequence_output_batches(
+                context,
+                input_ref,
+                target_field=target_field,
+                selector=selector,
+                start_value=start_value,
+                step=step,
+                overwrite_rule=overwrite_rule,
+                zero_pad=zero_pad,
+                prefix=prefix,
+                suffix=suffix,
+            ),
         )
