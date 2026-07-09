@@ -7,7 +7,6 @@ from collections.abc import Callable
 from threading import Lock, Thread
 from typing import TextIO
 
-from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
 from flowweaver.node_executor.builtin_fault import (
     BUILTIN_FAULT_NODE_TYPES,
@@ -15,7 +14,16 @@ from flowweaver.node_executor.builtin_fault import (
 )
 from flowweaver.node_executor.cancel_token import CancelToken, NodeExecutionContext
 from flowweaver.node_executor.fake import FakeNodeExecutor
-from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
+from flowweaver.node_executor.process_helpers import (
+    failed_task_result as _failed_task_result,
+)
+from flowweaver.node_executor.process_helpers import (
+    write_envelope as _write_envelope,
+)
+from flowweaver.node_executor.process_helpers import (
+    write_process_error as _write_process_error,
+)
+from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
     IPCEnvelope,
@@ -26,7 +34,7 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskProgressPayload,
     NodeTaskSubmitPayload,
 )
-from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.node_task import NodeTaskModel
 
 EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE = 2
 
@@ -303,40 +311,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--executor-id", required=True)
     args = parser.parse_args(argv)
     return run_node_executor_process(executor_id=args.executor_id)
-
-
-def _write_envelope(stream: TextIO, envelope: IPCEnvelope) -> None:
-    stream.write(envelope.model_dump_json())
-    stream.write("\n")
-    stream.flush()
-
-
-def _write_process_error(stream: TextIO, error_code: str, error: Exception) -> None:
-    stream.write(f"{error_code}: {type(error).__name__}: {error}\n")
-    stream.flush()
-
-
-def _failed_task_result(
-    task: NodeTaskModel,
-    *,
-    executor_id: str,
-    error: Exception,
-) -> NodeTaskResultModel:
-    now = utc_now()
-    return NodeTaskResultModel(
-        task_id=task.task_id,
-        node_run_id=task.node_run_id,
-        attempt=task.attempt,
-        executor_id=executor_id,
-        process_generation=task.process_generation,
-        status=NodeResultStatus.FAILED,
-        error={
-            "message": str(error),
-            "error_type": type(error).__name__,
-        },
-        started_at=now,
-        finished_at=now,
-    )
 
 
 def _exit() -> None:
