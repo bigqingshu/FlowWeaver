@@ -70,15 +70,6 @@ from flowweaver.nodes.default_row_node_schemas import (
     _unpivot_rows_schema as _unpivot_rows_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
-    _fill_cells_schema as _fill_cells_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
-    _fill_range_schema as _fill_range_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
-    _fill_sequence_schema as _fill_sequence_schema,
-)
-from flowweaver.nodes.default_table_basic_node_schemas import (
     _filter_rows_schema as _filter_rows_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
@@ -98,6 +89,15 @@ from flowweaver.nodes.default_table_column_node_schemas import (
 )
 from flowweaver.nodes.default_table_column_node_schemas import (
     _reorder_columns_schema as _reorder_columns_schema,
+)
+from flowweaver.nodes.default_table_fill_node_schemas import (
+    _fill_cells_schema as _fill_cells_schema,
+)
+from flowweaver.nodes.default_table_fill_node_schemas import (
+    _fill_range_schema as _fill_range_schema,
+)
+from flowweaver.nodes.default_table_fill_node_schemas import (
+    _fill_sequence_schema as _fill_sequence_schema,
 )
 from flowweaver.nodes.default_text_node_schemas import (
     _extract_text_schema as _extract_text_schema,
