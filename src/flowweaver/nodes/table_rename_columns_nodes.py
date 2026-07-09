@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import RENAME_COLUMNS_NODE_TYPE
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
-from flowweaver.nodes.table_node_handlers import (
-    BuiltinTableNodeContext,
-    BuiltinTableNodeValidationError,
-)
+from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
 from flowweaver.nodes.table_node_io import (
     primary_input_ref as _primary_input_ref,
 )
@@ -18,6 +13,9 @@ from flowweaver.nodes.table_rename_columns_helpers import (
     rename_columns_apply_duplicate_policy as _rename_columns_apply_duplicate_policy,
 )
 from flowweaver.nodes.table_rename_columns_helpers import (
+    rename_columns_output_batches as _rename_columns_output_batches,
+)
+from flowweaver.nodes.table_rename_columns_helpers import (
     rename_columns_proposed_names as _rename_columns_proposed_names,
 )
 from flowweaver.nodes.table_rename_columns_helpers import (
@@ -25,8 +23,6 @@ from flowweaver.nodes.table_rename_columns_helpers import (
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
-
-_NodeValidationError = BuiltinTableNodeValidationError
 
 
 class RenameColumnsNodeHandler:
@@ -64,24 +60,16 @@ class RenameColumnsNodeHandler:
             for field, output_name in zip(input_ref.schema, output_names, strict=True)
         }
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    output_rows.append(
-                        {
-                            source_to_output[field.name]: row.get(field.name)
-                            for field in input_ref.schema
-                        }
-                    )
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=schema,
-            row_batches=output_batches(),
+            row_batches=_rename_columns_output_batches(
+                context,
+                input_ref,
+                source_to_output=source_to_output,
+            ),
         )
 
 

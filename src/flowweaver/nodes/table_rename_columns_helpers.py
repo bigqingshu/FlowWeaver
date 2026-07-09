@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from collections.abc import Iterator
+from typing import Any
+
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
 from flowweaver.nodes.table_rename_columns_config import (
     rename_columns_proposed_names as rename_columns_proposed_names,
 )
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -60,3 +66,21 @@ def rename_columns_schema(
             zip(schema, output_names, strict=True)
         )
     ]
+
+
+def rename_columns_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    source_to_output: dict[str, str],
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        output_rows: list[dict[str, Any]] = []
+        for row in rows:
+            output_rows.append(
+                {
+                    source_to_output[field.name]: row.get(field.name)
+                    for field in input_ref.schema
+                }
+            )
+        yield output_rows
