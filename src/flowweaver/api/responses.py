@@ -6,20 +6,9 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from flowweaver.api.runtime_model_responses import runtime_model_to_jsonable
 from flowweaver.api.table_ref_responses import table_ref_to_jsonable
 from flowweaver.common.ids import new_id
-from flowweaver.engine.runtime_models import (
-    LoopIterationRun,
-    LoopIterationTableRef,
-    LoopRun,
-    NodeRun,
-    RuntimeEventLog,
-    SharedPublication,
-    WorkflowDefinition,
-    WorkflowProcess,
-    WorkflowRevision,
-    WorkflowRun,
-)
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -71,161 +60,9 @@ def _to_jsonable(value: Any) -> Any:
         return {key: _to_jsonable(item) for key, item in value.items()}
     if isinstance(value, datetime):
         return value.isoformat()
-    if isinstance(value, WorkflowDefinition):
-        return {
-            "workflow_id": value.workflow_id,
-            "name": value.name,
-            "revision_id": value.revision_id,
-            "version": value.version,
-            "definition_hash": value.definition_hash,
-            "definition": value.definition,
-            "status": value.status,
-            "created_at": value.created_at.isoformat(),
-            "updated_at": value.updated_at.isoformat(),
-        }
-    if isinstance(value, WorkflowRevision):
-        return {
-            "revision_id": value.revision_id,
-            "workflow_id": value.workflow_id,
-            "version": value.version,
-            "definition_hash": value.definition_hash,
-            "definition": value.definition,
-            "created_at": value.created_at.isoformat(),
-            "created_by": value.created_by,
-        }
-    if isinstance(value, WorkflowRun):
-        return {
-            "workflow_run_id": value.workflow_run_id,
-            "workflow_id": value.workflow_id,
-            "revision_id": value.revision_id,
-            "workflow_version": value.workflow_version,
-            "definition_hash": value.definition_hash,
-            "status": value.status,
-            "state_version": value.state_version,
-            "owner_process_id": value.owner_process_id,
-            "process_generation": value.process_generation,
-            "fencing_token": value.fencing_token,
-            "input_snapshot_id": value.input_snapshot_id,
-            "run_mode": value.run_mode,
-            "trigger_source": value.trigger_source,
-            "target_node_instance_id": value.target_node_instance_id,
-            "started_at": value.started_at.isoformat() if value.started_at else None,
-            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
-            "completion_reason": value.completion_reason,
-            "error": value.error,
-        }
-    if isinstance(value, WorkflowProcess):
-        return {
-            "process_id": value.process_id,
-            "workflow_run_id": value.workflow_run_id,
-            "os_pid": value.os_pid,
-            "process_generation": value.process_generation,
-            "fencing_token": value.fencing_token,
-            "status": value.status,
-            "started_at": value.started_at.isoformat(),
-            "last_heartbeat_at": (
-                value.last_heartbeat_at.isoformat() if value.last_heartbeat_at else None
-            ),
-            "cancel_requested_at": (
-                value.cancel_requested_at.isoformat()
-                if value.cancel_requested_at
-                else None
-            ),
-            "exited_at": value.exited_at.isoformat() if value.exited_at else None,
-            "exit_code": value.exit_code,
-            "error": value.error,
-        }
-    if isinstance(value, NodeRun):
-        return {
-            "node_run_id": value.node_run_id,
-            "workflow_run_id": value.workflow_run_id,
-            "node_instance_id": value.node_instance_id,
-            "node_type": value.node_type,
-            "status": value.status,
-            "state_version": value.state_version,
-            "executor_id": value.executor_id,
-            "progress": value.progress,
-            "current_stage": value.current_stage,
-            "attempt": value.attempt,
-            "started_at": value.started_at.isoformat() if value.started_at else None,
-            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
-            "last_heartbeat": (
-                value.last_heartbeat.isoformat() if value.last_heartbeat else None
-            ),
-            "error": value.error,
-        }
-    if isinstance(value, LoopRun):
-        return {
-            "loop_run_id": value.loop_run_id,
-            "workflow_run_id": value.workflow_run_id,
-            "loop_id": value.loop_id,
-            "start_node_instance_id": value.start_node_instance_id,
-            "judge_node_instance_id": value.judge_node_instance_id,
-            "status": value.status,
-            "state_version": value.state_version,
-            "current_iteration": value.current_iteration,
-            "max_iterations": value.max_iterations,
-            "exit_reason": value.exit_reason,
-            "started_at": value.started_at.isoformat() if value.started_at else None,
-            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
-            "error": value.error,
-            "created_at": value.created_at.isoformat(),
-        }
-    if isinstance(value, LoopIterationRun):
-        return {
-            "loop_iteration_id": value.loop_iteration_id,
-            "loop_run_id": value.loop_run_id,
-            "iteration_index": value.iteration_index,
-            "status": value.status,
-            "state_version": value.state_version,
-            "input_table_ref_id": value.input_table_ref_id,
-            "input_selector": value.input_selector,
-            "output_table_ref_id": value.output_table_ref_id,
-            "failed_node_run_id": value.failed_node_run_id,
-            "started_at": value.started_at.isoformat() if value.started_at else None,
-            "finished_at": value.finished_at.isoformat() if value.finished_at else None,
-            "error": value.error,
-            "created_at": value.created_at.isoformat(),
-        }
-    if isinstance(value, LoopIterationTableRef):
-        return {
-            "loop_iteration_id": value.loop_iteration_id,
-            "table_ref_id": value.table_ref_id,
-            "role": value.role,
-            "created_at": value.created_at.isoformat(),
-        }
-    if isinstance(value, RuntimeEventLog):
-        return {
-            "event_id": value.event_id,
-            "sequence_number": value.sequence_number,
-            "event_version": value.event_version,
-            "event_type": value.event_type,
-            "timestamp": value.timestamp.isoformat(),
-            "workflow_run_id": value.workflow_run_id,
-            "node_run_id": value.node_run_id,
-            "payload": value.payload,
-        }
+    runtime_model_payload = runtime_model_to_jsonable(value)
+    if runtime_model_payload is not None:
+        return runtime_model_payload
     if isinstance(value, TableRefModel):
         return table_ref_to_jsonable(value)
-    if isinstance(value, SharedPublication):
-        return {
-            "publication_id": value.publication_id,
-            "share_name": value.share_name,
-            "publication_version": value.publication_version,
-            "producer_workflow_id": value.producer_workflow_id,
-            "producer_run_id": value.producer_run_id,
-            "status": value.status,
-            "input_snapshot_id": value.input_snapshot_id,
-            "retention_policy": value.retention_policy,
-            "created_at": value.created_at.isoformat(),
-            "members": [
-                {
-                    "publication_id": member.publication_id,
-                    "export_name": member.export_name,
-                    "table_ref_id": member.table_ref_id,
-                    "exact_table_version": member.exact_table_version,
-                }
-                for member in value.members
-            ],
-        }
     return value
