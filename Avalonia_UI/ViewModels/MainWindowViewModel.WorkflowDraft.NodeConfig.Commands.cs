@@ -35,11 +35,6 @@ public partial class MainWindowViewModel
             return;
         }
 
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        WorkflowDefinitionValidationMessage = T("definition.node_config_applied");
-        WorkflowDefinitionValidationErrorMessage = null;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Success);
+        ApplySelectedNodeConfigDraftSuccess(patchResult);
     }
 }
