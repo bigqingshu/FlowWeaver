@@ -15,7 +15,9 @@ from flowweaver.nodes.table_node_io import (
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
-from flowweaver.nodes.table_ops import has_field, reorder_fields
+from flowweaver.nodes.table_reorder_columns_helpers import (
+    reorder_columns_output_plan as _reorder_columns_output_plan,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -54,38 +56,12 @@ class ReorderColumnsNodeHandler:
             allowed={"append", "drop", "error"},
             node_type=self.node_type,
         )
-        missing_columns = [
-            column
-            for column in order
-            if not has_field(input_ref.schema, column)
-        ]
-        if missing_columns and missing_policy == "error":
-            raise _NodeValidationError(
-                f"Fields do not exist: {', '.join(missing_columns)}"
-            )
-        order = [
-            column
-            for column in order
-            if has_field(input_ref.schema, column)
-        ]
-        input_field_names = [field.name for field in input_ref.schema]
-        unlisted_columns = [
-            column
-            for column in input_field_names
-            if column not in order
-        ]
-        if unlisted_columns and unlisted_policy == "error":
-            raise _NodeValidationError(
-                f"Fields are not listed: {', '.join(unlisted_columns)}"
-            )
-        schema = reorder_fields(
+        schema, output_columns = _reorder_columns_output_plan(
             input_ref.schema,
-            order,
-            include_unlisted=unlisted_policy == "append",
+            order=order,
+            missing_policy=missing_policy,
+            unlisted_policy=unlisted_policy,
         )
-        if not schema:
-            raise _NodeValidationError("ReorderColumnsNode output schema is empty")
-        output_columns = [field.name for field in schema]
 
         def output_batches():
             for rows in context.iter_row_batches(input_ref):
