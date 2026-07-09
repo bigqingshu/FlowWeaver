@@ -34,6 +34,9 @@ from flowweaver.engine.supervisor_paths import (
 from flowweaver.engine.supervisor_paths import (
     workflow_process_runtime_event_path as _workflow_process_runtime_event_path,
 )
+from flowweaver.engine.supervisor_process_launch import (
+    launch_child_process as _launch_child_process,
+)
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
 
 
@@ -78,20 +81,16 @@ class Supervisor:
             runtime_event_path=runtime_event_path,
         )
         stdout_path, stderr_path = self._workflow_process_log_paths(workflow_run_id)
-        stdout_file = stdout_path.open("ab")
-        stderr_file = stderr_path.open("ab")
         try:
-            child = subprocess.Popen(
+            child = _launch_child_process(
                 command,
                 cwd=Path(__file__).resolve().parents[2],
                 env=self._child_environment(),
                 stdin=subprocess.DEVNULL,
-                stdout=stdout_file,
-                stderr=stderr_file,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
             )
         except Exception as exc:
-            stdout_file.close()
-            stderr_file.close()
             self._runtime_store.mark_workflow_process_exited(
                 process.process_id,
                 exit_code=1,
@@ -103,11 +102,6 @@ class Supervisor:
             )
             self._runtime_events.forget(process.process_id)
             raise
-        finally:
-            if not stdout_file.closed:
-                stdout_file.close()
-            if not stderr_file.closed:
-                stderr_file.close()
         self._children[process.process_id] = child
         self._runtime_store.update_workflow_process_pid(process.process_id, child.pid)
         return process.process_id
@@ -121,20 +115,14 @@ class Supervisor:
             executor_id=executor_id,
         )
         stdout_path, stderr_path = self._executor_process_log_paths(executor_id)
-        stdout_file = stdout_path.open("ab")
-        stderr_file = stderr_path.open("ab")
-        try:
-            child = subprocess.Popen(
-                command,
-                cwd=Path(__file__).resolve().parents[2],
-                env=self._child_environment(),
-                stdin=subprocess.PIPE,
-                stdout=stdout_file,
-                stderr=stderr_file,
-            )
-        finally:
-            stdout_file.close()
-            stderr_file.close()
+        child = _launch_child_process(
+            command,
+            cwd=Path(__file__).resolve().parents[2],
+            env=self._child_environment(),
+            stdin=subprocess.PIPE,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        )
         self._executor_children[executor_id] = child
         return executor_id
 
