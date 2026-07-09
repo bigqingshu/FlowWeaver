@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -14,29 +12,22 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import TableLeaseRecord
 from flowweaver.engine.immediate_session import immediate_session
+from flowweaver.engine.table_lease_models import (
+    LeaseAcquireResult as LeaseAcquireResult,
+)
+from flowweaver.engine.table_lease_models import (
+    TableLease as TableLease,
+)
+from flowweaver.engine.table_lease_models import (
+    datetime_to_text as _datetime_to_text,
+)
+from flowweaver.engine.table_lease_models import (
+    json_dumps as _json_dumps,
+)
+from flowweaver.engine.table_lease_models import (
+    lease_from_record as _lease_from_record,
+)
 from flowweaver.protocols.enums import TableLeaseStatus, TableLeaseType
-
-
-@dataclass(frozen=True)
-class TableLease:
-    lease_id: str
-    table_ref_id: str
-    lease_type: str
-    owner_id: str
-    status: str
-    acquired_at: datetime
-    last_heartbeat_at: datetime
-    expires_at: datetime
-    released_at: datetime | None
-    metadata: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class LeaseAcquireResult:
-    granted: bool
-    lease: TableLease | None
-    conflict_lease_ids: list[str]
-    reason: str | None = None
 
 
 class TableLeaseManager:
@@ -204,34 +195,3 @@ def _conflicts_for(
             if record.lease_type == TableLeaseType.WRITE.value
         ]
     return active_leases
-
-
-def _lease_from_record(record: TableLeaseRecord) -> TableLease:
-    return TableLease(
-        lease_id=record.lease_id,
-        table_ref_id=record.table_ref_id,
-        lease_type=record.lease_type,
-        owner_id=record.owner_id,
-        status=record.status,
-        acquired_at=_datetime_from_text(record.acquired_at),
-        last_heartbeat_at=_datetime_from_text(record.last_heartbeat_at),
-        expires_at=_datetime_from_text(record.expires_at),
-        released_at=_optional_datetime_from_text(record.released_at),
-        metadata=json.loads(record.metadata_json),
-    )
-
-
-def _json_dumps(value: dict[str, Any]) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
-def _datetime_to_text(value: datetime) -> str:
-    return value.isoformat()
-
-
-def _datetime_from_text(value: str) -> datetime:
-    return datetime.fromisoformat(value)
-
-
-def _optional_datetime_from_text(value: str | None) -> datetime | None:
-    return datetime.fromisoformat(value) if value is not None else None
