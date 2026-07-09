@@ -7,21 +7,6 @@ public partial class MainWindowViewModel
     private int runtimeEventLogLoadVersion;
 
     [ObservableProperty]
-    private string logWorkflowRunIdFilter = string.Empty;
-
-    [ObservableProperty]
-    private string logNodeRunIdFilter = string.Empty;
-
-    [ObservableProperty]
-    private string logEventTypeFilter = string.Empty;
-
-    [ObservableProperty]
-    private string runtimeEventAfterSequenceNumberFilter = string.Empty;
-
-    [ObservableProperty]
-    private string runtimeEventLimitFilter = "100";
-
-    [ObservableProperty]
     private bool isLoadingRuntimeEventLog;
 
     [ObservableProperty]
