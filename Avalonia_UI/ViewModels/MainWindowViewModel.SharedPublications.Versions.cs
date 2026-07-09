@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -23,9 +22,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? sharedPublicationVersionErrorMessage;
-
-    public ObservableCollection<SharedPublicationListItemViewModel> SharedPublicationVersions { get; } =
-        new();
 
     public bool HasSharedPublicationVersionError =>
         !string.IsNullOrWhiteSpace(SharedPublicationVersionErrorMessage);
