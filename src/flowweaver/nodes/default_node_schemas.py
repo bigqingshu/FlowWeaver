@@ -42,7 +42,7 @@ from flowweaver.nodes.default_numeric_datetime_node_schemas import (
 from flowweaver.nodes.default_numeric_datetime_node_schemas import (
     _parse_datetime_schema as _parse_datetime_schema,
 )
-from flowweaver.nodes.default_resource_node_schemas import (
+from flowweaver.nodes.default_plugin_resource_node_schemas import (
     _plugin_node_schema as _plugin_node_schema,
 )
 from flowweaver.nodes.default_resource_node_schemas import (
