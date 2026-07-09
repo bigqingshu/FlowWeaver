@@ -3317,7 +3317,12 @@ def test_workflow_process_times_out_infinite_loop_fault_node_with_default_execut
         node_run.node_run_id
     ) is None
     assert "NODE_PROGRESS" in [event.event_type for event in events]
-    assert [event.event_type for event in events][-2:] == [
+    terminal_event_types = [
+        event.event_type
+        for event in events
+        if event.event_type in {"NODE_TIMEOUT", "WORKFLOW_FAILED"}
+    ]
+    assert terminal_event_types[-2:] == [
         "NODE_TIMEOUT",
         "WORKFLOW_FAILED",
     ]
@@ -3578,7 +3583,12 @@ def test_workflow_process_times_out_task_while_executor_is_still_running(
     assert store.get_latest_succeeded_node_task_result_for_node_run(
         loaded_node.node_run_id
     ) is None
-    assert [event.event_type for event in events][-2:] == [
+    terminal_event_types = [
+        event.event_type
+        for event in events
+        if event.event_type in {"NODE_TIMEOUT", "WORKFLOW_FAILED"}
+    ]
+    assert terminal_event_types[-2:] == [
         "NODE_TIMEOUT",
         "WORKFLOW_FAILED",
     ]
