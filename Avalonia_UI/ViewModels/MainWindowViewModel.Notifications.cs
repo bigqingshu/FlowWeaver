@@ -32,12 +32,6 @@ public partial class MainWindowViewModel
     private TimeSpan? notificationAutoDismissAfter;
 
     [ObservableProperty]
-    private bool hasNotificationCountdown;
-
-    [ObservableProperty]
-    private double notificationCountdownProgress;
-
-    [ObservableProperty]
     private int notificationOpenSequence;
 
     [ObservableProperty]
