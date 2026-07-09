@@ -12,6 +12,9 @@ from flowweaver.engine.runtime_table_connections import (
 from flowweaver.engine.runtime_table_connections import (
     validate_runtime_table_ref as _validate_runtime_table_ref,
 )
+from flowweaver.engine.runtime_table_rows import (
+    runtime_insert_rows_statement as _runtime_insert_rows_statement,
+)
 from flowweaver.engine.runtime_table_sql import (
     order_clause as _order_clause,
 )
@@ -36,7 +39,6 @@ from flowweaver.engine.runtime_table_sql import (
 from flowweaver.engine.table_provider_protocol import TableProvider as TableProvider
 from flowweaver.protocols.enums import (
     LifecycleStatus,
-    TableMutability,
     TableRole,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -159,38 +161,11 @@ class SQLiteRuntimeTableProvider:
         table_ref: TableRefModel,
         rows: Sequence[dict[str, Any]],
     ) -> None:
-        if not rows:
+        statement = _runtime_insert_rows_statement(table_ref, rows)
+        if statement is None:
             return
-        if (
-            table_ref.lifecycle_status != LifecycleStatus.STAGING
-            or table_ref.mutability != TableMutability.WORKING_MUTABLE
-        ):
-            raise ValueError("only STAGING working tables can be written")
-        _, table_name = _table_location(table_ref)
-        schema_columns = [field.name for field in table_ref.schema]
-        for row in rows:
-            unknown_columns = set(row) - set(schema_columns)
-            if unknown_columns:
-                raise ValueError(
-                    f"row contains columns not declared in schema: "
-                    f"{sorted(unknown_columns)}"
-                )
-        placeholders = ", ".join("?" for _ in schema_columns)
-        quoted_columns = ", ".join(
-            _quote_identifier(column) for column in schema_columns
-        )
-        values = [
-            [row.get(column) for column in schema_columns]
-            for row in rows
-        ]
         with self._connect(table_ref) as connection:
-            connection.executemany(
-                (
-                    f"INSERT INTO {_quote_identifier(table_name)} "
-                    f"({quoted_columns}) VALUES ({placeholders})"
-                ),
-                values,
-            )
+            connection.executemany(statement.sql, statement.values)
 
     def drop_table(self, table_ref: TableRefModel) -> None:
         _, table_name = _table_location(table_ref)
