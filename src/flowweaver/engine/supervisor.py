@@ -19,6 +19,9 @@ from flowweaver.engine.supervisor_commands import (
 from flowweaver.engine.supervisor_commands import (
     workflow_process_command as _workflow_process_command,
 )
+from flowweaver.engine.supervisor_executor_events import (
+    publish_executor_exited as _publish_executor_exited,
+)
 from flowweaver.engine.supervisor_paths import (
     child_environment as _child_environment,
 )
@@ -32,8 +35,6 @@ from flowweaver.engine.supervisor_paths import (
     workflow_process_runtime_event_path as _workflow_process_runtime_event_path,
 )
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
-from flowweaver.protocols.enums import EventType
-from flowweaver.protocols.events import EventModel
 
 
 class Supervisor:
@@ -198,7 +199,9 @@ class Supervisor:
             if child.poll() is None:
                 terminate_child_process(child, graceful_timeout_seconds=2)
             self._executor_children.pop(executor_id, None)
-            self._publish_executor_exited(
+            _publish_executor_exited(
+                event_router=self._event_router,
+                runtime_store=self._runtime_store,
                 executor_id=executor_id,
                 exit_code=child.returncode if child.returncode is not None else 1,
                 pid=child.pid,
@@ -265,7 +268,9 @@ class Supervisor:
             if exit_code is None:
                 continue
             self._executor_children.pop(executor_id, None)
-            self._publish_executor_exited(
+            _publish_executor_exited(
+                event_router=self._event_router,
+                runtime_store=self._runtime_store,
                 executor_id=executor_id,
                 exit_code=exit_code,
                 pid=child.pid,
@@ -341,24 +346,3 @@ class Supervisor:
                 reason="WORKFLOW_PROCESS_EXITED_ABNORMALLY",
             )
         return process
-
-    def _publish_executor_exited(
-        self,
-        *,
-        executor_id: str,
-        exit_code: int,
-        pid: int | None,
-    ) -> RuntimeEvent | None:
-        event = EventModel(
-            event_type=EventType.EXECUTOR_EXITED,
-            payload={
-                "executor_id": executor_id,
-                "exit_code": exit_code,
-                "pid": pid,
-                "abnormal": exit_code != 0,
-            },
-        )
-        if self._event_router is not None:
-            return self._event_router.publish_event(event)
-        self._runtime_store.append_runtime_event(event)
-        return None
