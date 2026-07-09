@@ -41,6 +41,9 @@ from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventCh
 from flowweaver.engine.supervisor_workflow_processes import (
     finish_workflow_process as _finish_workflow_process,
 )
+from flowweaver.engine.supervisor_workflow_processes import (
+    handle_lost_workflow_process as _handle_lost_workflow_process,
+)
 
 
 class Supervisor:
@@ -281,12 +284,14 @@ class Supervisor:
             starting_stale_before=starting_stale_before,
         )
         for process in lost:
-            self._drain_runtime_events_for_process(process.process_id)
-            self._children.pop(process.process_id, None)
-            self._forget_runtime_event_channel(process.process_id)
-            self._runtime_store.abort_workflow_run_for_process(
-                process.process_id,
-                reason="WORKFLOW_PROCESS_LOST",
+            _handle_lost_workflow_process(
+                self._runtime_store,
+                self._children,
+                process,
+                drain_runtime_events_for_process=(
+                    self._drain_runtime_events_for_process
+                ),
+                forget_runtime_event_channel=self._forget_runtime_event_channel,
             )
         return lost
 

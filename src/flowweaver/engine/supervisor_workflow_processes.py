@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+from collections.abc import Callable, MutableMapping
+
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
 
 
@@ -21,3 +24,20 @@ def finish_workflow_process(
             reason="WORKFLOW_PROCESS_EXITED_ABNORMALLY",
         )
     return process
+
+
+def handle_lost_workflow_process(
+    runtime_store: RuntimeStore,
+    children: MutableMapping[str, subprocess.Popen],
+    process: WorkflowProcess,
+    *,
+    drain_runtime_events_for_process: Callable[[str], object],
+    forget_runtime_event_channel: Callable[[str], None],
+) -> None:
+    drain_runtime_events_for_process(process.process_id)
+    children.pop(process.process_id, None)
+    forget_runtime_event_channel(process.process_id)
+    runtime_store.abort_workflow_run_for_process(
+        process.process_id,
+        reason="WORKFLOW_PROCESS_LOST",
+    )
