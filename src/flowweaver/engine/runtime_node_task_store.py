@@ -4,24 +4,18 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from flowweaver.engine import runtime_node_task_queries as _task_queries
 from flowweaver.engine import runtime_node_task_result_update as _result_update
 from flowweaver.engine import runtime_node_task_runtime_state as _runtime_state
-from flowweaver.engine.db_models import (
-    NodeTaskRecord,
-    NodeTaskResultRecord,
-)
 from flowweaver.engine.runtime_models import NodeRun
 from flowweaver.engine.runtime_node_task_record_mappers import (
-    _node_task_from_record,
-    _node_task_result_from_record,
     _node_task_result_to_record,
     _node_task_to_record,
 )
-from flowweaver.protocols.enums import NodeResultStatus, NodeRunStatus
+from flowweaver.protocols.enums import NodeRunStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 
@@ -35,10 +29,7 @@ class RuntimeNodeTaskStoreMixin:
 
     def get_node_task(self, task_id: str) -> NodeTaskModel | None:
         with self._session_factory() as session:
-            record = session.get(NodeTaskRecord, task_id)
-            if record is None:
-                return None
-            return _node_task_from_record(record)
+            return _task_queries.get_node_task_from_session(session, task_id)
 
     def update_node_task_runtime_state(
         self,
@@ -112,29 +103,21 @@ class RuntimeNodeTaskStoreMixin:
         result_id: str,
     ) -> NodeTaskResultModel | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(NodeTaskResultRecord)
-                .where(NodeTaskResultRecord.task_id == task_id)
-                .where(NodeTaskResultRecord.result_id == result_id)
+            return _task_queries.get_node_task_result_from_session(
+                session,
+                task_id=task_id,
+                result_id=result_id,
             )
-            if record is None:
-                return None
-            return _node_task_result_from_record(record)
 
     def get_latest_succeeded_node_task_result_for_node_run(
         self,
         node_run_id: str,
     ) -> NodeTaskResultModel | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(NodeTaskResultRecord)
-                .where(NodeTaskResultRecord.node_run_id == node_run_id)
-                .where(NodeTaskResultRecord.status == NodeResultStatus.SUCCEEDED.value)
-                .order_by(
-                    NodeTaskResultRecord.finished_at.desc(),
-                    NodeTaskResultRecord.result_id.desc(),
+            return (
+                _task_queries
+                .get_latest_succeeded_node_task_result_for_node_run_from_session(
+                    session,
+                    node_run_id,
                 )
             )
-            if record is None:
-                return None
-            return _node_task_result_from_record(record)
