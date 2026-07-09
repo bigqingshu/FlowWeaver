@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import TableLeaseRecord
+from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.protocols.enums import TableLeaseStatus, TableLeaseType
 
 
@@ -189,21 +189,8 @@ class TableLeaseManager:
             record.released_at = _datetime_to_text(now)
         return len(stale_records)
 
-    @contextmanager
-    def _immediate_session(self) -> Iterator[Session]:
-        connection: Connection = self._engine.connect()
-        session = Session(bind=connection, expire_on_commit=False)
-        try:
-            connection.exec_driver_sql("BEGIN IMMEDIATE")
-            yield session
-            session.flush()
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            session.close()
-            connection.close()
+    def _immediate_session(self) -> AbstractContextManager[Session]:
+        return immediate_session(self._engine)
 
 
 def _conflicts_for(

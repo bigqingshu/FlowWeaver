@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import select, update
-from sqlalchemy.engine import Connection, CursorResult, Engine
+from sqlalchemy.engine import CursorResult, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.ids import new_id
@@ -16,6 +15,7 @@ from flowweaver.engine.db_models import (
     WorkflowProcessRecord,
     WorkflowRunRecord,
 )
+from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import WorkflowProcess, WorkflowRun
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
@@ -313,21 +313,5 @@ class RuntimeWorkflowProcessStoreMixin:
                 return None
             return _workflow_run_from_record(loaded)
 
-    @contextmanager
-    def _immediate_session(self) -> Iterator[Session]:
-        connection: Connection = self.engine.connect()
-        session = Session(bind=connection, expire_on_commit=False)
-        try:
-            if self.database_url.startswith("sqlite"):
-                connection.exec_driver_sql("BEGIN IMMEDIATE")
-            else:
-                connection.begin()
-            yield session
-            session.flush()
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            session.close()
-            connection.close()
+    def _immediate_session(self) -> AbstractContextManager[Session]:
+        return immediate_session(self.engine, database_url=self.database_url)
