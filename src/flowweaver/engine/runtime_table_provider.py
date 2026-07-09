@@ -21,21 +21,23 @@ from flowweaver.engine.runtime_table_reading import (
 from flowweaver.engine.runtime_table_rows import (
     runtime_insert_rows_statement as _runtime_insert_rows_statement,
 )
-from flowweaver.engine.runtime_table_sql import quote_identifier as _quote_identifier
 from flowweaver.engine.runtime_table_sql import (
     schema_fingerprint as schema_fingerprint,
 )
-from flowweaver.engine.runtime_table_sql import (
-    sqlite_type as _sqlite_type,
+from flowweaver.engine.runtime_table_writing import (
+    create_runtime_table_on_connection as _create_runtime_table_on_connection,
 )
-from flowweaver.engine.runtime_table_sql import (
-    table_location as _table_location,
+from flowweaver.engine.runtime_table_writing import (
+    drop_runtime_table_on_connection as _drop_runtime_table_on_connection,
+)
+from flowweaver.engine.runtime_table_writing import (
+    publish_runtime_staging_on_connection as _publish_runtime_staging_on_connection,
+)
+from flowweaver.engine.runtime_table_writing import (
+    runtime_table_columns_sql as _runtime_table_columns_sql,
 )
 from flowweaver.engine.table_provider_protocol import TableProvider as TableProvider
-from flowweaver.protocols.enums import (
-    LifecycleStatus,
-    TableRole,
-)
+from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 SQLITE_RUNTIME_PROVIDER_ID = "sqlite_runtime"
@@ -127,17 +129,13 @@ class SQLiteRuntimeTableProvider:
 
     def create_table(self, table_ref: TableRefModel) -> None:
         _validate_runtime_table_ref(table_ref, provider_id=self.provider_id)
-        _, table_name = _table_location(table_ref)
-        columns = ", ".join(
-            f"{_quote_identifier(field.name)} {_sqlite_type(field.data_type)}"
-            for field in table_ref.schema
-        )
-        if not columns:
+        if not _runtime_table_columns_sql(table_ref.schema):
             raise ValueError("runtime tables require at least one schema field")
         with self._connect(table_ref) as connection:
-            connection.execute(
-                f"CREATE TABLE IF NOT EXISTS "
-                f"{_quote_identifier(table_name)} ({columns})"
+            _create_runtime_table_on_connection(
+                connection,
+                table_ref,
+                if_not_exists=True,
             )
 
     def insert_rows(
@@ -152,56 +150,20 @@ class SQLiteRuntimeTableProvider:
             connection.executemany(statement.sql, statement.values)
 
     def drop_table(self, table_ref: TableRefModel) -> None:
-        _, table_name = _table_location(table_ref)
         with self._connect(table_ref) as connection:
-            connection.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table_name)}")
+            _drop_runtime_table_on_connection(connection, table_ref)
 
     def publish_staging(
         self,
         staging_ref: TableRefModel,
         published_ref: TableRefModel,
     ) -> None:
-        if staging_ref.lifecycle_status != LifecycleStatus.STAGING:
-            raise ValueError("publish_staging requires a STAGING source")
-        if published_ref.lifecycle_status != LifecycleStatus.PUBLISHED:
-            raise ValueError("publish_staging requires a PUBLISHED target")
-        staging_database, staging_table = _table_location(staging_ref)
-        published_database, published_table = _table_location(published_ref)
-        if staging_database != published_database:
-            raise ValueError(
-                "staging and published tables must share a runtime database"
-            )
-        if staging_ref.schema_fingerprint != published_ref.schema_fingerprint:
-            raise ValueError("published table schema must match staging schema")
-        quoted_columns = ", ".join(
-            _quote_identifier(field.name) for field in staging_ref.schema
-        )
         with self._connect(staging_ref) as connection:
-            connection.execute("BEGIN")
-            connection.execute(
-                f"DROP TABLE IF EXISTS {_quote_identifier(published_table)}"
+            _publish_runtime_staging_on_connection(
+                connection,
+                staging_ref=staging_ref,
+                published_ref=published_ref,
             )
-            self._create_table_on_connection(connection, published_ref)
-            connection.execute(
-                f"INSERT INTO {_quote_identifier(published_table)} "
-                f"({quoted_columns}) "
-                f"SELECT {quoted_columns} FROM {_quote_identifier(staging_table)}"
-            )
-            connection.execute("COMMIT")
-
-    def _create_table_on_connection(
-        self,
-        connection: sqlite3.Connection,
-        table_ref: TableRefModel,
-    ) -> None:
-        _, table_name = _table_location(table_ref)
-        columns = ", ".join(
-            f"{_quote_identifier(field.name)} {_sqlite_type(field.data_type)}"
-            for field in table_ref.schema
-        )
-        connection.execute(
-            f"CREATE TABLE {_quote_identifier(table_name)} ({columns})"
-        )
 
     def _connect(self, table_ref: TableRefModel) -> sqlite3.Connection:
         return _connect_runtime_table(
