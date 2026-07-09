@@ -67,8 +67,4 @@ public partial class MainWindowViewModel
             }
         }
     }
-    partial void OnNodeRunErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasNodeRunError));
-    }
 }

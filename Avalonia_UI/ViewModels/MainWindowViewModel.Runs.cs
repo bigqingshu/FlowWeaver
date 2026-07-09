@@ -1,21 +1,12 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    [ObservableProperty]
-    private string nodeRunMessage = "Select a run to load node status.";
-
-    [ObservableProperty]
-    private string? nodeRunErrorMessage;
-
-    public bool HasNodeRunError => !string.IsNullOrWhiteSpace(NodeRunErrorMessage);
-
     private bool CanRefreshRuns()
     {
         return CanUseEngineActions && !IsRunBusy;
