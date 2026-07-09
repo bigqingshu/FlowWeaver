@@ -5,16 +5,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from flowweaver.common.ids import new_id
-from flowweaver.common.time import utc_now
+from flowweaver.engine import runtime_table_refs as _runtime_table_refs
 from flowweaver.engine.runtime_table_connections import (
     connect_runtime_table as _connect_runtime_table,
 )
 from flowweaver.engine.runtime_table_connections import (
     validate_runtime_table_ref as _validate_runtime_table_ref,
-)
-from flowweaver.engine.runtime_table_sql import (
-    identifier_token as _identifier_token,
 )
 from flowweaver.engine.runtime_table_sql import (
     order_clause as _order_clause,
@@ -42,8 +38,6 @@ from flowweaver.protocols.enums import (
     LifecycleStatus,
     TableMutability,
     TableRole,
-    TableScope,
-    TableStorageKind,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -63,7 +57,10 @@ class SQLiteRuntimeTableProvider:
         self._busy_timeout_ms = busy_timeout_ms
 
     def database_path_for_run(self, workflow_run_id: str) -> Path:
-        return self._runtime_root / f"{_identifier_token(workflow_run_id)}.db"
+        return _runtime_table_refs.runtime_database_path(
+            self._runtime_root,
+            workflow_run_id,
+        )
 
     def create_staging_table(
         self,
@@ -75,29 +72,15 @@ class SQLiteRuntimeTableProvider:
         role: TableRole = TableRole.CURRENT,
         version: int = 1,
     ) -> TableRefModel:
-        table_name = (
-            f"stg_{_identifier_token(node_run_id)}_{_identifier_token(output_name)}"
-        )
-        table_ref = TableRefModel(
-            table_ref_id=new_id(),
-            role=role,
-            storage_kind=TableStorageKind.RUNTIME_SQL,
-            scope=TableScope.WORKFLOW_SCOPE,
-            mutability=TableMutability.WORKING_MUTABLE,
+        table_ref = _runtime_table_refs.runtime_staging_table_ref(
+            runtime_root=self._runtime_root,
             provider_id=self.provider_id,
-            logical_table_id=output_name,
-            opaque_handle={
-                "database_path": self.database_path_for_run(workflow_run_id).as_posix(),
-                "table_name": table_name,
-            },
-            schema=list(schema),
-            schema_fingerprint=schema_fingerprint(schema),
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
+            output_name=output_name,
+            schema=schema,
+            role=role,
             version=version,
-            capabilities={"READ", "APPEND"},
-            lifecycle_status=LifecycleStatus.STAGING,
-            created_by_workflow_run_id=workflow_run_id,
-            created_by_node_run_id=node_run_id,
-            created_at=utc_now(),
         )
         self.create_table(table_ref)
         return table_ref
@@ -108,33 +91,10 @@ class SQLiteRuntimeTableProvider:
         *,
         version: int | None = None,
     ) -> TableRefModel:
-        database_path, staging_table = _table_location(staging_ref)
-        published_version = staging_ref.version + 1 if version is None else version
-        published_table = (
-            f"pub_{_identifier_token(staging_table)}_v{published_version}"
-        )
-        return TableRefModel(
-            table_ref_id=new_id(),
-            role=staging_ref.role,
-            storage_kind=staging_ref.storage_kind,
-            scope=staging_ref.scope,
-            mutability=TableMutability.PUBLISHED_IMMUTABLE,
+        return _runtime_table_refs.published_runtime_table_ref_from_staging(
+            staging_ref,
             provider_id=self.provider_id,
-            resource_profile_id=staging_ref.resource_profile_id,
-            mount_id=staging_ref.mount_id,
-            logical_table_id=staging_ref.logical_table_id,
-            opaque_handle={
-                "database_path": database_path.as_posix(),
-                "table_name": published_table,
-            },
-            schema=staging_ref.schema,
-            schema_fingerprint=staging_ref.schema_fingerprint,
-            version=published_version,
-            capabilities={"READ"},
-            lifecycle_status=LifecycleStatus.PUBLISHED,
-            created_by_workflow_run_id=staging_ref.created_by_workflow_run_id,
-            created_by_node_run_id=staging_ref.created_by_node_run_id,
-            created_at=utc_now(),
+            version=version,
         )
 
     def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
