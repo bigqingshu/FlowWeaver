@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
@@ -34,10 +33,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? nodeRunErrorMessage;
-
-    public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
-
-    public ObservableCollection<NodeRunListItemViewModel> NodeRuns { get; } = new();
 
     public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
 
