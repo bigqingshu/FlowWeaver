@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from flowweaver.nodes.table_lookup_matched_field_outputs import (
@@ -90,3 +91,37 @@ def lookup_matched_values(
             else "matched"
         )
     return values
+
+
+def lookup_matched_output_batches(
+    context: BuiltinTableNodeContext,
+    main_ref: TableRefModel,
+    *,
+    source_field: str,
+    lookup_index: dict[Any, list[dict[str, Any]]],
+    multi_match_policy: str,
+    output_fields: LookupMatchedOutputFields,
+    no_match_value: Any,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(main_ref):
+        output_rows: list[dict[str, Any]] = []
+        for row in rows:
+            matches = lookup_index.get(row.get(source_field), [])
+            if len(matches) > 1 and multi_match_policy == "error":
+                raise _NodeValidationError(
+                    "LookupMatchedFieldNameNode found multiple matches"
+                )
+            match = lookup_matched_select_match(
+                matches,
+                multi_match_policy=multi_match_policy,
+            )
+            output_rows.append(
+                dict(row)
+                | lookup_matched_values(
+                    match,
+                    match_count=len(matches),
+                    output_fields=output_fields,
+                    no_match_value=no_match_value,
+                )
+            )
+        yield output_rows

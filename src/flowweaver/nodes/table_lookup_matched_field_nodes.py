@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import (
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
 )
@@ -9,16 +7,13 @@ from flowweaver.nodes.table_lookup_matched_field_helpers import (
     lookup_matched_field_index as _lookup_matched_field_index,
 )
 from flowweaver.nodes.table_lookup_matched_field_helpers import (
+    lookup_matched_output_batches as _lookup_matched_output_batches,
+)
+from flowweaver.nodes.table_lookup_matched_field_helpers import (
     lookup_matched_output_fields as _lookup_matched_output_fields,
 )
 from flowweaver.nodes.table_lookup_matched_field_helpers import (
     lookup_matched_output_schema as _lookup_matched_output_schema,
-)
-from flowweaver.nodes.table_lookup_matched_field_helpers import (
-    lookup_matched_select_match as _lookup_matched_select_match,
-)
-from flowweaver.nodes.table_lookup_matched_field_helpers import (
-    lookup_matched_values as _lookup_matched_values,
 )
 from flowweaver.nodes.table_node_config import (
     enum_config as _enum_config,
@@ -121,35 +116,19 @@ class LookupMatchedFieldNameNodeHandler:
             match_mode=match_mode,
         )
 
-        def output_batches():
-            for rows in context.iter_row_batches(main_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    matches = lookup_index.get(row.get(source_field), [])
-                    if len(matches) > 1 and multi_match_policy == "error":
-                        raise _NodeValidationError(
-                            "LookupMatchedFieldNameNode found multiple matches"
-                        )
-                    match = _lookup_matched_select_match(
-                        matches,
-                        multi_match_policy=multi_match_policy,
-                    )
-                    output_rows.append(
-                        dict(row)
-                        | _lookup_matched_values(
-                            match,
-                            match_count=len(matches),
-                            output_fields=output_fields,
-                            no_match_value=no_match_value,
-                        )
-                    )
-                yield output_rows
-
         return [
             context.publish_row_batches(
                 task,
                 output_name=f"{task.node_instance_id}_output",
                 schema=output_schema,
-                row_batches=output_batches(),
+                row_batches=_lookup_matched_output_batches(
+                    context,
+                    main_ref,
+                    source_field=source_field,
+                    lookup_index=lookup_index,
+                    multi_match_policy=multi_match_policy,
+                    output_fields=output_fields,
+                    no_match_value=no_match_value,
+                ),
             )
         ]

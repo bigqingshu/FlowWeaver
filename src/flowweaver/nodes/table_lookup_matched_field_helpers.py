@@ -4,6 +4,9 @@ from flowweaver.nodes.table_lookup_matched_field_matching import (
     lookup_matched_field_index as lookup_matched_field_index,
 )
 from flowweaver.nodes.table_lookup_matched_field_matching import (
+    lookup_matched_output_batches as lookup_matched_output_batches,
+)
+from flowweaver.nodes.table_lookup_matched_field_matching import (
     lookup_matched_select_match as lookup_matched_select_match,
 )
 from flowweaver.nodes.table_lookup_matched_field_matching import (
