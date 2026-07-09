@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import FILL_RANGE_NODE_TYPE
+from flowweaver.nodes.table_fill_range_helpers import field_range as _field_range
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
 from flowweaver.nodes.table_node_config import (
     enum_config as _enum_config,
@@ -29,13 +30,12 @@ from flowweaver.nodes.table_node_io import (
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
-from flowweaver.nodes.table_ops import find_field
 from flowweaver.nodes.table_value_source_config import (
     value_source_config as _value_source_config,
 )
 from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.protocols.table_ref import TableRefModel
 
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 _NodeValidationError = BuiltinTableNodeValidationError
@@ -141,27 +141,3 @@ class FillRangeNodeHandler:
             schema=input_ref.schema,
             row_batches=output_batches(),
         )
-
-
-def _field_range(
-    schema: list[FieldSchemaModel],
-    *,
-    start_field: str,
-    end_field: str,
-    node_type: str,
-) -> list[str]:
-    start_schema = find_field(schema, start_field)
-    if start_schema is None:
-        raise _NodeValidationError(f"Field does not exist: {start_field}")
-    end_schema = find_field(schema, end_field)
-    if end_schema is None:
-        raise _NodeValidationError(f"Field does not exist: {end_field}")
-    if start_schema.ordinal > end_schema.ordinal:
-        raise _NodeValidationError(
-            f"{node_type} start_field must not be after end_field"
-        )
-    return [
-        field.name
-        for field in schema
-        if start_schema.ordinal <= field.ordinal <= end_schema.ordinal
-    ]
