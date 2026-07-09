@@ -4,18 +4,7 @@ public partial class MainWindowViewModel
 {
     partial void OnHasWorkflowDefinitionRevisionConflictChanged(bool value)
     {
-        ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
-        ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-        ApplyRuntimeOptionsDraftCommand.NotifyCanExecuteChanged();
-        RegenerateRuntimeOptionsJsonDraftCommand.NotifyCanExecuteChanged();
-        ResetRuntimeOptionsSelectedNodeOverrideCommand.NotifyCanExecuteChanged();
-        AddWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
-        NotifyWorkflowDefinitionNodeActionCommandsChanged();
-        AddWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        DeleteWorkflowDefinitionDraftConnectionCommand.NotifyCanExecuteChanged();
-        SaveWorkflowDefinitionDraftCommand.NotifyCanExecuteChanged();
-        StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
-        PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
+        NotifyWorkflowDefinitionRevisionConflictChangedCommands();
         OnPropertyChanged(nameof(WorkflowRunGuardText));
     }
 }
