@@ -7,6 +7,8 @@ from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
     NodeTaskCancelRequestPayload,
+    NodeTaskCompletedPayload,
+    NodeTaskFailedPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
@@ -31,6 +33,15 @@ def missing_result(
     )
 
 
+def submit_task_envelope(task: NodeTaskModel) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+
 def cancel_request_envelope(
     task: NodeTaskModel,
     *,
@@ -45,6 +56,16 @@ def cancel_request_envelope(
             reason=reason,
         ).model_dump(mode="json"),
     )
+
+
+def node_task_result_from_response(
+    response: IPCEnvelope,
+) -> NodeTaskResultModel | None:
+    if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
+        return NodeTaskCompletedPayload.model_validate(response.payload).result
+    if response.message_type == IPCMessageType.NODE_TASK_FAILED:
+        return NodeTaskFailedPayload.model_validate(response.payload).result
+    return None
 
 
 def ipc_failure_result(

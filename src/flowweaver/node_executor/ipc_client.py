@@ -13,6 +13,8 @@ from flowweaver.node_executor.ipc_client_messages import (
     cancel_request_envelope,
     ipc_failure_result,
     missing_result,
+    node_task_result_from_response,
+    submit_task_envelope,
 )
 from flowweaver.node_executor.ipc_client_subprocess_helpers import (
     child_environment as _child_environment,
@@ -31,11 +33,7 @@ from flowweaver.node_executor.ipc_client_subprocess_helpers import (
 )
 from flowweaver.node_executor.process import NodeExecutorProcess
 from flowweaver.protocols.enums import IPCMessageType
-from flowweaver.protocols.ipc_messages import (
-    IPCEnvelope,
-    NodeTaskCompletedPayload,
-    NodeTaskFailedPayload,
-)
+from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 
 NodeTaskIpcEventHandler = Callable[[NodeTaskModel, IPCEnvelope], None]
@@ -60,22 +58,14 @@ class LocalNodeExecutorIpcClient:
         self._event_handler = handler
 
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
-        envelope = IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_SUBMIT,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            payload=task.model_dump(mode="json"),
-        )
+        envelope = submit_task_envelope(task)
         for response in self._process.handle_envelope(envelope):
             if response.message_type in INTERMEDIATE_NODE_TASK_MESSAGES:
                 self._emit_event(task, response)
                 continue
-            if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
-                return NodeTaskCompletedPayload.model_validate(
-                    response.payload
-                ).result
-            if response.message_type == IPCMessageType.NODE_TASK_FAILED:
-                return NodeTaskFailedPayload.model_validate(response.payload).result
+            result = node_task_result_from_response(response)
+            if result is not None:
+                return result
         return missing_result(task, executor_id=self.executor_id)
 
     def request_cancel(
@@ -137,12 +127,7 @@ class SubprocessNodeExecutorIpcClient:
         return self._closed
 
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
-        envelope = IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_SUBMIT,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            payload=task.model_dump(mode="json"),
-        )
+        envelope = submit_task_envelope(task)
         if not self._write_envelope(envelope):
             return self._missing_result(task)
         while True:
@@ -152,12 +137,9 @@ class SubprocessNodeExecutorIpcClient:
             if response.message_type in INTERMEDIATE_NODE_TASK_MESSAGES:
                 self._emit_event(task, response)
                 continue
-            if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
-                return NodeTaskCompletedPayload.model_validate(
-                    response.payload
-                ).result
-            if response.message_type == IPCMessageType.NODE_TASK_FAILED:
-                return NodeTaskFailedPayload.model_validate(response.payload).result
+            result = node_task_result_from_response(response)
+            if result is not None:
+                return result
 
     def request_cancel(
         self,
