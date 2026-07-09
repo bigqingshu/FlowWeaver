@@ -67,13 +67,6 @@ public partial class MainWindowViewModel
             }
         }
     }
-
-    partial void OnIsLoadingNodeRunsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsNodeRunBusy));
-        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
-    }
-
     partial void OnNodeRunErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasNodeRunError));

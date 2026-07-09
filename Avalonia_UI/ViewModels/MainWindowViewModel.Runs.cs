@@ -9,15 +9,10 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private bool isLoadingNodeRuns;
-
-    [ObservableProperty]
     private string nodeRunMessage = "Select a run to load node status.";
 
     [ObservableProperty]
     private string? nodeRunErrorMessage;
-
-    public bool IsNodeRunBusy => IsLoadingNodeRuns;
 
     public bool HasNodeRunError => !string.IsNullOrWhiteSpace(NodeRunErrorMessage);
 
