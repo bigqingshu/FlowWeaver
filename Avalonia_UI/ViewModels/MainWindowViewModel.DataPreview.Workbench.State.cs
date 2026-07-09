@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -33,20 +32,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private bool isDataPreviewWorkbenchDraft;
-
-    private string[] dataPreviewWorkbenchLoadedColumns = [];
-
-    private JsonElement[] dataPreviewWorkbenchLoadedRows = [];
-
-    private string[][] dataPreviewWorkbenchOriginalCellRows = [];
-
-    private string[][] dataPreviewWorkbenchEditableCellRows = [];
-
-    private int dataPreviewWorkbenchOffset;
-
-    private bool dataPreviewWorkbenchHasMore;
-
-    private long dataPreviewWorkbenchRowCount;
 
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
 
