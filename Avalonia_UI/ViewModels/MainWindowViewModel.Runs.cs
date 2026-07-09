@@ -11,12 +11,6 @@ public partial class MainWindowViewModel
     private int nodeRunsLoadVersion;
 
     [ObservableProperty]
-    private bool isLoadingRuns;
-
-    [ObservableProperty]
-    private bool isCancellingRun;
-
-    [ObservableProperty]
     private string runMessage = "No runs loaded.";
 
     [ObservableProperty]
@@ -30,8 +24,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? nodeRunErrorMessage;
-
-    public bool IsRunBusy => IsLoadingRuns || IsCancellingRun;
 
     public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
 
@@ -85,16 +77,6 @@ public partial class MainWindowViewModel
         RunMessage = T("runs.refresh_failed");
         RunErrorMessage = DescribeError(response);
         IsLoadingRuns = false;
-    }
-
-    partial void OnIsLoadingRunsChanged(bool value)
-    {
-        NotifyRunCommandStateChanged();
-    }
-
-    partial void OnIsCancellingRunChanged(bool value)
-    {
-        NotifyRunCommandStateChanged();
     }
 
     partial void OnRunErrorMessageChanged(string? value)
