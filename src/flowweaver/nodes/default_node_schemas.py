@@ -27,6 +27,9 @@ from flowweaver.nodes.default_datetime_node_schemas import (
 from flowweaver.nodes.default_datetime_node_schemas import (
     _parse_datetime_schema as _parse_datetime_schema,
 )
+from flowweaver.nodes.default_extract_text_node_schemas import (
+    _extract_text_schema as _extract_text_schema,
+)
 from flowweaver.nodes.default_file_resource_node_schemas import (
     _batch_rename_files_schema as _batch_rename_files_schema,
 )
@@ -44,6 +47,9 @@ from flowweaver.nodes.default_numeric_node_schemas import (
 )
 from flowweaver.nodes.default_plugin_resource_node_schemas import (
     _plugin_node_schema as _plugin_node_schema,
+)
+from flowweaver.nodes.default_replace_text_node_schemas import (
+    _replace_text_schema as _replace_text_schema,
 )
 from flowweaver.nodes.default_row_deduplicate_node_schemas import (
     _deduplicate_rows_schema as _deduplicate_rows_schema,
@@ -104,12 +110,6 @@ from flowweaver.nodes.default_table_fill_node_schemas import (
 )
 from flowweaver.nodes.default_table_fill_node_schemas import (
     _fill_sequence_schema as _fill_sequence_schema,
-)
-from flowweaver.nodes.default_text_node_schemas import (
-    _extract_text_schema as _extract_text_schema,
-)
-from flowweaver.nodes.default_text_node_schemas import (
-    _replace_text_schema as _replace_text_schema,
 )
 from flowweaver.nodes.default_write_operation_node_schemas import (
     _write_back_table_schema as _write_back_table_schema,
