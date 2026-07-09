@@ -7,7 +7,8 @@ public partial class MainWindowViewModel
         NotifyAppShellLocalizedTextChanged();
         NotifyConnectionLocalizedTextChanged();
         NotifyDataPreviewWorkbenchLocalizedTextChanged();
-        NotifyWorkflowListAndRunsLocalizedTextChanged();
+        NotifyWorkflowListLocalizedTextChanged();
+        NotifyRunsLocalizedTextChanged();
         NotifyWorkflowDefinitionBasicsLocalizedTextChanged();
         NotifyRuntimeOptionsLocalizedTextChanged();
         NotifyWorkflowStructuredEditLocalizedTextChanged();
