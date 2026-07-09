@@ -1,4 +1,3 @@
-using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -8,8 +7,7 @@ public partial class MainWindowViewModel
     [RelayCommand(CanExecute = nameof(CanRestoreDataPreviewWorkbenchDraft))]
     private void RestoreDataPreviewWorkbenchDraft()
     {
-        dataPreviewWorkbenchEditableCellRows =
-            DataPreviewTableGridBuilder.CloneCellRows(dataPreviewWorkbenchOriginalCellRows);
+        RestoreDataPreviewWorkbenchEditableRows();
         ApplyDataPreviewWorkbenchSearch();
         NotifyDataPreviewWorkbenchDirtyStateChanged();
         DataPreviewWorkbenchClipboardText = string.Empty;
