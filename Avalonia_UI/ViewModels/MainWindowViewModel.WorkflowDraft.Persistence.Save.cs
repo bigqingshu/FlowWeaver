@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
 
@@ -10,27 +9,12 @@ public partial class MainWindowViewModel
     {
         if (WorkflowDefinitionDetail is null)
         {
-            WorkflowDefinitionValidationMessage = T("definition.save_rejected");
-            WorkflowDefinitionValidationErrorMessage = T("definition.load_before_saving");
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.save",
-                UiNotificationKind.Error);
+            RejectWorkflowDefinitionSaveWithoutDetail();
             return false;
         }
 
-        JsonElement definition;
-        try
+        if (!TryReadWorkflowDefinitionDraftJsonForSave(out var definition))
         {
-            using var parsed = JsonDocument.Parse(WorkflowDefinitionDraftJson);
-            definition = parsed.RootElement.Clone();
-        }
-        catch (JsonException ex)
-        {
-            WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
-            WorkflowDefinitionValidationErrorMessage = ex.Message;
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.save",
-                UiNotificationKind.Error);
             return false;
         }
 
