@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flowweaver.nodes.default_control_node_schemas import (
+from flowweaver.nodes.default_control_condition_node_schemas import (
     _condition_flag_schema as _condition_flag_schema,
 )
 from flowweaver.nodes.default_control_node_schemas import (
