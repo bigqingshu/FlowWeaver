@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import BATCH_RENAME_FILES_NODE_TYPE
 from flowweaver.nodes.table_batch_rename_files_helpers import (
-    batch_rename_plan_row as _batch_rename_plan_row,
+    batch_rename_output_batches as _batch_rename_output_batches,
 )
 from flowweaver.nodes.table_batch_rename_files_helpers import (
     batch_rename_status_schema as _batch_rename_status_schema,
@@ -105,32 +103,6 @@ class BatchRenameFilesNodeHandler:
             node_type=self.node_type,
         )
 
-        def output_batches():
-            row_number = 1
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    output_rows.append(
-                        _batch_rename_plan_row(
-                            row,
-                            row_number=row_number,
-                            path_field=path_field,
-                            new_name_field=new_name_field,
-                            name_value_type=name_value_type,
-                            new_path_field=new_path_field,
-                            status_field=status_field,
-                            auto_append_ext=auto_append_ext,
-                            allow_dirs=allow_dirs,
-                            create_target_dirs=create_target_dirs,
-                            conflict_mode=conflict_mode,
-                            actual_rename=actual_rename,
-                            write_log=write_log,
-                            log_path=log_path,
-                        )
-                    )
-                    row_number += 1
-                yield output_rows
-
         return [
             context.publish_row_batches(
                 task,
@@ -139,7 +111,22 @@ class BatchRenameFilesNodeHandler:
                     new_path_field=new_path_field,
                     status_field=status_field,
                 ),
-                row_batches=output_batches(),
+                row_batches=_batch_rename_output_batches(
+                    context,
+                    input_ref,
+                    path_field=path_field,
+                    new_name_field=new_name_field,
+                    name_value_type=name_value_type,
+                    new_path_field=new_path_field,
+                    status_field=status_field,
+                    auto_append_ext=auto_append_ext,
+                    allow_dirs=allow_dirs,
+                    create_target_dirs=create_target_dirs,
+                    conflict_mode=conflict_mode,
+                    actual_rename=actual_rename,
+                    write_log=write_log,
+                    log_path=log_path,
+                ),
             )
         ]
 
