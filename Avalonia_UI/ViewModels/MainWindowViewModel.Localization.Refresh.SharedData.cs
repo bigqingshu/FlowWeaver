@@ -2,9 +2,8 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private void NotifySharedDataLocalizedTextChanged()
+    private void NotifySharedPublicationsLocalizedTextChanged()
     {
-        OnPropertyChanged(nameof(TableRefsSectionText));
         OnPropertyChanged(nameof(ShareText));
         OnPropertyChanged(nameof(ShareNameWatermarkText));
         OnPropertyChanged(nameof(VersionsText));

@@ -18,7 +18,8 @@ public partial class MainWindowViewModel
         NotifyNodeCatalogLocalizedTextChanged();
         NotifyAdvancedDraftJsonLocalizedTextChanged();
         NotifyRuntimeEventLogLocalizedTextChanged();
-        NotifySharedDataLocalizedTextChanged();
+        NotifyTableRefsLocalizedTextChanged();
+        NotifySharedPublicationsLocalizedTextChanged();
         RefreshLocalizedDerivedState();
     }
 }
