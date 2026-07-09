@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import argparse
 import time
-import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import NoReturn
@@ -14,7 +12,6 @@ from flowweaver.common.config import (
 )
 from flowweaver.engine.runtime_event_sink import (
     DatabaseEventSink,
-    IPCEventSink,
     RuntimeEventSink,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
@@ -26,6 +23,7 @@ from flowweaver.node_executor import (
 from flowweaver.workflow_process import (
     ipc_events,
     process_cancellation,
+    process_cli,
     process_dag,
     process_definition,
     process_loop,
@@ -109,40 +107,10 @@ def _DefaultWorkflowProcessExecutorOwner(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--database-url", required=True)
-    parser.add_argument("--workflow-run-id", required=True)
-    parser.add_argument("--process-id", required=True)
-    parser.add_argument("--process-generation", type=int, required=True)
-    parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
-    parser.add_argument("--runtime-event-path")
-    parser.add_argument("--runtime-dir")
-    parser.add_argument("--execution-mode")
-    parser.add_argument("--max-concurrent-node-tasks")
-    args = parser.parse_args(argv)
-    store = RuntimeStore(args.database_url)
-    try:
-        event_sink: RuntimeEventSink = (
-            IPCEventSink(args.runtime_event_path)
-            if args.runtime_event_path
-            else DatabaseEventSink(store)
-        )
-        return run_workflow_process(
-            store=store,
-            workflow_run_id=args.workflow_run_id,
-            process_id=args.process_id,
-            process_generation=args.process_generation,
-            heartbeat_interval_seconds=args.heartbeat_interval_seconds,
-            event_sink=event_sink,
-            runtime_dir=args.runtime_dir,
-            execution_mode=args.execution_mode,
-            max_concurrent_node_tasks=args.max_concurrent_node_tasks,
-        )
-    except Exception:
-        traceback.print_exc()
-        return 1
-    finally:
-        store.dispose()
+    return process_cli.run_workflow_process_cli(
+        argv,
+        run_workflow_process=run_workflow_process,
+    )
 
 
 def run_workflow_process(
@@ -201,6 +169,8 @@ def run_workflow_process(
         _close_execution_pool(execution_pool)
         if reusable_executor_owner is not None:
             reusable_executor_owner.close()
+
+
 def _exit() -> NoReturn:
     raise SystemExit(main())
 
