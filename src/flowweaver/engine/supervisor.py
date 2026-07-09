@@ -3,7 +3,6 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
-import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,7 +11,6 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
-from flowweaver.engine.supervisor_child_processes import terminate_child_process
 from flowweaver.engine.supervisor_commands import (
     node_executor_command as _node_executor_command,
 )
@@ -49,6 +47,9 @@ from flowweaver.engine.supervisor_workflow_processes import (
 )
 from flowweaver.engine.supervisor_workflow_processes import (
     handle_lost_workflow_process as _handle_lost_workflow_process,
+)
+from flowweaver.engine.supervisor_workflow_processes import (
+    stop_workflow_child as _stop_workflow_child,
 )
 
 
@@ -196,30 +197,18 @@ class Supervisor:
         child = self._children.get(process.process_id)
         if child is None:
             return
-        deadline = time.monotonic() + graceful_timeout_seconds
-        while time.monotonic() < deadline:
-            if child.poll() is not None:
-                self._drain_runtime_events_for_process(process.process_id)
-                self._children.pop(process.process_id, None)
-                self._finish_workflow_process(
-                    process.process_id,
-                    exit_code=child.returncode or 0,
-                )
-                self._forget_runtime_event_channel(process.process_id)
-                return
-            time.sleep(0.05)
-        terminate_child_process(
+        _stop_workflow_child(
+            self._runtime_store,
+            self._children,
+            process,
             child,
-            graceful_timeout_seconds=self._config.workflow_process_cancel_grace_seconds,
+            graceful_timeout_seconds=graceful_timeout_seconds,
+            terminate_graceful_timeout_seconds=(
+                self._config.workflow_process_cancel_grace_seconds
+            ),
+            drain_runtime_events_for_process=self._drain_runtime_events_for_process,
+            forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
-        self._drain_runtime_events_for_process(process.process_id)
-        self._children.pop(process.process_id, None)
-        self._finish_workflow_process(
-            process.process_id,
-            exit_code=child.returncode if child.returncode not in (None, 0) else 1,
-            error={"message": "Workflow process terminated after cancel timeout"},
-        )
-        self._forget_runtime_event_channel(process.process_id)
 
     def request_workflow_cancel(self, workflow_run_id: str) -> WorkflowProcess | None:
         return self._runtime_store.request_workflow_process_cancel(workflow_run_id)

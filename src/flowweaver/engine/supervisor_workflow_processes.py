@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from collections.abc import Callable, MutableMapping
 
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
@@ -76,3 +77,42 @@ def close_workflow_children(
             ),
         )
         forget_runtime_event_channel(process_id)
+
+
+def stop_workflow_child(
+    runtime_store: RuntimeStore,
+    children: MutableMapping[str, subprocess.Popen],
+    process: WorkflowProcess,
+    child: subprocess.Popen,
+    *,
+    graceful_timeout_seconds: int,
+    terminate_graceful_timeout_seconds: float,
+    drain_runtime_events_for_process: Callable[[str], object],
+    forget_runtime_event_channel: Callable[[str], None],
+) -> None:
+    deadline = time.monotonic() + graceful_timeout_seconds
+    while time.monotonic() < deadline:
+        if child.poll() is not None:
+            drain_runtime_events_for_process(process.process_id)
+            children.pop(process.process_id, None)
+            finish_workflow_process(
+                runtime_store,
+                process.process_id,
+                exit_code=child.returncode or 0,
+            )
+            forget_runtime_event_channel(process.process_id)
+            return
+        time.sleep(0.05)
+    terminate_child_process(
+        child,
+        graceful_timeout_seconds=terminate_graceful_timeout_seconds,
+    )
+    drain_runtime_events_for_process(process.process_id)
+    children.pop(process.process_id, None)
+    finish_workflow_process(
+        runtime_store,
+        process.process_id,
+        exit_code=child.returncode if child.returncode not in (None, 0) else 1,
+        error={"message": "Workflow process terminated after cancel timeout"},
+    )
+    forget_runtime_event_channel(process.process_id)
