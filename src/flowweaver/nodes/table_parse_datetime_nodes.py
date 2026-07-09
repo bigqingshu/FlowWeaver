@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import PARSE_DATETIME_NODE_TYPE
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
@@ -21,19 +19,13 @@ from flowweaver.nodes.table_node_io import (
 )
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.nodes.table_parse_datetime_helpers import (
-    format_parsed_datetime as _format_parsed_datetime,
-)
-from flowweaver.nodes.table_parse_datetime_helpers import (
     parse_datetime_output_field as _parse_datetime_output_field,
 )
 from flowweaver.nodes.table_parse_datetime_helpers import (
     parse_datetime_output_schema as _parse_datetime_output_schema,
 )
-from flowweaver.nodes.table_parse_datetime_helpers import (
-    parse_datetime_unmatched_value as _parse_datetime_unmatched_value,
-)
-from flowweaver.nodes.table_parse_datetime_helpers import (
-    parse_datetime_value as _parse_datetime_value,
+from flowweaver.nodes.table_parse_datetime_output import (
+    parse_datetime_output_batches as _parse_datetime_output_batches,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
@@ -125,43 +117,21 @@ class ParseDateTimeNodeHandler:
             node_type=self.node_type,
         )
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    raw_value = row.get(source_field)
-                    if time_source_field is not None:
-                        raw_value = f"{raw_value} {row.get(time_source_field)}"
-                    parsed = _parse_datetime_value(
-                        raw_value,
-                        config=task.config,
-                        parse_type=parse_type,
-                        input_structure=input_structure,
-                    )
-                    status = "parsed" if parsed is not None else "failed"
-                    output_value = (
-                        _format_parsed_datetime(
-                            parsed,
-                            config=task.config,
-                            parse_type=parse_type,
-                        )
-                        if parsed is not None
-                        else _parse_datetime_unmatched_value(
-                            raw_value,
-                            config=task.config,
-                            unmatched_mode=unmatched_mode,
-                        )
-                    )
-                    output_row = dict(row) | {output_field: output_value}
-                    if status_field is not None:
-                        output_row[status_field] = status
-                    output_rows.append(output_row)
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_parse_datetime_output_batches(
+                context,
+                input_ref,
+                config=task.config,
+                source_field=source_field,
+                time_source_field=time_source_field,
+                parse_type=parse_type,
+                input_structure=input_structure,
+                output_field=output_field,
+                status_field=status_field,
+                unmatched_mode=unmatched_mode,
+            ),
         )
