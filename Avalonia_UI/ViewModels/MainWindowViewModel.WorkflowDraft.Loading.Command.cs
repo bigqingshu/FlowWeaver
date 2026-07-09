@@ -37,10 +37,7 @@ public partial class MainWindowViewModel
 
             if (!workflowResponse.Ok || workflowResponse.Data is null)
             {
-                WorkflowDefinitionDetail = null;
-                SelectedWorkflowDefinitionNode = null;
-                WorkflowDefinitionMessage = T("definition.load_failed");
-                WorkflowDefinitionErrorMessage = DescribeError(workflowResponse);
+                ApplyWorkflowDefinitionLoadFailure(workflowResponse);
                 return;
             }
 
@@ -56,10 +53,7 @@ public partial class MainWindowViewModel
 
             if (!revisionsResponse.Ok || revisionsResponse.Data is null)
             {
-                WorkflowDefinitionDetail = null;
-                SelectedWorkflowDefinitionNode = null;
-                WorkflowDefinitionMessage = T("definition.revisions_load_failed");
-                WorkflowDefinitionErrorMessage = DescribeError(revisionsResponse);
+                ApplyWorkflowDefinitionRevisionsLoadFailure(revisionsResponse);
                 return;
             }
 
