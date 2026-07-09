@@ -111,9 +111,9 @@ from flowweaver.nodes.default_table_fill_node_schemas import (
 from flowweaver.nodes.default_table_fill_node_schemas import (
     _fill_sequence_schema as _fill_sequence_schema,
 )
-from flowweaver.nodes.default_write_operation_node_schemas import (
+from flowweaver.nodes.default_write_back_node_schema import (
     _write_back_table_schema as _write_back_table_schema,
 )
-from flowweaver.nodes.default_write_operation_node_schemas import (
+from flowweaver.nodes.default_write_selected_node_schema import (
     _write_selected_columns_schema as _write_selected_columns_schema,
 )
