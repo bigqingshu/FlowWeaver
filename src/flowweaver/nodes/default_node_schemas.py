@@ -66,7 +66,7 @@ from flowweaver.nodes.default_row_node_schemas import (
 from flowweaver.nodes.default_row_node_schemas import (
     _deduplicate_rows_schema as _deduplicate_rows_schema,
 )
-from flowweaver.nodes.default_row_node_schemas import (
+from flowweaver.nodes.default_row_transform_node_schemas import (
     _unpivot_rows_schema as _unpivot_rows_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
