@@ -23,26 +23,12 @@ public partial class MainWindowViewModel
             selectedNodeIds);
         if (!patchResult.Succeeded)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_delete_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.delete_nodes",
-                UiNotificationKind.Error);
+            ApplyWorkflowDefinitionDraftDeleteNodesFailure(patchResult);
             return;
         }
 
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        WorkflowDefinitionValidationMessage =
-            patchResult.RemovedConnections.Count > 0
-                ? F(
-                    "format.workflow_definition_nodes_deleted_with_connections",
-                    selectedNodeIds.Length)
-                : F("format.workflow_definition_nodes_deleted", selectedNodeIds.Length);
-        WorkflowDefinitionValidationErrorMessage =
-            FormatRemovedConnectionsMessage(patchResult.RemovedConnections);
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.delete_nodes",
-            UiNotificationKind.Success);
+        ApplyWorkflowDefinitionDraftDeleteNodesSuccess(
+            patchResult,
+            selectedNodeIds.Length);
     }
 }
