@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+from typing import Any
+
+from flowweaver.protocols.enums import TableRole, TableStorageKind
+from flowweaver.workflow_process.table_input_resolution_models import (
+    TableInputResolution,
+    TableInputResolutionIssue,
+    TableInputResolutionStatus,
+    TableInputSelector,
+)
+
+INPUT_SOURCE_CONFIG_KEY = "input_source"
+INPUT_SOURCES_CONFIG_KEYS = ("input_sources", "input_table_sources")
+
+
+def selectors_from_config(
+    config: dict[str, Any],
+) -> tuple[TableInputSelector, ...] | TableInputResolution:
+    selectors: list[TableInputSelector] = []
+
+    single_source = config.get(INPUT_SOURCE_CONFIG_KEY)
+    if isinstance(single_source, dict):
+        selector = _selector_from_value("in", single_source)
+        if isinstance(selector, TableInputResolution):
+            return selector
+        if selector is not None:
+            selectors.append(selector)
+
+    for key in INPUT_SOURCES_CONFIG_KEYS:
+        sources = config.get(key)
+        if isinstance(sources, dict):
+            for slot, source in sources.items():
+                if not isinstance(slot, str) or not slot.strip():
+                    return _config_error(
+                        "",
+                        f"{key} contains an empty input slot name",
+                    )
+                selector = _selector_from_value(slot.strip(), source)
+                if isinstance(selector, TableInputResolution):
+                    return selector
+                if selector is not None:
+                    selectors.append(selector)
+        elif isinstance(sources, list):
+            for index, source in enumerate(sources):
+                if not isinstance(source, dict):
+                    return _config_error(
+                        "",
+                        f"{key}[{index}] must be an object",
+                    )
+                slot = _optional_string(source, "slot") or _optional_string(
+                    source,
+                    "input_slot",
+                )
+                if slot is None:
+                    return _config_error(
+                        "",
+                        f"{key}[{index}] must include slot",
+                    )
+                selector = _selector_from_value(slot, source)
+                if isinstance(selector, TableInputResolution):
+                    return selector
+                if selector is not None:
+                    selectors.append(selector)
+
+    seen_slots: set[str] = set()
+    for selector in selectors:
+        if selector.slot in seen_slots:
+            return _config_error(
+                selector.slot,
+                f"duplicate input slot: {selector.slot}",
+            )
+        seen_slots.add(selector.slot)
+
+    return tuple(selectors)
+
+
+def _selector_from_value(
+    slot: str,
+    value: Any,
+) -> TableInputSelector | TableInputResolution | None:
+    if not isinstance(value, dict):
+        return _config_error(slot, "input source must be an object")
+    source_type = _optional_string(value, "type") or (
+        "upstream_table"
+        if _optional_string(value, "source_node_instance_id") is not None
+        else "current"
+    )
+    if source_type in {"current", "current_table"}:
+        return None
+    if source_type not in {"upstream_table", "upstream"}:
+        return _config_error(slot, f"unsupported input source type: {source_type}")
+
+    source_node_instance_id = _optional_string(value, "source_node_instance_id")
+    if source_node_instance_id is None:
+        return _config_error(
+            slot,
+            "upstream input source requires source_node_instance_id",
+        )
+    output_role = _optional_table_role(value, slot=slot)
+    if isinstance(output_role, TableInputResolution):
+        return output_role
+    storage_kind = _optional_storage_kind(value, slot=slot)
+    if isinstance(storage_kind, TableInputResolution):
+        return storage_kind
+
+    return TableInputSelector(
+        slot=slot,
+        source_node_instance_id=source_node_instance_id,
+        output_role=output_role,
+        storage_kind=storage_kind,
+        logical_table_id=_optional_string(value, "logical_table_id"),
+        output_slot=(
+            _optional_string(value, "output_slot")
+            or _optional_string(value, "output_alias")
+        ),
+    )
+
+
+def _optional_table_role(
+    value: dict[str, Any],
+    *,
+    slot: str,
+) -> TableRole | TableInputResolution | None:
+    raw = _optional_string(value, "output_role")
+    if raw is None:
+        return None
+    try:
+        return TableRole(raw)
+    except ValueError:
+        return _config_error(slot, f"unsupported output_role: {raw}")
+
+
+def _optional_storage_kind(
+    value: dict[str, Any],
+    *,
+    slot: str,
+) -> TableStorageKind | TableInputResolution | None:
+    raw = _optional_string(value, "storage_kind")
+    if raw is None:
+        return None
+    try:
+        return TableStorageKind(raw)
+    except ValueError:
+        return _config_error(slot, f"unsupported storage_kind: {raw}")
+
+
+def _optional_string(value: dict[str, Any], key: str) -> str | None:
+    raw = value.get(key)
+    if not isinstance(raw, str):
+        return None
+    normalized = raw.strip()
+    return normalized or None
+
+
+def _config_error(slot: str, message: str) -> TableInputResolution:
+    return TableInputResolution(
+        TableInputResolutionStatus.ERROR,
+        issue=TableInputResolutionIssue(
+            slot=slot,
+            message=message,
+            details={"slot": slot},
+        ),
+    )
