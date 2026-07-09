@@ -34,15 +34,7 @@ public partial class MainWindowViewModel
 
             if (saved.Ok && saved.Data is not null)
             {
-                WorkflowDefinitionValidationMessage =
-                    F("format.saved_workflow", saved.Data.Name, saved.Data.Version);
-                ShowWorkflowDefinitionNotification(
-                    "workflow.definition.save",
-                    UiNotificationKind.Success);
-                IsWorkflowDefinitionDraftDirty = false;
-                HasWorkflowDefinitionRevisionConflict = false;
-                await RefreshWorkflowsSelectingAsync(saved.Data.WorkflowId);
-                await LoadSelectedWorkflowDefinitionAsync();
+                await ApplyWorkflowDefinitionDraftSaveSuccessAsync(saved.Data);
                 return true;
             }
 
