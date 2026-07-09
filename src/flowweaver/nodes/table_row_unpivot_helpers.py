@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import UNPIVOT_ROWS_NODE_TYPE
@@ -14,15 +13,15 @@ from flowweaver.nodes.table_node_config import (
     optional_string_list_config as _optional_string_list_config,
 )
 from flowweaver.nodes.table_node_config import string_list_config as _string_list_config
-from flowweaver.nodes.table_node_handlers import (
-    BuiltinTableNodeContext,
-    BuiltinTableNodeValidationError,
-)
+from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
 from flowweaver.nodes.table_row_unpivot_output import (
     unpivot_output_rows as unpivot_output_rows,
 )
 from flowweaver.nodes.table_row_unpivot_output import (
     unpivot_rows_output_schema as unpivot_rows_output_schema,
+)
+from flowweaver.nodes.table_row_unpivot_runtime import (
+    unpivot_rows_output_batches as unpivot_rows_output_batches,
 )
 from flowweaver.nodes.table_row_unpivot_selection import (
     unpivot_row_selected as unpivot_row_selected,
@@ -140,27 +139,4 @@ def unpivot_rows_config(
         "empty_fixed": config.get("empty_fixed"),
         "trim_value": _bool_config(config, "trim_value", default=False),
     }
-
-
-def unpivot_rows_output_batches(
-    context: BuiltinTableNodeContext,
-    input_ref: TableRefModel,
-    *,
-    config: dict[str, Any],
-    row_selector: dict[str, int],
-) -> Iterator[list[dict[str, Any]]]:
-    row_number = 1
-    for rows in context.iter_row_batches(input_ref):
-        output_rows: list[dict[str, Any]] = []
-        for row in rows:
-            if unpivot_row_selected(row_number, row_selector):
-                output_rows.extend(
-                    unpivot_output_rows(
-                        row,
-                        row_number=row_number,
-                        config=config,
-                    )
-                )
-            row_number += 1
-        yield output_rows
 
