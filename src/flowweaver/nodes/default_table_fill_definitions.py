@@ -5,9 +5,13 @@ from flowweaver.nodes.builtin_table_node_types import (
     FILL_RANGE_NODE_TYPE,
     FILL_SEQUENCE_NODE_TYPE,
 )
-from flowweaver.nodes.default_node_schemas import (
+from flowweaver.nodes.default_fill_cells_node_schema import (
     _fill_cells_schema,
+)
+from flowweaver.nodes.default_fill_range_node_schema import (
     _fill_range_schema,
+)
+from flowweaver.nodes.default_fill_sequence_node_schema import (
     _fill_sequence_schema,
 )
 from flowweaver.nodes.default_table_slots import (
