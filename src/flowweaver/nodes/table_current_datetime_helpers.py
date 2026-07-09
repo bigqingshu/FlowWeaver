@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
+from flowweaver.common.time import utc_now
 from flowweaver.nodes.builtin_table_node_types import (
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
 )
 from flowweaver.nodes.table_node_config import (
     optional_node_string_config as _optional_node_string_config,
 )
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
 from flowweaver.nodes.table_ops import (
     append_field,
     find_field,
@@ -100,3 +105,26 @@ def datetime_formatted_value(
         return template.format(**replacements)
     except (KeyError, ValueError) as exc:
         raise _NodeValidationError(str(exc)) from exc
+
+
+def current_datetime_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    output_field: str,
+    config: dict[str, Any],
+    format_mode: str,
+    fixed_value: str | None,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        output_rows: list[dict[str, Any]] = []
+        for row in rows:
+            value = fixed_value
+            if value is None:
+                value = datetime_formatted_value(
+                    utc_now(),
+                    config=config,
+                    format_mode=format_mode,
+                )
+            output_rows.append(dict(row) | {output_field: value})
+        yield output_rows
