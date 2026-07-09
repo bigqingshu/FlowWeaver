@@ -5,8 +5,5 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private bool isRuntimeEventStreamRunning;
-
-    [ObservableProperty]
-    private bool isRuntimeEventStreamConnected;
+    private long? lastRuntimeEventSequenceNumber;
 }
