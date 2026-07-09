@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from collections.abc import Iterator
+from typing import Any
+
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
 from flowweaver.nodes.table_ops import has_field, reorder_fields
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -46,3 +52,19 @@ def reorder_columns_output_plan(
     if not output_schema:
         raise _NodeValidationError("ReorderColumnsNode output schema is empty")
     return output_schema, [field.name for field in output_schema]
+
+
+def reorder_columns_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    output_columns: list[str],
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        yield [
+            {
+                column: row.get(column)
+                for column in output_columns
+            }
+            for row in rows
+        ]
