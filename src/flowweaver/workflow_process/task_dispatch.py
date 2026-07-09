@@ -19,7 +19,6 @@ from flowweaver.workflow_process.node_tasks import (
 from flowweaver.workflow_process.ready_queue import (
     ReadyNodeCandidate,
     collect_ready_node_candidates,
-    count_in_flight_node_runs,
 )
 from flowweaver.workflow_process.task_completion import (
     apply_executor_task_completion,
@@ -35,6 +34,9 @@ from flowweaver.workflow_process.task_completion_drain import (
 )
 from flowweaver.workflow_process.task_dispatch_config import (
     timeout_seconds_from_node_config as timeout_seconds_from_node_config,
+)
+from flowweaver.workflow_process.task_dispatch_limits import (
+    available_ready_dispatch_slots as available_ready_dispatch_slots,
 )
 from flowweaver.workflow_process.task_input_resolution_failure import (
     fail_ready_node_input_resolution as fail_ready_node_input_resolution,
@@ -171,24 +173,3 @@ def dispatch_ready_node_candidate(
         node_instance_id=accepted.node_instance_id,
         executor_id=executor.executor_id,
     )
-
-
-def available_ready_dispatch_slots(
-    *,
-    store: RuntimeStore,
-    workflow_run_id: str,
-    max_ready_dispatch_per_cycle: int | None,
-    max_concurrent_node_tasks: int | None,
-) -> int | None:
-    limits: list[int] = []
-    if max_ready_dispatch_per_cycle is not None:
-        limits.append(max(0, max_ready_dispatch_per_cycle))
-    if max_concurrent_node_tasks is not None:
-        in_flight_count = count_in_flight_node_runs(
-            store=store,
-            workflow_run_id=workflow_run_id,
-        )
-        limits.append(max(0, max_concurrent_node_tasks - in_flight_count))
-    if not limits:
-        return None
-    return min(limits)
