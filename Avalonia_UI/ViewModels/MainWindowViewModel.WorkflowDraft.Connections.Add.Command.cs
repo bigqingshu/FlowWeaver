@@ -28,23 +28,4 @@ public partial class MainWindowViewModel
         WorkflowDefinitionValidationErrorMessage = null;
         ResetNewDraftConnectionInput();
     }
-
-    [RelayCommand(CanExecute = nameof(CanDeleteWorkflowDefinitionDraftConnection))]
-    private void DeleteWorkflowDefinitionDraftConnection()
-    {
-        var patchResult = WorkflowDefinitionDraftConnectionPatcher.DeleteConnection(
-            WorkflowDefinitionDraftJson,
-            SelectedWorkflowDefinitionDraftConnectionId);
-        if (!patchResult.Succeeded)
-        {
-            WorkflowDefinitionValidationMessage = T("definition.connection_delete_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
-            return;
-        }
-
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        WorkflowDefinitionValidationMessage = T("definition.connection_deleted");
-        WorkflowDefinitionValidationErrorMessage = null;
-    }
 }
