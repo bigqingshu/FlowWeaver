@@ -8,13 +8,8 @@ from sqlalchemy.orm import sessionmaker
 
 from flowweaver.common.database import create_sqlite_engine, sqlite_url
 from flowweaver.common.time import utc_now
-from flowweaver.engine.db_models import (
-    DataRefRecord,
-    RuntimeEventRecord,
-)
-from flowweaver.engine.runtime_event_record_mappers import (
-    _runtime_event_from_record,
-)
+from flowweaver.engine.db_models import DataRefRecord
+from flowweaver.engine.runtime_event_store import RuntimeEventStoreMixin
 from flowweaver.engine.runtime_input_snapshot_store import (
     RuntimeInputSnapshotStoreMixin,
 )
@@ -39,9 +34,7 @@ from flowweaver.engine.runtime_models import (
     NodeRun as NodeRun,
 )
 from flowweaver.engine.runtime_models import ReadLease as ReadLease
-from flowweaver.engine.runtime_models import (
-    RuntimeEventLog,
-)
+from flowweaver.engine.runtime_models import RuntimeEventLog as RuntimeEventLog
 from flowweaver.engine.runtime_models import SharedPublication as SharedPublication
 from flowweaver.engine.runtime_models import (
     WorkflowProcess as WorkflowProcess,
@@ -61,7 +54,6 @@ from flowweaver.engine.runtime_read_lease_store import (
 from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
-    _json_dumps,
     _table_ref_from_record,
 )
 from flowweaver.engine.runtime_shared_publication_store import (
@@ -85,7 +77,6 @@ from flowweaver.engine.runtime_workflow_run_store import (
 from flowweaver.protocols.enums import (
     LifecycleStatus,
 )
-from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -95,6 +86,7 @@ class RuntimeStore(
     RuntimeWorkflowProcessStoreMixin,
     RuntimeNodeRunStoreMixin,
     RuntimeNodeTaskStoreMixin,
+    RuntimeEventStoreMixin,
     RuntimeLoopStoreMixin,
     RuntimeSharedPublicationStoreMixin,
     RuntimeSharedTableStoreMixin,
@@ -180,52 +172,6 @@ class RuntimeStore(
             record.lifecycle_status = LifecycleStatus.RELEASED.value
             record.released_at = _datetime_to_text(now)
             return _table_ref_from_record(record)
-
-    def append_runtime_event(self, event: EventModel) -> int:
-        with self._session_factory.begin() as session:
-            record = RuntimeEventRecord(
-                event_id=event.event_id,
-                event_version=event.event_version,
-                event_type=event.event_type.value,
-                timestamp=_datetime_to_text(event.timestamp),
-                workflow_run_id=event.workflow_run_id,
-                node_run_id=event.node_run_id,
-                payload_json=_json_dumps(event.payload),
-            )
-            session.add(record)
-            session.flush()
-            return record.sequence_number
-
-    def list_runtime_events(
-        self,
-        *,
-        after_sequence_number: int | None = None,
-        workflow_run_id: str | None = None,
-        node_run_id: str | None = None,
-        event_type: str | None = None,
-        limit: int = 100,
-    ) -> list[RuntimeEventLog]:
-        limit = max(1, min(limit, 1000))
-        statement = select(RuntimeEventRecord).order_by(
-            RuntimeEventRecord.sequence_number
-        )
-        if after_sequence_number is not None:
-            statement = statement.where(
-                RuntimeEventRecord.sequence_number > after_sequence_number
-            )
-        if workflow_run_id is not None:
-            statement = statement.where(
-                RuntimeEventRecord.workflow_run_id == workflow_run_id
-            )
-        if node_run_id is not None:
-            statement = statement.where(RuntimeEventRecord.node_run_id == node_run_id)
-        if event_type is not None:
-            statement = statement.where(RuntimeEventRecord.event_type == event_type)
-        with self._session_factory() as session:
-            return [
-                _runtime_event_from_record(record)
-                for record in session.scalars(statement.limit(limit))
-            ]
 
     def dispose(self) -> None:
         self.engine.dispose()
