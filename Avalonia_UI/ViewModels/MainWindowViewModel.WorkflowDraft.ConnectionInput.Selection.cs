@@ -17,22 +17,4 @@ public partial class MainWindowViewModel
         NewDraftConnectionTargetNodeId = node.NodeInstanceId;
         ApplySuggestedNewDraftConnectionId();
     }
-
-    partial void OnSelectedNewDraftConnectionSourceNodeChanged(
-        WorkflowDefinitionDraftNode? value)
-    {
-        if (value is not null)
-        {
-            ApplySelectedNewDraftConnectionSourceNode(value);
-        }
-    }
-
-    partial void OnSelectedNewDraftConnectionTargetNodeChanged(
-        WorkflowDefinitionDraftNode? value)
-    {
-        if (value is not null)
-        {
-            ApplySelectedNewDraftConnectionTargetNode(value);
-        }
-    }
 }
