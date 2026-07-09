@@ -14,6 +14,12 @@ from flowweaver.engine.db_models import (
     WorkflowRunRecord,
 )
 from flowweaver.engine.runtime_models import ReadLease
+from flowweaver.engine.runtime_read_lease_queries import (
+    get_read_lease_from_session as _get_read_lease,
+)
+from flowweaver.engine.runtime_read_lease_queries import (
+    list_read_leases_by_workflow_run_from_session as _list_read_leases_by_run,
+)
 from flowweaver.engine.runtime_record_mappers import _datetime_to_text
 from flowweaver.engine.runtime_shared_table_record_mappers import (
     _read_lease_from_record,
@@ -66,10 +72,7 @@ class RuntimeReadLeaseStoreMixin:
 
     def get_read_lease(self, lease_id: str) -> ReadLease | None:
         with self._session_factory() as session:
-            record = session.get(ReadLeaseRecord, lease_id)
-            if record is None:
-                return None
-            return _read_lease_from_record(record)
+            return _get_read_lease(session, lease_id)
 
     def list_read_leases_by_workflow_run(
         self,
@@ -77,20 +80,12 @@ class RuntimeReadLeaseStoreMixin:
         *,
         active_only: bool = False,
     ) -> list[ReadLease]:
-        statement = (
-            select(ReadLeaseRecord)
-            .where(ReadLeaseRecord.consumer_workflow_run_id == workflow_run_id)
-            .order_by(ReadLeaseRecord.acquired_at, ReadLeaseRecord.lease_id)
-        )
-        if active_only:
-            statement = statement.where(ReadLeaseRecord.released_at.is_(None))
-            statement = statement.where(
-                ReadLeaseRecord.expires_at > _datetime_to_text(utc_now())
-            )
         with self._session_factory() as session:
-            return [
-                _read_lease_from_record(record) for record in session.scalars(statement)
-            ]
+            return _list_read_leases_by_run(
+                session,
+                workflow_run_id,
+                active_only=active_only,
+            )
 
     def release_read_lease(self, lease_id: str) -> ReadLease | None:
         now = utc_now()
