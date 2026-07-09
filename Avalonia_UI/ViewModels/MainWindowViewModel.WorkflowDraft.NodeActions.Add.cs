@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
@@ -10,20 +9,8 @@ public partial class MainWindowViewModel
     private void AddWorkflowDefinitionDraftNode()
     {
         var autoWirePorts = TryGetAutoWirePorts();
-        JsonElement config;
-        try
+        if (!TryReadNewDraftNodeConfigJson(out var config))
         {
-            using var parsed = JsonDocument.Parse(NewDraftNodeConfigJson);
-            config = parsed.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            WorkflowDefinitionValidationMessage = T("definition.node_add_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                T("definition.node_add_config_json_invalid");
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.add_node",
-                UiNotificationKind.Error);
             return;
         }
 
