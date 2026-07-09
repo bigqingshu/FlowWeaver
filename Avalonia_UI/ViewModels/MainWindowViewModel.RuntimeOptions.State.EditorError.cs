@@ -5,5 +5,5 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private int runtimeOptionsNodeOverrideCount;
+    private string? runtimeOptionsEditorErrorMessage;
 }
