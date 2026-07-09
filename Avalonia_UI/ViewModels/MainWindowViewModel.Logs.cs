@@ -1,15 +1,8 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
     private int runtimeEventLogLoadVersion;
-
-    [ObservableProperty]
-    private bool isLoadingRuntimeEventLog;
-
-    public bool IsLogBusy => IsLoadingRuntimeEventLog;
 
     public string WorkflowRunFilterText => T("logs.workflow_run");
 
@@ -30,10 +23,4 @@ public partial class MainWindowViewModel
     public string LimitText => T("common.limit");
 
     public string RuntimeEventsSectionText => T("logs.runtime_events");
-
-    partial void OnIsLoadingRuntimeEventLogChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsLogBusy));
-        RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
-    }
 }
