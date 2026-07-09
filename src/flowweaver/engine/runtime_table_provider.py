@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
@@ -31,6 +31,7 @@ from flowweaver.engine.runtime_table_sql import (
 from flowweaver.engine.runtime_table_sql import (
     where_clause as _where_clause,
 )
+from flowweaver.engine.table_provider_protocol import TableProvider as TableProvider
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     TableMutability,
@@ -41,40 +42,6 @@ from flowweaver.protocols.enums import (
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 SQLITE_RUNTIME_PROVIDER_ID = "sqlite_runtime"
-
-
-class TableProvider(Protocol):
-    provider_id: str
-
-    def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
-        ...
-
-    def count_rows(self, table_ref: TableRefModel) -> int:
-        ...
-
-    def read_rows(
-        self,
-        table_ref: TableRefModel,
-        offset: int,
-        limit: int,
-        columns: list[str] | None = None,
-        order_by: list[str] | None = None,
-        filters: list[dict[str, Any]] | None = None,
-    ) -> list[dict[str, Any]]:
-        ...
-
-    def create_table(self, table_ref: TableRefModel) -> None:
-        ...
-
-    def drop_table(self, table_ref: TableRefModel) -> None:
-        ...
-
-    def publish_staging(
-        self,
-        staging_ref: TableRefModel,
-        published_ref: TableRefModel,
-    ) -> None:
-        ...
 
 
 class SQLiteRuntimeTableProvider:

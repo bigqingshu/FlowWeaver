@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from flowweaver.api.responses import error_response
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.engine.runtime_table_provider import TableProvider
+from flowweaver.engine.table_provider_protocol import TableProvider
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.protocols.enums import LifecycleStatus
 from flowweaver.protocols.table_ref import TableRefModel

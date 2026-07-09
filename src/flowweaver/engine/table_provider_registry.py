@@ -10,8 +10,8 @@ from flowweaver.engine.external_sql_table_provider import (
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_table_provider import (
     SQLiteRuntimeTableProvider,
-    TableProvider,
 )
+from flowweaver.engine.table_provider_protocol import TableProvider
 from flowweaver.protocols.enums import TableStorageKind
 
 
