@@ -27,29 +27,4 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
     }
 
-    private void NotifyRunMonitorActionStateChanged()
-    {
-        RefreshRunsCommand.NotifyCanExecuteChanged();
-        CancelSelectedRunCommand.NotifyCanExecuteChanged();
-        RefreshNodeRunsCommand.NotifyCanExecuteChanged();
-    }
-
-    private void NotifyRuntimeEventLogActionStateChanged()
-    {
-        RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
-    }
-
-    private void NotifyDataPreviewActionStateChanged()
-    {
-        RefreshTableRefsCommand.NotifyCanExecuteChanged();
-        RefreshSelectedWorkflowNodeDataPreviewCommand.NotifyCanExecuteChanged();
-        ShowDataPreviewDetailsCommand.NotifyCanExecuteChanged();
-        LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
-    }
-
-    private void NotifySharedPublicationActionStateChanged()
-    {
-        RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
-        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
-    }
 }
