@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
+from flowweaver.nodes.table_delete_rows_predicates import DeleteRowsPredicate
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
@@ -11,7 +12,6 @@ from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
-DeleteRowsPredicate = Callable[[int, dict[str, Any]], bool]
 
 
 def delete_rows_output_batches(
