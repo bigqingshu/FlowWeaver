@@ -6,7 +6,6 @@ public partial class MainWindowViewModel
     {
         NodeDefinitionCatalogMessage =
             F("format.loaded_node_definitions", NodeDefinitions.Count);
-        OnPropertyChanged(nameof(HasNodeDefinitions));
-        OnPropertyChanged(nameof(HasNodeDefinitionCatalogEmptyState));
+        NotifyNodeDefinitionCatalogPresentationStateChanged();
     }
 }
