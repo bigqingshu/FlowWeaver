@@ -19,30 +19,14 @@ public partial class MainWindowViewModel
 
         try
         {
-            var nodeRunsResponse = await _apiClient.ListNodeRunsAsync(
-                BuildSettings(),
+            var nodeRun = await TryLoadRequestedNodeRunForDataPreviewAsync(
                 requestedRunId,
-                _shutdown.Token);
-
-            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
-            {
-                return false;
-            }
-
-            if (!nodeRunsResponse.Ok || nodeRunsResponse.Data is null)
-            {
-                return ApplyFailedNodeDataPreviewResponse(nodeRunsResponse, notifyResult);
-            }
-
-            var nodeRun = FindNodeRunByInstanceId(
-                nodeRunsResponse.Data,
-                requestedNodeInstanceId);
+                requestedNodeInstanceId,
+                requestVersion,
+                notifyResult);
             if (nodeRun is null)
             {
-                return ApplyMissingNodeDataPreviewOutput(
-                    "format.data_preview_node_run_not_found",
-                    requestedNodeInstanceId,
-                    notifyResult);
+                return false;
             }
 
             var tableRefsResponse = await _apiClient.ListTableRefsAsync(
