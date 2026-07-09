@@ -5,6 +5,12 @@ from flowweaver.nodes.builtin_table_node_types import (
     DELETE_COLUMNS_NODE_TYPE,
 )
 from flowweaver.nodes.table_column_structure_helpers import (
+    add_columns_output_batches as _add_columns_output_batches,
+)
+from flowweaver.nodes.table_column_structure_helpers import (
+    delete_columns_output_batches as _delete_columns_output_batches,
+)
+from flowweaver.nodes.table_column_structure_helpers import (
     normalize_data_type as _normalize_data_type,
 )
 from flowweaver.nodes.table_column_structure_helpers import (
@@ -59,19 +65,17 @@ class AddColumnsNodeHandler:
             nullable=default_value is None,
         )
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                yield [
-                    row | {column_name: default_value}
-                    for row in rows
-                ]
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=schema,
-            row_batches=output_batches(),
+            row_batches=_add_columns_output_batches(
+                context,
+                input_ref,
+                column_name=column_name,
+                default_value=default_value,
+            ),
         )
 
 
@@ -107,20 +111,14 @@ class DeleteColumnsNodeHandler:
             raise _NodeValidationError("DeleteColumnsNode cannot delete all fields")
         output_columns = [field.name for field in schema]
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                yield [
-                    {
-                        column: row.get(column)
-                        for column in output_columns
-                    }
-                    for row in rows
-                ]
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=schema,
-            row_batches=output_batches(),
+            row_batches=_delete_columns_output_batches(
+                context,
+                input_ref,
+                output_columns=output_columns,
+            ),
         )

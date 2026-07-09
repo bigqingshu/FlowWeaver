@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
+from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -46,3 +51,33 @@ def parse_default_value(value: Any, *, data_type: str) -> Any:
                 return False
         raise _NodeValidationError("default_value must be a boolean")
     return value
+
+
+def add_columns_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    column_name: str,
+    default_value: Any,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        yield [
+            row | {column_name: default_value}
+            for row in rows
+        ]
+
+
+def delete_columns_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    output_columns: list[str],
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        yield [
+            {
+                column: row.get(column)
+                for column in output_columns
+            }
+            for row in rows
+        ]
