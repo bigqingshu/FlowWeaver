@@ -3,6 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import FILL_CELLS_NODE_TYPE
+from flowweaver.nodes.table_fill_cells_helpers import (
+    fill_cells_selected_rows as _fill_cells_selected_rows,
+)
+from flowweaver.nodes.table_fill_cells_helpers import (
+    fill_cells_value_source_config as _fill_cells_value_source_config,
+)
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
 from flowweaver.nodes.table_node_config import (
     enum_config as _enum_config,
@@ -27,9 +33,6 @@ from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
 from flowweaver.nodes.table_ops import has_field
-from flowweaver.nodes.table_value_source_config import (
-    value_source_config as _value_source_config,
-)
 from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
@@ -119,31 +122,3 @@ class FillCellsNodeHandler:
             schema=input_ref.schema,
             row_batches=output_batches(),
         )
-
-
-def _fill_cells_value_source_config(config: dict[str, Any]):
-    return _value_source_config(
-        config,
-        "value_source",
-        fallback_key="manual_value",
-    )
-
-
-def _fill_cells_selected_rows(
-    *,
-    start_row: int,
-    direction: str,
-    count: int | None,
-    total_rows: int,
-) -> set[int]:
-    if total_rows <= 0:
-        return set()
-    if direction == "down":
-        end_row = (
-            total_rows
-            if count is None
-            else min(total_rows, start_row + count - 1)
-        )
-        return set(range(start_row, end_row + 1))
-    end_row = 1 if count is None else max(1, start_row - count + 1)
-    return set(range(end_row, start_row + 1))
