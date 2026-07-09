@@ -1,26 +1,13 @@
-using Avalonia_UI.Models;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    public bool HasTableRefError => !string.IsNullOrWhiteSpace(TableRefErrorMessage);
-
-    public bool HasDataPreviewError =>
-        !string.IsNullOrWhiteSpace(DataPreviewErrorMessage);
-
-    public bool HasDataPreviewColumns => DataPreviewColumns.Count > 0;
-
-    public bool HasDataPreviewRows => DataPreviewRows.Count > 0;
-
     public string DataPreviewSourceText =>
         !string.IsNullOrWhiteSpace(dataPreviewSourceWorkflowRunId)
         && !string.IsNullOrWhiteSpace(dataPreviewSourceNodeInstanceId)
         && !string.IsNullOrWhiteSpace(dataPreviewSourceLogicalTableId)
             ? FormatDataPreviewSourceText()
             : T("data_preview.source_not_loaded");
-
-    public bool IsDataPreviewBusy => IsLoadingDataPreview;
 
     public string DataPreviewSectionText => T("definition.data_preview");
 
