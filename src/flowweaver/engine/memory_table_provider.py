@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable, MutableMapping, Sequence
 from typing import Any
 
+from flowweaver.engine.memory_table_building import (
+    build_memory_table_from_batches as _build_memory_table_from_batches,
+)
 from flowweaver.engine.memory_table_refs import (
     MEMORY_PROVIDER_ID as MEMORY_PROVIDER_ID,
 )
@@ -11,7 +14,6 @@ from flowweaver.engine.memory_table_refs import memory_table_ref as _memory_tabl
 from flowweaver.engine.memory_table_refs import (
     validate_memory_table_ref as _validate_memory_table_ref,
 )
-from flowweaver.engine.memory_table_rows import normalize_rows as _normalize_rows
 from flowweaver.engine.memory_table_rows import ordered_rows as _ordered_rows
 from flowweaver.engine.memory_table_rows import selected_columns as _selected_columns
 from flowweaver.engine.memory_table_storage import (
@@ -77,15 +79,12 @@ class MemoryTableProvider:
             role=role,
             version=version,
         )
-        schema_copy = list(table_ref.schema)
-        cleaned_rows: list[dict[str, Any]] = []
-        for rows in row_batches:
-            cleaned_rows.extend(_normalize_rows(schema_copy, rows))
+        memory_table = _build_memory_table_from_batches(
+            table_ref.schema,
+            row_batches,
+        )
         with self._lock:
-            self._tables[memory_table_id] = _MemoryTable(
-                schema=schema_copy,
-                rows=cleaned_rows,
-            )
+            self._tables[memory_table_id] = memory_table
         return table_ref
 
     def replace_rows(
@@ -102,17 +101,14 @@ class MemoryTableProvider:
     ) -> None:
         self._validate_ref(table_ref)
         memory_table_id = _memory_table_id(table_ref)
-        schema_copy = list(table_ref.schema)
-        cleaned_rows: list[dict[str, Any]] = []
-        for rows in row_batches:
-            cleaned_rows.extend(_normalize_rows(schema_copy, rows))
+        memory_table = _build_memory_table_from_batches(
+            table_ref.schema,
+            row_batches,
+        )
         with self._lock:
             if memory_table_id not in self._tables:
                 raise ValueError("memory table is not available")
-            self._tables[memory_table_id] = _MemoryTable(
-                schema=schema_copy,
-                rows=cleaned_rows,
-            )
+            self._tables[memory_table_id] = memory_table
 
     def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
         return list(self._load_table(table_ref).schema)
