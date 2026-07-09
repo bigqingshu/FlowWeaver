@@ -12,12 +12,6 @@ public partial class MainWindowViewModel
     private const int CollapsedRecentEventCount = 1;
     private const int ExpandedRecentEventCount = 5;
 
-    public string RecentEventsSectionText => T("recent_events.section");
-
-    public string RecentEventsEmptyText => T("recent_events.empty");
-
-    public string RecentEventsViewAllText => T("recent_events.view_all");
-
     [RelayCommand]
     private void ViewAllRecentEvents()
     {
