@@ -18,9 +18,4 @@ public partial class MainWindowViewModel
     private string? workflowDefinitionErrorMessage;
 
     private int workflowDefinitionLoadVersion = 0;
-
-    partial void OnIsLoadingWorkflowDefinitionChanged(bool value)
-    {
-        LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();
-    }
 }
