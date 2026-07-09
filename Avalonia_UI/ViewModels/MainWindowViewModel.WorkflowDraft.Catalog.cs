@@ -26,12 +26,4 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
         new();
-
-    public bool HasNodeDefinitionCatalogError =>
-        !string.IsNullOrWhiteSpace(NodeDefinitionCatalogErrorMessage);
-
-    public bool HasNodeDefinitions => NodeDefinitions.Count > 0;
-
-    public bool HasNodeDefinitionCatalogEmptyState =>
-        !IsLoadingNodeDefinitions && !HasNodeDefinitions;
 }

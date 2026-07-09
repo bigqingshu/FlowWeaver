@@ -2,6 +2,14 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    public bool HasNodeDefinitionCatalogError =>
+        !string.IsNullOrWhiteSpace(NodeDefinitionCatalogErrorMessage);
+
+    public bool HasNodeDefinitions => NodeDefinitions.Count > 0;
+
+    public bool HasNodeDefinitionCatalogEmptyState =>
+        !IsLoadingNodeDefinitions && !HasNodeDefinitions;
+
     public string? RefreshNodeDefinitionsDisabledReasonText
     {
         get
