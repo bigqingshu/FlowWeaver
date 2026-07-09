@@ -11,12 +11,6 @@ public partial class MainWindowViewModel
     private int nodeRunsLoadVersion;
 
     [ObservableProperty]
-    private string runMessage = "No runs loaded.";
-
-    [ObservableProperty]
-    private string? runErrorMessage;
-
-    [ObservableProperty]
     private bool isLoadingNodeRuns;
 
     [ObservableProperty]
@@ -24,8 +18,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? nodeRunErrorMessage;
-
-    public bool HasRunError => !string.IsNullOrWhiteSpace(RunErrorMessage);
 
     public bool IsNodeRunBusy => IsLoadingNodeRuns;
 
@@ -79,8 +71,4 @@ public partial class MainWindowViewModel
         IsLoadingRuns = false;
     }
 
-    partial void OnRunErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasRunError));
-    }
 }
