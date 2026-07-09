@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Callable
-from threading import Lock, Thread
+from threading import Lock
 from typing import TextIO
 
 from flowweaver.node_executor.base import NodeExecutorFactory
@@ -20,8 +19,11 @@ from flowweaver.node_executor.process_helpers import (
 from flowweaver.node_executor.process_helpers import (
     write_envelope as _write_envelope,
 )
-from flowweaver.node_executor.process_helpers import (
-    write_process_error as _write_process_error,
+from flowweaver.node_executor.process_loop import (
+    EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE as EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE,
+)
+from flowweaver.node_executor.process_loop import (
+    run_node_executor_ipc_loop,
 )
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
@@ -35,8 +37,6 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-
-EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE = 2
 
 
 class NodeExecutorProcess:
@@ -268,42 +268,12 @@ def run_node_executor_process(
         executor_factory=executor_factory,
         event_writer=lambda envelope: _write_envelope(stdout, envelope),
     )
-    _write_envelope(stdout, process.ready_envelope())
-    task_workers: list[Thread] = []
-
-    def handle_task(envelope: IPCEnvelope) -> None:
-        try:
-            responses = process.handle_envelope(envelope)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else 1
-            os._exit(code)
-        for response in responses:
-            _write_envelope(stdout, response)
-
-    for line in stdin:
-        if not line.strip():
-            continue
-        try:
-            envelope = IPCEnvelope.model_validate_json(line)
-        except ValueError as exc:
-            _write_process_error(stderr, "IPC_INPUT_ERROR", exc)
-            return EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE
-        if envelope.message_type == IPCMessageType.NODE_TASK_SUBMIT:
-            worker = Thread(
-                target=handle_task,
-                args=(envelope,),
-                name=f"flowweaver-executor-task-{envelope.message_id}",
-                daemon=True,
-            )
-            task_workers.append(worker)
-            worker.start()
-            continue
-        responses = process.handle_envelope(envelope)
-        for response in responses:
-            _write_envelope(stdout, response)
-    for worker in task_workers:
-        worker.join()
-    return 0
+    return run_node_executor_ipc_loop(
+        process,
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
