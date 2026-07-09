@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import ADVANCED_FILTER_ROWS_NODE_TYPE
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
@@ -24,12 +22,11 @@ from flowweaver.nodes.table_row_filter_helpers import (
     advanced_filter_conditions as _advanced_filter_conditions,
 )
 from flowweaver.nodes.table_row_filter_helpers import (
-    advanced_filter_output_fields as _advanced_filter_output_fields,
+    advanced_filter_output_batches as _advanced_filter_output_batches,
 )
 from flowweaver.nodes.table_row_filter_helpers import (
-    advanced_filter_row_matches as _advanced_filter_row_matches,
+    advanced_filter_output_fields as _advanced_filter_output_fields,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -79,56 +76,19 @@ class AdvancedFilterRowsNodeHandler:
             default=False,
         )
 
-        def output_batches():
-            output_count = 0
-            matched_count = 0
-            seen_rows: set[tuple[Any, ...]] = set()
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    try:
-                        if not _advanced_filter_row_matches(
-                            row,
-                            conditions=conditions,
-                            logic=logic,
-                        ):
-                            continue
-                    except ValueSourceError as exc:
-                        raise _NodeValidationError(str(exc)) from exc
-                    output_row = {
-                        field_name: row.get(field_name)
-                        for field_name in output_fields
-                    }
-                    if remove_duplicates:
-                        output_key = tuple(
-                            output_row.get(field)
-                            for field in output_fields
-                        )
-                        if output_key in seen_rows:
-                            continue
-                        seen_rows.add(output_key)
-                    matched_count += 1
-                    if (
-                        max_intermediate is not None
-                        and matched_count > max_intermediate
-                    ):
-                        raise _NodeValidationError(
-                            "AdvancedFilterRowsNode matched rows exceed "
-                            "max_intermediate"
-                        )
-                    if result_limit is not None and output_count >= result_limit:
-                        if output_rows:
-                            yield output_rows
-                        return
-                    output_rows.append(output_row)
-                    output_count += 1
-                if output_rows:
-                    yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_advanced_filter_output_batches(
+                context,
+                input_ref,
+                conditions=conditions,
+                logic=logic,
+                output_fields=output_fields,
+                result_limit=result_limit,
+                max_intermediate=max_intermediate,
+                remove_duplicates=remove_duplicates,
+            ),
         )
