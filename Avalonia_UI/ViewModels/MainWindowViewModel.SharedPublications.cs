@@ -1,14 +1,8 @@
-using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
     private int sharedPublicationsLoadVersion;
-
-    [ObservableProperty]
-    private SharedPublicationListItemViewModel? selectedSharedPublication;
 
     public bool IsDataBusy =>
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
