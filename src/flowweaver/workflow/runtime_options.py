@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Callable, Mapping
-from typing import Any
 
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
-from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow.definition import (
@@ -15,6 +12,24 @@ from flowweaver.workflow.definition import (
     RuntimeOptionsWorkflowModel,
     TelemetryRuntimeOptionsOverrideModel,
     WorkflowDefinitionModel,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    CRITICAL_EVENT_TYPES as _CRITICAL_EVENT_TYPES,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    event_node_instance_id as _event_node_instance_id,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    runtime_options_should_emit_event as _runtime_options_should_emit_event,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    sanitize_runtime_diagnostics_payload as _sanitize_runtime_diagnostics_payload,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    sanitize_runtime_error_payload as _sanitize_runtime_error_payload,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
+    sanitize_runtime_event as _sanitize_runtime_event,
 )
 
 SYSTEM_DEFAULT_RUNTIME_OPTIONS = RuntimeOptionsWorkflowModel()
@@ -59,47 +74,6 @@ _PROFILE_PRESET_OVERRIDES: dict[str, dict[str, object]] = {
         },
     },
 }
-_CRITICAL_EVENT_TYPES = frozenset(
-    {
-        EventType.WORKFLOW_STARTED,
-        EventType.WORKFLOW_FINISHED,
-        EventType.WORKFLOW_FAILED,
-        EventType.WORKFLOW_CANCELLED,
-        EventType.NODE_STARTED,
-        EventType.NODE_FINISHED,
-        EventType.NODE_FAILED,
-        EventType.NODE_TIMEOUT,
-    }
-)
-_BASIC_EVENT_TYPES = _CRITICAL_EVENT_TYPES | frozenset(
-    {
-        EventType.NODE_QUEUED,
-        EventType.NODE_LONG_RUNNING,
-    }
-)
-_ESSENTIAL_PAYLOAD_KEYS = frozenset(
-    {
-        "process_id",
-        "task_id",
-        "executor_id",
-        "node_instance_id",
-        "completion_reason",
-        "run_mode",
-        "target_node_instance_id",
-    }
-)
-_ESSENTIAL_ERROR_KEYS = frozenset(
-    {
-        "message",
-        "error_code",
-        "code",
-        "reason",
-        "origin",
-        "status",
-    }
-)
-
-
 class RuntimeOptionsEventSink:
     def __init__(
         self,
@@ -309,144 +283,3 @@ def _merge_runtime_options_overlay(
 def _profile_preset_data(profile: str) -> dict[str, object]:
     preset = _PROFILE_PRESET_OVERRIDES.get(profile)
     return dict(preset or {})
-
-
-def _runtime_options_should_emit_event(
-    event: EventModel,
-    options: RuntimeOptionsWorkflowModel,
-) -> bool:
-    if event.event_type == EventType.NODE_PROGRESS:
-        return options.telemetry.progress_enabled and (
-            options.telemetry.event_level in {"progress", "verbose"}
-        )
-    if event.event_type in _CRITICAL_EVENT_TYPES:
-        return True
-    if options.telemetry.event_level == "none":
-        return False
-    if options.telemetry.event_level == "basic":
-        return event.event_type in _BASIC_EVENT_TYPES
-    if options.telemetry.event_level == "progress":
-        return True
-    return True
-
-
-def _sanitize_runtime_event(
-    event: EventModel,
-    options: RuntimeOptionsWorkflowModel,
-) -> EventModel:
-    payload = dict(event.payload)
-    payload = _sanitize_runtime_diagnostics_payload(payload, options)
-    return event.model_copy(update={"payload": payload})
-
-
-def _sanitize_runtime_diagnostics_payload(
-    payload: dict[str, Any],
-    options: RuntimeOptionsWorkflowModel,
-    *,
-    essential_keys: frozenset[str] = _ESSENTIAL_PAYLOAD_KEYS,
-) -> dict[str, Any]:
-    payload = dict(payload)
-    if not options.diagnostics.include_metrics:
-        payload = _remove_payload_key(payload, "metrics")
-    if options.diagnostics.redact_columns:
-        payload = _redact_payload(
-            payload,
-            {column.lower() for column in options.diagnostics.redact_columns},
-            options.diagnostics.mask_policy,
-        )
-    payload = _limit_payload_size(
-        payload,
-        options.diagnostics.payload_byte_limit,
-        essential_keys=essential_keys,
-    )
-    return payload
-
-
-def _sanitize_runtime_error_payload(
-    payload: dict[str, Any],
-    options: RuntimeOptionsWorkflowModel,
-) -> dict[str, Any]:
-    if not options.diagnostics.capture_error_context:
-        payload = {
-            key: value
-            for key, value in payload.items()
-            if key in _ESSENTIAL_ERROR_KEYS
-        }
-    return _sanitize_runtime_diagnostics_payload(
-        payload,
-        options,
-        essential_keys=_ESSENTIAL_PAYLOAD_KEYS | _ESSENTIAL_ERROR_KEYS,
-    )
-
-
-def _event_node_instance_id(event: EventModel) -> str | None:
-    value = event.payload.get("node_instance_id")
-    return value if isinstance(value, str) and value else None
-
-
-def _remove_payload_key(value: Any, key: str) -> Any:
-    if isinstance(value, dict):
-        return {
-            item_key: _remove_payload_key(item_value, key)
-            for item_key, item_value in value.items()
-            if item_key != key
-        }
-    if isinstance(value, list):
-        return [_remove_payload_key(item, key) for item in value]
-    return value
-
-
-def _redact_payload(
-    value: Any,
-    redact_columns: set[str],
-    mask_policy: str,
-) -> Any:
-    if isinstance(value, dict):
-        return {
-            item_key: (
-                _mask_value(item_value, mask_policy)
-                if item_key.lower() in redact_columns
-                else _redact_payload(item_value, redact_columns, mask_policy)
-            )
-            for item_key, item_value in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_payload(item, redact_columns, mask_policy) for item in value]
-    return value
-
-
-def _mask_value(value: Any, mask_policy: str) -> Any:
-    if mask_policy == "none":
-        return value
-    if mask_policy == "full":
-        return "***"
-    text = str(value)
-    if len(text) <= 2:
-        return "*" * len(text)
-    return f"{text[0]}***{text[-1]}"
-
-
-def _limit_payload_size(
-    payload: dict[str, Any],
-    payload_byte_limit: int,
-    *,
-    essential_keys: frozenset[str] = _ESSENTIAL_PAYLOAD_KEYS,
-) -> dict[str, Any]:
-    if payload_byte_limit <= 0:
-        return payload
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        default=str,
-    ).encode("utf-8")
-    if len(encoded) <= payload_byte_limit:
-        return payload
-    limited = {
-        key: value
-        for key, value in payload.items()
-        if key in essential_keys
-    }
-    limited["_runtime_options_payload_truncated"] = True
-    limited["_runtime_options_payload_original_bytes"] = len(encoded)
-    return limited
