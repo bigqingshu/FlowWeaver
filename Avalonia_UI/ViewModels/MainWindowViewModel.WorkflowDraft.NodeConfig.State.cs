@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using Avalonia_UI.Models;
 
@@ -73,22 +72,5 @@ public partial class MainWindowViewModel
 
         OnPropertyChanged(nameof(HasSelectedNodeConfigEditableInputFields));
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
-    }
-
-    private static string? FormatNodeConfigApplyErrors(
-        NodeConfigEditableDraftConfigResult result)
-    {
-        var fieldWarningCodes = result.FieldErrors
-            .Select(error => error.Warning)
-            .ToHashSet(StringComparer.Ordinal);
-        var issueLines = result.FieldErrors
-            .Select(error => $"{error.FieldName}: {error.Warning}")
-            .Concat(result.Warnings.Where(warning => !fieldWarningCodes.Contains(warning)))
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToArray();
-
-        return issueLines.Length == 0
-            ? null
-            : string.Join(Environment.NewLine, issueLines);
     }
 }
