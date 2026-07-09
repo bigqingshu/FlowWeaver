@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from flowweaver.nodes.builtin_table_node_types import MERGE_COLUMNS_NODE_TYPE
 from flowweaver.nodes.table_merge_columns_helpers import (
+    merge_columns_output_batches as _merge_columns_output_batches,
+)
+from flowweaver.nodes.table_merge_columns_helpers import (
     merge_columns_output_schema as _merge_columns_output_schema,
 )
 from flowweaver.nodes.table_merge_columns_helpers import (
     merge_columns_separators as _merge_columns_separators,
-)
-from flowweaver.nodes.table_merge_columns_helpers import (
-    merge_columns_value as _merge_columns_value,
 )
 from flowweaver.nodes.table_node_config import (
     bool_config as _bool_config,
@@ -89,27 +89,19 @@ class MergeColumnsNodeHandler:
         trim_value = _bool_config(task.config, "trim_value", default=False)
         empty_placeholder = task.config.get("empty_placeholder", "")
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                yield [
-                    row
-                    | {
-                        output_field: _merge_columns_value(
-                            row,
-                            fields=fields,
-                            separators=separators,
-                            skip_empty=skip_empty,
-                            trim_value=trim_value,
-                            empty_placeholder=empty_placeholder,
-                        )
-                    }
-                    for row in rows
-                ]
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_merge_columns_output_batches(
+                context,
+                input_ref,
+                output_field=output_field,
+                fields=fields,
+                separators=separators,
+                skip_empty=skip_empty,
+                trim_value=trim_value,
+                empty_placeholder=empty_placeholder,
+            ),
         )

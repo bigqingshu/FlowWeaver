@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
 from flowweaver.nodes.table_ops import append_field, has_field, replace_field_schema
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -100,3 +104,31 @@ def merge_columns_value(
             merged += separators[index - 1]
         merged += value
     return merged
+
+
+def merge_columns_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    output_field: str,
+    fields: list[str],
+    separators: list[str],
+    skip_empty: bool,
+    trim_value: bool,
+    empty_placeholder: Any,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        yield [
+            row
+            | {
+                output_field: merge_columns_value(
+                    row,
+                    fields=fields,
+                    separators=separators,
+                    skip_empty=skip_empty,
+                    trim_value=trim_value,
+                    empty_placeholder=empty_placeholder,
+                )
+            }
+            for row in rows
+        ]
