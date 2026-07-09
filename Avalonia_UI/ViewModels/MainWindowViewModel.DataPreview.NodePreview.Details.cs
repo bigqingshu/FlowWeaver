@@ -8,13 +8,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private bool CanShowDataPreviewDetails()
-    {
-        return CanUseEngineActions
-            && !string.IsNullOrWhiteSpace(dataPreviewSourceTableRefId)
-            && !IsLoadingDataPreviewWorkbench;
-    }
-
     [RelayCommand(CanExecute = nameof(CanShowDataPreviewDetails))]
     private async Task ShowDataPreviewDetailsAsync()
     {

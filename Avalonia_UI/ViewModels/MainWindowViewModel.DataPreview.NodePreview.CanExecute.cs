@@ -9,4 +9,11 @@ public partial class MainWindowViewModel
             && SelectedWorkflowDefinitionNode is not null
             && !IsLoadingDataPreview;
     }
+
+    private bool CanShowDataPreviewDetails()
+    {
+        return CanUseEngineActions
+            && !string.IsNullOrWhiteSpace(dataPreviewSourceTableRefId)
+            && !IsLoadingDataPreviewWorkbench;
+    }
 }
