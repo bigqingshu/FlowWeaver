@@ -4,7 +4,6 @@ from contextlib import AbstractContextManager
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -26,6 +25,15 @@ from flowweaver.engine.table_lease_models import (
 )
 from flowweaver.engine.table_lease_models import (
     lease_from_record as _lease_from_record,
+)
+from flowweaver.engine.table_lease_queries import (
+    active_table_leases as _active_table_leases,
+)
+from flowweaver.engine.table_lease_queries import (
+    conflicting_table_leases as _conflicting_table_leases,
+)
+from flowweaver.engine.table_lease_queries import (
+    expire_stale_table_leases as _expire_stale_table_leases,
 )
 from flowweaver.protocols.enums import TableLeaseStatus, TableLeaseType
 
@@ -95,7 +103,7 @@ class TableLeaseManager:
             return len(
                 [
                     record
-                    for record in self._active_leases(session, table_ref_id, now)
+                    for record in _active_table_leases(session, table_ref_id, now)
                     if record.lease_type == TableLeaseType.READ.value
                 ]
             )
@@ -104,7 +112,7 @@ class TableLeaseManager:
         now = utc_now()
         with self._immediate_session() as session:
             self._expire_stale_leases(session, now)
-            return not self._active_leases(session, table_ref_id, now)
+            return not _active_table_leases(session, table_ref_id, now)
 
     def expire_stale_leases(self) -> int:
         with self._immediate_session() as session:
@@ -123,8 +131,8 @@ class TableLeaseManager:
         expires_at = now + timedelta(seconds=ttl_seconds)
         with self._immediate_session() as session:
             self._expire_stale_leases(session, now)
-            active_leases = self._active_leases(session, table_ref_id, now)
-            conflicts = _conflicts_for(lease_type, active_leases)
+            active_leases = _active_table_leases(session, table_ref_id, now)
+            conflicts = _conflicting_table_leases(lease_type, active_leases)
             if conflicts:
                 return LeaseAcquireResult(
                     granted=False,
@@ -152,46 +160,8 @@ class TableLeaseManager:
                 conflict_lease_ids=[],
             )
 
-    def _active_leases(
-        self,
-        session: Session,
-        table_ref_id: str,
-        now: datetime,
-    ) -> list[TableLeaseRecord]:
-        return list(
-            session.scalars(
-                select(TableLeaseRecord)
-                .where(TableLeaseRecord.table_ref_id == table_ref_id)
-                .where(TableLeaseRecord.status == TableLeaseStatus.ACTIVE.value)
-                .where(TableLeaseRecord.expires_at > _datetime_to_text(now))
-            )
-        )
-
     def _expire_stale_leases(self, session: Session, now: datetime) -> int:
-        stale_records = list(
-            session.scalars(
-                select(TableLeaseRecord)
-                .where(TableLeaseRecord.status == TableLeaseStatus.ACTIVE.value)
-                .where(TableLeaseRecord.expires_at <= _datetime_to_text(now))
-            )
-        )
-        for record in stale_records:
-            record.status = TableLeaseStatus.EXPIRED.value
-            record.released_at = _datetime_to_text(now)
-        return len(stale_records)
+        return _expire_stale_table_leases(session, now)
 
     def _immediate_session(self) -> AbstractContextManager[Session]:
         return immediate_session(self._engine)
-
-
-def _conflicts_for(
-    requested_type: TableLeaseType,
-    active_leases: list[TableLeaseRecord],
-) -> list[TableLeaseRecord]:
-    if requested_type == TableLeaseType.READ:
-        return [
-            record
-            for record in active_leases
-            if record.lease_type == TableLeaseType.WRITE.value
-        ]
-    return active_leases
