@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any
 
 from flowweaver.common.subprocess_command import python_module_command
-from flowweaver.common.time import utc_now
 from flowweaver.node_executor.base import NodeExecutorFactory
+from flowweaver.node_executor.ipc_client_messages import (
+    INTERMEDIATE_NODE_TASK_MESSAGES,
+    cancel_request_envelope,
+    ipc_failure_result,
+    missing_result,
+)
 from flowweaver.node_executor.process import NodeExecutorProcess
-from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
+from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
-    NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
 )
@@ -49,7 +53,7 @@ class LocalNodeExecutorIpcClient:
             payload=task.model_dump(mode="json"),
         )
         for response in self._process.handle_envelope(envelope):
-            if response.message_type in _INTERMEDIATE_NODE_TASK_MESSAGES:
+            if response.message_type in INTERMEDIATE_NODE_TASK_MESSAGES:
                 self._emit_event(task, response)
                 continue
             if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
@@ -58,7 +62,7 @@ class LocalNodeExecutorIpcClient:
                 ).result
             if response.message_type == IPCMessageType.NODE_TASK_FAILED:
                 return NodeTaskFailedPayload.model_validate(response.payload).result
-        return _missing_result(task, executor_id=self.executor_id)
+        return missing_result(task, executor_id=self.executor_id)
 
     def request_cancel(
         self,
@@ -66,7 +70,7 @@ class LocalNodeExecutorIpcClient:
         *,
         reason: str = "WORKFLOW_CANCEL_REQUESTED",
     ) -> bool:
-        envelope = _cancel_request_envelope(task, reason=reason)
+        envelope = cancel_request_envelope(task, reason=reason)
         self._process.handle_envelope(envelope)
         return True
 
@@ -131,7 +135,7 @@ class SubprocessNodeExecutorIpcClient:
             response = self._read_response()
             if response is None:
                 return self._missing_result(task)
-            if response.message_type in _INTERMEDIATE_NODE_TASK_MESSAGES:
+            if response.message_type in INTERMEDIATE_NODE_TASK_MESSAGES:
                 self._emit_event(task, response)
                 continue
             if response.message_type == IPCMessageType.NODE_TASK_COMPLETED:
@@ -147,7 +151,7 @@ class SubprocessNodeExecutorIpcClient:
         *,
         reason: str = "WORKFLOW_CANCEL_REQUESTED",
     ) -> bool:
-        return self._write_envelope(_cancel_request_envelope(task, reason=reason))
+        return self._write_envelope(cancel_request_envelope(task, reason=reason))
 
     def close(self) -> None:
         if self._closed:
@@ -214,7 +218,7 @@ class SubprocessNodeExecutorIpcClient:
             self._event_handler(task, envelope)
 
     def _missing_result(self, task: NodeTaskModel) -> NodeTaskResultModel:
-        return _ipc_failure_result(
+        return ipc_failure_result(
             task,
             executor_id=self.executor_id,
             error=self._failure_error(),
@@ -252,55 +256,6 @@ class SubprocessNodeExecutorIpcClient:
             return ""
         return output[-2000:]
 
-
-def _missing_result(
-    task: NodeTaskModel,
-    *,
-    executor_id: str,
-) -> NodeTaskResultModel:
-    return _ipc_failure_result(
-        task,
-        executor_id=executor_id,
-        error={"message": "Node executor IPC response did not include a result"},
-    )
-
-
-def _cancel_request_envelope(
-    task: NodeTaskModel,
-    *,
-    reason: str,
-) -> IPCEnvelope:
-    return IPCEnvelope(
-        message_type=IPCMessageType.NODE_TASK_CANCEL_REQUEST,
-        workflow_run_id=task.workflow_run_id,
-        node_run_id=task.node_run_id,
-        payload=NodeTaskCancelRequestPayload(
-            task_id=task.task_id,
-            reason=reason,
-        ).model_dump(mode="json"),
-    )
-
-
-def _ipc_failure_result(
-    task: NodeTaskModel,
-    *,
-    executor_id: str,
-    error: dict[str, Any],
-) -> NodeTaskResultModel:
-    now = utc_now()
-    return NodeTaskResultModel(
-        task_id=task.task_id,
-        node_run_id=task.node_run_id,
-        attempt=task.attempt,
-        executor_id=executor_id,
-        process_generation=task.process_generation,
-        status=NodeResultStatus.FAILED,
-        error=error,
-        started_at=now,
-        finished_at=now,
-    )
-
-
 def _src_path() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -315,12 +270,3 @@ def _child_environment(base_env: Mapping[str, str] | None = None) -> dict[str, s
         else f"{src_path}{os.pathsep}{existing_pythonpath}"
     )
     return env
-
-
-_INTERMEDIATE_NODE_TASK_MESSAGES = frozenset(
-    {
-        IPCMessageType.NODE_TASK_ACCEPTED,
-        IPCMessageType.NODE_TASK_HEARTBEAT,
-        IPCMessageType.NODE_TASK_PROGRESS,
-    }
-)
