@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
@@ -20,10 +19,6 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private long? lastRuntimeEventSequenceNumber;
 
-    public ObservableCollection<RuntimeEventListItemViewModel> RuntimeEvents { get; } = new();
-
     public bool HasRuntimeEventStreamError =>
         !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
-
-    public bool HasRuntimeEvents => RuntimeEvents.Count > 0;
 }
