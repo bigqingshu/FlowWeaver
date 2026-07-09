@@ -1,28 +1,12 @@
 using System.Text.Json;
 using System.Threading.Tasks;
-using Avalonia_UI.Api;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    [ObservableProperty]
-    private bool isValidatingWorkflowDefinitionDraft;
-
-    [ObservableProperty]
-    private string workflowDefinitionValidationMessage = "Load definition to edit draft JSON.";
-
-    [ObservableProperty]
-    private string? workflowDefinitionValidationErrorMessage;
-
-    private bool CanValidateWorkflowDefinitionDraft()
-    {
-        return CanUseEngineActions && HasWorkflowDefinitionDraft && !IsWorkflowDefinitionDraftBusy;
-    }
-
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
     private async Task ValidateWorkflowDefinitionDraftAsync()
     {
@@ -81,5 +65,4 @@ public partial class MainWindowViewModel
             "workflow.definition.validate",
             UiNotificationKind.Error);
     }
-
 }
