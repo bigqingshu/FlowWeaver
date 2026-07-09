@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Depends, Request
 
 from flowweaver.api.api_models import (
     APIResponseModel,
     WorkflowCreateRequest,
-    WorkflowRunBackgroundStartRequest,
-    WorkflowRunStartRequest,
     WorkflowUpdateRequest,
     WorkflowValidateRequest,
 )
@@ -16,14 +14,12 @@ from flowweaver.api.dependencies import (
     check_origin,
     get_node_registry,
     get_runtime_store,
-    get_supervisor,
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
-from flowweaver.api.workflow_run_start import start_workflow_run_for_request
+from flowweaver.api.routes_workflow_runs import router as workflow_runs_router
 from flowweaver.engine.runtime_models import WorkflowRevisionConflict
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.engine.supervisor import Supervisor
 from flowweaver.nodes.registry import NodeRegistry
 from flowweaver.workflow.validation import validate_workflow_definition
 
@@ -32,6 +28,7 @@ router = APIRouter(
     tags=["workflows"],
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
+router.include_router(workflow_runs_router)
 
 
 @router.get("", response_model=APIResponseModel)
@@ -90,57 +87,6 @@ def get_workflow(
             status_code=404,
         )
     return ok_response(request, workflow)
-
-
-@router.post("/{workflow_id}/runs", status_code=201, response_model=APIResponseModel)
-def start_workflow_run(
-    request: Request,
-    workflow_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-    supervisor: Annotated[Supervisor, Depends(get_supervisor)],
-    payload: Annotated[WorkflowRunStartRequest | None, Body()] = None,
-):
-    run_mode = payload.run_mode if payload is not None else "full"
-    trigger_source = payload.trigger_source if payload is not None else "manual"
-    target_node_instance_id = (
-        payload.target_node_instance_id if payload is not None else None
-    )
-    return start_workflow_run_for_request(
-        request,
-        workflow_id=workflow_id,
-        store=store,
-        supervisor=supervisor,
-        run_mode=run_mode,
-        trigger_source=trigger_source,
-        target_node_instance_id=target_node_instance_id,
-    )
-
-
-@router.post(
-    "/{workflow_id}/background-runs",
-    status_code=201,
-    response_model=APIResponseModel,
-)
-def start_background_workflow_run(
-    request: Request,
-    workflow_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-    supervisor: Annotated[Supervisor, Depends(get_supervisor)],
-    payload: Annotated[WorkflowRunBackgroundStartRequest | None, Body()] = None,
-):
-    run_mode = payload.run_mode if payload is not None else "full"
-    target_node_instance_id = (
-        payload.target_node_instance_id if payload is not None else None
-    )
-    return start_workflow_run_for_request(
-        request,
-        workflow_id=workflow_id,
-        store=store,
-        supervisor=supervisor,
-        run_mode=run_mode,
-        trigger_source="background_manual",
-        target_node_instance_id=target_node_instance_id,
-    )
 
 
 @router.put("/{workflow_id}", response_model=APIResponseModel)
