@@ -1,6 +1,4 @@
-using System.Linq;
 using System.Threading.Tasks;
-using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -57,24 +55,9 @@ public partial class MainWindowViewModel
                 return;
             }
 
-            WorkflowDefinitionDetail = new WorkflowDefinitionDetailViewModel(
+            ApplyWorkflowDefinitionLoadSuccess(
                 workflowResponse.Data,
-                revisionsResponse.Data,
-                DisplayTextFormatter,
-                _nodeEditorResolver);
-            SelectedWorkflowDefinitionNode =
-                WorkflowDefinitionDetail.Nodes.FirstOrDefault();
-            originalWorkflowDefinitionJson = WorkflowDefinitionDetail.RawDefinitionJson;
-            WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
-            IsWorkflowDefinitionDraftDirty = false;
-            HasWorkflowDefinitionRevisionConflict = false;
-            WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
-            WorkflowDefinitionValidationErrorMessage = null;
-            WorkflowDefinitionMessage =
-                F(
-                    "format.loaded_workflow_definition",
-                    WorkflowDefinitionDetail.Name,
-                    WorkflowDefinitionDetail.VersionText);
+                revisionsResponse.Data);
         }
         finally
         {
