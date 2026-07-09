@@ -16,15 +16,4 @@ public partial class MainWindowViewModel
         NotifySharedPublicationActionStateChanged();
     }
 
-    private void NotifyRunSelectionActionStateChanged()
-    {
-        OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
-        OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
-    }
-
-    private void NotifyNodeCatalogSummaryActionStateChanged()
-    {
-        OnPropertyChanged(nameof(RefreshNodeDefinitionsDisabledReasonText));
-    }
-
 }
