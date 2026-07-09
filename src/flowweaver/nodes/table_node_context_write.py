@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from contextlib import suppress
 from typing import Any
 
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
-from flowweaver.nodes.table_node_errors import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_context_runtime_write import (
+    publish_runtime_row_batches as _publish_runtime_row_batches,
+)
+from flowweaver.nodes.table_node_context_runtime_write import (
+    replace_runtime_table_batches as _replace_runtime_table_batches,
+)
 from flowweaver.nodes.table_node_output_targets import (
     TableOutputWriteResult,
 )
@@ -24,7 +28,7 @@ from flowweaver.nodes.table_node_output_targets import (
 from flowweaver.nodes.table_node_output_targets import (
     require_existing_output_target_ref as _require_existing_output_target_ref,
 )
-from flowweaver.protocols.enums import TableRole, TableStorageKind
+from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
@@ -67,18 +71,15 @@ class TableNodeContextWriteMixin:
         role: TableRole = TableRole.CURRENT,
         version: int = 1,
     ) -> TableRefModel:
-        staging_ref = self.table_provider.create_staging_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        return _publish_runtime_row_batches(
+            self,
+            task,
             output_name=output_name,
             schema=schema,
+            row_batches=row_batches,
             role=role,
             version=version,
         )
-        for rows in row_batches:
-            self.table_provider.insert_rows(staging_ref, rows)
-        self.registry.register_staging(staging_ref)
-        return self.registry.publish(staging_ref.table_ref_id)
 
     def create_memory_table(
         self,
@@ -128,27 +129,14 @@ class TableNodeContextWriteMixin:
         schema: Sequence[FieldSchemaModel],
         row_batches: Iterable[Sequence[dict[str, Any]]],
     ) -> TableRefModel:
-        if target_ref.storage_kind != TableStorageKind.RUNTIME_SQL:
-            raise BuiltinTableNodeValidationError(
-                "replace_runtime_table_batches requires a RUNTIME_SQL target"
-            )
-        staging_output_name = f"{output_name}__replace_{target_ref.table_ref_id}"
-        staging_ref = self.table_provider.create_staging_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            output_name=staging_output_name,
+        return _replace_runtime_table_batches(
+            self,
+            task,
+            target_ref=target_ref,
+            output_name=output_name,
             schema=schema,
-            role=target_ref.role,
-            version=target_ref.version,
+            row_batches=row_batches,
         )
-        try:
-            for rows in row_batches:
-                self.table_provider.insert_rows(staging_ref, rows)
-            self.table_provider.publish_staging(staging_ref, target_ref)
-        finally:
-            with suppress(Exception):
-                self.table_provider.drop_table(staging_ref)
-        return target_ref
 
     def create_memory_table_from_batches(
         self,
