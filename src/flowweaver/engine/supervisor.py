@@ -20,6 +20,9 @@ from flowweaver.engine.supervisor_commands import (
     workflow_process_command as _workflow_process_command,
 )
 from flowweaver.engine.supervisor_executor_events import (
+    close_executor_children as _close_executor_children,
+)
+from flowweaver.engine.supervisor_executor_events import (
     publish_executor_exited as _publish_executor_exited,
 )
 from flowweaver.engine.supervisor_paths import (
@@ -176,17 +179,11 @@ class Supervisor:
             drain_runtime_events_for_process=self._drain_runtime_events_for_process,
             forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
-        for executor_id, child in list(self._executor_children.items()):
-            if child.poll() is None:
-                terminate_child_process(child, graceful_timeout_seconds=2)
-            self._executor_children.pop(executor_id, None)
-            _publish_executor_exited(
-                event_router=self._event_router,
-                runtime_store=self._runtime_store,
-                executor_id=executor_id,
-                exit_code=child.returncode if child.returncode is not None else 1,
-                pid=child.pid,
-            )
+        _close_executor_children(
+            children=self._executor_children,
+            event_router=self._event_router,
+            runtime_store=self._runtime_store,
+        )
 
     def stop_workflow_process(
         self,
