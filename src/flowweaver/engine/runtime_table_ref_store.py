@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.time import utc_now
@@ -9,6 +8,15 @@ from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
     _table_ref_from_record,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
+    get_table_ref_from_session as _get_table_ref,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
+    list_table_refs_by_node_run_from_session as _list_by_node_run,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
+    list_table_refs_by_workflow_run_from_session as _list_by_workflow_run,
 )
 from flowweaver.protocols.enums import LifecycleStatus
 from flowweaver.protocols.table_ref import TableRefModel
@@ -23,22 +31,14 @@ class RuntimeTableRefStoreMixin:
 
     def get_table_ref(self, table_ref_id: str) -> TableRefModel | None:
         with self._session_factory() as session:
-            record = session.get(DataRefRecord, table_ref_id)
-            if record is None:
-                return None
-            return _table_ref_from_record(record)
+            return _get_table_ref(session, table_ref_id)
 
     def list_table_refs_by_workflow_run(
         self,
         workflow_run_id: str,
     ) -> list[TableRefModel]:
         with self._session_factory() as session:
-            records = session.scalars(
-                select(DataRefRecord)
-                .where(DataRefRecord.workflow_run_id == workflow_run_id)
-                .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
-            ).all()
-            return [_table_ref_from_record(record) for record in records]
+            return _list_by_workflow_run(session, workflow_run_id)
 
     def list_table_refs_by_node_run(
         self,
@@ -47,13 +47,11 @@ class RuntimeTableRefStoreMixin:
         node_run_id: str,
     ) -> list[TableRefModel]:
         with self._session_factory() as session:
-            records = session.scalars(
-                select(DataRefRecord)
-                .where(DataRefRecord.workflow_run_id == workflow_run_id)
-                .where(DataRefRecord.node_run_id == node_run_id)
-                .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
-            ).all()
-            return [_table_ref_from_record(record) for record in records]
+            return _list_by_node_run(
+                session,
+                workflow_run_id=workflow_run_id,
+                node_run_id=node_run_id,
+            )
 
     def mark_staging_table_ref_released(
         self,
