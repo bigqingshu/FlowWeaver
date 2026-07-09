@@ -5,7 +5,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
     WorkflowDefinitionRecord,
@@ -19,8 +18,15 @@ from flowweaver.engine.runtime_models import (
 )
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
-    _definition_hash,
-    _json_dumps,
+)
+from flowweaver.engine.runtime_workflow_definition_records import (
+    initial_workflow_definition_records as _initial_workflow_definition_records,
+)
+from flowweaver.engine.runtime_workflow_definition_records import (
+    next_workflow_revision_record as _next_workflow_revision_record,
+)
+from flowweaver.engine.runtime_workflow_definition_records import (
+    sync_legacy_workflow_definition_record as _sync_legacy_workflow_definition_record,
 )
 from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_definition_from_records,
@@ -39,39 +45,15 @@ class RuntimeWorkflowDefinitionStoreMixin:
         workflow_id: str | None = None,
         created_by: str | None = None,
     ) -> WorkflowDefinition:
-        now = utc_now()
-        workflow_id = workflow_id or new_id()
-        revision_id = new_id()
-        definition_json = _json_dumps(definition)
-        definition_hash = _definition_hash(definition_json)
-        workflow = WorkflowRecord(
-            workflow_id=workflow_id,
+        records = _initial_workflow_definition_records(
             name=name,
-            current_revision_id=revision_id,
-            status="ACTIVE",
-            created_at=_datetime_to_text(now),
-            updated_at=_datetime_to_text(now),
-        )
-        revision = WorkflowRevisionRecord(
-            revision_id=revision_id,
+            definition=definition,
             workflow_id=workflow_id,
-            version=1,
-            definition_json=definition_json,
-            definition_hash=definition_hash,
-            created_at=_datetime_to_text(now),
             created_by=created_by,
         )
-        legacy = WorkflowDefinitionRecord(
-            workflow_id=workflow_id,
-            name=name,
-            version=1,
-            definition_json=definition_json,
-            created_at=_datetime_to_text(now),
-            updated_at=_datetime_to_text(now),
-        )
         with self._session_factory.begin() as session:
-            session.add_all([workflow, revision, legacy])
-        return _workflow_definition_from_records(workflow, revision)
+            session.add_all([records.workflow, records.revision, records.legacy])
+        return _workflow_definition_from_records(records.workflow, records.revision)
 
     def get_workflow_definition(self, workflow_id: str) -> WorkflowDefinition | None:
         with self._session_factory() as session:
@@ -145,13 +127,10 @@ class RuntimeWorkflowDefinitionStoreMixin:
             if current_revision is None:
                 return None
             if definition is not None:
-                revision = WorkflowRevisionRecord(
-                    revision_id=new_id(),
+                revision = _next_workflow_revision_record(
                     workflow_id=workflow_id,
                     version=current_revision.version + 1,
-                    definition_json=_json_dumps(definition),
-                    definition_hash=_definition_hash(_json_dumps(definition)),
-                    created_at=_datetime_to_text(utc_now()),
+                    definition=definition,
                     created_by=created_by,
                 )
                 session.add(revision)
@@ -160,10 +139,11 @@ class RuntimeWorkflowDefinitionStoreMixin:
             workflow.updated_at = _datetime_to_text(utc_now())
             legacy = session.get(WorkflowDefinitionRecord, workflow_id)
             if legacy is not None:
-                legacy.name = workflow.name
-                legacy.version = current_revision.version
-                legacy.definition_json = current_revision.definition_json
-                legacy.updated_at = workflow.updated_at
+                _sync_legacy_workflow_definition_record(
+                    legacy,
+                    workflow=workflow,
+                    revision=current_revision,
+                )
             updated = _workflow_definition_from_records(workflow, current_revision)
         return updated
 
