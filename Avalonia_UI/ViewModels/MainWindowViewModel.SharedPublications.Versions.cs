@@ -4,8 +4,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private int sharedPublicationVersionsLoadVersion;
-
     partial void OnSelectedSharedPublicationChanged(SharedPublicationListItemViewModel? value)
     {
         sharedPublicationVersionsLoadVersion++;
