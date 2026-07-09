@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.ids import new_id
@@ -17,11 +16,20 @@ from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _json_dumps,
 )
+from flowweaver.engine.runtime_shared_publication_queries import (
+    get_latest_shared_publication_from_session as _get_latest_publication,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    get_shared_publication_from_session as _get_publication,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    get_shared_publication_version_from_session as _get_publication_version,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    list_shared_publications_from_session as _list_publications,
+)
 from flowweaver.engine.runtime_shared_table_record_mappers import (
     _shared_publication_from_records,
-)
-from flowweaver.engine.runtime_shared_table_store_helpers import (
-    get_shared_publication_member_records as _get_shared_publication_member_records,
 )
 from flowweaver.engine.runtime_shared_table_store_helpers import (
     next_shared_publication_version as _next_shared_publication_version,
@@ -102,13 +110,7 @@ class RuntimeSharedPublicationStoreMixin:
         publication_id: str,
     ) -> SharedPublication | None:
         with self._session_factory() as session:
-            record = session.get(SharedPublicationRecord, publication_id)
-            if record is None:
-                return None
-            return _shared_publication_from_records(
-                record,
-                _get_shared_publication_member_records(session, publication_id),
-            )
+            return _get_publication(session, publication_id)
 
     def get_shared_publication_version(
         self,
@@ -117,21 +119,10 @@ class RuntimeSharedPublicationStoreMixin:
         publication_version: int,
     ) -> SharedPublication | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(SharedPublicationRecord)
-                .where(SharedPublicationRecord.share_name == share_name)
-                .where(
-                    SharedPublicationRecord.publication_version == publication_version
-                )
-            )
-            if record is None:
-                return None
-            return _shared_publication_from_records(
-                record,
-                _get_shared_publication_member_records(
-                    session,
-                    record.publication_id,
-                ),
+            return _get_publication_version(
+                session,
+                share_name=share_name,
+                publication_version=publication_version,
             )
 
     def get_latest_shared_publication(
@@ -139,21 +130,7 @@ class RuntimeSharedPublicationStoreMixin:
         share_name: str,
     ) -> SharedPublication | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(SharedPublicationRecord)
-                .where(SharedPublicationRecord.share_name == share_name)
-                .order_by(SharedPublicationRecord.publication_version.desc())
-                .limit(1)
-            )
-            if record is None:
-                return None
-            return _shared_publication_from_records(
-                record,
-                _get_shared_publication_member_records(
-                    session,
-                    record.publication_id,
-                ),
-            )
+            return _get_latest_publication(session, share_name)
 
     def list_shared_publications(
         self,
@@ -161,26 +138,9 @@ class RuntimeSharedPublicationStoreMixin:
         share_name: str | None = None,
         limit: int = 100,
     ) -> list[SharedPublication]:
-        limit = max(1, min(limit, 1000))
-        statement = select(SharedPublicationRecord).order_by(
-            SharedPublicationRecord.share_name,
-            SharedPublicationRecord.publication_version.desc(),
-            SharedPublicationRecord.created_at.desc(),
-        )
-        if share_name is not None:
-            statement = statement.where(
-                SharedPublicationRecord.share_name == share_name
-            )
-        statement = statement.limit(limit)
         with self._session_factory() as session:
-            records = session.scalars(statement).all()
-            return [
-                _shared_publication_from_records(
-                    record,
-                    _get_shared_publication_member_records(
-                        session,
-                        record.publication_id,
-                    ),
-                )
-                for record in records
-            ]
+            return _list_publications(
+                session,
+                share_name=share_name,
+                limit=limit,
+            )
