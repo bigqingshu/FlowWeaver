@@ -18,21 +18,8 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private string? dataPreviewErrorMessage;
 
-    private string? dataPreviewSourceWorkflowRunId;
-
-    private string? dataPreviewSourceNodeInstanceId;
-
-    private string? dataPreviewSourceLogicalTableId;
-
-    private string? dataPreviewSourceTableRefId;
-
-    private string? dataPreviewSourceRunMode;
-
-    private string? dataPreviewSourceTargetNodeInstanceId;
-
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewColumns { get; } = new();
 
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewRows { get; } =
         new();
-
 }
