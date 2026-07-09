@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -9,6 +8,15 @@ from flowweaver.engine.db_models import (
     LoopIterationNodeRunRecord,
     LoopIterationRunRecord,
     LoopRunRecord,
+)
+from flowweaver.engine.runtime_loop_iteration_node_run_queries import (
+    get_loop_iteration_node_run_from_session as _get_iteration_node_run,
+)
+from flowweaver.engine.runtime_loop_iteration_node_run_queries import (
+    list_loop_iteration_node_runs_by_node_run_from_session as _list_by_node_run,
+)
+from flowweaver.engine.runtime_loop_iteration_node_run_queries import (
+    list_loop_iteration_node_runs_from_session as _list_iteration_node_runs,
 )
 from flowweaver.engine.runtime_loop_iteration_table_ref_store import (
     RuntimeLoopIterationTableRefStoreMixin,
@@ -84,16 +92,11 @@ class RuntimeLoopIterationNodeRunStoreMixin(RuntimeLoopIterationTableRefStoreMix
         node_run_id: str,
     ) -> LoopIterationNodeRun | None:
         with self._session_factory() as session:
-            record = session.get(
-                LoopIterationNodeRunRecord,
-                {
-                    "loop_iteration_id": loop_iteration_id,
-                    "node_run_id": node_run_id,
-                },
+            return _get_iteration_node_run(
+                session,
+                loop_iteration_id=loop_iteration_id,
+                node_run_id=node_run_id,
             )
-            if record is None:
-                return None
-            return _loop_iteration_node_run_from_record(record)
 
     def list_loop_iteration_node_runs(
         self,
@@ -102,40 +105,17 @@ class RuntimeLoopIterationNodeRunStoreMixin(RuntimeLoopIterationTableRefStoreMix
         node_instance_id: str | None = None,
         role: str | None = None,
     ) -> list[LoopIterationNodeRun]:
-        statement = (
-            select(LoopIterationNodeRunRecord)
-            .where(LoopIterationNodeRunRecord.loop_iteration_id == loop_iteration_id)
-            .order_by(
-                LoopIterationNodeRunRecord.node_instance_id,
-                LoopIterationNodeRunRecord.node_run_id,
-            )
-        )
-        if node_instance_id is not None:
-            statement = statement.where(
-                LoopIterationNodeRunRecord.node_instance_id == node_instance_id
-            )
-        if role is not None:
-            statement = statement.where(LoopIterationNodeRunRecord.role == role)
         with self._session_factory() as session:
-            return [
-                _loop_iteration_node_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
+            return _list_iteration_node_runs(
+                session,
+                loop_iteration_id,
+                node_instance_id=node_instance_id,
+                role=role,
+            )
 
     def list_loop_iteration_node_runs_by_node_run(
         self,
         node_run_id: str,
     ) -> list[LoopIterationNodeRun]:
-        statement = (
-            select(LoopIterationNodeRunRecord)
-            .where(LoopIterationNodeRunRecord.node_run_id == node_run_id)
-            .order_by(
-                LoopIterationNodeRunRecord.loop_iteration_id,
-                LoopIterationNodeRunRecord.role,
-            )
-        )
         with self._session_factory() as session:
-            return [
-                _loop_iteration_node_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
+            return _list_by_node_run(session, node_run_id)
