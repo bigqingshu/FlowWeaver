@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_handlers import (
+    BuiltinTableNodeContext,
+    BuiltinTableNodeValidationError,
+)
+from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -39,3 +44,26 @@ def copy_column_value(
     if copied is None or copied == "":
         return empty_default
     return copied
+
+
+def copy_column_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    source_field: str,
+    target_field: str,
+    trim_value: bool,
+    empty_default: Any,
+) -> Iterator[list[dict[str, Any]]]:
+    for rows in context.iter_row_batches(input_ref):
+        yield [
+            row
+            | {
+                target_field: copy_column_value(
+                    row.get(source_field),
+                    trim_value=trim_value,
+                    empty_default=empty_default,
+                )
+            }
+            for row in rows
+        ]
