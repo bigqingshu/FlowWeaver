@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
-from queue import Empty, Queue
+from queue import Queue
 from threading import Thread
 
 from flowweaver.common.time import utc_now
@@ -34,8 +33,18 @@ from flowweaver.workflow_process.task_cancellation_helpers import (
 from flowweaver.workflow_process.task_cancellation_helpers import (
     workflow_cancel_was_requested as workflow_cancel_was_requested,
 )
-
-CleanupStagingForNode = Callable[[str, str], None]
+from flowweaver.workflow_process.task_supervision_helpers import (
+    CleanupStagingForNode as CleanupStagingForNode,
+)
+from flowweaver.workflow_process.task_supervision_helpers import (
+    cleanup_staging_for_node_safely as cleanup_staging_for_node_safely,
+)
+from flowweaver.workflow_process.task_supervision_helpers import (
+    get_node_task_execution_result as get_node_task_execution_result,
+)
+from flowweaver.workflow_process.task_supervision_helpers import (
+    task_supervision_poll_seconds as task_supervision_poll_seconds,
+)
 
 
 def execute_node_task_with_supervision(
@@ -151,43 +160,3 @@ def execute_node_task_with_supervision(
                     reason="WORKFLOW_CANCEL_GRACE_EXPIRED",
                 )
 
-
-def get_node_task_execution_result(
-    results: Queue[NodeTaskResultModel | Exception],
-    *,
-    timeout_seconds: float,
-    raise_executor_errors: bool = True,
-) -> NodeTaskResultModel | None:
-    try:
-        item = (
-            results.get(timeout=timeout_seconds)
-            if timeout_seconds > 0
-            else results.get_nowait()
-        )
-    except Empty:
-        return None
-    if isinstance(item, Exception):
-        if raise_executor_errors:
-            raise item
-        return None
-    return item
-
-
-def task_supervision_poll_seconds(heartbeat_interval_seconds: float) -> float:
-    if heartbeat_interval_seconds <= 0:
-        return 0.01
-    return min(max(heartbeat_interval_seconds, 0.01), 0.1)
-
-
-def cleanup_staging_for_node_safely(
-    cleanup_staging_for_node: CleanupStagingForNode | None,
-    *,
-    workflow_run_id: str,
-    node_run_id: str,
-) -> None:
-    if cleanup_staging_for_node is None:
-        return
-    try:
-        cleanup_staging_for_node(workflow_run_id, node_run_id)
-    except Exception:
-        pass
