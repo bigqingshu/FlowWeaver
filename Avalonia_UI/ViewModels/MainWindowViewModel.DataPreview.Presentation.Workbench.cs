@@ -1,34 +1,10 @@
-using Avalonia_UI.Models;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    public bool HasDataPreviewWorkbenchError =>
-        !string.IsNullOrWhiteSpace(DataPreviewWorkbenchErrorMessage);
-
-    public bool HasDataPreviewWorkbenchColumns => DataPreviewWorkbenchColumns.Count > 0;
-
-    public bool HasDataPreviewWorkbenchRows => DataPreviewWorkbenchRows.Count > 0;
-
-    public bool HasDataPreviewWorkbenchClipboardText =>
-        !string.IsNullOrEmpty(DataPreviewWorkbenchClipboardText);
-
-    public bool HasDataPreviewWorkbenchPasteText =>
-        !string.IsNullOrWhiteSpace(DataPreviewWorkbenchPasteText);
-
-    public bool IsDataPreviewWorkbenchDirty =>
-        dataPreviewWorkbenchEditableCellRows.Length > 0
-        && !DataPreviewTableGridBuilder.CellRowsEqual(
-            dataPreviewWorkbenchOriginalCellRows,
-            dataPreviewWorkbenchEditableCellRows);
-
     public string DataPreviewWorkbenchDirtyStateText => IsDataPreviewWorkbenchDirty
         ? T("data_preview.dirty")
         : T("data_preview.clean");
-
-    public bool CanSaveDataPreviewWorkbenchAsDraft =>
-        LoadedDataPreviewTableRef?.HasCapability("SAVE_AS") == true;
 
     public string DataPreviewWorkbenchSavePolicyText =>
         LoadedDataPreviewTableRef is not { } tableRef
@@ -48,8 +24,6 @@ public partial class MainWindowViewModel
         dataPreviewWorkbenchLoadedRows.Length == 0 ? 0 : dataPreviewWorkbenchOffset + 1,
         dataPreviewWorkbenchOffset + dataPreviewWorkbenchLoadedRows.Length,
         dataPreviewWorkbenchRowCount);
-
-    public bool IsDataPreviewWorkbenchBusy => IsLoadingDataPreviewWorkbench;
 
     public string DataPreviewWorkbenchPendingText => T("data_preview.workbench_pending");
 
