@@ -1,36 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, MutableMapping, Sequence
-from dataclasses import dataclass
-from threading import RLock
 from typing import Any
 
-from flowweaver.common.ids import new_id
-from flowweaver.common.time import utc_now
+from flowweaver.engine.memory_table_refs import (
+    MEMORY_PROVIDER_ID as MEMORY_PROVIDER_ID,
+)
+from flowweaver.engine.memory_table_refs import memory_table_id as _memory_table_id
+from flowweaver.engine.memory_table_refs import memory_table_ref as _memory_table_ref
+from flowweaver.engine.memory_table_refs import (
+    validate_memory_table_ref as _validate_memory_table_ref,
+)
 from flowweaver.engine.memory_table_rows import normalize_rows as _normalize_rows
 from flowweaver.engine.memory_table_rows import ordered_rows as _ordered_rows
 from flowweaver.engine.memory_table_rows import selected_columns as _selected_columns
-from flowweaver.engine.runtime_table_provider import schema_fingerprint
-from flowweaver.protocols.enums import (
-    LifecycleStatus,
-    TableMutability,
-    TableRole,
-    TableScope,
-    TableStorageKind,
+from flowweaver.engine.memory_table_storage import (
+    GLOBAL_MEMORY_TABLES as _GLOBAL_MEMORY_TABLES,
 )
+from flowweaver.engine.memory_table_storage import (
+    GLOBAL_MEMORY_TABLES_LOCK as _GLOBAL_MEMORY_TABLES_LOCK,
+)
+from flowweaver.engine.memory_table_storage import MemoryTable as _MemoryTable
+from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
-
-MEMORY_PROVIDER_ID = "memory"
-
-
-@dataclass
-class _MemoryTable:
-    schema: list[FieldSchemaModel]
-    rows: list[dict[str, Any]]
-
-
-_GLOBAL_MEMORY_TABLES: dict[str, _MemoryTable] = {}
-_GLOBAL_MEMORY_TABLES_LOCK = RLock()
 
 
 class MemoryTableProvider:
@@ -76,26 +68,16 @@ class MemoryTableProvider:
         role: TableRole = TableRole.AUXILIARY,
         version: int = 1,
     ) -> TableRefModel:
-        schema_copy = list(schema)
-        memory_table_id = new_id()
-        table_ref = TableRefModel(
-            table_ref_id=new_id(),
-            role=role,
-            storage_kind=TableStorageKind.MEMORY,
-            scope=TableScope.WORKFLOW_SCOPE,
-            mutability=TableMutability.WORKING_MUTABLE,
+        memory_table_id, table_ref = _memory_table_ref(
             provider_id=self.provider_id,
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
             logical_table_id=logical_table_id,
-            opaque_handle={"memory_table_id": memory_table_id},
-            schema=schema_copy,
-            schema_fingerprint=schema_fingerprint(schema_copy),
+            schema=schema,
+            role=role,
             version=version,
-            capabilities={"READ"},
-            lifecycle_status=LifecycleStatus.ACTIVE,
-            created_by_workflow_run_id=workflow_run_id,
-            created_by_node_run_id=node_run_id,
-            created_at=utc_now(),
         )
+        schema_copy = list(table_ref.schema)
         cleaned_rows: list[dict[str, Any]] = []
         for rows in row_batches:
             cleaned_rows.extend(_normalize_rows(schema_copy, rows))
@@ -196,21 +178,4 @@ class MemoryTableProvider:
             )
 
     def _validate_ref(self, table_ref: TableRefModel) -> None:
-        if table_ref.provider_id != self.provider_id:
-            raise ValueError("table_ref belongs to a different provider")
-        if table_ref.storage_kind != TableStorageKind.MEMORY:
-            raise ValueError("MemoryTableProvider only supports MEMORY")
-        if table_ref.lifecycle_status in {
-            LifecycleStatus.RELEASED,
-            LifecycleStatus.RETIRED,
-            LifecycleStatus.ORPHANED,
-        }:
-            raise ValueError("memory table is not available")
-
-
-def _memory_table_id(table_ref: TableRefModel) -> str:
-    memory_table_id = table_ref.opaque_handle.get("memory_table_id")
-    if not isinstance(memory_table_id, str) or not memory_table_id:
-        raise ValueError("table_ref opaque_handle.memory_table_id is required")
-    return memory_table_id
-
+        _validate_memory_table_ref(table_ref, provider_id=self.provider_id)
