@@ -14,9 +14,11 @@ from flowweaver.nodes.builtin_table_node_types import (
     LIST_FILES_NODE_TYPE,
     PLUGIN_NODE_TYPE,
 )
-from flowweaver.nodes.default_node_schemas import (
+from flowweaver.nodes.default_batch_rename_files_node_schema import (
     _batch_rename_files_schema,
-    _list_files_schema,
+)
+from flowweaver.nodes.default_list_files_node_schema import _list_files_schema
+from flowweaver.nodes.default_node_schemas import (
     _plugin_node_schema,
     _publish_shared_tables_schema,
     _read_shared_tables_schema,

@@ -3,6 +3,9 @@ from __future__ import annotations
 from flowweaver.nodes.default_add_columns_node_schema import (
     _add_columns_schema as _add_columns_schema,
 )
+from flowweaver.nodes.default_batch_rename_files_node_schema import (
+    _batch_rename_files_schema as _batch_rename_files_schema,
+)
 from flowweaver.nodes.default_control_condition_node_schemas import (
     _condition_flag_schema as _condition_flag_schema,
 )
@@ -36,12 +39,6 @@ from flowweaver.nodes.default_delete_columns_node_schema import (
 from flowweaver.nodes.default_extract_text_node_schemas import (
     _extract_text_schema as _extract_text_schema,
 )
-from flowweaver.nodes.default_file_resource_node_schemas import (
-    _batch_rename_files_schema as _batch_rename_files_schema,
-)
-from flowweaver.nodes.default_file_resource_node_schemas import (
-    _list_files_schema as _list_files_schema,
-)
 from flowweaver.nodes.default_fill_cells_node_schema import (
     _fill_cells_schema as _fill_cells_schema,
 )
@@ -50,6 +47,9 @@ from flowweaver.nodes.default_fill_range_node_schema import (
 )
 from flowweaver.nodes.default_fill_sequence_node_schema import (
     _fill_sequence_schema as _fill_sequence_schema,
+)
+from flowweaver.nodes.default_list_files_node_schema import (
+    _list_files_schema as _list_files_schema,
 )
 from flowweaver.nodes.default_lookup_merge_node_schemas import (
     _lookup_matched_field_name_schema as _lookup_matched_field_name_schema,
