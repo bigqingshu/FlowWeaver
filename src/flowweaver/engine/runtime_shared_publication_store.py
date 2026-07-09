@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
-    DataRefRecord,
     SharedPublicationMemberRecord,
     SharedPublicationRecord,
-    WorkflowRunRecord,
 )
 from flowweaver.engine.runtime_models import SharedPublication
 from flowweaver.engine.runtime_record_mappers import (
@@ -25,7 +23,15 @@ from flowweaver.engine.runtime_shared_table_record_mappers import (
 from flowweaver.engine.runtime_shared_table_store_helpers import (
     get_shared_publication_member_records as _get_shared_publication_member_records,
 )
-from flowweaver.protocols.enums import LifecycleStatus, TableMutability
+from flowweaver.engine.runtime_shared_table_store_helpers import (
+    next_shared_publication_version as _next_shared_publication_version,
+)
+from flowweaver.engine.runtime_shared_table_store_helpers import (
+    require_shared_publication_producer_run as _require_shared_publication_producer_run,
+)
+from flowweaver.engine.runtime_shared_table_store_helpers import (
+    validate_shared_publication_members as _validate_shared_publication_members,
+)
 
 
 class RuntimeSharedPublicationStoreMixin:
@@ -49,46 +55,20 @@ class RuntimeSharedPublicationStoreMixin:
         publication_id = publication_id or new_id()
         member_records: list[SharedPublicationMemberRecord] = []
         with self._session_factory.begin() as session:
-            producer_run = session.get(WorkflowRunRecord, producer_run_id)
-            if producer_run is None:
-                raise ValueError(f"Producer run not found: {producer_run_id}")
-            if producer_run.workflow_id != producer_workflow_id:
-                raise ValueError(
-                    f"Producer run does not belong to workflow: {producer_run_id}"
-                )
-            table_ref_records: dict[str, DataRefRecord] = {}
-            for export_name, table_ref_id in members.items():
-                table_ref_record = session.get(DataRefRecord, table_ref_id)
-                if table_ref_record is None:
-                    raise ValueError(f"TableRef not found: {table_ref_id}")
-                if table_ref_record.workflow_run_id != producer_run_id:
-                    raise ValueError(
-                        "Shared publication member does not belong to "
-                        f"producer run: {table_ref_id}"
-                    )
-                if table_ref_record.lifecycle_status != LifecycleStatus.PUBLISHED.value:
-                    raise ValueError(
-                        f"Shared publication member must be PUBLISHED: {table_ref_id}"
-                    )
-                if (
-                    table_ref_record.mutability
-                    != TableMutability.PUBLISHED_IMMUTABLE.value
-                ):
-                    raise ValueError(
-                        "Shared publication member must be PUBLISHED_IMMUTABLE: "
-                        f"{table_ref_id}"
-                    )
-                table_ref_records[export_name] = table_ref_record
-
-            max_version = cast(
-                int | None,
-                session.scalar(
-                    select(func.max(SharedPublicationRecord.publication_version)).where(
-                        SharedPublicationRecord.share_name == share_name
-                    )
-                ),
+            _require_shared_publication_producer_run(
+                session,
+                producer_run_id=producer_run_id,
+                producer_workflow_id=producer_workflow_id,
             )
-            publication_version = 1 if max_version is None else max_version + 1
+            table_ref_records = _validate_shared_publication_members(
+                session,
+                producer_run_id=producer_run_id,
+                members=members,
+            )
+            publication_version = _next_shared_publication_version(
+                session,
+                share_name=share_name,
+            )
             publication_record = SharedPublicationRecord(
                 publication_id=publication_id,
                 share_name=share_name,
