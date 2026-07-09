@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import DELETE_ROWS_NODE_TYPE
+from flowweaver.nodes.table_delete_rows_helpers import (
+    delete_rows_output_batches as _delete_rows_output_batches,
+)
 from flowweaver.nodes.table_delete_rows_helpers import (
     delete_rows_predicate as _delete_rows_predicate,
 )
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
-from flowweaver.nodes.table_node_handlers import (
-    BuiltinTableNodeContext,
-    BuiltinTableNodeValidationError,
-)
+from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
-
-_NodeValidationError = BuiltinTableNodeValidationError
 
 
 class DeleteRowsNodeHandler:
@@ -50,23 +45,14 @@ class DeleteRowsNodeHandler:
             total_rows=total_rows,
         )
 
-        def output_batches():
-            row_number = 1
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    try:
-                        if not should_delete(row_number, row):
-                            output_rows.append(row)
-                    except ValueSourceError as exc:
-                        raise _NodeValidationError(str(exc)) from exc
-                    row_number += 1
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=input_ref.schema,
-            row_batches=output_batches(),
+            row_batches=_delete_rows_output_batches(
+                context,
+                input_ref,
+                should_delete=should_delete,
+            ),
         )
