@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import FILL_RANGE_NODE_TYPE
 from flowweaver.nodes.table_fill_range_helpers import field_range as _field_range
-from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
+from flowweaver.nodes.table_fill_range_helpers import (
+    fill_range_output_batches as _fill_range_output_batches,
+)
 from flowweaver.nodes.table_node_config import (
     enum_config as _enum_config,
 )
@@ -33,7 +33,6 @@ from flowweaver.nodes.table_node_io import (
 from flowweaver.nodes.table_value_source_config import (
     value_source_config as _value_source_config,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -112,32 +111,18 @@ class FillRangeNodeHandler:
             node_type=self.node_type,
         )
 
-        def output_batches():
-            row_number = 1
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    if start_row <= row_number <= end_row:
-                        try:
-                            fill_value = value_source.resolve(row)
-                        except ValueSourceError as exc:
-                            raise _NodeValidationError(str(exc)) from exc
-                        output_row = dict(row)
-                        for field in target_fields:
-                            if overwrite_rule == "all" or _is_empty_cell(
-                                output_row.get(field)
-                            ):
-                                output_row[field] = fill_value
-                        output_rows.append(output_row)
-                    else:
-                        output_rows.append(row)
-                    row_number += 1
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=input_ref.schema,
-            row_batches=output_batches(),
+            row_batches=_fill_range_output_batches(
+                context,
+                input_ref,
+                start_row=start_row,
+                end_row=end_row,
+                target_fields=target_fields,
+                value_source=value_source,
+                overwrite_rule=overwrite_rule,
+            ),
         )
