@@ -1,4 +1,3 @@
-using System;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
@@ -6,20 +5,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private bool CanApplySelectedNodeDisplayNameDraft()
-    {
-        return CanUseEngineActions
-            && WorkflowDefinitionDetail is not null
-            && SelectedWorkflowDefinitionNode is not null
-            && HasWorkflowDefinitionDraft
-            && !IsWorkflowDefinitionDraftBusy
-            && !HasWorkflowDefinitionRevisionConflict
-            && !string.Equals(
-                SelectedNodeDisplayNameDraft.Trim(),
-                SelectedWorkflowDefinitionNode.DisplayName,
-                StringComparison.Ordinal);
-    }
-
     [RelayCommand(CanExecute = nameof(CanApplySelectedNodeDisplayNameDraft))]
     private void ApplySelectedNodeDisplayNameDraft()
     {
