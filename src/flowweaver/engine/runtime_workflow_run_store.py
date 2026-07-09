@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -23,6 +22,12 @@ from flowweaver.engine.runtime_status_guards import (
 )
 from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_run_from_record,
+)
+from flowweaver.engine.runtime_workflow_run_queries import (
+    get_workflow_run_from_session as _get_workflow_run_from_session,
+)
+from flowweaver.engine.runtime_workflow_run_queries import (
+    list_workflow_runs_from_session as _list_workflow_runs_from_session,
 )
 from flowweaver.engine.runtime_workflow_run_status_update import (
     update_workflow_run_status_in_session as _update_workflow_run_status,
@@ -93,10 +98,7 @@ class RuntimeWorkflowRunStoreMixin:
 
     def get_workflow_run(self, workflow_run_id: str) -> WorkflowRun | None:
         with self._session_factory() as session:
-            record = session.get(WorkflowRunRecord, workflow_run_id)
-            if record is None:
-                return None
-            return _workflow_run_from_record(record)
+            return _get_workflow_run_from_session(session, workflow_run_id)
 
     def workflow_run_is_owned_by(
         self,
@@ -123,34 +125,16 @@ class RuntimeWorkflowRunStoreMixin:
         offset: int = 0,
         limit: int | None = None,
     ) -> list[WorkflowRun]:
-        statement = select(WorkflowRunRecord).order_by(
-            WorkflowRunRecord.started_at.desc(),
-            WorkflowRunRecord.workflow_run_id,
-        )
-        if workflow_id is not None:
-            statement = statement.where(WorkflowRunRecord.workflow_id == workflow_id)
-        if statuses is not None:
-            status_values = [
-                status.value if isinstance(status, WorkflowRunStatus) else status
-                for status in statuses
-            ]
-            statement = statement.where(WorkflowRunRecord.status.in_(status_values))
-        if run_mode is not None:
-            statement = statement.where(WorkflowRunRecord.run_mode == run_mode)
-        if trigger_source is not None:
-            statement = statement.where(
-                WorkflowRunRecord.trigger_source == trigger_source
-            )
-        if offset > 0:
-            statement = statement.offset(offset)
-        if limit is not None:
-            statement = statement.limit(limit)
-
         with self._session_factory() as session:
-            return [
-                _workflow_run_from_record(record)
-                for record in session.scalars(statement)
-            ]
+            return _list_workflow_runs_from_session(
+                session,
+                workflow_id=workflow_id,
+                statuses=statuses,
+                run_mode=run_mode,
+                trigger_source=trigger_source,
+                offset=offset,
+                limit=limit,
+            )
 
     def update_workflow_run_status(
         self,
