@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
@@ -26,11 +25,5 @@ public partial class MainWindowViewModel
         ShowWorkflowDefinitionNotification(
             "workflow.definition.restore",
             UiNotificationKind.Success);
-    }
-
-    [RelayCommand(CanExecute = nameof(CanSaveWorkflowDefinitionDraft))]
-    private async Task SaveWorkflowDefinitionDraftAsync()
-    {
-        await TrySaveWorkflowDefinitionDraftAsync();
     }
 }
