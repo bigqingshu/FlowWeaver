@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable
-from threading import Lock
 from typing import TextIO
 
 from flowweaver.node_executor.base import NodeExecutorFactory
@@ -11,7 +10,7 @@ from flowweaver.node_executor.builtin_fault import (
     BUILTIN_FAULT_NODE_TYPES,
     BuiltinFaultNodeExecutor,
 )
-from flowweaver.node_executor.cancel_token import CancelToken, NodeExecutionContext
+from flowweaver.node_executor.cancel_token import NodeExecutionContext
 from flowweaver.node_executor.fake import FakeNodeExecutor
 from flowweaver.node_executor.process_envelopes import (
     heartbeat_envelope as _heartbeat_envelope,
@@ -46,6 +45,7 @@ from flowweaver.node_executor.process_loop import (
 from flowweaver.node_executor.process_loop import (
     run_node_executor_ipc_loop,
 )
+from flowweaver.node_executor.process_state import NodeExecutorProcessState
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
@@ -66,22 +66,16 @@ class NodeExecutorProcess:
         self.executor_id = executor_id
         self._executor_factory = executor_factory
         self._event_writer = event_writer
-        self._active_task_ids: set[str] = set()
-        self._active_task_correlations: dict[str, str] = {}
-        self._cancel_tokens: dict[str, CancelToken] = {}
-        self._execution_contexts: dict[str, NodeExecutionContext] = {}
+        self._state = NodeExecutorProcessState()
         self._pending_task_events: list[IPCEnvelope] = []
-        self._state_lock = Lock()
 
     def ready_envelope(self) -> IPCEnvelope:
         return _ready_envelope(self.executor_id)
 
     def heartbeat_envelope(self) -> IPCEnvelope:
-        with self._state_lock:
-            active_task_ids = sorted(self._active_task_ids)
         return _heartbeat_envelope(
             self.executor_id,
-            active_task_ids=active_task_ids,
+            active_task_ids=self._state.active_task_ids(),
         )
 
     def task_heartbeat_envelope(
@@ -94,9 +88,7 @@ class NodeExecutorProcess:
             self.executor_id,
             task,
             correlation_id=correlation_id
-            or self._active_task_correlations.get(
-                task.task_id
-            ),
+            or self._state.task_correlation_id(task.task_id),
         )
 
     def task_progress_envelope(
@@ -114,9 +106,7 @@ class NodeExecutorProcess:
             current_stage=current_stage,
             metrics=metrics or {},
             correlation_id=correlation_id
-            or self._active_task_correlations.get(
-                task.task_id
-            ),
+            or self._state.task_correlation_id(task.task_id),
         )
 
     def emit_task_heartbeat(
@@ -155,14 +145,10 @@ class NodeExecutorProcess:
             return ()
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
         executor = self._executor_for_task(task)
-        with self._state_lock:
-            cancel_token = CancelToken()
-            self._active_task_ids.add(task.task_id)
-            self._active_task_correlations[task.task_id] = envelope.message_id
-            self._cancel_tokens[task.task_id] = cancel_token
-            self._execution_contexts[task.task_id] = NodeExecutionContext(
-                cancel_token
-            )
+        self._state.begin_task(
+            task_id=task.task_id,
+            correlation_id=envelope.message_id,
+        )
         self._pending_task_events = []
         accepted = _task_accepted_envelope(
             self.executor_id,
@@ -187,11 +173,7 @@ class NodeExecutorProcess:
             )
             return (*accepted_events, *task_events, failed)
         finally:
-            with self._state_lock:
-                self._active_task_ids.discard(task.task_id)
-                self._active_task_correlations.pop(task.task_id, None)
-                self._cancel_tokens.pop(task.task_id, None)
-                self._execution_contexts.pop(task.task_id, None)
+            self._state.finish_task(task.task_id)
             self._pending_task_events = []
         completed = _task_completed_envelope(
             task,
@@ -205,18 +187,14 @@ class NodeExecutorProcess:
         return context is not None and context.is_cancelled()
 
     def task_context(self, task: NodeTaskModel) -> NodeExecutionContext | None:
-        with self._state_lock:
-            return self._execution_contexts.get(task.task_id)
+        return self._state.task_context(task.task_id)
 
     def _handle_cancel_request(
         self,
         envelope: IPCEnvelope,
     ) -> tuple[IPCEnvelope, ...]:
         payload = NodeTaskCancelRequestPayload.model_validate(envelope.payload)
-        with self._state_lock:
-            token = self._cancel_tokens.get(payload.task_id)
-        if token is not None:
-            token.request_cancel(reason=payload.reason)
+        self._state.request_cancel(task_id=payload.task_id, reason=payload.reason)
         return ()
 
     def _emit_or_queue_task_event(self, envelope: IPCEnvelope) -> None:
