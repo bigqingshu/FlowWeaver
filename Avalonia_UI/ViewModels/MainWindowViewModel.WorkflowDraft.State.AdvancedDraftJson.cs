@@ -6,9 +6,4 @@ public partial class MainWindowViewModel
 {
     [ObservableProperty]
     private bool isWorkflowDraftJsonAdvancedVisible;
-
-    partial void OnIsWorkflowDraftJsonAdvancedVisibleChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
-    }
 }
