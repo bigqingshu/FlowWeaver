@@ -6,6 +6,11 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    public bool HasSelectedRunRuntimeOptionsSummary => SelectedRun is not null;
+
+    public string SelectedRunRuntimeOptionsSummaryText =>
+        FormatSelectedRunRuntimeOptionsSummary();
+
     private string FormatSelectedRunRuntimeOptionsSummary()
     {
         if (SelectedRun is null)

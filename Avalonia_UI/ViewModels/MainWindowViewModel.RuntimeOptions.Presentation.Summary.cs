@@ -10,11 +10,6 @@ public partial class MainWindowViewModel
             RuntimeOptionsProgressEnabledDraft ? T("common.on") : T("common.off"),
             RuntimeOptionsNodeOverrideCount);
 
-    public bool HasSelectedRunRuntimeOptionsSummary => SelectedRun is not null;
-
-    public string SelectedRunRuntimeOptionsSummaryText =>
-        FormatSelectedRunRuntimeOptionsSummary();
-
     private void NotifyRuntimeOptionsSummaryChanged()
     {
         OnPropertyChanged(nameof(RuntimeOptionsSummaryText));
