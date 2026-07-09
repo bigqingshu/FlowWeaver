@@ -9,10 +9,15 @@ from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
 from flowweaver.common.ids import new_id
-from flowweaver.common.subprocess_command import python_module_command
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
+from flowweaver.engine.supervisor_commands import (
+    node_executor_command as _node_executor_command,
+)
+from flowweaver.engine.supervisor_commands import (
+    workflow_process_command as _workflow_process_command,
+)
 from flowweaver.engine.supervisor_paths import (
     child_environment as _child_environment,
 )
@@ -61,31 +66,15 @@ class Supervisor:
             process.process_id,
         )
         self._runtime_events.register(process.process_id, runtime_event_path)
-        command = [
-            *python_module_command(
-                python_executable=self._python_executable,
-                module_name="flowweaver.workflow_process.main",
-                src_path=Path(__file__).resolve().parents[2],
-            ),
-            "--database-url",
-            self._runtime_store.database_url,
-            "--workflow-run-id",
-            workflow_run_id,
-            "--process-id",
-            process.process_id,
-            "--process-generation",
-            str(process.process_generation),
-            "--heartbeat-interval-seconds",
-            str(self._config.workflow_process_heartbeat_interval_seconds),
-            "--execution-mode",
-            self._config.workflow_process_execution_mode,
-            "--max-concurrent-node-tasks",
-            str(self._config.workflow_process_max_concurrent_node_tasks),
-            "--runtime-dir",
-            str(self._config.resolved_runtime_dir()),
-            "--runtime-event-path",
-            str(runtime_event_path),
-        ]
+        command = _workflow_process_command(
+            python_executable=self._python_executable,
+            src_path=Path(__file__).resolve().parents[2],
+            database_url=self._runtime_store.database_url,
+            workflow_run_id=workflow_run_id,
+            process=process,
+            config=self._config,
+            runtime_event_path=runtime_event_path,
+        )
         stdout_path, stderr_path = self._workflow_process_log_paths(workflow_run_id)
         stdout_file = stdout_path.open("ab")
         stderr_file = stderr_path.open("ab")
@@ -124,15 +113,11 @@ class Supervisor:
     def start_executor_process(self, *, executor_id: str | None = None) -> str:
         self.start()
         executor_id = executor_id or new_id()
-        command = [
-            *python_module_command(
-                python_executable=self._python_executable,
-                module_name="flowweaver.node_executor.process",
-                src_path=Path(__file__).resolve().parents[2],
-            ),
-            "--executor-id",
-            executor_id,
-        ]
+        command = _node_executor_command(
+            python_executable=self._python_executable,
+            src_path=Path(__file__).resolve().parents[2],
+            executor_id=executor_id,
+        )
         stdout_path, stderr_path = self._executor_process_log_paths(executor_id)
         stdout_file = stdout_path.open("ab")
         stderr_file = stderr_path.open("ab")
