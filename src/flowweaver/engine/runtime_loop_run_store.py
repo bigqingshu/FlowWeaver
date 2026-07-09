@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,6 +13,15 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import LoopRunRecord, WorkflowRunRecord
 from flowweaver.engine.runtime_loop_record_mappers import _loop_run_from_record
+from flowweaver.engine.runtime_loop_run_queries import (
+    get_loop_run_for_workflow_loop_from_session as _get_loop_for_workflow_loop,
+)
+from flowweaver.engine.runtime_loop_run_queries import (
+    get_loop_run_from_session as _get_loop_run,
+)
+from flowweaver.engine.runtime_loop_run_queries import (
+    list_loop_runs_from_session as _list_loop_runs,
+)
 from flowweaver.engine.runtime_models import LoopRun
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
@@ -79,10 +88,7 @@ class RuntimeLoopRunStoreMixin:
 
     def get_loop_run(self, loop_run_id: str) -> LoopRun | None:
         with self._session_factory() as session:
-            record = session.get(LoopRunRecord, loop_run_id)
-            if record is None:
-                return None
-            return _loop_run_from_record(record)
+            return _get_loop_run(session, loop_run_id)
 
     def get_loop_run_for_workflow_loop(
         self,
@@ -91,14 +97,11 @@ class RuntimeLoopRunStoreMixin:
         loop_id: str,
     ) -> LoopRun | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(LoopRunRecord)
-                .where(LoopRunRecord.workflow_run_id == workflow_run_id)
-                .where(LoopRunRecord.loop_id == loop_id)
+            return _get_loop_for_workflow_loop(
+                session,
+                workflow_run_id=workflow_run_id,
+                loop_id=loop_id,
             )
-            if record is None:
-                return None
-            return _loop_run_from_record(record)
 
     def list_loop_runs(
         self,
@@ -106,19 +109,12 @@ class RuntimeLoopRunStoreMixin:
         *,
         statuses: Iterable[LoopRunStatus | str] | None = None,
     ) -> list[LoopRun]:
-        statement = (
-            select(LoopRunRecord)
-            .where(LoopRunRecord.workflow_run_id == workflow_run_id)
-            .order_by(LoopRunRecord.created_at, LoopRunRecord.loop_run_id)
-        )
-        if statuses is not None:
-            statement = statement.where(
-                LoopRunRecord.status.in_(_loop_run_status_values(statuses))
-            )
         with self._session_factory() as session:
-            return [
-                _loop_run_from_record(record) for record in session.scalars(statement)
-            ]
+            return _list_loop_runs(
+                session,
+                workflow_run_id,
+                statuses=statuses,
+            )
 
     def update_loop_run_status(
         self,
