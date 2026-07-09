@@ -12,6 +12,7 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
+from flowweaver.engine.supervisor_child_processes import terminate_child_process
 from flowweaver.engine.supervisor_commands import (
     node_executor_command as _node_executor_command,
 )
@@ -172,12 +173,12 @@ class Supervisor:
             forced = False
             if child.poll() is None:
                 forced = True
-                child.terminate()
-                try:
-                    child.wait(timeout=self._config.workflow_process_cancel_grace_seconds)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait(timeout=2)
+                terminate_child_process(
+                    child,
+                    graceful_timeout_seconds=(
+                        self._config.workflow_process_cancel_grace_seconds
+                    ),
+                )
             self._drain_runtime_events_for_process(process_id)
             exit_code = child.returncode if child.returncode is not None else 1
             if forced and exit_code == 0:
@@ -195,12 +196,7 @@ class Supervisor:
             self._forget_runtime_event_channel(process_id)
         for executor_id, child in list(self._executor_children.items()):
             if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait(timeout=2)
+                terminate_child_process(child, graceful_timeout_seconds=2)
             self._executor_children.pop(executor_id, None)
             self._publish_executor_exited(
                 executor_id=executor_id,
@@ -231,12 +227,10 @@ class Supervisor:
                 self._forget_runtime_event_channel(process.process_id)
                 return
             time.sleep(0.05)
-        child.terminate()
-        try:
-            child.wait(timeout=self._config.workflow_process_cancel_grace_seconds)
-        except subprocess.TimeoutExpired:
-            child.kill()
-            child.wait(timeout=2)
+        terminate_child_process(
+            child,
+            graceful_timeout_seconds=self._config.workflow_process_cancel_grace_seconds,
+        )
         self._drain_runtime_events_for_process(process.process_id)
         self._children.pop(process.process_id, None)
         self._finish_workflow_process(
