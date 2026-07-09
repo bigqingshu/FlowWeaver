@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import WRITE_SELECTED_COLUMNS_NODE_TYPE
-from flowweaver.nodes.table_node_common import simple_schema as _simple_schema
 from flowweaver.nodes.table_node_config import (
     named_output_config as _named_output_config,
 )
@@ -16,7 +15,9 @@ from flowweaver.nodes.table_node_handlers import (
 from flowweaver.nodes.table_write_selected_runtime import (
     write_selected_runtime_target as write_selected_runtime_target,
 )
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.nodes.table_write_selected_status import (
+    write_selected_columns_status_schema as write_selected_columns_status_schema,
+)
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -129,30 +130,3 @@ def write_selected_target_fields(
             f"{', '.join(duplicates)}"
         )
     return target_fields
-
-
-def write_selected_columns_status_schema() -> list[FieldSchemaModel]:
-    return _simple_schema(
-        [
-            ("status", "TEXT", False),
-            ("source_type", "TEXT", False),
-            ("target_type", "TEXT", False),
-            ("target_table", "TEXT", False),
-            ("write_mode", "TEXT", False),
-            ("overwrite_rule", "TEXT", False),
-            ("selected_field_count", "INTEGER", False),
-            ("mapping_count", "INTEGER", False),
-            ("source_row_count", "INTEGER", False),
-            ("enable_write", "TEXT", False),
-            ("backup_before_write", "TEXT", False),
-            ("actual_write", "TEXT", False),
-            ("affected_rows", "INTEGER", False),
-            ("skipped_rows", "INTEGER", False),
-            ("warning_count", "INTEGER", False),
-            ("warnings", "TEXT", False),
-            ("target_table_ref_id", "TEXT", False),
-            ("selected_fields", "TEXT", False),
-            ("target_fields", "TEXT", False),
-            ("skipped_reason", "TEXT", False),
-        ]
-    )
