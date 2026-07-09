@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import WRITE_BACK_TABLE_NODE_TYPE
@@ -12,35 +11,16 @@ from flowweaver.nodes.table_node_config import (
 from flowweaver.nodes.table_node_config import (
     optional_string_config as _optional_string_config,
 )
-from flowweaver.nodes.table_write_back_config import (
-    writeback_field_mappings_config as _writeback_field_mappings_config,
+from flowweaver.nodes.table_write_back_node_config_model import (
+    WriteBackNodeConfig,
 )
-from flowweaver.nodes.table_write_back_config import (
-    writeback_match_rules_config as _writeback_match_rules_config,
+from flowweaver.nodes.table_write_back_node_summaries import (
+    writeback_field_mapping_summary_config as _writeback_field_mapping_summary_config,
+)
+from flowweaver.nodes.table_write_back_node_summaries import (
+    writeback_match_summary_config as _writeback_match_summary_config,
 )
 from flowweaver.protocols.table_ref import TableRefModel
-
-
-@dataclass(frozen=True)
-class WriteBackNodeConfig:
-    direction: str
-    source_table: str
-    target_table: str
-    target_type: str
-    write_mode: str
-    use_match_rules: bool
-    match_rule_count: int
-    match_fields: str
-    field_mappings: list[dict[str, str]]
-    mapped_fields: str
-    overwrite_policy: str
-    source_empty_policy: str
-    no_match_policy: str
-    multi_match_policy: str
-    duplicate_target_policy: str
-    enable_write: bool
-    backup_before_write: bool
-    output_preview_table: bool
 
 
 def writeback_node_config(
@@ -83,30 +63,13 @@ def writeback_node_config(
         allowed={"create", "overwrite", "append"},
         node_type=node_type,
     )
-    use_match_rules = _bool_config(
-        config,
-        "use_match_rules",
-        default=True,
-    )
-    match_rule_count = 0
-    match_fields = ""
-    if use_match_rules:
-        match_rules = _writeback_match_rules_config(
-            config,
-            input_ref=input_ref,
-        )
-        match_rule_count = len(match_rules)
-        match_fields = ",".join(
-            f"{rule['source_field']}->{rule['target_field']}"
-            for rule in match_rules
-        )
-    field_mappings = _writeback_field_mappings_config(
+    use_match_rules, match_rule_count, match_fields = _writeback_match_summary_config(
         config,
         input_ref=input_ref,
     )
-    mapped_fields = ",".join(
-        f"{mapping['source_field']}->{mapping['target_field']}"
-        for mapping in field_mappings
+    field_mappings, mapped_fields = _writeback_field_mapping_summary_config(
+        config,
+        input_ref=input_ref,
     )
     overwrite_policy = _enum_config(
         config,
