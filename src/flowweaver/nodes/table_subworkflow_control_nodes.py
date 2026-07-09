@@ -23,6 +23,9 @@ from flowweaver.nodes.table_node_handlers import (
 from flowweaver.nodes.table_subworkflow_control_helpers import (
     subworkflow_loop_node_ids as _subworkflow_loop_node_ids,
 )
+from flowweaver.nodes.table_subworkflow_control_plan import (
+    subworkflow_plan_details as _subworkflow_plan_details,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -117,16 +120,6 @@ class SubWorkflowNodeHandler:
                 "allow_loop_nodes is false: "
                 + ", ".join(blocked_loop_nodes)
             )
-        input_summaries = [
-            {
-                "table_ref_id": input_ref.table_ref_id,
-                "logical_table_id": input_ref.logical_table_id,
-                "role": input_ref.role.value,
-                "storage_kind": input_ref.storage_kind.value,
-                "field_count": len(input_ref.schema),
-            }
-            for input_ref in input_refs
-        ]
         return [
             _publish_control_status(
                 context,
@@ -137,21 +130,20 @@ class SubWorkflowNodeHandler:
                 target_anchor=group_name,
                 action="declare_subworkflow_plan",
                 reason="preview only; no child workflow run is created",
-                details={
-                    "group_name": group_name,
-                    "subworkflow_ref": subworkflow_ref,
-                    "node_count": len(nodes),
-                    "input_source_type": input_source_type,
-                    "input_ref_count": len(input_refs),
-                    "input_refs": input_summaries,
-                    "input_mapping": input_mapping,
-                    "input_defaults": input_defaults,
-                    "missing_input_policy": missing_input_policy,
-                    "transit_scope": transit_scope,
-                    "allow_loop_nodes": allow_loop_nodes,
-                    "main_output_mode": main_output_mode,
-                    "save_to_transit": save_to_transit,
-                    "output_transit_name": output_transit_name,
-                },
+                details=_subworkflow_plan_details(
+                    group_name=group_name,
+                    subworkflow_ref=subworkflow_ref,
+                    node_count=len(nodes),
+                    input_source_type=input_source_type,
+                    input_refs=input_refs,
+                    input_mapping=input_mapping,
+                    input_defaults=input_defaults,
+                    missing_input_policy=missing_input_policy,
+                    transit_scope=transit_scope,
+                    allow_loop_nodes=allow_loop_nodes,
+                    main_output_mode=main_output_mode,
+                    save_to_transit=save_to_transit,
+                    output_transit_name=output_transit_name,
+                ),
             )
         ]
