@@ -7,14 +7,4 @@ public partial class MainWindowViewModel
 {
     [ObservableProperty]
     private WorkflowDefinitionDraftStructure? workflowDefinitionDraftStructure;
-
-    private void RefreshWorkflowDefinitionDraftStructureState()
-    {
-        WorkflowDefinitionDraftStructure =
-            ReadWorkflowDefinitionDraftStructureFromCache();
-        RefreshWorkflowDefinitionDraftNodes();
-        ClearSelectedWorkflowDefinitionDraftNodeIfMissing();
-        ClearSelectedWorkflowDefinitionDraftConnectionIfMissing();
-        ClearSelectedNewDraftConnectionNodesIfMissing();
-    }
 }
