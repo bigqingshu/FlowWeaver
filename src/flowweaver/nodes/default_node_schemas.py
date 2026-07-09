@@ -12,10 +12,10 @@ from flowweaver.nodes.default_control_jump_node_schemas import (
 from flowweaver.nodes.default_control_jump_node_schemas import (
     _unconditional_jump_schema as _unconditional_jump_schema,
 )
-from flowweaver.nodes.default_control_node_schemas import (
+from flowweaver.nodes.default_control_loop_node_schemas import (
     _loop_judge_schema as _loop_judge_schema,
 )
-from flowweaver.nodes.default_control_node_schemas import (
+from flowweaver.nodes.default_control_loop_node_schemas import (
     _loop_start_schema as _loop_start_schema,
 )
 from flowweaver.nodes.default_control_node_schemas import (
