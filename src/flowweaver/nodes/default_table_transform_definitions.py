@@ -2,37 +2,30 @@ from __future__ import annotations
 
 from flowweaver.nodes.builtin_table_node_types import (
     ADD_CURRENT_DATETIME_COLUMN_NODE_TYPE,
-    ADVANCED_FILTER_ROWS_NODE_TYPE,
-    COPY_ROWS_NODE_TYPE,
-    DEDUPLICATE_ROWS_NODE_TYPE,
-    DELETE_ROWS_NODE_TYPE,
     EXTRACT_TEXT_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
     REPLACE_TEXT_NODE_TYPE,
-    UNPIVOT_ROWS_NODE_TYPE,
 )
 from flowweaver.nodes.default_node_schemas import (
     _add_current_datetime_column_schema,
-    _advanced_filter_rows_schema,
-    _copy_rows_schema,
-    _deduplicate_rows_schema,
-    _delete_rows_schema,
     _extract_text_schema,
     _lookup_matched_field_name_schema,
     _merge_columns_schema,
     _numeric_column_operation_schema,
     _parse_datetime_schema,
     _replace_text_schema,
-    _unpivot_rows_schema,
 )
 from flowweaver.nodes.default_table_basic_column_definitions import (
     default_table_basic_column_node_definitions,
 )
 from flowweaver.nodes.default_table_fill_definitions import (
     default_table_fill_node_definitions,
+)
+from flowweaver.nodes.default_table_row_definitions import (
+    default_table_row_node_definitions,
 )
 from flowweaver.nodes.default_table_slots import (
     _current_output_table_slot,
@@ -57,56 +50,7 @@ def default_table_transform_node_definitions() -> tuple[NodeDefinitionSpec, ...]
             output_table_slots=_single_transform_output_table_slots(),
             config_schema=_replace_text_schema(),
         ),
-        NodeDefinitionSpec(
-            node_type=DELETE_ROWS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Delete Rows",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_delete_rows_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=COPY_ROWS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Copy Rows",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_copy_rows_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=UNPIVOT_ROWS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Unpivot Rows",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_unpivot_rows_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=DEDUPLICATE_ROWS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Deduplicate Rows",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_deduplicate_rows_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=ADVANCED_FILTER_ROWS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Advanced Filter Rows",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_advanced_filter_rows_schema(),
-        ),
+        *default_table_row_node_definitions(),
         NodeDefinitionSpec(
             node_type=EXTRACT_TEXT_NODE_TYPE,
             node_version="1.0",
