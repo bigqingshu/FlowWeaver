@@ -60,6 +60,12 @@ from flowweaver.nodes.default_row_filter_node_schemas import (
 from flowweaver.nodes.default_row_transform_node_schemas import (
     _unpivot_rows_schema as _unpivot_rows_schema,
 )
+from flowweaver.nodes.default_save_table_node_schemas import (
+    _save_memory_table_schema as _save_memory_table_schema,
+)
+from flowweaver.nodes.default_save_table_node_schemas import (
+    _save_run_table_schema as _save_run_table_schema,
+)
 from flowweaver.nodes.default_shared_table_resource_node_schemas import (
     _publish_shared_tables_schema as _publish_shared_tables_schema,
 )
@@ -105,15 +111,9 @@ from flowweaver.nodes.default_text_node_schemas import (
 from flowweaver.nodes.default_text_node_schemas import (
     _replace_text_schema as _replace_text_schema,
 )
-from flowweaver.nodes.default_write_node_schemas import (
-    _save_memory_table_schema as _save_memory_table_schema,
-)
-from flowweaver.nodes.default_write_node_schemas import (
-    _save_run_table_schema as _save_run_table_schema,
-)
-from flowweaver.nodes.default_write_node_schemas import (
+from flowweaver.nodes.default_write_operation_node_schemas import (
     _write_back_table_schema as _write_back_table_schema,
 )
-from flowweaver.nodes.default_write_node_schemas import (
+from flowweaver.nodes.default_write_operation_node_schemas import (
     _write_selected_columns_schema as _write_selected_columns_schema,
 )
