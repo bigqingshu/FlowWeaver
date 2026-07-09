@@ -1,5 +1,3 @@
-using System;
-using System.Collections.ObjectModel;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -25,9 +23,6 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? sharedPublicationErrorMessage;
-
-    public ObservableCollection<SharedPublicationListItemViewModel> SharedPublications { get; } =
-        new();
 
     public bool HasSharedPublicationError =>
         !string.IsNullOrWhiteSpace(SharedPublicationErrorMessage);
