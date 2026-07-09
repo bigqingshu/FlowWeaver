@@ -3,13 +3,19 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.nodes.table_node_errors import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_handler_registry import (
+    BuiltinTableNodeHandler as BuiltinTableNodeHandler,
+)
+from flowweaver.nodes.table_node_handler_registry import (
+    BuiltinTableNodeHandlerRegistry as BuiltinTableNodeHandlerRegistry,
+)
 from flowweaver.nodes.table_node_output_targets import (
     TableOutputWriteResult,
 )
@@ -384,37 +390,3 @@ class BuiltinTableNodeContext:
         raise BuiltinTableNodeValidationError(
             f"Unsupported table storage kind: {table_ref.storage_kind.value}"
         )
-
-
-class BuiltinTableNodeHandler(Protocol):
-    node_type: str
-
-    def execute(
-        self,
-        task: NodeTaskModel,
-        context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
-        ...
-
-
-class BuiltinTableNodeHandlerRegistry:
-    def __init__(
-        self,
-        handlers: Sequence[BuiltinTableNodeHandler] = (),
-    ) -> None:
-        self._handlers: dict[str, BuiltinTableNodeHandler] = {}
-        for handler in handlers:
-            self.register(handler)
-
-    def register(self, handler: BuiltinTableNodeHandler) -> None:
-        if handler.node_type in self._handlers:
-            raise ValueError(
-                f"Duplicate builtin table node handler: {handler.node_type}"
-            )
-        self._handlers[handler.node_type] = handler
-
-    def get(self, node_type: str) -> BuiltinTableNodeHandler | None:
-        return self._handlers.get(node_type)
-
-    def node_types(self) -> tuple[str, ...]:
-        return tuple(sorted(self._handlers))
