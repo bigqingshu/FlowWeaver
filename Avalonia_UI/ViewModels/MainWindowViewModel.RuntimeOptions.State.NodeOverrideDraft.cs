@@ -6,9 +6,6 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private WorkflowDefinitionNodeListItemViewModel? selectedRuntimeOptionsNode;
-
-    [ObservableProperty]
     private string runtimeOptionsSelectedNodeProfileDraft = RuntimeOptionsDefaults.Profile;
 
     [ObservableProperty]
