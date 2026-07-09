@@ -21,18 +21,6 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private string? dataPreviewWorkbenchErrorMessage;
 
-    [ObservableProperty]
-    private string dataPreviewWorkbenchSearchText = string.Empty;
-
-    [ObservableProperty]
-    private string dataPreviewWorkbenchClipboardText = string.Empty;
-
-    [ObservableProperty]
-    private string dataPreviewWorkbenchPasteText = string.Empty;
-
-    [ObservableProperty]
-    private bool isDataPreviewWorkbenchDraft;
-
     public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
 
     public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewWorkbenchRows { get; } =
