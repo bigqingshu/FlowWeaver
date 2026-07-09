@@ -7,7 +7,7 @@ from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
 if TYPE_CHECKING:
-    from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
+    from flowweaver.nodes.table_node_context import BuiltinTableNodeContext
 
 
 class BuiltinTableNodeHandler(Protocol):
