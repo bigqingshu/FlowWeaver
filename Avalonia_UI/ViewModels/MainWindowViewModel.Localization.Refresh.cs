@@ -10,6 +10,8 @@ public partial class MainWindowViewModel
         NotifyWorkflowListLocalizedTextChanged();
         NotifyRunsLocalizedTextChanged();
         NotifyWorkflowDefinitionBasicsLocalizedTextChanged();
+        NotifyWorkflowDefinitionNodesLocalizedTextChanged();
+        NotifyWorkflowNodeConfigLocalizedTextChanged();
         NotifyRuntimeOptionsLocalizedTextChanged();
         NotifyWorkflowStructuredEditLocalizedTextChanged();
         NotifyWorkflowDraftEditorLocalizedTextChanged();

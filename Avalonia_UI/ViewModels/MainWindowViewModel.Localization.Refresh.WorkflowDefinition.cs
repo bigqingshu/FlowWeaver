@@ -12,10 +12,18 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(StatusLabelText));
         OnPropertyChanged(nameof(HashLabelText));
         OnPropertyChanged(nameof(UpdatedLabelText));
+    }
+
+    private void NotifyWorkflowDefinitionNodesLocalizedTextChanged()
+    {
         OnPropertyChanged(nameof(NodesSectionText));
         OnPropertyChanged(nameof(WorkflowNodesSectionText));
         OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
         OnPropertyChanged(nameof(WorkflowDefinitionBatchSelectedNodeCountText));
+    }
+
+    private void NotifyWorkflowNodeConfigLocalizedTextChanged()
+    {
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
         OnPropertyChanged(nameof(ApplyNodeDisplayNameText));
