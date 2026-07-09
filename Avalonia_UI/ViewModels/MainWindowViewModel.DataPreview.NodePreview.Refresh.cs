@@ -29,30 +29,15 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            var tableRefsResponse = await _apiClient.ListTableRefsAsync(
-                BuildSettings(),
+            var tableRef = await TryLoadRequestedNodeTableRefForDataPreviewAsync(
                 requestedRunId,
-                _shutdown.Token);
-
-            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
-            {
-                return false;
-            }
-
-            if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
-            {
-                return ApplyFailedNodeDataPreviewResponse(tableRefsResponse, notifyResult);
-            }
-
-            var tableRef = FindLatestReadableNodeRunTableRef(
-                tableRefsResponse.Data,
-                nodeRun.NodeRunId);
+                requestedNodeInstanceId,
+                nodeRun.NodeRunId,
+                requestVersion,
+                notifyResult);
             if (tableRef is null)
             {
-                return ApplyMissingNodeDataPreviewOutput(
-                    "format.data_preview_table_ref_not_found",
-                    requestedNodeInstanceId,
-                    notifyResult);
+                return false;
             }
 
             var rowsResponse = await _apiClient.GetTableDataRowsAsync(
