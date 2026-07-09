@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import DEDUPLICATE_ROWS_NODE_TYPE
@@ -153,5 +154,56 @@ def deduplicate_occurrence_index(
         return 1
     occurrence_counts[key] = occurrence_counts.get(key, 0) + 1
     return occurrence_counts[key]
+
+
+def deduplicate_output_batches(
+    context: BuiltinTableNodeContext,
+    input_ref: TableRefModel,
+    *,
+    key_fields: list[str],
+    trim: bool,
+    ignore_case: bool,
+    empty_key_policy: str,
+    keep_policy: str,
+    output_mode: str,
+    add_marker_columns: bool,
+    marker_fields: dict[str, str],
+    groups: dict[tuple[Any, ...], dict[str, int]],
+) -> Iterator[list[dict[str, Any]]]:
+    row_number = 1
+    occurrence_counts: dict[tuple[Any, ...], int] = {}
+    for rows in context.iter_row_batches(input_ref):
+        output_rows: list[dict[str, Any]] = []
+        for row in rows:
+            key = deduplicate_key(
+                row,
+                key_fields=key_fields,
+                trim=trim,
+                ignore_case=ignore_case,
+                empty_key_policy=empty_key_policy,
+            )
+            occurrence_index = deduplicate_occurrence_index(
+                occurrence_counts,
+                key,
+            )
+            keep_row = deduplicate_should_keep(
+                row_number,
+                key=key,
+                groups=groups,
+                keep_policy=keep_policy,
+            )
+            if output_mode == "mark" or keep_row:
+                output_row = dict(row)
+                if add_marker_columns:
+                    output_row |= deduplicate_marker_values(
+                        key=key,
+                        groups=groups,
+                        occurrence_index=occurrence_index,
+                        keep_row=keep_row,
+                        marker_fields=marker_fields,
+                    )
+                output_rows.append(output_row)
+            row_number += 1
+        yield output_rows
 
 

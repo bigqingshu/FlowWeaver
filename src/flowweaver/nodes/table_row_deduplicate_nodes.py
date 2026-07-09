@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import DEDUPLICATE_ROWS_NODE_TYPE
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
@@ -17,25 +15,16 @@ from flowweaver.nodes.table_row_deduplicate_helpers import (
     deduplicate_groups as _deduplicate_groups,
 )
 from flowweaver.nodes.table_row_deduplicate_helpers import (
-    deduplicate_key as _deduplicate_key,
-)
-from flowweaver.nodes.table_row_deduplicate_helpers import (
     deduplicate_key_fields as _deduplicate_key_fields,
 )
 from flowweaver.nodes.table_row_deduplicate_helpers import (
     deduplicate_marker_fields as _deduplicate_marker_fields,
 )
 from flowweaver.nodes.table_row_deduplicate_helpers import (
-    deduplicate_marker_values as _deduplicate_marker_values,
-)
-from flowweaver.nodes.table_row_deduplicate_helpers import (
-    deduplicate_occurrence_index as _deduplicate_occurrence_index,
+    deduplicate_output_batches as _deduplicate_output_batches,
 )
 from flowweaver.nodes.table_row_deduplicate_helpers import (
     deduplicate_output_schema as _deduplicate_output_schema,
-)
-from flowweaver.nodes.table_row_deduplicate_helpers import (
-    deduplicate_should_keep as _deduplicate_should_keep,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
@@ -104,49 +93,24 @@ class DeduplicateRowsNodeHandler:
             empty_key_policy=empty_key_policy,
         )
 
-        def output_batches():
-            row_number = 1
-            occurrence_counts: dict[tuple[Any, ...], int] = {}
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    key = _deduplicate_key(
-                        row,
-                        key_fields=key_fields,
-                        trim=trim,
-                        ignore_case=ignore_case,
-                        empty_key_policy=empty_key_policy,
-                    )
-                    occurrence_index = _deduplicate_occurrence_index(
-                        occurrence_counts,
-                        key,
-                    )
-                    keep_row = _deduplicate_should_keep(
-                        row_number,
-                        key=key,
-                        groups=groups,
-                        keep_policy=keep_policy,
-                    )
-                    if output_mode == "mark" or keep_row:
-                        output_row = dict(row)
-                        if add_marker_columns:
-                            output_row |= _deduplicate_marker_values(
-                                key=key,
-                                groups=groups,
-                                occurrence_index=occurrence_index,
-                                keep_row=keep_row,
-                                marker_fields=marker_fields,
-                            )
-                        output_rows.append(output_row)
-                    row_number += 1
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_deduplicate_output_batches(
+                context,
+                input_ref,
+                key_fields=key_fields,
+                trim=trim,
+                ignore_case=ignore_case,
+                empty_key_policy=empty_key_policy,
+                keep_policy=keep_policy,
+                output_mode=output_mode,
+                add_marker_columns=add_marker_columns,
+                marker_fields=marker_fields,
+                groups=groups,
+            ),
         )
 
 
