@@ -3,17 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import FILL_SEQUENCE_NODE_TYPE
-from flowweaver.nodes.table_fill_sequence_helpers import (
+from flowweaver.nodes.table_fill_sequence_output import (
     fill_sequence_output_schema as _fill_sequence_output_schema,
 )
-from flowweaver.nodes.table_fill_sequence_helpers import (
+from flowweaver.nodes.table_fill_sequence_output import (
+    format_sequence_value as _format_sequence_value,
+)
+from flowweaver.nodes.table_fill_sequence_selection import (
     fill_sequence_selected_index as _fill_sequence_selected_index,
 )
-from flowweaver.nodes.table_fill_sequence_helpers import (
+from flowweaver.nodes.table_fill_sequence_selection import (
     fill_sequence_selector as _fill_sequence_selector,
-)
-from flowweaver.nodes.table_fill_sequence_helpers import (
-    format_sequence_value as _format_sequence_value,
 )
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
 from flowweaver.nodes.table_node_config import (
