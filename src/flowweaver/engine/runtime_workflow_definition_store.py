@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.time import utc_now
@@ -19,6 +18,18 @@ from flowweaver.engine.runtime_models import (
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
 )
+from flowweaver.engine.runtime_workflow_definition_queries import (
+    get_workflow_definition_from_session as _get_workflow_definition_from_session,
+)
+from flowweaver.engine.runtime_workflow_definition_queries import (
+    get_workflow_revision_from_session as _get_workflow_revision_from_session,
+)
+from flowweaver.engine.runtime_workflow_definition_queries import (
+    list_workflow_definitions_from_session as _list_workflow_definitions_from_session,
+)
+from flowweaver.engine.runtime_workflow_definition_queries import (
+    list_workflow_revisions_from_session as _list_workflow_revisions_from_session,
+)
 from flowweaver.engine.runtime_workflow_definition_records import (
     initial_workflow_definition_records as _initial_workflow_definition_records,
 )
@@ -30,7 +41,6 @@ from flowweaver.engine.runtime_workflow_definition_records import (
 )
 from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_definition_from_records,
-    _workflow_revision_from_record,
 )
 
 
@@ -57,43 +67,11 @@ class RuntimeWorkflowDefinitionStoreMixin:
 
     def get_workflow_definition(self, workflow_id: str) -> WorkflowDefinition | None:
         with self._session_factory() as session:
-            workflow = session.get(WorkflowRecord, workflow_id)
-            if workflow is None or workflow.status == "DELETED":
-                return None
-            revision = session.get(WorkflowRevisionRecord, workflow.current_revision_id)
-            if revision is None:
-                return None
-            return _workflow_definition_from_records(workflow, revision)
+            return _get_workflow_definition_from_session(session, workflow_id)
 
     def list_workflow_definitions(self) -> list[WorkflowDefinition]:
         with self._session_factory() as session:
-            workflows = session.scalars(
-                select(WorkflowRecord)
-                .where(WorkflowRecord.status != "DELETED")
-                .order_by(WorkflowRecord.created_at)
-            ).all()
-            revisions = {
-                revision.revision_id: revision
-                for revision in session.scalars(
-                    select(WorkflowRevisionRecord).where(
-                        WorkflowRevisionRecord.revision_id.in_(
-                            [
-                                workflow.current_revision_id
-                                for workflow in workflows
-                                if workflow.current_revision_id
-                            ]
-                        )
-                    )
-                )
-            }
-            return [
-                _workflow_definition_from_records(
-                    workflow,
-                    revisions[workflow.current_revision_id],
-                )
-                for workflow in workflows
-                if workflow.current_revision_id in revisions
-            ]
+            return _list_workflow_definitions_from_session(session)
 
     def update_workflow_definition(
         self,
@@ -158,16 +136,8 @@ class RuntimeWorkflowDefinitionStoreMixin:
 
     def list_workflow_revisions(self, workflow_id: str) -> list[WorkflowRevision]:
         with self._session_factory() as session:
-            records = session.scalars(
-                select(WorkflowRevisionRecord)
-                .where(WorkflowRevisionRecord.workflow_id == workflow_id)
-                .order_by(WorkflowRevisionRecord.version)
-            ).all()
-            return [_workflow_revision_from_record(record) for record in records]
+            return _list_workflow_revisions_from_session(session, workflow_id)
 
     def get_workflow_revision(self, revision_id: str) -> WorkflowRevision | None:
         with self._session_factory() as session:
-            record = session.get(WorkflowRevisionRecord, revision_id)
-            if record is None:
-                return None
-            return _workflow_revision_from_record(record)
+            return _get_workflow_revision_from_session(session, revision_id)
