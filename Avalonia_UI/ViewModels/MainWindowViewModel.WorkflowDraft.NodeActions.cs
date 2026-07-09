@@ -11,9 +11,4 @@ public partial class MainWindowViewModel
         MoveSelectedWorkflowDefinitionDraftNodeDownCommand.NotifyCanExecuteChanged();
         NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged();
     }
-
-    partial void OnSelectedWorkflowDefinitionDraftNodeInstanceIdChanged(string value)
-    {
-        DeleteWorkflowDefinitionDraftNodeCommand.NotifyCanExecuteChanged();
-    }
 }
