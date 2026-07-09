@@ -7,6 +7,18 @@ from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.nodes.table_node_context_memory_write import (
+    create_memory_table as _create_memory_table,
+)
+from flowweaver.nodes.table_node_context_memory_write import (
+    create_memory_table_from_batches as _create_memory_table_from_batches,
+)
+from flowweaver.nodes.table_node_context_memory_write import (
+    replace_memory_table_batches as _replace_memory_table_batches,
+)
+from flowweaver.nodes.table_node_context_memory_write import (
+    replace_memory_table_rows as _replace_memory_table_rows,
+)
 from flowweaver.nodes.table_node_context_runtime_write import (
     publish_runtime_row_batches as _publish_runtime_row_batches,
 )
@@ -91,17 +103,15 @@ class TableNodeContextWriteMixin:
         role: TableRole = TableRole.AUXILIARY,
         version: int = 1,
     ) -> TableRefModel:
-        memory_ref = self.memory_provider.create_memory_table(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        return _create_memory_table(
+            self,
+            task,
             logical_table_id=logical_table_id,
             schema=schema,
             rows=rows,
             role=role,
             version=version,
         )
-        self.store.register_table_ref(memory_ref)
-        return memory_ref
 
     def replace_runtime_table_rows(
         self,
@@ -148,31 +158,29 @@ class TableNodeContextWriteMixin:
         role: TableRole = TableRole.AUXILIARY,
         version: int = 1,
     ) -> TableRefModel:
-        memory_ref = self.memory_provider.create_memory_table_from_batches(
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
+        return _create_memory_table_from_batches(
+            self,
+            task,
             logical_table_id=logical_table_id,
             schema=schema,
             row_batches=row_batches,
             role=role,
             version=version,
         )
-        self.store.register_table_ref(memory_ref)
-        return memory_ref
 
     def replace_memory_table_rows(
         self,
         table_ref: TableRefModel,
         rows: Sequence[dict[str, Any]],
     ) -> None:
-        self.memory_provider.replace_rows(table_ref, rows)
+        _replace_memory_table_rows(self, table_ref, rows)
 
     def replace_memory_table_batches(
         self,
         table_ref: TableRefModel,
         row_batches: Iterable[Sequence[dict[str, Any]]],
     ) -> None:
-        self.memory_provider.replace_row_batches(table_ref, row_batches)
+        _replace_memory_table_batches(self, table_ref, row_batches)
 
     def find_latest_output_target_ref(
         self,
