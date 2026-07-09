@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse
 
+from flowweaver.api.data_table_refs import (
+    load_readable_table_ref,
+    rejected_data_read,
+    summary_payload,
+)
 from flowweaver.api.dependencies import (
     check_origin,
     get_runtime_store,
     get_table_provider_registry,
     require_api_token,
 )
-from flowweaver.api.responses import error_response, ok_response
+from flowweaver.api.responses import ok_response
 from flowweaver.engine.runtime_store import RuntimeStore
-from flowweaver.engine.runtime_table_provider import TableProvider
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
-from flowweaver.protocols.enums import LifecycleStatus
-from flowweaver.protocols.table_ref import TableRefModel
 
 DEFAULT_ROW_LIMIT = 50
 MAX_ROW_LIMIT = 200
@@ -27,12 +27,6 @@ router = APIRouter(
     tags=["data"],
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
-
-
-@dataclass(frozen=True)
-class ReadableTableRefContext:
-    table_ref: TableRefModel
-    provider: TableProvider
 
 
 @router.get("/{table_ref_id}", response_model=None)
@@ -45,7 +39,7 @@ def get_table_ref(
         Depends(get_table_provider_registry),
     ],
 ):
-    context, rejection = _load_readable_table_ref(
+    context, rejection = load_readable_table_ref(
         request,
         table_ref_id,
         store=store,
@@ -67,7 +61,7 @@ def get_table_ref_schema(
         Depends(get_table_provider_registry),
     ],
 ):
-    context, rejection = _load_readable_table_ref(
+    context, rejection = load_readable_table_ref(
         request,
         table_ref_id,
         store=store,
@@ -81,7 +75,7 @@ def get_table_ref_schema(
     try:
         schema = context.provider.get_schema(table_ref)
     except ValueError as exc:
-        return _rejected_data_read(request, exc)
+        return rejected_data_read(request, exc)
 
     return ok_response(
         request,
@@ -103,7 +97,7 @@ def get_table_ref_summary(
         Depends(get_table_provider_registry),
     ],
 ):
-    context, rejection = _load_readable_table_ref(
+    context, rejection = load_readable_table_ref(
         request,
         table_ref_id,
         store=store,
@@ -117,9 +111,9 @@ def get_table_ref_summary(
     try:
         row_count = context.provider.count_rows(table_ref)
     except ValueError as exc:
-        return _rejected_data_read(request, exc)
+        return rejected_data_read(request, exc)
 
-    return ok_response(request, _summary_payload(table_ref, row_count=row_count))
+    return ok_response(request, summary_payload(table_ref, row_count=row_count))
 
 
 @router.get("/{table_ref_id}/rows", response_model=None)
@@ -136,7 +130,7 @@ def get_table_ref_rows(
     columns: Annotated[list[str] | None, Query()] = None,
     order_by: Annotated[list[str] | None, Query()] = None,
 ):
-    context, rejection = _load_readable_table_ref(
+    context, rejection = load_readable_table_ref(
         request,
         table_ref_id,
         store=store,
@@ -158,7 +152,7 @@ def get_table_ref_rows(
         )
         row_count = context.provider.count_rows(table_ref)
     except ValueError as exc:
-        return _rejected_data_read(request, exc)
+        return rejected_data_read(request, exc)
 
     return ok_response(
         request,
@@ -171,82 +165,4 @@ def get_table_ref_rows(
             "rows": rows,
             "has_more": offset + len(rows) < row_count,
         },
-    )
-
-
-def _load_readable_table_ref(
-    request: Request,
-    table_ref_id: str,
-    *,
-    store: RuntimeStore,
-    provider_registry: TableProviderRegistry,
-) -> tuple[ReadableTableRefContext, None] | tuple[None, JSONResponse]:
-    table_ref = store.get_table_ref(table_ref_id)
-    if table_ref is None:
-        return None, error_response(
-            request,
-            error_code="TABLE_REF_NOT_FOUND",
-            message="TableRef not found",
-            status_code=404,
-        )
-    provider = provider_registry.get(table_ref.provider_id)
-    if provider is None:
-        return None, error_response(
-            request,
-            error_code="DATA_PROVIDER_UNSUPPORTED",
-            message="TableRef provider is not supported by this EngineHost",
-            status_code=400,
-        )
-    if not provider_registry.supports_storage_kind(
-        table_ref.provider_id,
-        table_ref.storage_kind,
-    ):
-        return None, error_response(
-            request,
-            error_code="DATA_STORAGE_UNSUPPORTED",
-            message="TableRef storage kind is not supported by this EngineHost",
-            status_code=400,
-        )
-    if "READ" not in table_ref.capabilities:
-        return None, error_response(
-            request,
-            error_code="TABLE_REF_NOT_READABLE",
-            message="TableRef does not declare READ capability",
-            status_code=403,
-        )
-    if table_ref.lifecycle_status in {
-        LifecycleStatus.RELEASED,
-        LifecycleStatus.RETIRED,
-        LifecycleStatus.ORPHANED,
-    }:
-        return None, error_response(
-            request,
-            error_code="TABLE_REF_NOT_AVAILABLE",
-            message="TableRef is no longer available for reading",
-            status_code=409,
-        )
-    return ReadableTableRefContext(table_ref=table_ref, provider=provider), None
-
-
-def _summary_payload(table_ref: TableRefModel, *, row_count: int) -> dict[str, object]:
-    return {
-        "table_ref_id": table_ref.table_ref_id,
-        "workflow_run_id": table_ref.created_by_workflow_run_id,
-        "node_run_id": table_ref.created_by_node_run_id,
-        "logical_table_id": table_ref.logical_table_id,
-        "storage_kind": table_ref.storage_kind.value,
-        "lifecycle_status": table_ref.lifecycle_status.value,
-        "version": table_ref.version,
-        "schema_fingerprint": table_ref.schema_fingerprint,
-        "capabilities": sorted(table_ref.capabilities),
-        "row_count": row_count,
-    }
-
-
-def _rejected_data_read(request: Request, exc: ValueError) -> JSONResponse:
-    return error_response(
-        request,
-        error_code="DATA_READ_REJECTED",
-        message=str(exc),
-        status_code=400,
     )
