@@ -4,60 +4,27 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from flowweaver.nodes.table_node_errors import BuiltinTableNodeValidationError
+from flowweaver.nodes.table_node_output_target_lookup import (
+    find_latest_output_target_ref as find_latest_output_target_ref,
+)
+from flowweaver.nodes.table_node_output_target_lookup import (
+    require_existing_output_target_ref as require_existing_output_target_ref,
+)
 from flowweaver.nodes.table_node_output_target_models import (
     TableNodeOutputContext as TableNodeOutputContext,
 )
 from flowweaver.nodes.table_node_output_target_models import (
     TableOutputWriteResult as TableOutputWriteResult,
 )
+from flowweaver.nodes.table_node_row_batch_counter import (
+    RowBatchCounter as _RowBatchCounter,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.protocols.table_ref import FieldSchemaModel
 from flowweaver.workflow_process.table_output_targets import (
     TableOutputTarget,
     TableOutputTargetKind,
 )
-
-
-def find_latest_output_target_ref(
-    context: TableNodeOutputContext,
-    *,
-    workflow_run_id: str,
-    target: TableOutputTarget,
-) -> TableRefModel | None:
-    if target.logical_table_id is None or target.storage_kind is None:
-        return None
-    matches = [
-        table_ref
-        for table_ref in context.registry.list_by_workflow_run(workflow_run_id)
-        if table_ref.logical_table_id == target.logical_table_id
-        and table_ref.storage_kind == target.storage_kind
-        and table_ref.role == target.role
-    ]
-    if not matches:
-        return None
-    return max(matches, key=lambda table_ref: table_ref.version)
-
-
-def require_existing_output_target_ref(
-    context: TableNodeOutputContext,
-    *,
-    workflow_run_id: str,
-    target: TableOutputTarget,
-) -> TableRefModel:
-    if not target.is_existing_target:
-        raise BuiltinTableNodeValidationError(
-            "output target must be an existing target"
-        )
-    table_ref = find_latest_output_target_ref(
-        context,
-        workflow_run_id=workflow_run_id,
-        target=target,
-    )
-    if table_ref is None:
-        raise BuiltinTableNodeValidationError(
-            f"output target does not exist: {target.logical_table_id}"
-        )
-    return table_ref
 
 
 def publish_output_target_batches(
@@ -161,17 +128,6 @@ def replace_output_target_batches(
         affected_rows=counter.row_count,
         target_existed=True,
     )
-
-
-class _RowBatchCounter:
-    def __init__(self, row_batches: Iterable[Sequence[dict[str, Any]]]) -> None:
-        self._row_batches = row_batches
-        self.row_count = 0
-
-    def __iter__(self):
-        for rows in self._row_batches:
-            self.row_count += len(rows)
-            yield rows
 
 
 def _required_target_table_name(target: TableOutputTarget) -> str:
