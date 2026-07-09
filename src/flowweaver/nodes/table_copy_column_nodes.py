@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import COPY_COLUMN_NODE_TYPE
+from flowweaver.nodes.table_copy_column_helpers import (
+    copy_column_output_mode_config as _copy_column_output_mode_config,
+)
+from flowweaver.nodes.table_copy_column_helpers import (
+    copy_column_target_field_config as _copy_column_target_field_config,
+)
+from flowweaver.nodes.table_copy_column_helpers import (
+    copy_column_value as _copy_column_value,
+)
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
 from flowweaver.nodes.table_node_config import (
     node_string_config as _node_string_config,
@@ -97,37 +104,3 @@ class CopyColumnNodeHandler:
             schema=schema,
             row_batches=output_batches(),
         )
-
-
-def _copy_column_output_mode_config(config: dict[str, Any]) -> str:
-    value = config.get("output_mode", "new_field")
-    if not isinstance(value, str) or not value:
-        raise _NodeValidationError("CopyColumnNode config.output_mode is required")
-    mode = value.strip().lower()
-    if mode not in {"new_field", "overwrite"}:
-        raise _NodeValidationError(f"Unsupported CopyColumnNode output_mode: {value}")
-    return mode
-
-
-def _copy_column_target_field_config(
-    config: dict[str, Any],
-    *,
-    output_mode: str,
-) -> str:
-    key = "new_field" if output_mode == "new_field" else "target_field"
-    value = config.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise _NodeValidationError(f"CopyColumnNode config.{key} is required")
-    return value.strip()
-
-
-def _copy_column_value(
-    value: Any,
-    *,
-    trim_value: bool,
-    empty_default: Any,
-) -> Any:
-    copied = value.strip() if trim_value and isinstance(value, str) else value
-    if copied is None or copied == "":
-        return empty_default
-    return copied
