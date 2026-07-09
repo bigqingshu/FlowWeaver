@@ -35,19 +35,10 @@ public partial class MainWindowViewModel
             var displayOrder = 1;
             foreach (var node in WorkflowDefinitionDraftStructure.Nodes)
             {
-                var nodeItem = new WorkflowDefinitionNodeListItemViewModel(
-                    node.NodeInstanceId,
-                    node.NodeType,
-                    node.NodeVersion,
-                    node.DisplayName,
-                    node.Enabled,
-                    node.ConfigJson,
-                    DisplayTextFormatter,
-                    _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName),
-                    displayOrder)
-                {
-                    IsBatchSelected = batchSelectedNodeIds.Contains(node.NodeInstanceId),
-                };
+                var nodeItem = CreateWorkflowDefinitionDraftNodeListItem(
+                    node,
+                    displayOrder,
+                    batchSelectedNodeIds.Contains(node.NodeInstanceId));
                 nodeItem.PropertyChanged += OnWorkflowDefinitionDraftNodeItemPropertyChanged;
                 WorkflowDefinitionDraftNodes.Add(nodeItem);
                 displayOrder++;
