@@ -11,14 +11,5 @@ public partial class MainWindowViewModel
     private bool isRuntimeEventStreamConnected;
 
     [ObservableProperty]
-    private string runtimeEventStreamMessage = "Event stream disconnected.";
-
-    [ObservableProperty]
-    private string? runtimeEventStreamErrorMessage;
-
-    [ObservableProperty]
     private long? lastRuntimeEventSequenceNumber;
-
-    public bool HasRuntimeEventStreamError =>
-        !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
 }
