@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
@@ -10,31 +9,6 @@ public partial class MainWindowViewModel
     private const int MaxRecentEvents = 20;
     private const int CollapsedRecentEventCount = 1;
     private const int ExpandedRecentEventCount = 5;
-
-    private void AddRecentEvent(
-        string key,
-        UiNotificationKind kind,
-        string sourceText,
-        string title,
-        string message)
-    {
-        RecentEvents.Insert(
-            0,
-            new RecentEventListItemViewModel(
-                key,
-                kind,
-                sourceText,
-                title,
-                message,
-                DateTimeOffset.Now));
-
-        while (RecentEvents.Count > MaxRecentEvents)
-        {
-            RecentEvents.RemoveAt(RecentEvents.Count - 1);
-        }
-
-        NotifyRecentEventsChanged();
-    }
 
     private void AddRecentRuntimeEvent(RuntimeEventDto runtimeEvent)
     {
