@@ -8,6 +8,18 @@ public partial class MainWindowViewModel
     private void LoadDataPreviewWorkbenchRows(TableDataRowsDto rows, bool isDraft = false)
     {
         var gridState = DataPreviewTableGridBuilder.BuildWorkbenchState(rows);
+        ApplyDataPreviewWorkbenchGridState(gridState, isDraft);
+        DataPreviewWorkbenchClipboardText = string.Empty;
+        ApplyDataPreviewWorkbenchSearch();
+        NotifyDataPreviewWorkbenchPagingChanged();
+        NotifyDataPreviewWorkbenchDirtyStateChanged();
+        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+    }
+
+    private void ApplyDataPreviewWorkbenchGridState(
+        DataPreviewWorkbenchGridState gridState,
+        bool isDraft)
+    {
         IsDataPreviewWorkbenchDraft = isDraft;
         dataPreviewWorkbenchLoadedColumns = gridState.Columns;
         dataPreviewWorkbenchLoadedRows = gridState.Rows;
@@ -16,10 +28,5 @@ public partial class MainWindowViewModel
         dataPreviewWorkbenchOffset = gridState.Offset;
         dataPreviewWorkbenchHasMore = gridState.HasMore;
         dataPreviewWorkbenchRowCount = gridState.RowCount;
-        DataPreviewWorkbenchClipboardText = string.Empty;
-        ApplyDataPreviewWorkbenchSearch();
-        NotifyDataPreviewWorkbenchPagingChanged();
-        NotifyDataPreviewWorkbenchDirtyStateChanged();
-        OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
     }
 }
