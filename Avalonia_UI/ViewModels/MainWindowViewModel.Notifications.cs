@@ -1,44 +1,11 @@
 using System;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    [ObservableProperty]
-    private bool isNotificationOpen;
-
-    [ObservableProperty]
-    private string notificationKey = string.Empty;
-
-    [ObservableProperty]
-    private UiNotificationKind notificationKind = UiNotificationKind.Info;
-
-    [ObservableProperty]
-    private string notificationTitle = string.Empty;
-
-    [ObservableProperty]
-    private string notificationMessage = string.Empty;
-
-    [ObservableProperty]
-    private DateTimeOffset? notificationUpdatedAt;
-
-    [ObservableProperty]
-    private bool isNotificationSticky;
-
-    [ObservableProperty]
-    private TimeSpan? notificationAutoDismissAfter;
-
-    [ObservableProperty]
-    private int notificationOpenSequence;
-
-    [ObservableProperty]
-    private int notificationUpdateCount;
-
-    public string NotificationKindText => NotificationKind.ToString();
-
     public void ShowNotification(
         string key,
         UiNotificationKind kind,
@@ -86,10 +53,5 @@ public partial class MainWindowViewModel
         NotificationAutoDismissAfter = null;
         HasNotificationCountdown = false;
         NotificationCountdownProgress = 0;
-    }
-
-    partial void OnNotificationKindChanged(UiNotificationKind value)
-    {
-        OnPropertyChanged(nameof(NotificationKindText));
     }
 }
