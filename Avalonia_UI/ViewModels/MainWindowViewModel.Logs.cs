@@ -2,8 +2,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private int runtimeEventLogLoadVersion;
-
     public string WorkflowRunFilterText => T("logs.workflow_run");
 
     public string RunIdWatermarkText => T("logs.run_id_watermark");
