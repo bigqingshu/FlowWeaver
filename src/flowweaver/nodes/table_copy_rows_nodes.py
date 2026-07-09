@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import COPY_ROWS_NODE_TYPE
 from flowweaver.nodes.table_copy_rows_helpers import (
-    copy_row_batches as _copy_row_batches,
+    copy_row_source_row as _copy_row_source_row,
 )
 from flowweaver.nodes.table_copy_rows_helpers import (
-    copy_row_source_row as _copy_row_source_row,
+    copy_rows_output_batches as _copy_rows_output_batches,
 )
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
 from flowweaver.nodes.table_node_config import (
@@ -93,50 +91,17 @@ class CopyRowsNodeHandler:
             source_row_number=source_row_number,
         )
 
-        def output_batches():
-            if insert_mode == "prepend":
-                yield from _copy_row_batches(
-                    source_row,
-                    copy_count=copy_count,
-                    batch_size=context.row_batch_size,
-                )
-            row_number = 1
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    if insert_mode == "before_row" and row_number == insert_row:
-                        if output_rows:
-                            yield output_rows
-                            output_rows = []
-                        yield from _copy_row_batches(
-                            source_row,
-                            copy_count=copy_count,
-                            batch_size=context.row_batch_size,
-                        )
-                    output_rows.append(row)
-                    if insert_mode == "after_row" and row_number == insert_row:
-                        if output_rows:
-                            yield output_rows
-                            output_rows = []
-                        yield from _copy_row_batches(
-                            source_row,
-                            copy_count=copy_count,
-                            batch_size=context.row_batch_size,
-                        )
-                    row_number += 1
-                if output_rows:
-                    yield output_rows
-            if insert_mode == "append":
-                yield from _copy_row_batches(
-                    source_row,
-                    copy_count=copy_count,
-                    batch_size=context.row_batch_size,
-                )
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=input_ref.schema,
-            row_batches=output_batches(),
+            row_batches=_copy_rows_output_batches(
+                context,
+                input_ref,
+                source_row=source_row,
+                copy_count=copy_count,
+                insert_mode=insert_mode,
+                insert_row=insert_row,
+            ),
         )
