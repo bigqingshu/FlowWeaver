@@ -9,15 +9,6 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     private bool isLoadingRuntimeEventLog;
 
-    [ObservableProperty]
-    private string runtimeEventLogMessage = "No runtime events loaded.";
-
-    [ObservableProperty]
-    private string? runtimeEventLogErrorMessage;
-
-    public bool HasRuntimeEventLogError =>
-        !string.IsNullOrWhiteSpace(RuntimeEventLogErrorMessage);
-
     public bool IsLogBusy => IsLoadingRuntimeEventLog;
 
     public string WorkflowRunFilterText => T("logs.workflow_run");
@@ -44,10 +35,5 @@ public partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(IsLogBusy));
         RefreshRuntimeEventLogCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnRuntimeEventLogErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasRuntimeEventLogError));
     }
 }
