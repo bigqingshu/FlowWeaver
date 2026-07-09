@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -15,34 +12,11 @@ public partial class MainWindowViewModel
     private const int CollapsedRecentEventCount = 1;
     private const int ExpandedRecentEventCount = 5;
 
-    [ObservableProperty]
-    private bool isRecentEventsExpanded;
-
-    public ObservableCollection<RecentEventListItemViewModel> RecentEvents { get; } =
-        new();
-
-    public bool HasRecentEvents => RecentEvents.Count > 0;
-
-    public bool HasNoRecentEvents => !HasRecentEvents;
-
-    public bool HasMoreRecentEvents => RecentEvents.Count > CollapsedRecentEventCount;
-
-    public IReadOnlyList<RecentEventListItemViewModel> VisibleRecentEvents =>
-        RecentEvents.Take(
-                IsRecentEventsExpanded
-                    ? ExpandedRecentEventCount
-                    : CollapsedRecentEventCount)
-            .ToArray();
-
     public string RecentEventsSectionText => T("recent_events.section");
 
     public string RecentEventsEmptyText => T("recent_events.empty");
 
     public string RecentEventsViewAllText => T("recent_events.view_all");
-
-    public string RecentEventsToggleText => IsRecentEventsExpanded
-        ? T("recent_events.collapse")
-        : T("recent_events.expand");
 
     [RelayCommand]
     private void ViewAllRecentEvents()
@@ -104,17 +78,4 @@ public partial class MainWindowViewModel
         return parts.Count == 0 ? string.Empty : string.Join(", ", parts);
     }
 
-    private void NotifyRecentEventsChanged()
-    {
-        OnPropertyChanged(nameof(HasRecentEvents));
-        OnPropertyChanged(nameof(HasNoRecentEvents));
-        OnPropertyChanged(nameof(HasMoreRecentEvents));
-        OnPropertyChanged(nameof(VisibleRecentEvents));
-    }
-
-    partial void OnIsRecentEventsExpandedChanged(bool value)
-    {
-        OnPropertyChanged(nameof(RecentEventsToggleText));
-        OnPropertyChanged(nameof(VisibleRecentEvents));
-    }
 }
