@@ -31,29 +31,10 @@ public partial class MainWindowViewModel
             offset);
         if (!patchResult.Succeeded)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_move_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.move_node",
-                UiNotificationKind.Error);
+            ApplyWorkflowDefinitionDraftMoveNodeFailure(patchResult);
             return;
         }
 
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        SelectWorkflowDefinitionDraftNode(nodeInstanceId);
-        WorkflowDefinitionValidationMessage =
-            patchResult.AddedConnections.Count > 0
-                ? T("definition.node_moved_with_rewired_connections")
-                : T("definition.node_moved");
-        WorkflowDefinitionValidationErrorMessage =
-            patchResult.AddedConnections.Count > 0
-                ? FormatMovedRewiredConnectionsMessage(
-                    patchResult.RemovedConnections,
-                    patchResult.AddedConnections)
-                : null;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.move_node",
-            UiNotificationKind.Success);
+        ApplyWorkflowDefinitionDraftMoveNodeSuccess(patchResult, nodeInstanceId);
     }
 }
