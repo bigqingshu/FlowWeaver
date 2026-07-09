@@ -11,12 +11,6 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
-from flowweaver.engine.supervisor_commands import (
-    node_executor_command as _node_executor_command,
-)
-from flowweaver.engine.supervisor_commands import (
-    workflow_process_command as _workflow_process_command,
-)
 from flowweaver.engine.supervisor_executor_events import (
     close_executor_children as _close_executor_children,
 )
@@ -27,16 +21,13 @@ from flowweaver.engine.supervisor_paths import (
     child_environment as _child_environment,
 )
 from flowweaver.engine.supervisor_paths import (
-    executor_process_log_paths as _executor_process_log_paths,
-)
-from flowweaver.engine.supervisor_paths import (
-    workflow_process_log_paths as _workflow_process_log_paths,
-)
-from flowweaver.engine.supervisor_paths import (
     workflow_process_runtime_event_path as _workflow_process_runtime_event_path,
 )
-from flowweaver.engine.supervisor_process_launch import (
-    launch_child_process as _launch_child_process,
+from flowweaver.engine.supervisor_process_start import (
+    start_executor_child_process as _start_executor_child_process,
+)
+from flowweaver.engine.supervisor_process_start import (
+    start_workflow_child_process as _start_workflow_child_process,
 )
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
 from flowweaver.engine.supervisor_workflow_processes import (
@@ -84,35 +75,17 @@ class Supervisor:
             process.process_id,
         )
         self._runtime_events.register(process.process_id, runtime_event_path)
-        command = _workflow_process_command(
-            python_executable=self._python_executable,
-            src_path=Path(__file__).resolve().parents[2],
-            database_url=self._runtime_store.database_url,
-            workflow_run_id=workflow_run_id,
-            process=process,
-            config=self._config,
-            runtime_event_path=runtime_event_path,
-        )
-        stdout_path, stderr_path = self._workflow_process_log_paths(workflow_run_id)
         try:
-            child = _launch_child_process(
-                command,
-                cwd=Path(__file__).resolve().parents[2],
+            child = _start_workflow_child_process(
+                config=self._config,
+                runtime_store=self._runtime_store,
+                python_executable=self._python_executable,
+                workflow_run_id=workflow_run_id,
+                process=process,
+                runtime_event_path=runtime_event_path,
                 env=self._child_environment(),
-                stdin=subprocess.DEVNULL,
-                stdout_path=stdout_path,
-                stderr_path=stderr_path,
             )
-        except Exception as exc:
-            self._runtime_store.mark_workflow_process_exited(
-                process.process_id,
-                exit_code=1,
-                error={"message": str(exc)},
-            )
-            self._runtime_store.abort_workflow_run_for_process(
-                process.process_id,
-                reason="WORKFLOW_PROCESS_START_FAILED",
-            )
+        except Exception:
             self._runtime_events.forget(process.process_id)
             raise
         self._children[process.process_id] = child
@@ -122,19 +95,11 @@ class Supervisor:
     def start_executor_process(self, *, executor_id: str | None = None) -> str:
         self.start()
         executor_id = executor_id or new_id()
-        command = _node_executor_command(
+        child = _start_executor_child_process(
+            config=self._config,
             python_executable=self._python_executable,
-            src_path=Path(__file__).resolve().parents[2],
             executor_id=executor_id,
-        )
-        stdout_path, stderr_path = self._executor_process_log_paths(executor_id)
-        child = _launch_child_process(
-            command,
-            cwd=Path(__file__).resolve().parents[2],
             env=self._child_environment(),
-            stdin=subprocess.PIPE,
-            stdout_path=stdout_path,
-            stderr_path=stderr_path,
         )
         self._executor_children[executor_id] = child
         return executor_id
@@ -273,12 +238,6 @@ class Supervisor:
 
     def _child_environment(self) -> dict[str, str]:
         return _child_environment(src_path=Path(__file__).resolve().parents[2])
-
-    def _workflow_process_log_paths(self, workflow_run_id: str) -> tuple[Path, Path]:
-        return _workflow_process_log_paths(self._config, workflow_run_id)
-
-    def _executor_process_log_paths(self, executor_id: str) -> tuple[Path, Path]:
-        return _executor_process_log_paths(self._config, executor_id)
 
     def _workflow_process_runtime_event_path(
         self,
