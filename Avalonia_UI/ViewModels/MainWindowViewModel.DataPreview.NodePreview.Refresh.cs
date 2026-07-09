@@ -40,28 +40,22 @@ public partial class MainWindowViewModel
                 return false;
             }
 
-            var rowsResponse = await _apiClient.GetTableDataRowsAsync(
-                BuildSettings(),
+            var rows = await TryLoadRequestedNodeRowsForDataPreviewAsync(
+                requestedRunId,
+                requestedNodeInstanceId,
                 tableRef.TableRefId,
-                offset: 0,
-                limit: DataPreviewRowLimit,
-                cancellationToken: _shutdown.Token);
-
-            if (IsStaleDataPreviewRequest(requestVersion, requestedRunId, requestedNodeInstanceId))
+                requestVersion,
+                notifyResult);
+            if (rows is null)
             {
                 return false;
-            }
-
-            if (!rowsResponse.Ok || rowsResponse.Data is null)
-            {
-                return ApplyFailedNodeDataPreviewResponse(rowsResponse, notifyResult);
             }
 
             ApplySuccessfulNodeDataPreviewRefresh(
                 requestedRunId,
                 requestedNodeInstanceId,
                 tableRef,
-                rowsResponse.Data);
+                rows);
             if (notifyResult)
             {
                 ShowDataPreviewNotification(UiNotificationKind.Success);
