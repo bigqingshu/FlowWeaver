@@ -8,9 +8,11 @@ from flowweaver.engine.runtime_store import NodeRun, RuntimeStore, WorkflowRun
 from flowweaver.protocols.enums import (
     EventType,
     NodeRunStatus,
-    WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
+from flowweaver.workflow_process.controller_completion import (
+    complete_workflow_if_all_nodes_succeeded as _complete_workflow,
+)
 from flowweaver.workflow_process.controller_readiness import (
     node_dependencies_are_ready as _node_dependencies_are_ready,
 )
@@ -18,9 +20,6 @@ from flowweaver.workflow_process.controller_readiness import (
     node_runs_by_instance as _node_runs_by_instance,
 )
 from flowweaver.workflow_process.dag import WorkflowDag
-from flowweaver.workflow_process.workflow_completion import (
-    WorkflowCompletionEvaluator,
-)
 
 
 @dataclass(frozen=True)
@@ -171,7 +170,7 @@ def advance_after_node_success(
         process_generation=process_generation,
         dag=dag,
     )
-    workflow_completed = _complete_workflow_if_all_nodes_succeeded(
+    workflow_completed = _complete_workflow(
         store,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
@@ -179,41 +178,6 @@ def advance_after_node_success(
         event_sink=event_sink,
     )
     return NodeAdvanceResult(completed_node, newly_ready, workflow_completed)
-
-
-def _complete_workflow_if_all_nodes_succeeded(
-    store: RuntimeStore,
-    *,
-    workflow_run_id: str,
-    process_id: str,
-    process_generation: int | None = None,
-    event_sink: RuntimeEventSink,
-) -> WorkflowRun | None:
-    if not WorkflowCompletionEvaluator(store).can_mark_workflow_succeeded(
-        workflow_run_id
-    ):
-        return None
-    run = store.get_workflow_run(workflow_run_id)
-    if run is None or run.status == WorkflowRunStatus.SUCCEEDED.value:
-        return run
-    completed = store.update_workflow_run_status(
-        workflow_run_id,
-        WorkflowRunStatus.SUCCEEDED,
-        finished_at=utc_now(),
-        expected_state_version=run.state_version,
-        allowed_source_statuses=[WorkflowRunStatus.RUNNING],
-        owner_process_id=process_id if process_generation is not None else None,
-        process_generation=process_generation,
-    )
-    if completed is not None:
-        event_sink.emit(
-            EventModel(
-                event_type=EventType.WORKFLOW_FINISHED,
-                workflow_run_id=workflow_run_id,
-                payload={"process_id": process_id},
-            )
-        )
-    return completed
 
 
 def _publish_node_queued(
