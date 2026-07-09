@@ -5,9 +5,13 @@ from flowweaver.nodes.builtin_table_node_types import (
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
     PARSE_DATETIME_NODE_TYPE,
 )
-from flowweaver.nodes.default_node_schemas import (
+from flowweaver.nodes.default_current_datetime_node_schema import (
     _add_current_datetime_column_schema,
+)
+from flowweaver.nodes.default_node_schemas import (
     _numeric_column_operation_schema,
+)
+from flowweaver.nodes.default_parse_datetime_node_schema import (
     _parse_datetime_schema,
 )
 from flowweaver.nodes.default_table_slots import (
