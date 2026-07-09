@@ -28,10 +28,4 @@ public partial class MainWindowViewModel
 
         NotifyDataPreviewRowsChanged();
     }
-
-    private void NotifyDataPreviewRowsChanged()
-    {
-        OnPropertyChanged(nameof(HasDataPreviewColumns));
-        OnPropertyChanged(nameof(HasDataPreviewRows));
-    }
 }
