@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import re
-from typing import Any
-
 from flowweaver.nodes.builtin_table_node_types import EXTRACT_TEXT_NODE_TYPE
-from flowweaver.nodes.table_extract_text_helpers import SKIP_ROW as _SKIP_ROW
+from flowweaver.nodes.table_extract_text_helpers import (
+    extract_text_output_batches as _extract_text_output_batches,
+)
 from flowweaver.nodes.table_extract_text_helpers import (
     extract_text_output_field as _extract_text_output_field,
 )
@@ -13,12 +12,6 @@ from flowweaver.nodes.table_extract_text_helpers import (
 )
 from flowweaver.nodes.table_extract_text_helpers import (
     extract_text_rule_fallback_key as _extract_text_rule_fallback_key,
-)
-from flowweaver.nodes.table_extract_text_helpers import (
-    extract_text_unmatched_value as _extract_text_unmatched_value,
-)
-from flowweaver.nodes.table_extract_text_helpers import (
-    extract_text_value as _extract_text_value,
 )
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
@@ -39,7 +32,6 @@ from flowweaver.nodes.table_ops import find_field
 from flowweaver.nodes.table_value_source_config import (
     value_source_config as _value_source_config,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -110,38 +102,21 @@ class ExtractTextNodeHandler:
             fallback_key="unmatched_value",
         )
 
-        def output_batches():
-            for rows in context.iter_row_batches(input_ref):
-                output_rows: list[dict[str, Any]] = []
-                for row in rows:
-                    try:
-                        extracted = _extract_text_value(
-                            row.get(source_field),
-                            row=row,
-                            config=task.config,
-                            method=method,
-                            rule_source=rule_source,
-                            strip_result=strip_result,
-                        )
-                        if extracted is None:
-                            extracted = _extract_text_unmatched_value(
-                                row,
-                                source_value=row.get(source_field),
-                                unmatched_mode=unmatched_mode,
-                                unmatched_source=unmatched_source,
-                            )
-                        if extracted is _SKIP_ROW:
-                            continue
-                    except (ValueSourceError, re.error, IndexError) as exc:
-                        raise _NodeValidationError(str(exc)) from exc
-                    output_rows.append(dict(row) | {output_field: extracted})
-                yield output_rows
-
         return _publish_primary_table_output(
             task,
             context,
             node_type=self.node_type,
             schema=output_schema,
-            row_batches=output_batches(),
+            row_batches=_extract_text_output_batches(
+                context,
+                input_ref,
+                config=task.config,
+                source_field=source_field,
+                output_field=output_field,
+                method=method,
+                rule_source=rule_source,
+                strip_result=strip_result,
+                unmatched_mode=unmatched_mode,
+                unmatched_source=unmatched_source,
+            ),
         )
-
