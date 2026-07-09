@@ -4,7 +4,8 @@ public partial class MainWindowViewModel
 {
     private void NotifyLocalizedTextChanged()
     {
-        NotifyAppShellAndConnectionLocalizedTextChanged();
+        NotifyAppShellLocalizedTextChanged();
+        NotifyConnectionLocalizedTextChanged();
         NotifyDataPreviewWorkbenchLocalizedTextChanged();
         NotifyWorkflowListAndRunsLocalizedTextChanged();
         NotifyWorkflowDefinitionBasicsLocalizedTextChanged();
