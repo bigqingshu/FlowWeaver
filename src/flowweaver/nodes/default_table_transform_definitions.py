@@ -7,9 +7,6 @@ from flowweaver.nodes.builtin_table_node_types import (
     DEDUPLICATE_ROWS_NODE_TYPE,
     DELETE_ROWS_NODE_TYPE,
     EXTRACT_TEXT_NODE_TYPE,
-    FILL_CELLS_NODE_TYPE,
-    FILL_RANGE_NODE_TYPE,
-    FILL_SEQUENCE_NODE_TYPE,
     LOOKUP_MATCHED_FIELD_NAME_NODE_TYPE,
     MERGE_COLUMNS_NODE_TYPE,
     NUMERIC_COLUMN_OPERATION_NODE_TYPE,
@@ -24,9 +21,6 @@ from flowweaver.nodes.default_node_schemas import (
     _deduplicate_rows_schema,
     _delete_rows_schema,
     _extract_text_schema,
-    _fill_cells_schema,
-    _fill_range_schema,
-    _fill_sequence_schema,
     _lookup_matched_field_name_schema,
     _merge_columns_schema,
     _numeric_column_operation_schema,
@@ -36,6 +30,9 @@ from flowweaver.nodes.default_node_schemas import (
 )
 from flowweaver.nodes.default_table_basic_column_definitions import (
     default_table_basic_column_node_definitions,
+)
+from flowweaver.nodes.default_table_fill_definitions import (
+    default_table_fill_node_definitions,
 )
 from flowweaver.nodes.default_table_slots import (
     _current_output_table_slot,
@@ -49,36 +46,7 @@ from flowweaver.nodes.registry import NodeDefinitionSpec, NodePortSpec
 def default_table_transform_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
     return (
         *default_table_basic_column_node_definitions(),
-        NodeDefinitionSpec(
-            node_type=FILL_CELLS_NODE_TYPE,
-            node_version="1.0",
-            display_name="Fill Cells",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_fill_cells_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=FILL_RANGE_NODE_TYPE,
-            node_version="1.0",
-            display_name="Fill Range",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_fill_range_schema(),
-        ),
-        NodeDefinitionSpec(
-            node_type=FILL_SEQUENCE_NODE_TYPE,
-            node_version="1.0",
-            display_name="Fill Sequence",
-            input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("out"),),
-            input_table_slots=_single_transform_input_table_slots(),
-            output_table_slots=_single_transform_output_table_slots(),
-            config_schema=_fill_sequence_schema(),
-        ),
+        *default_table_fill_node_definitions(),
         NodeDefinitionSpec(
             node_type=REPLACE_TEXT_NODE_TYPE,
             node_version="1.0",
