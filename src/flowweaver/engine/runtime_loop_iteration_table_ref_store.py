@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -12,6 +11,12 @@ from flowweaver.engine.db_models import (
 )
 from flowweaver.engine.runtime_loop_iteration_run_store import (
     RuntimeLoopIterationRunStoreMixin,
+)
+from flowweaver.engine.runtime_loop_iteration_table_ref_queries import (
+    get_loop_iteration_table_ref_from_session as _get_iteration_table_ref,
+)
+from flowweaver.engine.runtime_loop_iteration_table_ref_queries import (
+    list_loop_iteration_table_refs_from_session as _list_iteration_table_refs,
 )
 from flowweaver.engine.runtime_loop_record_mappers import (
     _loop_iteration_table_ref_from_record,
@@ -75,19 +80,13 @@ class RuntimeLoopIterationTableRefStoreMixin(RuntimeLoopIterationRunStoreMixin):
         table_ref_id: str,
         role: LoopIterationTableRefRole | str,
     ) -> LoopIterationTableRef | None:
-        role_value = role.value if isinstance(role, LoopIterationTableRefRole) else role
         with self._session_factory() as session:
-            record = session.get(
-                LoopIterationTableRefRecord,
-                {
-                    "loop_iteration_id": loop_iteration_id,
-                    "table_ref_id": table_ref_id,
-                    "role": role_value,
-                },
+            return _get_iteration_table_ref(
+                session,
+                loop_iteration_id=loop_iteration_id,
+                table_ref_id=table_ref_id,
+                role=role,
             )
-            if record is None:
-                return None
-            return _loop_iteration_table_ref_from_record(record)
 
     def list_loop_iteration_table_refs(
         self,
@@ -95,21 +94,9 @@ class RuntimeLoopIterationTableRefStoreMixin(RuntimeLoopIterationRunStoreMixin):
         *,
         role: LoopIterationTableRefRole | str | None = None,
     ) -> list[LoopIterationTableRef]:
-        statement = (
-            select(LoopIterationTableRefRecord)
-            .where(LoopIterationTableRefRecord.loop_iteration_id == loop_iteration_id)
-            .order_by(
-                LoopIterationTableRefRecord.role,
-                LoopIterationTableRefRecord.table_ref_id,
-            )
-        )
-        if role is not None:
-            role_value = (
-                role.value if isinstance(role, LoopIterationTableRefRole) else role
-            )
-            statement = statement.where(LoopIterationTableRefRecord.role == role_value)
         with self._session_factory() as session:
-            return [
-                _loop_iteration_table_ref_from_record(record)
-                for record in session.scalars(statement)
-            ]
+            return _list_iteration_table_refs(
+                session,
+                loop_iteration_id,
+                role=role,
+            )
