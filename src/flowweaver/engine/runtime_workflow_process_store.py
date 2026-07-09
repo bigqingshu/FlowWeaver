@@ -13,13 +13,11 @@ from flowweaver.common.time import utc_now
 from flowweaver.engine import runtime_workflow_process_abort as _process_abort
 from flowweaver.engine import runtime_workflow_process_claim as _process_claim
 from flowweaver.engine import runtime_workflow_process_lifecycle as _process_lifecycle
+from flowweaver.engine import runtime_workflow_process_lost as _process_lost
 from flowweaver.engine.db_models import WorkflowProcessRecord
 from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import WorkflowProcess, WorkflowRun
 from flowweaver.engine.runtime_record_mappers import _datetime_to_text
-from flowweaver.engine.runtime_status_guards import (
-    ACTIVE_WORKFLOW_PROCESS_STATUSES as _ACTIVE_WORKFLOW_PROCESS_STATUSES,
-)
 from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_process_from_record,
 )
@@ -160,34 +158,14 @@ class RuntimeWorkflowProcessStoreMixin:
         stale_before: datetime,
         starting_stale_before: datetime | None = None,
     ) -> list[WorkflowProcess]:
-        lost: list[WorkflowProcess] = []
+        now = utc_now()
         with self._session_factory.begin() as session:
-            records = list(
-                session.scalars(
-                    select(WorkflowProcessRecord).where(
-                        WorkflowProcessRecord.status.in_(
-                            _ACTIVE_WORKFLOW_PROCESS_STATUSES
-                        )
-                    )
-                )
+            return _process_lost.mark_lost_workflow_processes_in_session(
+                session,
+                stale_before=stale_before,
+                starting_stale_before=starting_stale_before,
+                now=now,
             )
-            now = utc_now()
-            for record in records:
-                if record.status == WorkflowProcessStatus.STARTING.value:
-                    if (
-                        starting_stale_before is None
-                        or record.started_at > _datetime_to_text(starting_stale_before)
-                    ):
-                        continue
-                elif (
-                    record.last_heartbeat_at is None
-                    or record.last_heartbeat_at > _datetime_to_text(stale_before)
-                ):
-                    continue
-                record.status = WorkflowProcessStatus.LOST.value
-                record.exited_at = _datetime_to_text(now)
-                lost.append(_workflow_process_from_record(record))
-        return lost
 
     def abort_workflow_run_for_process(
         self,
