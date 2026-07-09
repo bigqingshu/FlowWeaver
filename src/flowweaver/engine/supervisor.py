@@ -38,6 +38,9 @@ from flowweaver.engine.supervisor_process_launch import (
     launch_child_process as _launch_child_process,
 )
 from flowweaver.engine.supervisor_runtime_events import SupervisorRuntimeEventChannels
+from flowweaver.engine.supervisor_workflow_processes import (
+    finish_workflow_process as _finish_workflow_process,
+)
 
 
 class Supervisor:
@@ -323,14 +326,9 @@ class Supervisor:
         exit_code: int,
         error: dict[str, str] | None = None,
     ) -> WorkflowProcess | None:
-        process = self._runtime_store.mark_workflow_process_exited(
+        return _finish_workflow_process(
+            self._runtime_store,
             process_id,
             exit_code=exit_code,
             error=error,
         )
-        if process is not None and exit_code != 0:
-            self._runtime_store.abort_workflow_run_for_process(
-                process_id,
-                reason="WORKFLOW_PROCESS_EXITED_ABNORMALLY",
-            )
-        return process
