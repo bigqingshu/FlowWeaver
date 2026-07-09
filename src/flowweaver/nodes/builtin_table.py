@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from flowweaver.nodes import builtin_table_registry as _builtin_table_registry
 from flowweaver.nodes.builtin_sql import (
     SQL_MAPPING_NODE_TYPE as SQL_MAPPING_NODE_TYPE,
 )
@@ -151,7 +152,7 @@ from flowweaver.nodes.table_control_nodes import (
     UnconditionalJumpNodeHandler as UnconditionalJumpNodeHandler,
 )
 from flowweaver.nodes.table_node_handlers import (
-    BuiltinTableNodeHandlerRegistry,
+    BuiltinTableNodeHandlerRegistry as BuiltinTableNodeHandlerRegistry,
 )
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError as BuiltinTableNodeValidationError,
@@ -235,54 +236,8 @@ from flowweaver.nodes.table_write_nodes import (
     WriteSelectedColumnsNodeHandler as WriteSelectedColumnsNodeHandler,
 )
 
-
-def table_node_types() -> tuple[str, ...]:
-    return create_builtin_table_node_handler_registry().node_types()
-
-
-def is_table_node_type(node_type: str) -> bool:
-    return node_type in table_node_types()
-
-
-def create_builtin_table_node_handler_registry() -> BuiltinTableNodeHandlerRegistry:
-    return BuiltinTableNodeHandlerRegistry(
-        handlers=(
-            GenerateTestTableNodeHandler(),
-            FilterRowsNodeHandler(),
-            AddColumnsNodeHandler(),
-            DeleteColumnsNodeHandler(),
-            CopyColumnNodeHandler(),
-            ReorderColumnsNodeHandler(),
-            RenameColumnsNodeHandler(),
-            FillCellsNodeHandler(),
-            FillRangeNodeHandler(),
-            FillSequenceNodeHandler(),
-            ReplaceTextNodeHandler(),
-            DeleteRowsNodeHandler(),
-            CopyRowsNodeHandler(),
-            UnpivotRowsNodeHandler(),
-            DeduplicateRowsNodeHandler(),
-            AdvancedFilterRowsNodeHandler(),
-            ExtractTextNodeHandler(),
-            LookupMatchedFieldNameNodeHandler(),
-            MergeColumnsNodeHandler(),
-            NumericColumnOperationNodeHandler(),
-            AddCurrentDateTimeColumnNodeHandler(),
-            ParseDateTimeNodeHandler(),
-            ConditionFlagNodeHandler(),
-            JumpAnchorNodeHandler(),
-            UnconditionalJumpNodeHandler(),
-            ConditionalJumpNodeHandler(),
-            LoopStartNodeHandler(),
-            LoopJudgeNodeHandler(),
-            SubWorkflowNodeHandler(),
-            SaveMemoryTableNodeHandler(),
-            SaveRunTableNodeHandler(),
-            WriteSelectedColumnsNodeHandler(),
-            WriteBackTableNodeHandler(),
-            ListFilesNodeHandler(),
-            BatchRenameFilesNodeHandler(),
-            PluginNodeHandler(),
-            SqlMappingNodeHandler(),
-        )
-    )
+create_builtin_table_node_handler_registry = (
+    _builtin_table_registry.create_builtin_table_node_handler_registry
+)
+is_table_node_type = _builtin_table_registry.is_table_node_type
+table_node_types = _builtin_table_registry.table_node_types

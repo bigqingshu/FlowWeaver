@@ -14,6 +14,9 @@ from flowweaver.nodes.builtin_table_node_types import (
     SAVE_RUN_TABLE_NODE_TYPE,
     STATUS_OUTPUT_NODE_TYPES,
 )
+from flowweaver.nodes.builtin_table_registry import (
+    create_builtin_table_node_handler_registry,
+)
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
@@ -46,7 +49,7 @@ class BuiltinTableNodeRunner:
             memory_provider=memory_provider,
             sql_mapping_runner=SqlMappingNodeRunner(store=store),
         )
-        self._handler_registry = _create_builtin_table_node_handler_registry()
+        self._handler_registry = create_builtin_table_node_handler_registry()
 
     def execute(
         self,
@@ -94,14 +97,6 @@ class BuiltinTableNodeRunner:
         raise BuiltinTableNodeValidationError(
             f"Unsupported builtin node type: {task.node_type}"
         )
-
-
-def _create_builtin_table_node_handler_registry():
-    from flowweaver.nodes.builtin_table import (
-        create_builtin_table_node_handler_registry,
-    )
-
-    return create_builtin_table_node_handler_registry()
 
 
 def _table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
