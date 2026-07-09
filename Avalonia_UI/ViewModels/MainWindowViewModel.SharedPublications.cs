@@ -2,8 +2,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private int sharedPublicationsLoadVersion;
-
     public bool IsDataBusy =>
         IsLoadingTableRefs || IsLoadingSharedPublications || IsLoadingSharedPublicationVersions;
 
