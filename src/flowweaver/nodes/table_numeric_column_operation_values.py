@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-import math
 from typing import Any
 
-from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
-
-_NodeValidationError = BuiltinTableNodeValidationError
+from flowweaver.nodes.table_numeric_column_operation_math import (
+    numeric_binary_operation as _numeric_binary_operation,
+)
+from flowweaver.nodes.table_numeric_column_operation_math import (
+    numeric_round_result as _numeric_round_result,
+)
+from flowweaver.nodes.table_numeric_column_operation_math import (
+    numeric_unary_operation as _numeric_unary_operation,
+)
+from flowweaver.nodes.table_numeric_column_operation_policies import (
+    numeric_policy_value as _numeric_policy_value,
+)
+from flowweaver.nodes.table_numeric_column_operation_policies import (
+    parse_number as _parse_number,
+)
 
 
 def numeric_operation_value(
@@ -93,78 +104,4 @@ def _numeric_operand_value(
         return row_number
     if operand_source == "sequence":
         return operand_config["start"] + (sequence_index - 1) * operand_config["step"]
-    return None
-
-
-def _numeric_unary_operation(
-    value: float,
-    *,
-    operation: str,
-    decimal_places: int | None,
-) -> float:
-    if operation == "round":
-        places = 0 if decimal_places is None else decimal_places
-        return float(round(value, places))
-    if operation == "floor":
-        return float(math.floor(value))
-    if operation == "ceil":
-        return float(math.ceil(value))
-    return value
-
-
-def _numeric_binary_operation(
-    target_number: float,
-    operand_number: float,
-    *,
-    operation: str,
-) -> float:
-    if operation == "add":
-        return target_number + operand_number
-    if operation == "subtract":
-        return target_number - operand_number
-    if operation == "multiply":
-        return target_number * operand_number
-    if operation == "divide":
-        return target_number / operand_number
-    raise _NodeValidationError(
-        f"Unsupported NumericColumnOperationNode operation: {operation}"
-    )
-
-
-def _numeric_round_result(value: float, decimal_places: int | None) -> float:
-    if decimal_places is None:
-        return value
-    return float(round(value, decimal_places))
-
-
-def _numeric_policy_value(
-    config: dict[str, Any],
-    *,
-    policy: str,
-    fixed_key: str,
-    original_value: Any,
-    error_message: str,
-) -> Any:
-    if policy == "empty":
-        return None
-    if policy == "fixed":
-        return config.get(fixed_key)
-    if policy == "keep_original":
-        return original_value
-    raise _NodeValidationError(error_message)
-
-
-def _parse_number(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped == "":
-            return None
-        try:
-            return float(stripped)
-        except ValueError:
-            return None
     return None

@@ -10,8 +10,8 @@ from flowweaver.nodes.table_node_config import (
     node_string_config as _node_string_config,
 )
 from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
-from flowweaver.nodes.table_numeric_column_operation_values import (
-    _parse_number as _parse_number,
+from flowweaver.nodes.table_numeric_column_operation_policies import (
+    parse_number as _parse_number,
 )
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.protocols.table_ref import TableRefModel

@@ -19,8 +19,5 @@ from flowweaver.nodes.table_numeric_column_operation_row_selection import (
     numeric_row_selector as numeric_row_selector,
 )
 from flowweaver.nodes.table_numeric_column_operation_values import (
-    _parse_number as _parse_number,
-)
-from flowweaver.nodes.table_numeric_column_operation_values import (
     numeric_operation_value as numeric_operation_value,
 )
