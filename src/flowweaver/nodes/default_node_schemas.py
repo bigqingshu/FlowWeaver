@@ -18,7 +18,7 @@ from flowweaver.nodes.default_control_loop_node_schemas import (
 from flowweaver.nodes.default_control_loop_node_schemas import (
     _loop_start_schema as _loop_start_schema,
 )
-from flowweaver.nodes.default_control_node_schemas import (
+from flowweaver.nodes.default_control_subworkflow_node_schemas import (
     _subworkflow_schema as _subworkflow_schema,
 )
 from flowweaver.nodes.default_lookup_merge_node_schemas import (
