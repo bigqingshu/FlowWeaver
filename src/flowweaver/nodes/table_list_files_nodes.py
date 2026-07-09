@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from flowweaver.nodes.builtin_table_node_types import LIST_FILES_NODE_TYPE
-from flowweaver.nodes.table_list_files_helpers import (
-    list_file_rows as _list_file_rows,
-)
-from flowweaver.nodes.table_list_files_helpers import (
+from flowweaver.nodes.table_list_files_config import (
     list_files_directory_config as _list_files_directory_config,
 )
-from flowweaver.nodes.table_list_files_helpers import (
+from flowweaver.nodes.table_list_files_config import (
     list_files_extensions_config as _list_files_extensions_config,
 )
-from flowweaver.nodes.table_list_files_helpers import (
+from flowweaver.nodes.table_list_files_rows import (
+    list_file_rows as _list_file_rows,
+)
+from flowweaver.nodes.table_list_files_schema import (
     list_files_schema as _list_files_schema,
 )
 from flowweaver.nodes.table_node_config import (
