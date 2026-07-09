@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
-using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -11,12 +10,6 @@ public partial class MainWindowViewModel
     private const int MaxRecentEvents = 20;
     private const int CollapsedRecentEventCount = 1;
     private const int ExpandedRecentEventCount = 5;
-
-    [RelayCommand]
-    private void ViewAllRecentEvents()
-    {
-        SelectedShellPageKey = ShellPageKey.Logs;
-    }
 
     private void AddRecentEvent(
         string key,
