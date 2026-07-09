@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
@@ -12,27 +11,12 @@ public partial class MainWindowViewModel
     {
         if (string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson))
         {
-            WorkflowDefinitionValidationMessage = T("definition.validation_rejected");
-            WorkflowDefinitionValidationErrorMessage = T("definition.draft_required");
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.validate",
-                UiNotificationKind.Error);
+            RejectWorkflowDefinitionDraftValidationWithoutDraft();
             return;
         }
 
-        JsonElement definition;
-        try
+        if (!TryReadWorkflowDefinitionDraftJsonForValidation(out var definition))
         {
-            using var parsed = JsonDocument.Parse(WorkflowDefinitionDraftJson);
-            definition = parsed.RootElement.Clone();
-        }
-        catch (JsonException ex)
-        {
-            WorkflowDefinitionValidationMessage = T("definition.draft_json_invalid");
-            WorkflowDefinitionValidationErrorMessage = ex.Message;
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.validate",
-                UiNotificationKind.Error);
             return;
         }
 
