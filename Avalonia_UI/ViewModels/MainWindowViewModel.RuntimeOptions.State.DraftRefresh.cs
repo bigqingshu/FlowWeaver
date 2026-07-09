@@ -18,14 +18,19 @@ public partial class MainWindowViewModel
                 ? null
                 : LocalizeWorkflowDefinitionDraftWarning(readResult.Warning);
 
+        ClearStaleSelectedRuntimeOptionsNode();
+
+        RefreshSelectedRuntimeOptionsNodeDraftState(draft);
+        NotifyRuntimeOptionsSummaryChanged();
+        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
+    }
+
+    private void ClearStaleSelectedRuntimeOptionsNode()
+    {
         if (SelectedRuntimeOptionsNode is not null &&
             !WorkflowDefinitionDraftNodes.Contains(SelectedRuntimeOptionsNode))
         {
             SelectedRuntimeOptionsNode = null;
         }
-
-        RefreshSelectedRuntimeOptionsNodeDraftState(draft);
-        NotifyRuntimeOptionsSummaryChanged();
-        OnPropertyChanged(nameof(HasRuntimeOptionsEditorError));
     }
 }
