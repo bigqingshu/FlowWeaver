@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 from typing import Any
 
+from flowweaver.engine.external_sql_table_reading import (
+    count_external_sql_rows as _count_external_sql_rows,
+)
+from flowweaver.engine.external_sql_table_reading import (
+    quote_external_sql_identifier as _quote_identifier,
+)
+from flowweaver.engine.external_sql_table_reading import (
+    read_external_sql_rows as _read_external_sql_rows,
+)
 from flowweaver.protocols.enums import TableStorageKind
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -19,12 +27,7 @@ class SQLiteExternalSqlTableProvider:
 
     def count_rows(self, table_ref: TableRefModel) -> int:
         database_path, source_sql = self._source(table_ref)
-        with self._connect(database_path) as connection:
-            return int(
-                connection.execute(
-                    f"SELECT COUNT(*) FROM {source_sql}"
-                ).fetchone()[0]
-            )
+        return _count_external_sql_rows(database_path, source_sql)
 
     def read_rows(
         self,
@@ -35,25 +38,17 @@ class SQLiteExternalSqlTableProvider:
         order_by: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
-        if offset < 0:
-            raise ValueError("offset must be non-negative")
-        if limit < 0:
-            raise ValueError("limit must be non-negative")
-        if filters:
-            raise ValueError("external SQL provider does not support filters yet")
         database_path, source_sql = self._source(table_ref)
-        selected_columns = _selected_columns(table_ref, columns)
-        selected_sql = ", ".join(
-            _quote_identifier(column) for column in selected_columns
+        return _read_external_sql_rows(
+            table_ref=table_ref,
+            database_path=database_path,
+            source_sql=source_sql,
+            offset=offset,
+            limit=limit,
+            columns=columns,
+            order_by=order_by,
+            filters=filters,
         )
-        order_clause = _order_clause(table_ref, order_by)
-        query = (
-            f"SELECT {selected_sql} FROM {source_sql}"
-            f"{order_clause} LIMIT ? OFFSET ?"
-        )
-        with self._connect(database_path) as connection:
-            cursor = connection.execute(query, [limit, offset])
-            return [dict(row) for row in cursor.fetchall()]
 
     def create_table(self, table_ref: TableRefModel) -> None:
         raise ValueError("external SQL provider is read-only")
@@ -94,51 +89,8 @@ class SQLiteExternalSqlTableProvider:
             "external SQL table_ref requires exactly one of table_name or query"
         )
 
-    def _connect(self, database_path: Path) -> sqlite3.Connection:
-        connection = sqlite3.connect(database_path)
-        connection.row_factory = sqlite3.Row
-        return connection
-
     def _validate_ref(self, table_ref: TableRefModel) -> None:
         if table_ref.provider_id != self.provider_id:
             raise ValueError("table_ref belongs to a different provider")
         if table_ref.storage_kind != TableStorageKind.EXTERNAL_SQL:
             raise ValueError("external SQL provider only supports EXTERNAL_SQL")
-
-
-def _selected_columns(
-    table_ref: TableRefModel,
-    columns: list[str] | None,
-) -> list[str]:
-    schema_columns = {field.name for field in table_ref.schema}
-    selected_columns = columns or [field.name for field in table_ref.schema]
-    unknown_columns = set(selected_columns) - schema_columns
-    if unknown_columns:
-        raise ValueError(f"unknown columns requested: {sorted(unknown_columns)}")
-    return selected_columns
-
-
-def _order_clause(
-    table_ref: TableRefModel,
-    order_by: list[str] | None,
-) -> str:
-    if not order_by:
-        return ""
-    schema_columns = {field.name for field in table_ref.schema}
-    clauses: list[str] = []
-    for item in order_by:
-        direction = "ASC"
-        column = item
-        if item.startswith("-"):
-            direction = "DESC"
-            column = item[1:]
-        if column not in schema_columns:
-            raise ValueError(f"unknown order_by column: {column}")
-        clauses.append(f"{_quote_identifier(column)} {direction}")
-    return " ORDER BY " + ", ".join(clauses)
-
-
-def _quote_identifier(identifier: str) -> str:
-    if "\x00" in identifier:
-        raise ValueError("identifier must not contain NUL")
-    return '"' + identifier.replace('"', '""') + '"'
