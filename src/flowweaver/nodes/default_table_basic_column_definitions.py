@@ -9,13 +9,19 @@ from flowweaver.nodes.builtin_table_node_types import (
     RENAME_COLUMNS_NODE_TYPE,
     REORDER_COLUMNS_NODE_TYPE,
 )
-from flowweaver.nodes.default_node_schemas import (
-    _add_columns_schema,
-    _copy_column_schema,
+from flowweaver.nodes.default_add_columns_node_schema import _add_columns_schema
+from flowweaver.nodes.default_copy_column_node_schema import _copy_column_schema
+from flowweaver.nodes.default_delete_columns_node_schema import (
     _delete_columns_schema,
+)
+from flowweaver.nodes.default_node_schemas import (
     _filter_rows_schema,
     _generate_test_table_schema,
+)
+from flowweaver.nodes.default_rename_columns_node_schema import (
     _rename_columns_schema,
+)
+from flowweaver.nodes.default_reorder_columns_node_schema import (
     _reorder_columns_schema,
 )
 from flowweaver.nodes.default_table_slots import (

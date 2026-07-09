@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from flowweaver.nodes.default_add_columns_node_schema import (
+    _add_columns_schema as _add_columns_schema,
+)
 from flowweaver.nodes.default_control_condition_node_schemas import (
     _condition_flag_schema as _condition_flag_schema,
 )
@@ -21,11 +24,17 @@ from flowweaver.nodes.default_control_loop_node_schemas import (
 from flowweaver.nodes.default_control_subworkflow_node_schemas import (
     _subworkflow_schema as _subworkflow_schema,
 )
+from flowweaver.nodes.default_copy_column_node_schema import (
+    _copy_column_schema as _copy_column_schema,
+)
 from flowweaver.nodes.default_datetime_node_schemas import (
     _add_current_datetime_column_schema as _add_current_datetime_column_schema,
 )
 from flowweaver.nodes.default_datetime_node_schemas import (
     _parse_datetime_schema as _parse_datetime_schema,
+)
+from flowweaver.nodes.default_delete_columns_node_schema import (
+    _delete_columns_schema as _delete_columns_schema,
 )
 from flowweaver.nodes.default_extract_text_node_schemas import (
     _extract_text_schema as _extract_text_schema,
@@ -47,6 +56,12 @@ from flowweaver.nodes.default_numeric_node_schemas import (
 )
 from flowweaver.nodes.default_plugin_resource_node_schemas import (
     _plugin_node_schema as _plugin_node_schema,
+)
+from flowweaver.nodes.default_rename_columns_node_schema import (
+    _rename_columns_schema as _rename_columns_schema,
+)
+from flowweaver.nodes.default_reorder_columns_node_schema import (
+    _reorder_columns_schema as _reorder_columns_schema,
 )
 from flowweaver.nodes.default_replace_text_node_schemas import (
     _replace_text_schema as _replace_text_schema,
@@ -86,21 +101,6 @@ from flowweaver.nodes.default_table_basic_node_schemas import (
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
     _generate_test_table_schema as _generate_test_table_schema,
-)
-from flowweaver.nodes.default_table_column_node_schemas import (
-    _add_columns_schema as _add_columns_schema,
-)
-from flowweaver.nodes.default_table_column_node_schemas import (
-    _copy_column_schema as _copy_column_schema,
-)
-from flowweaver.nodes.default_table_column_node_schemas import (
-    _delete_columns_schema as _delete_columns_schema,
-)
-from flowweaver.nodes.default_table_column_node_schemas import (
-    _rename_columns_schema as _rename_columns_schema,
-)
-from flowweaver.nodes.default_table_column_node_schemas import (
-    _reorder_columns_schema as _reorder_columns_schema,
 )
 from flowweaver.nodes.default_table_fill_node_schemas import (
     _fill_cells_schema as _fill_cells_schema,
