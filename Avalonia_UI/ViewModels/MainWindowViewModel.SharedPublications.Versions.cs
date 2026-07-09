@@ -8,9 +8,6 @@ public partial class MainWindowViewModel
     private int sharedPublicationVersionsLoadVersion;
 
     [ObservableProperty]
-    private bool isLoadingSharedPublicationVersions;
-
-    [ObservableProperty]
     private string sharedPublicationVersionMessage =
         "Select or enter a share name to load versions.";
 
@@ -33,12 +30,6 @@ public partial class MainWindowViewModel
             SharedPublicationVersionShareNameFilter = value.ShareName;
         }
 
-        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnIsLoadingSharedPublicationVersionsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsDataBusy));
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
 
