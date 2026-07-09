@@ -1,4 +1,3 @@
-using System;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
@@ -19,25 +18,10 @@ public partial class MainWindowViewModel
             SelectedWorkflowDefinitionNode.NodeInstanceId);
         if (!patchResult.Succeeded)
         {
-            WorkflowDefinitionValidationMessage = T("definition.node_copy_failed");
-            WorkflowDefinitionValidationErrorMessage =
-                LocalizeWorkflowDefinitionDraftWarning(patchResult.Warning);
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.copy_node",
-                UiNotificationKind.Error);
+            ApplyWorkflowDefinitionDraftCopyNodeFailure(patchResult);
             return;
         }
 
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
-        if (!string.IsNullOrWhiteSpace(patchResult.AddedNodeInstanceId))
-        {
-            SelectWorkflowDefinitionDraftNode(patchResult.AddedNodeInstanceId);
-        }
-
-        WorkflowDefinitionValidationMessage = T("definition.node_copied");
-        WorkflowDefinitionValidationErrorMessage = null;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.copy_node",
-            UiNotificationKind.Success);
+        ApplyWorkflowDefinitionDraftCopyNodeSuccess(patchResult);
     }
 }
