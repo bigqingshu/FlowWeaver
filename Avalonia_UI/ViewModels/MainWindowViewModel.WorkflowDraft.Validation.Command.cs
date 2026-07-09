@@ -31,22 +31,10 @@ public partial class MainWindowViewModel
 
         if (response.Ok && response.Data is not null)
         {
-            WorkflowDefinitionValidationMessage = response.Data.Valid
-                ? T("definition.draft_valid")
-                : T("definition.draft_has_issues");
-            WorkflowDefinitionValidationErrorMessage = FormatValidationIssues(response.Data);
-            IsValidatingWorkflowDefinitionDraft = false;
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.validate",
-                response.Data.Valid ? UiNotificationKind.Success : UiNotificationKind.Warning);
+            ApplyWorkflowDefinitionDraftValidationSuccess(response.Data);
             return;
         }
 
-        WorkflowDefinitionValidationMessage = T("definition.validation_failed");
-        WorkflowDefinitionValidationErrorMessage = DescribeError(response);
-        IsValidatingWorkflowDefinitionDraft = false;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.validate",
-            UiNotificationKind.Error);
+        ApplyWorkflowDefinitionDraftValidationFailure(response);
     }
 }
