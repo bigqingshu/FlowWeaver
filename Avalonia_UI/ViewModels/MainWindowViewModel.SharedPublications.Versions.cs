@@ -8,12 +8,6 @@ public partial class MainWindowViewModel
     private int sharedPublicationVersionsLoadVersion;
 
     [ObservableProperty]
-    private string sharedPublicationVersionShareNameFilter = string.Empty;
-
-    [ObservableProperty]
-    private string sharedPublicationVersionLimitFilter = "100";
-
-    [ObservableProperty]
     private bool isLoadingSharedPublicationVersions;
 
     [ObservableProperty]
@@ -39,11 +33,6 @@ public partial class MainWindowViewModel
             SharedPublicationVersionShareNameFilter = value.ShareName;
         }
 
-        RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnSharedPublicationVersionShareNameFilterChanged(string value)
-    {
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
     }
 
