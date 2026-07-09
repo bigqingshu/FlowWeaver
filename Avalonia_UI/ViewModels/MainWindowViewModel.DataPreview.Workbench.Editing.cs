@@ -9,10 +9,7 @@ public partial class MainWindowViewModel
         int columnIndex,
         string value)
     {
-        if (rowIndex < 0
-            || rowIndex >= dataPreviewWorkbenchEditableCellRows.Length
-            || columnIndex < 0
-            || columnIndex >= dataPreviewWorkbenchEditableCellRows[rowIndex].Length)
+        if (!IsValidDataPreviewWorkbenchCellIndex(rowIndex, columnIndex))
         {
             return;
         }
@@ -28,5 +25,13 @@ public partial class MainWindowViewModel
         dataPreviewWorkbenchEditableCellRows[rowIndex][columnIndex] = value;
         DataPreviewWorkbenchClipboardText = string.Empty;
         NotifyDataPreviewWorkbenchDirtyStateChanged();
+    }
+
+    private bool IsValidDataPreviewWorkbenchCellIndex(int rowIndex, int columnIndex)
+    {
+        return rowIndex >= 0
+            && rowIndex < dataPreviewWorkbenchEditableCellRows.Length
+            && columnIndex >= 0
+            && columnIndex < dataPreviewWorkbenchEditableCellRows[rowIndex].Length;
     }
 }
