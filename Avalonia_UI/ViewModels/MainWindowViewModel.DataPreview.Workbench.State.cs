@@ -1,5 +1,3 @@
-using System.Collections.ObjectModel;
-using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Avalonia_UI.ViewModels;
@@ -20,10 +18,4 @@ public partial class MainWindowViewModel
 
     [ObservableProperty]
     private string? dataPreviewWorkbenchErrorMessage;
-
-    public ObservableCollection<TableDataPreviewColumnViewModel> DataPreviewWorkbenchColumns { get; } = new();
-
-    public ObservableCollection<TableDataPreviewRowViewModel> DataPreviewWorkbenchRows { get; } =
-        new();
-
 }
