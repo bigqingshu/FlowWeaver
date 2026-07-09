@@ -5,10 +5,6 @@ from collections.abc import Callable
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutorFactory
-from flowweaver.protocols.enums import (
-    NodeResultStatus,
-)
-from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow_process import ipc_events
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process.dag import WorkflowDag
@@ -33,6 +29,12 @@ from flowweaver.workflow_process.task_completion import (
 )
 from flowweaver.workflow_process.task_completion import (
     fail_rejected_node_result as fail_rejected_node_result,
+)
+from flowweaver.workflow_process.task_dispatch_config import (
+    timeout_seconds_from_node_config as timeout_seconds_from_node_config,
+)
+from flowweaver.workflow_process.task_input_resolution_failure import (
+    fail_ready_node_input_resolution as fail_ready_node_input_resolution,
 )
 
 CleanupStagingForNode = Callable[[str, str], None]
@@ -201,58 +203,6 @@ def dispatch_ready_node_candidate(
     )
 
 
-def fail_ready_node_input_resolution(
-    *,
-    workflow_run_id: str,
-    workflow_process_id: str,
-    process_generation: int,
-    candidate: ReadyNodeCandidate,
-    task_manager: NodeTaskManager,
-) -> None:
-    task = task_manager.submit_ready_node(
-        workflow_run_id=workflow_run_id,
-        workflow_process_id=workflow_process_id,
-        process_generation=process_generation,
-        node_instance_id=candidate.node_run.node_instance_id,
-        node_run_id=candidate.node_run.node_run_id,
-        input_refs=list(candidate.input_refs),
-        input_slot_bindings=candidate.input_slot_bindings,
-        timeout_seconds=timeout_seconds_from_node_config(candidate.dag_node.config),
-    )
-    if task is None:
-        return None
-    executor_id = "workflow_process.input_resolver"
-    accepted = task_manager.accept_task(
-        task_id=task.task_id,
-        executor_id=executor_id,
-    )
-    if accepted is None:
-        return None
-    issue = candidate.input_resolution_issue
-    message = (
-        issue.message
-        if issue is not None
-        else "Input table selector could not be resolved"
-    )
-    details = issue.details if issue is not None else {}
-    task_manager.apply_result(
-        NodeTaskResultModel(
-            task_id=accepted.task_id,
-            node_run_id=accepted.node_run_id,
-            attempt=accepted.attempt,
-            executor_id=executor_id,
-            process_generation=accepted.process_generation,
-            status=NodeResultStatus.FAILED,
-            error={
-                "code": "INPUT_TABLE_RESOLUTION_FAILED",
-                "message": message,
-                "details": details,
-            },
-        )
-    )
-    return None
-
-
 def available_ready_dispatch_slots(
     *,
     store: RuntimeStore,
@@ -272,10 +222,3 @@ def available_ready_dispatch_slots(
     if not limits:
         return None
     return min(limits)
-
-
-def timeout_seconds_from_node_config(config: dict[str, object]) -> int:
-    value = config.get("timeout_seconds")
-    if isinstance(value, bool) or not isinstance(value, int):
-        return 60
-    return max(0, value)
