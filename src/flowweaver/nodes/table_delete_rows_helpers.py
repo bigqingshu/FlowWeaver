@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from typing import Any
 
 from flowweaver.nodes.builtin_table_node_types import DELETE_ROWS_NODE_TYPE
@@ -9,6 +9,9 @@ from flowweaver.nodes.table_delete_rows_config import (
 )
 from flowweaver.nodes.table_delete_rows_config import (
     row_numbers_config as _row_numbers_config,
+)
+from flowweaver.nodes.table_delete_rows_output import (
+    delete_rows_output_batches as delete_rows_output_batches,
 )
 from flowweaver.nodes.table_node_common import is_empty_cell as _is_empty_cell
 from flowweaver.nodes.table_node_config import bool_config as _bool_config
@@ -20,10 +23,7 @@ from flowweaver.nodes.table_node_config import (
 from flowweaver.nodes.table_node_config import (
     positive_int_config as _positive_int_config,
 )
-from flowweaver.nodes.table_node_handlers import (
-    BuiltinTableNodeContext,
-    BuiltinTableNodeValidationError,
-)
+from flowweaver.nodes.table_node_handlers import BuiltinTableNodeValidationError
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.nodes.table_row_condition_helpers import (
     condition_cell_matches as _condition_cell_matches,
@@ -31,7 +31,6 @@ from flowweaver.nodes.table_row_condition_helpers import (
 from flowweaver.nodes.table_row_condition_helpers import (
     normalize_condition_operator as _normalize_condition_operator,
 )
-from flowweaver.nodes.value_sources import ValueSourceError
 from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
@@ -131,23 +130,4 @@ def delete_rows_predicate(
             for field_name in field_names
         )
     raise _NodeValidationError(f"Unsupported DeleteRowsNode delete_mode: {delete_mode}")
-
-
-def delete_rows_output_batches(
-    context: BuiltinTableNodeContext,
-    input_ref: TableRefModel,
-    *,
-    should_delete: DeleteRowsPredicate,
-) -> Iterator[list[dict[str, Any]]]:
-    row_number = 1
-    for rows in context.iter_row_batches(input_ref):
-        output_rows: list[dict[str, Any]] = []
-        for row in rows:
-            try:
-                if not should_delete(row_number, row):
-                    output_rows.append(row)
-            except ValueSourceError as exc:
-                raise _NodeValidationError(str(exc)) from exc
-            row_number += 1
-        yield output_rows
 
