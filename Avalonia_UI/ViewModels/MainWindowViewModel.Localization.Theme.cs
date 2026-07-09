@@ -7,6 +7,18 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private void InitializeThemeMenuItems()
+    {
+        Themes.Add(new ThemeMenuItemViewModel("Light", PersistedUiSettings.LightThemeVariant));
+        Themes.Add(new ThemeMenuItemViewModel("Dark", PersistedUiSettings.DarkThemeVariant));
+        Themes.Add(new ThemeMenuItemViewModel("System", PersistedUiSettings.SystemThemeVariant));
+
+        foreach (var theme in Themes)
+        {
+            theme.IsSelected = theme.ThemeVariant == CurrentThemeVariant;
+        }
+    }
+
     [RelayCommand]
     private async Task ChangeThemeAsync(string? themeVariantStr)
     {

@@ -70,25 +70,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _workflowExportFileService =
             workflowExportFileService ?? new AvaloniaWorkflowExportFileService();
         _localizationService = localizationService ?? new JsonLocalizationService();
-        CurrentLanguageCode = _localizationService.CurrentLanguageCode;
-        foreach (var language in _localizationService.SupportedLanguages)
-        {
-            Languages.Add(
-                new LanguageMenuItemViewModel(language)
-                {
-                    IsSelected = language.Code == CurrentLanguageCode,
-                });
-        }
 
-        Themes.Add(new ThemeMenuItemViewModel("Light", PersistedUiSettings.LightThemeVariant));
-        Themes.Add(new ThemeMenuItemViewModel("Dark", PersistedUiSettings.DarkThemeVariant));
-        Themes.Add(new ThemeMenuItemViewModel("System", PersistedUiSettings.SystemThemeVariant));
-
-        foreach (var theme in Themes)
-        {
-            theme.IsSelected = theme.ThemeVariant == CurrentThemeVariant;
-        }
-
+        InitializeLanguageMenuItems();
+        InitializeThemeMenuItems();
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);
         RefreshShellNavigationItems();
         RefreshSelectedNodeConfigDraftState();

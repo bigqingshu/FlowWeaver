@@ -8,6 +8,19 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private void InitializeLanguageMenuItems()
+    {
+        CurrentLanguageCode = _localizationService.CurrentLanguageCode;
+        foreach (var language in _localizationService.SupportedLanguages)
+        {
+            Languages.Add(
+                new LanguageMenuItemViewModel(language)
+                {
+                    IsSelected = language.Code == CurrentLanguageCode,
+                });
+        }
+    }
+
     [RelayCommand]
     private async Task ChangeLanguageAsync(string? languageCode)
     {
