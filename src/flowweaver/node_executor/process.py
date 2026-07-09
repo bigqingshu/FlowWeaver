@@ -13,6 +13,18 @@ from flowweaver.node_executor.builtin_fault import (
 )
 from flowweaver.node_executor.cancel_token import CancelToken, NodeExecutionContext
 from flowweaver.node_executor.fake import FakeNodeExecutor
+from flowweaver.node_executor.process_envelopes import (
+    heartbeat_envelope as _heartbeat_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
+    ready_envelope as _ready_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
+    task_heartbeat_envelope as _task_heartbeat_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
+    task_progress_envelope as _task_progress_envelope,
+)
 from flowweaver.node_executor.process_helpers import (
     failed_task_result as _failed_task_result,
 )
@@ -27,13 +39,10 @@ from flowweaver.node_executor.process_loop import (
 )
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
-    ExecutorHeartbeatPayload,
     IPCEnvelope,
     NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
-    NodeTaskHeartbeatPayload,
-    NodeTaskProgressPayload,
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
@@ -58,20 +67,14 @@ class NodeExecutorProcess:
         self._state_lock = Lock()
 
     def ready_envelope(self) -> IPCEnvelope:
-        return IPCEnvelope(
-            message_type=IPCMessageType.EXECUTOR_READY,
-            payload={"executor_id": self.executor_id},
-        )
+        return _ready_envelope(self.executor_id)
 
     def heartbeat_envelope(self) -> IPCEnvelope:
         with self._state_lock:
             active_task_ids = sorted(self._active_task_ids)
-        return IPCEnvelope(
-            message_type=IPCMessageType.EXECUTOR_HEARTBEAT,
-            payload=ExecutorHeartbeatPayload(
-                executor_id=self.executor_id,
-                active_task_ids=active_task_ids,
-            ).model_dump(mode="json"),
+        return _heartbeat_envelope(
+            self.executor_id,
+            active_task_ids=active_task_ids,
         )
 
     def task_heartbeat_envelope(
@@ -80,18 +83,13 @@ class NodeExecutorProcess:
         *,
         correlation_id: str | None = None,
     ) -> IPCEnvelope:
-        return IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_HEARTBEAT,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            correlation_id=correlation_id or self._active_task_correlations.get(
+        return _task_heartbeat_envelope(
+            self.executor_id,
+            task,
+            correlation_id=correlation_id
+            or self._active_task_correlations.get(
                 task.task_id
             ),
-            payload=NodeTaskHeartbeatPayload(
-                executor_id=self.executor_id,
-                task_id=task.task_id,
-                attempt=task.attempt,
-            ).model_dump(mode="json"),
         )
 
     def task_progress_envelope(
@@ -103,18 +101,15 @@ class NodeExecutorProcess:
         metrics: dict[str, int | float | str] | None = None,
         correlation_id: str | None = None,
     ) -> IPCEnvelope:
-        return IPCEnvelope(
-            message_type=IPCMessageType.NODE_TASK_PROGRESS,
-            workflow_run_id=task.workflow_run_id,
-            node_run_id=task.node_run_id,
-            correlation_id=correlation_id or self._active_task_correlations.get(
+        return _task_progress_envelope(
+            task,
+            progress=progress,
+            current_stage=current_stage,
+            metrics=metrics or {},
+            correlation_id=correlation_id
+            or self._active_task_correlations.get(
                 task.task_id
             ),
-            payload=NodeTaskProgressPayload(
-                progress=progress,
-                current_stage=current_stage,
-                metrics=metrics or {},
-            ).model_dump(mode="json"),
         )
 
     def emit_task_heartbeat(
