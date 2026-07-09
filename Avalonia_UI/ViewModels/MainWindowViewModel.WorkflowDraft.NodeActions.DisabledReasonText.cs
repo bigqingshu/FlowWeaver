@@ -16,13 +16,4 @@ public partial class MainWindowViewModel
 
     public string? MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText =>
         GetMoveSelectedWorkflowDefinitionDraftNodeDisabledReason(offset: 1);
-
-    private void NotifyWorkflowDefinitionNodeActionDisabledReasonsChanged()
-    {
-        OnPropertyChanged(nameof(CopyWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteWorkflowDefinitionDraftNodeDisabledReasonText));
-        OnPropertyChanged(nameof(DeleteSelectedWorkflowDefinitionDraftNodesDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeUpDisabledReasonText));
-        OnPropertyChanged(nameof(MoveSelectedWorkflowDefinitionDraftNodeDownDisabledReasonText));
-    }
 }
