@@ -6,11 +6,6 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     private int sharedPublicationsLoadVersion;
-    [ObservableProperty]
-    private string sharedPublicationShareNameFilter = string.Empty;
-
-    [ObservableProperty]
-    private string sharedPublicationLimitFilter = "100";
 
     [ObservableProperty]
     private bool isLoadingSharedPublications;
