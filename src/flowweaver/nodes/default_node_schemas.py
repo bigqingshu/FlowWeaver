@@ -51,9 +51,6 @@ from flowweaver.nodes.default_resource_node_schemas import (
 from flowweaver.nodes.default_resource_node_schemas import (
     _read_shared_tables_schema as _read_shared_tables_schema,
 )
-from flowweaver.nodes.default_resource_node_schemas import (
-    _sql_mapping_schema as _sql_mapping_schema,
-)
 from flowweaver.nodes.default_row_deduplicate_node_schemas import (
     _deduplicate_rows_schema as _deduplicate_rows_schema,
 )
@@ -68,6 +65,9 @@ from flowweaver.nodes.default_row_filter_node_schemas import (
 )
 from flowweaver.nodes.default_row_transform_node_schemas import (
     _unpivot_rows_schema as _unpivot_rows_schema,
+)
+from flowweaver.nodes.default_sql_resource_node_schemas import (
+    _sql_mapping_schema as _sql_mapping_schema,
 )
 from flowweaver.nodes.default_table_basic_node_schemas import (
     _filter_rows_schema as _filter_rows_schema,
