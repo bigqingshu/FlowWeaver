@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,6 +13,15 @@ from flowweaver.engine.db_models import (
     NodeRunRecord,
 )
 from flowweaver.engine.runtime_models import NodeRun
+from flowweaver.engine.runtime_node_run_queries import (
+    get_node_run_for_instance_from_session as _get_node_run_for_instance,
+)
+from flowweaver.engine.runtime_node_run_queries import (
+    get_node_run_from_session as _get_node_run,
+)
+from flowweaver.engine.runtime_node_run_queries import (
+    list_node_runs_from_session as _list_node_runs,
+)
 from flowweaver.engine.runtime_node_run_status_update import (
     apply_node_run_status_update_guards as _apply_node_run_status_update_guards,
 )
@@ -80,10 +89,7 @@ class RuntimeNodeRunStoreMixin:
 
     def get_node_run(self, node_run_id: str) -> NodeRun | None:
         with self._session_factory() as session:
-            record = session.get(NodeRunRecord, node_run_id)
-            if record is None:
-                return None
-            return _node_run_from_record(record)
+            return _get_node_run(session, node_run_id)
 
     def get_node_run_for_instance(
         self,
@@ -92,23 +98,15 @@ class RuntimeNodeRunStoreMixin:
         node_instance_id: str,
     ) -> NodeRun | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(NodeRunRecord)
-                .where(NodeRunRecord.workflow_run_id == workflow_run_id)
-                .where(NodeRunRecord.node_instance_id == node_instance_id)
+            return _get_node_run_for_instance(
+                session,
+                workflow_run_id=workflow_run_id,
+                node_instance_id=node_instance_id,
             )
-            if record is None:
-                return None
-            return _node_run_from_record(record)
 
     def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
         with self._session_factory() as session:
-            records = session.scalars(
-                select(NodeRunRecord)
-                .where(NodeRunRecord.workflow_run_id == workflow_run_id)
-                .order_by(NodeRunRecord.node_instance_id)
-            ).all()
-            return [_node_run_from_record(record) for record in records]
+            return _list_node_runs(session, workflow_run_id)
 
     def update_node_run_status(
         self,
