@@ -45,16 +45,10 @@ public partial class MainWindowViewModel
             }
         }
 
-        SelectedWorkflowDefinitionNode = WorkflowDefinitionDraftNodes.FirstOrDefault(node =>
-            string.Equals(node.NodeInstanceId, selectedNodeId, StringComparison.Ordinal));
-        if (SelectedWorkflowDefinitionNode is null && !hadSelectedNode)
-        {
-            SelectedWorkflowDefinitionNode = WorkflowDefinitionDraftNodes.FirstOrDefault();
-        }
-
-        OnPropertyChanged(nameof(WorkflowDefinitionDraftNodeCountText));
-        OnPropertyChanged(nameof(WorkflowLinearChainStatusText));
+        RestoreWorkflowDefinitionDraftNodeSelection(
+            selectedNodeId,
+            hadSelectedNode);
+        NotifyWorkflowDefinitionDraftNodeListPresentationChanged();
         RefreshWorkflowDefinitionBatchSelectionState();
     }
-
 }
