@@ -1,6 +1,3 @@
-using System.ComponentModel;
-using Avalonia_UI.Models;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
@@ -13,16 +10,6 @@ public partial class MainWindowViewModel
         }
 
         RefreshWorkflowDefinitionBatchSelectionState();
-    }
-
-    private void OnWorkflowDefinitionDraftNodeItemPropertyChanged(
-        object? sender,
-        PropertyChangedEventArgs args)
-    {
-        if (args.PropertyName == nameof(WorkflowDefinitionNodeListItemViewModel.IsBatchSelected))
-        {
-            RefreshWorkflowDefinitionBatchSelectionState();
-        }
     }
 
     private void RefreshWorkflowDefinitionBatchSelectionState()
