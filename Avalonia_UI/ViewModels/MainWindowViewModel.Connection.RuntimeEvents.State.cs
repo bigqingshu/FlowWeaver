@@ -26,15 +26,4 @@ public partial class MainWindowViewModel
         !string.IsNullOrWhiteSpace(RuntimeEventStreamErrorMessage);
 
     public bool HasRuntimeEvents => RuntimeEvents.Count > 0;
-
-    partial void OnIsRuntimeEventStreamRunningChanged(bool value)
-    {
-        StartRuntimeEventStreamCommand.NotifyCanExecuteChanged();
-        StopRuntimeEventStreamCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnRuntimeEventStreamErrorMessageChanged(string? value)
-    {
-        OnPropertyChanged(nameof(HasRuntimeEventStreamError));
-    }
 }
