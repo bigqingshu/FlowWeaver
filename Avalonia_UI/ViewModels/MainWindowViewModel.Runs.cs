@@ -17,9 +17,6 @@ public partial class MainWindowViewModel
     private bool isCancellingRun;
 
     [ObservableProperty]
-    private WorkflowRunListItemViewModel? selectedRun;
-
-    [ObservableProperty]
     private string runMessage = "No runs loaded.";
 
     [ObservableProperty]
