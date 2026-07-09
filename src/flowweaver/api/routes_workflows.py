@@ -17,6 +17,9 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
+from flowweaver.api.routes_workflow_revisions import (
+    router as workflow_revisions_router,
+)
 from flowweaver.api.routes_workflow_runs import router as workflow_runs_router
 from flowweaver.engine.runtime_models import WorkflowRevisionConflict
 from flowweaver.engine.runtime_store import RuntimeStore
@@ -28,6 +31,7 @@ router = APIRouter(
     tags=["workflows"],
     dependencies=[Depends(require_api_token), Depends(check_origin)],
 )
+router.include_router(workflow_revisions_router)
 router.include_router(workflow_runs_router)
 
 
@@ -159,43 +163,6 @@ def validate_saved_workflow(
         )
     result = validate_workflow_definition(workflow.definition, registry)
     return ok_response(request, result.model_dump(mode="json"))
-
-
-@router.get("/{workflow_id}/revisions", response_model=APIResponseModel)
-def list_workflow_revisions(
-    request: Request,
-    workflow_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-):
-    if store.get_workflow_definition(workflow_id) is None:
-        return error_response(
-            request,
-            error_code="WORKFLOW_NOT_FOUND",
-            message="Workflow not found",
-            status_code=404,
-        )
-    return ok_response(request, store.list_workflow_revisions(workflow_id))
-
-
-@router.get(
-    "/{workflow_id}/revisions/{revision_id}",
-    response_model=APIResponseModel,
-)
-def get_workflow_revision(
-    request: Request,
-    workflow_id: str,
-    revision_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-):
-    revision = store.get_workflow_revision(revision_id)
-    if revision is None or revision.workflow_id != workflow_id:
-        return error_response(
-            request,
-            error_code="WORKFLOW_REVISION_NOT_FOUND",
-            message="Workflow revision not found",
-            status_code=404,
-        )
-    return ok_response(request, revision)
 
 
 @router.delete("/{workflow_id}", response_model=APIResponseModel)
