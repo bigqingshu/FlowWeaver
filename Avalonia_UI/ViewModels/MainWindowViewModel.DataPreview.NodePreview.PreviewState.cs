@@ -6,11 +6,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private int dataPreviewLoadVersion;
-
-    [ObservableProperty]
-    private bool isLoadingDataPreview;
-
     [ObservableProperty]
     private string dataPreviewMessage =
         "Select a run and workflow node to load data preview.";
