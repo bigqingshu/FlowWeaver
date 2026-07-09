@@ -3,19 +3,23 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
-from datetime import timedelta
 from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
 from flowweaver.common.ids import new_id
-from flowweaver.common.time import utc_now
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
 from flowweaver.engine.supervisor_executor_events import (
     close_executor_children as _close_executor_children,
 )
-from flowweaver.engine.supervisor_executor_events import (
-    publish_executor_exited as _publish_executor_exited,
+from flowweaver.engine.supervisor_maintenance import (
+    mark_lost_workflow_processes as _mark_lost_workflow_processes,
+)
+from flowweaver.engine.supervisor_maintenance import (
+    sweep_exited_executor_children as _sweep_exited_executor_children,
+)
+from flowweaver.engine.supervisor_maintenance import (
+    sweep_exited_workflow_children as _sweep_exited_workflow_children,
 )
 from flowweaver.engine.supervisor_paths import (
     child_environment as _child_environment,
@@ -35,9 +39,6 @@ from flowweaver.engine.supervisor_workflow_processes import (
 )
 from flowweaver.engine.supervisor_workflow_processes import (
     finish_workflow_process as _finish_workflow_process,
-)
-from flowweaver.engine.supervisor_workflow_processes import (
-    handle_lost_workflow_process as _handle_lost_workflow_process,
 )
 from flowweaver.engine.supervisor_workflow_processes import (
     stop_workflow_child as _stop_workflow_child,
@@ -179,59 +180,28 @@ class Supervisor:
         return self._runtime_store.request_workflow_process_cancel(workflow_run_id)
 
     def sweep_exited_children(self) -> list[WorkflowProcess]:
-        exited: list[WorkflowProcess] = []
-        for process_id, child in list(self._children.items()):
-            exit_code = child.poll()
-            if exit_code is None:
-                continue
-            self._drain_runtime_events_for_process(process_id)
-            self._children.pop(process_id, None)
-            process = self._finish_workflow_process(process_id, exit_code=exit_code)
-            self._drain_runtime_events_for_process(process_id)
-            self._forget_runtime_event_channel(process_id)
-            if process is not None:
-                exited.append(process)
-        return exited
+        return _sweep_exited_workflow_children(
+            children=self._children,
+            finish_workflow_process=self._finish_workflow_process,
+            drain_runtime_events_for_process=self._drain_runtime_events_for_process,
+            forget_runtime_event_channel=self._forget_runtime_event_channel,
+        )
 
     def sweep_exited_executors(self) -> list[str]:
-        exited: list[str] = []
-        for executor_id, child in list(self._executor_children.items()):
-            exit_code = child.poll()
-            if exit_code is None:
-                continue
-            self._executor_children.pop(executor_id, None)
-            _publish_executor_exited(
-                event_router=self._event_router,
-                runtime_store=self._runtime_store,
-                executor_id=executor_id,
-                exit_code=exit_code,
-                pid=child.pid,
-            )
-            exited.append(executor_id)
-        return exited
+        return _sweep_exited_executor_children(
+            children=self._executor_children,
+            event_router=self._event_router,
+            runtime_store=self._runtime_store,
+        )
 
     def mark_lost_workflow_processes(self) -> list[WorkflowProcess]:
-        stale_before = utc_now() - timedelta(
-            seconds=self._config.workflow_process_lost_threshold_seconds
+        return _mark_lost_workflow_processes(
+            config=self._config,
+            runtime_store=self._runtime_store,
+            children=self._children,
+            drain_runtime_events_for_process=self._drain_runtime_events_for_process,
+            forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
-        starting_stale_before = utc_now() - timedelta(
-            seconds=self._config.workflow_process_start_timeout_seconds
-        )
-        lost = self._runtime_store.mark_lost_workflow_processes(
-            stale_before=stale_before,
-            starting_stale_before=starting_stale_before,
-        )
-        for process in lost:
-            _handle_lost_workflow_process(
-                self._runtime_store,
-                self._children,
-                process,
-                drain_runtime_events_for_process=(
-                    self._drain_runtime_events_for_process
-                ),
-                forget_runtime_event_channel=self._forget_runtime_event_channel,
-            )
-        return lost
 
     def drain_runtime_events(self) -> list[RuntimeEvent]:
         return self._runtime_events.drain_all()
