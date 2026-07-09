@@ -4,7 +4,6 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,6 +17,12 @@ from flowweaver.engine.db_models import WorkflowProcessRecord
 from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import WorkflowProcess, WorkflowRun
 from flowweaver.engine.runtime_record_mappers import _datetime_to_text
+from flowweaver.engine.runtime_workflow_process_queries import (
+    get_workflow_process_for_run_from_session as _get_process_for_run,
+)
+from flowweaver.engine.runtime_workflow_process_queries import (
+    get_workflow_process_from_session as _get_process,
+)
 from flowweaver.engine.runtime_workflow_record_mappers import (
     _workflow_process_from_record,
 )
@@ -77,24 +82,14 @@ class RuntimeWorkflowProcessStoreMixin:
 
     def get_workflow_process(self, process_id: str) -> WorkflowProcess | None:
         with self._session_factory() as session:
-            record = session.get(WorkflowProcessRecord, process_id)
-            if record is None:
-                return None
-            return _workflow_process_from_record(record)
+            return _get_process(session, process_id)
 
     def get_workflow_process_for_run(
         self,
         workflow_run_id: str,
     ) -> WorkflowProcess | None:
         with self._session_factory() as session:
-            record = session.scalar(
-                select(WorkflowProcessRecord)
-                .where(WorkflowProcessRecord.workflow_run_id == workflow_run_id)
-                .order_by(WorkflowProcessRecord.started_at.desc())
-            )
-            if record is None:
-                return None
-            return _workflow_process_from_record(record)
+            return _get_process_for_run(session, workflow_run_id)
 
     def update_workflow_process_pid(
         self,
