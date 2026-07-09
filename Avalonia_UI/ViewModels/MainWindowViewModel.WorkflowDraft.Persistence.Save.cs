@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using Avalonia_UI.Models;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -40,20 +39,11 @@ public partial class MainWindowViewModel
 
             if (saved.Error?.ErrorCode == "WORKFLOW_REVISION_CONFLICT")
             {
-                HasWorkflowDefinitionRevisionConflict = true;
-                WorkflowDefinitionValidationMessage = T("definition.save_failed");
-                WorkflowDefinitionValidationErrorMessage = T("definition.revision_conflict");
-                ShowWorkflowDefinitionNotification(
-                    "workflow.definition.save",
-                    UiNotificationKind.Error);
+                ApplyWorkflowDefinitionDraftRevisionConflictSaveFailure();
                 return false;
             }
 
-            WorkflowDefinitionValidationMessage = T("definition.save_failed");
-            WorkflowDefinitionValidationErrorMessage = DescribeError(saved);
-            ShowWorkflowDefinitionNotification(
-                "workflow.definition.save",
-                UiNotificationKind.Error);
+            ApplyWorkflowDefinitionDraftSaveFailure(saved);
             return false;
         }
         finally
