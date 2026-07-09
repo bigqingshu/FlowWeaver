@@ -21,6 +21,12 @@ from flowweaver.nodes.default_control_loop_node_schemas import (
 from flowweaver.nodes.default_control_subworkflow_node_schemas import (
     _subworkflow_schema as _subworkflow_schema,
 )
+from flowweaver.nodes.default_file_resource_node_schemas import (
+    _batch_rename_files_schema as _batch_rename_files_schema,
+)
+from flowweaver.nodes.default_file_resource_node_schemas import (
+    _list_files_schema as _list_files_schema,
+)
 from flowweaver.nodes.default_lookup_merge_node_schemas import (
     _lookup_matched_field_name_schema as _lookup_matched_field_name_schema,
 )
@@ -35,12 +41,6 @@ from flowweaver.nodes.default_numeric_datetime_node_schemas import (
 )
 from flowweaver.nodes.default_numeric_datetime_node_schemas import (
     _parse_datetime_schema as _parse_datetime_schema,
-)
-from flowweaver.nodes.default_resource_node_schemas import (
-    _batch_rename_files_schema as _batch_rename_files_schema,
-)
-from flowweaver.nodes.default_resource_node_schemas import (
-    _list_files_schema as _list_files_schema,
 )
 from flowweaver.nodes.default_resource_node_schemas import (
     _plugin_node_schema as _plugin_node_schema,
