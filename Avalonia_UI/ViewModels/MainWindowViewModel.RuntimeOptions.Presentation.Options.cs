@@ -28,9 +28,4 @@ public partial class MainWindowViewModel
                 FormatRuntimeOptionsOptionValue(group, value)))
             .ToArray();
     }
-
-    private string FormatRuntimeOptionsOptionValue(string group, string value)
-    {
-        return DisplayTextFormatter.FormatRuntimeOptionsOptionValue(group, value);
-    }
 }
