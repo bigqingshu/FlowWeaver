@@ -48,14 +48,4 @@ public partial class MainWindowViewModel
             CompleteNodeDefinitionsRefresh(requestVersion);
         }
     }
-
-    private async Task RefreshNodeDefinitionsAfterHealthyConnectionAsync()
-    {
-        if (!CanRefreshNodeDefinitions())
-        {
-            return;
-        }
-
-        await RefreshNodeDefinitionsCoreAsync(allowStateCacheHit: true);
-    }
 }
