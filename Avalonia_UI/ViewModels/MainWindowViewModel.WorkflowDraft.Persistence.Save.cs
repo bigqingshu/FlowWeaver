@@ -17,9 +17,7 @@ public partial class MainWindowViewModel
             return false;
         }
 
-        IsSavingWorkflowDefinitionDraft = true;
-        WorkflowDefinitionValidationMessage = T("definition.saving_draft");
-        WorkflowDefinitionValidationErrorMessage = null;
+        BeginWorkflowDefinitionDraftSave();
 
         try
         {
@@ -48,7 +46,7 @@ public partial class MainWindowViewModel
         }
         finally
         {
-            IsSavingWorkflowDefinitionDraft = false;
+            CompleteWorkflowDefinitionDraftSave();
         }
     }
 }
