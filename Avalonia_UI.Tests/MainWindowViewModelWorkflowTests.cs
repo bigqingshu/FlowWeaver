@@ -3862,7 +3862,14 @@ public sealed class MainWindowViewModelWorkflowTests
                   "node_instance_id": "filter",
                   "node_type": "FilterRowsNode",
                   "node_version": "1.0",
-                  "config": {"field": "amount"}
+                  "config": {
+                    "field": "amount",
+                    "fields": ["amount", "total"],
+                    "condition_value": {"source": "fixed", "value": 3},
+                    "input_sources": {"in": {"type": "current"}},
+                    "output_targets": {"out": {"target_kind": "current"}},
+                    "plugin_extension": {"enabled": true}
+                  }
                 }
               ],
               "connections": []
@@ -3912,11 +3919,92 @@ public sealed class MainWindowViewModelWorkflowTests
                 .GetProperty("config")
                 .GetProperty("field")
                 .GetString());
+        var updatedConfig = document.RootElement
+            .GetProperty("nodes")[0]
+            .GetProperty("config");
+        Assert.AreEqual("total", updatedConfig.GetProperty("fields")[1].GetString());
+        Assert.AreEqual(
+            3,
+            updatedConfig.GetProperty("condition_value").GetProperty("value").GetInt32());
+        Assert.AreEqual(
+            "current",
+            updatedConfig.GetProperty("input_sources").GetProperty("in").GetProperty("type").GetString());
+        Assert.AreEqual(
+            "current",
+            updatedConfig.GetProperty("output_targets").GetProperty("out").GetProperty("target_kind").GetString());
+        Assert.IsTrue(
+            updatedConfig.GetProperty("plugin_extension").GetProperty("enabled").GetBoolean());
         Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
         Assert.AreEqual(
             "Node config applied to draft. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task ApplySelectedNodeConfigDraftDeletesOnlyExplicitlyClearedField()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {
+                    "field": "amount",
+                    "limit": 10,
+                    "plugin_extension": {"enabled": true}
+                  }
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "field": {"type": "string", "required": true},
+                                "limit": {"type": "integer"}
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.SelectedNodeConfigEditableInputFields
+            .Single(field => field.Name == "limit")
+            .HasInputValue = false;
+
+        viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
+
+        using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var config = document.RootElement.GetProperty("nodes")[0].GetProperty("config");
+        Assert.AreEqual("amount", config.GetProperty("field").GetString());
+        Assert.IsFalse(config.TryGetProperty("limit", out _));
+        Assert.IsTrue(config.GetProperty("plugin_extension").GetProperty("enabled").GetBoolean());
     }
 
     [TestMethod]

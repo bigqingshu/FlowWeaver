@@ -56,9 +56,7 @@ public static class NodeConfigEditableDraftConfigBuilder
     private static bool ShouldOmitMissingOptionalField(
         NodeConfigEditableDraftField field)
     {
-        return !field.Required &&
-            !field.HasInputValue &&
-            string.IsNullOrWhiteSpace(field.InputValue);
+        return !field.Required && !field.HasInputValue;
     }
 
     private static bool TryBuildValue(

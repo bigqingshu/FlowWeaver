@@ -8,4 +8,5 @@ public enum NodeConfigDraftApplyStatus
     NodeNotFound,
     NodeConfigNotObject,
     ConfigUnsupported,
+    PatchConflict,
 }

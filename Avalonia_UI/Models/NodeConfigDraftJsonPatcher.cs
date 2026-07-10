@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -11,16 +13,37 @@ public static class NodeConfigDraftJsonPatcher
         WriteIndented = true,
     };
 
-    public static NodeConfigDraftApplyResult ApplyConfig(
+    public static NodeConfigDraftApplyResult ApplyPatch(
         string workflowDefinitionDraftJson,
         string nodeInstanceId,
-        JsonElement config)
+        JsonElement fieldsToSet,
+        IEnumerable<string>? fieldsToDelete = null)
     {
-        if (config.ValueKind != JsonValueKind.Object)
+        if (fieldsToSet.ValueKind != JsonValueKind.Object)
         {
             return Failed(
                 NodeConfigDraftApplyStatus.ConfigUnsupported,
                 "CONFIG_UNSUPPORTED");
+        }
+
+        var setFieldNames = fieldsToSet
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var deleteFieldNames = (fieldsToDelete ?? [])
+            .ToHashSet(StringComparer.Ordinal);
+        var conflictingFields = setFieldNames
+            .Intersect(deleteFieldNames, StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (conflictingFields.Length > 0)
+        {
+            return new NodeConfigDraftApplyResult
+            {
+                Status = NodeConfigDraftApplyStatus.PatchConflict,
+                Warning = "CONFIG_PATCH_FIELD_CONFLICT",
+                ConflictingFields = conflictingFields,
+            };
         }
 
         JsonNode? root;
@@ -54,15 +77,34 @@ public static class NodeConfigDraftJsonPatcher
                 continue;
             }
 
-            if (nodeObject.TryGetPropertyValue("config", out var existingConfig) &&
-                existingConfig is not JsonObject)
+            JsonObject configObject;
+            if (nodeObject.TryGetPropertyValue("config", out var existingConfig))
             {
-                return Failed(
-                    NodeConfigDraftApplyStatus.NodeConfigNotObject,
-                    "NODE_CONFIG_NOT_OBJECT");
+                if (existingConfig is not JsonObject existingConfigObject)
+                {
+                    return Failed(
+                        NodeConfigDraftApplyStatus.NodeConfigNotObject,
+                        "NODE_CONFIG_NOT_OBJECT");
+                }
+
+                configObject = existingConfigObject;
+            }
+            else
+            {
+                configObject = new JsonObject();
+                nodeObject["config"] = configObject;
             }
 
-            nodeObject["config"] = JsonNode.Parse(config.GetRawText());
+            foreach (var property in fieldsToSet.EnumerateObject())
+            {
+                configObject[property.Name] = JsonNode.Parse(property.Value.GetRawText());
+            }
+
+            foreach (var fieldName in deleteFieldNames)
+            {
+                configObject.Remove(fieldName);
+            }
+
             return new NodeConfigDraftApplyResult
             {
                 Status = NodeConfigDraftApplyStatus.Succeeded,

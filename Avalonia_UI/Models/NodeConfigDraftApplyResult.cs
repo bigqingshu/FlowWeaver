@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Avalonia_UI.Models;
 
 public sealed record NodeConfigDraftApplyResult
@@ -7,6 +9,8 @@ public sealed record NodeConfigDraftApplyResult
     public string UpdatedWorkflowDefinitionDraftJson { get; init; } = string.Empty;
 
     public string? Warning { get; init; }
+
+    public IReadOnlyList<string> ConflictingFields { get; init; } = [];
 
     public bool Succeeded => Status == NodeConfigDraftApplyStatus.Succeeded;
 }

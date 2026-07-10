@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
@@ -25,10 +26,15 @@ public partial class MainWindowViewModel
         }
 
         using var config = JsonDocument.Parse(configResult.ConfigJson);
-        var patchResult = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var fieldsToDelete = SelectedNodeConfigEditableInputFields
+            .Where(field => field.OriginalHasInputValue && !field.HasInputValue)
+            .Select(field => field.Name)
+            .ToArray();
+        var patchResult = NodeConfigDraftJsonPatcher.ApplyPatch(
             WorkflowDefinitionDraftJson,
             SelectedWorkflowDefinitionNode.NodeInstanceId,
-            config.RootElement);
+            config.RootElement,
+            fieldsToDelete);
         if (!patchResult.Succeeded)
         {
             ApplySelectedNodeConfigDraftPatchFailure(patchResult);

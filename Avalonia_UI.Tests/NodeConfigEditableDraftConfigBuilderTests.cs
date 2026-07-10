@@ -47,7 +47,7 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
     }
 
     [TestMethod]
-    public void BuildOmitsMissingOptionalFields()
+    public void BuildOmitsMissingOptionalFieldsEvenWhenInputTextIsStale()
     {
         var draft = new NodeConfigEditableDraft
         {
@@ -57,7 +57,7 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
                 Field(
                     "optional_field",
                     NodeConfigFieldType.String,
-                    string.Empty,
+                    "stale value",
                     hasInputValue: false),
                 Field(
                     "required_field",

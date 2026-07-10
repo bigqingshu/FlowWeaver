@@ -8,11 +8,11 @@ namespace Avalonia_UI.Tests;
 public sealed class NodeConfigDraftJsonPatcherTests
 {
     [TestMethod]
-    public void ApplyConfigReplacesSelectedNodeConfigAndPreservesWorkflowShape()
+    public void ApplyPatchUpdatesSelectedFieldsAndPreservesWorkflowShape()
     {
         using var config = JsonDocument.Parse("""{"field":"amount","operator":"GT"}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """
             {
               "schema_version": "1.0",
@@ -28,7 +28,14 @@ public sealed class NodeConfigDraftJsonPatcherTests
                   "node_type": "FilterRowsNode",
                   "node_version": "1.0",
                   "display_name": "Filter",
-                  "config": {"field": "old"}
+                  "config": {
+                    "field": "old",
+                    "fields": ["amount", "total"],
+                    "condition_value": {"source": "fixed", "value": 3},
+                    "input_sources": {"in": {"type": "current"}},
+                    "output_targets": {"out": {"target_kind": "current"}},
+                    "plugin_extension": {"enabled": true}
+                  }
                 }
               ],
               "connections": [
@@ -57,14 +64,28 @@ public sealed class NodeConfigDraftJsonPatcherTests
         Assert.AreEqual("Filter", filter.GetProperty("display_name").GetString());
         Assert.AreEqual("amount", filter.GetProperty("config").GetProperty("field").GetString());
         Assert.AreEqual("GT", filter.GetProperty("config").GetProperty("operator").GetString());
+        Assert.AreEqual(
+            "total",
+            filter.GetProperty("config").GetProperty("fields")[1].GetString());
+        Assert.AreEqual(
+            3,
+            filter.GetProperty("config").GetProperty("condition_value").GetProperty("value").GetInt32());
+        Assert.AreEqual(
+            "current",
+            filter.GetProperty("config").GetProperty("input_sources").GetProperty("in").GetProperty("type").GetString());
+        Assert.AreEqual(
+            "current",
+            filter.GetProperty("config").GetProperty("output_targets").GetProperty("out").GetProperty("target_kind").GetString());
+        Assert.IsTrue(
+            filter.GetProperty("config").GetProperty("plugin_extension").GetProperty("enabled").GetBoolean());
     }
 
     [TestMethod]
-    public void ApplyConfigAddsMissingConfigObject()
+    public void ApplyPatchAddsMissingConfigObject()
     {
         using var config = JsonDocument.Parse("""{"rows":5}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """{"nodes":[{"node_instance_id":"source","node_type":"GenerateTestTableNode"}]}""",
             "source",
             config.RootElement);
@@ -81,11 +102,11 @@ public sealed class NodeConfigDraftJsonPatcherTests
     }
 
     [TestMethod]
-    public void ApplyConfigRejectsInvalidWorkflowJson()
+    public void ApplyPatchRejectsInvalidWorkflowJson()
     {
         using var config = JsonDocument.Parse("""{}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             "{",
             "source",
             config.RootElement);
@@ -96,11 +117,11 @@ public sealed class NodeConfigDraftJsonPatcherTests
     }
 
     [TestMethod]
-    public void ApplyConfigRejectsMissingNodesArray()
+    public void ApplyPatchRejectsMissingNodesArray()
     {
         using var config = JsonDocument.Parse("""{}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """{"schema_version":"1.0"}""",
             "source",
             config.RootElement);
@@ -111,11 +132,11 @@ public sealed class NodeConfigDraftJsonPatcherTests
     }
 
     [TestMethod]
-    public void ApplyConfigRejectsMissingNode()
+    public void ApplyPatchRejectsMissingNode()
     {
         using var config = JsonDocument.Parse("""{}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """{"nodes":[{"node_instance_id":"source"}]}""",
             "filter",
             config.RootElement);
@@ -126,11 +147,11 @@ public sealed class NodeConfigDraftJsonPatcherTests
     }
 
     [TestMethod]
-    public void ApplyConfigRejectsExistingNonObjectConfig()
+    public void ApplyPatchRejectsExistingNonObjectConfig()
     {
         using var config = JsonDocument.Parse("""{"rows":5}""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """{"nodes":[{"node_instance_id":"source","config":3}]}""",
             "source",
             config.RootElement);
@@ -141,11 +162,11 @@ public sealed class NodeConfigDraftJsonPatcherTests
     }
 
     [TestMethod]
-    public void ApplyConfigRejectsNonObjectDraftConfig()
+    public void ApplyPatchRejectsNonObjectDraftConfig()
     {
         using var config = JsonDocument.Parse("""["rows"]""");
 
-        var result = NodeConfigDraftJsonPatcher.ApplyConfig(
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
             """{"nodes":[{"node_instance_id":"source"}]}""",
             "source",
             config.RootElement);
@@ -153,5 +174,55 @@ public sealed class NodeConfigDraftJsonPatcherTests
         Assert.IsFalse(result.Succeeded);
         Assert.AreEqual(NodeConfigDraftApplyStatus.ConfigUnsupported, result.Status);
         Assert.AreEqual("CONFIG_UNSUPPORTED", result.Warning);
+    }
+
+    [TestMethod]
+    public void ApplyPatchDeletesOnlyExplicitFields()
+    {
+        using var fieldsToSet = JsonDocument.Parse("""{"field":"total"}""");
+
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "config": {
+                    "field": "amount",
+                    "limit": 10,
+                    "plugin_extension": {"enabled": true}
+                  }
+                }
+              ]
+            }
+            """,
+            "filter",
+            fieldsToSet.RootElement,
+            ["limit"]);
+
+        Assert.IsTrue(result.Succeeded);
+        using var updated = JsonDocument.Parse(result.UpdatedWorkflowDefinitionDraftJson);
+        var config = updated.RootElement.GetProperty("nodes")[0].GetProperty("config");
+        Assert.AreEqual("total", config.GetProperty("field").GetString());
+        Assert.IsFalse(config.TryGetProperty("limit", out _));
+        Assert.IsTrue(config.GetProperty("plugin_extension").GetProperty("enabled").GetBoolean());
+    }
+
+    [TestMethod]
+    public void ApplyPatchRejectsSetDeleteConflict()
+    {
+        using var fieldsToSet = JsonDocument.Parse("""{"field":"total"}""");
+
+        var result = NodeConfigDraftJsonPatcher.ApplyPatch(
+            """{"nodes":[{"node_instance_id":"filter","config":{"field":"amount"}}]}""",
+            "filter",
+            fieldsToSet.RootElement,
+            ["field"]);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(NodeConfigDraftApplyStatus.PatchConflict, result.Status);
+        Assert.AreEqual("CONFIG_PATCH_FIELD_CONFLICT", result.Warning);
+        Assert.HasCount(1, result.ConflictingFields);
+        Assert.AreEqual("field", result.ConflictingFields[0]);
     }
 }
