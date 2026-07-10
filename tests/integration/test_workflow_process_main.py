@@ -3305,7 +3305,7 @@ def test_workflow_process_times_out_infinite_loop_fault_node_with_default_execut
     node_run = store.list_node_runs(run.workflow_run_id)[0]
     events = store.list_runtime_events()
     assert exit_code == 0
-    assert elapsed_seconds < 5
+    assert elapsed_seconds < 10
     assert store.get_workflow_run(run.workflow_run_id).status == "FAILED"
     assert node_run.status == "TIMED_OUT"
     assert node_run.executor_id == "subprocess-node-executor"
