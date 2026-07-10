@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
-from flowweaver.protocols.enums import LifecycleStatus, TableStorageKind
+from flowweaver.protocols.enums import TableRole, TableStorageKind
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -17,19 +17,12 @@ def find_latest_write_selected_target_ref(
         if target_type == "memory_table"
         else TableStorageKind.RUNTIME_SQL
     )
-    candidates = [
-        table_ref
-        for table_ref in context.registry.list_by_workflow_run(workflow_run_id)
-        if table_ref.logical_table_id == target_table
-        and table_ref.storage_kind == storage_kind
-        and table_ref.lifecycle_status in {
-            LifecycleStatus.ACTIVE,
-            LifecycleStatus.PUBLISHED,
-        }
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda table_ref: table_ref.created_at)
+    return context.registry.get_latest_by_logical_identity(
+        workflow_run_id=workflow_run_id,
+        storage_kind=storage_kind,
+        role=TableRole.AUXILIARY,
+        logical_table_id=target_table,
+    )
 
 
 def next_write_selected_target_version(existing_ref: TableRefModel | None) -> int:

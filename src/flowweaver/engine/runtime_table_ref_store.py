@@ -10,6 +10,9 @@ from flowweaver.engine.runtime_record_mappers import (
     _table_ref_from_record,
 )
 from flowweaver.engine.runtime_table_ref_queries import (
+    get_latest_table_ref_by_logical_identity_from_session as _get_latest_by_identity,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
     get_table_ref_from_session as _get_table_ref,
 )
 from flowweaver.engine.runtime_table_ref_queries import (
@@ -18,7 +21,11 @@ from flowweaver.engine.runtime_table_ref_queries import (
 from flowweaver.engine.runtime_table_ref_queries import (
     list_table_refs_by_workflow_run_from_session as _list_by_workflow_run,
 )
-from flowweaver.protocols.enums import LifecycleStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableRole,
+    TableStorageKind,
+)
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -32,6 +39,23 @@ class RuntimeTableRefStoreMixin:
     def get_table_ref(self, table_ref_id: str) -> TableRefModel | None:
         with self._session_factory() as session:
             return _get_table_ref(session, table_ref_id)
+
+    def get_latest_table_ref_by_logical_identity(
+        self,
+        *,
+        workflow_run_id: str,
+        storage_kind: TableStorageKind,
+        role: TableRole,
+        logical_table_id: str,
+    ) -> TableRefModel | None:
+        with self._session_factory() as session:
+            return _get_latest_by_identity(
+                session,
+                workflow_run_id=workflow_run_id,
+                storage_kind=storage_kind,
+                role=role,
+                logical_table_id=logical_table_id,
+            )
 
     def list_table_refs_by_workflow_run(
         self,

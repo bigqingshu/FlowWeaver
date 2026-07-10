@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
-from flowweaver.protocols.enums import LifecycleStatus, TableMutability
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableMutability,
+    TableRole,
+    TableStorageKind,
+)
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -33,6 +38,21 @@ class RuntimeDataRegistry:
         if table_ref is None:
             raise KeyError(table_ref_id)
         return table_ref
+
+    def get_latest_by_logical_identity(
+        self,
+        *,
+        workflow_run_id: str,
+        storage_kind: TableStorageKind,
+        role: TableRole,
+        logical_table_id: str,
+    ) -> TableRefModel | None:
+        return self._store.get_latest_table_ref_by_logical_identity(
+            workflow_run_id=workflow_run_id,
+            storage_kind=storage_kind,
+            role=role,
+            logical_table_id=logical_table_id,
+        )
 
     def list_by_workflow_run(self, workflow_run_id: str) -> list[TableRefModel]:
         return self._store.list_table_refs_by_workflow_run(workflow_run_id)

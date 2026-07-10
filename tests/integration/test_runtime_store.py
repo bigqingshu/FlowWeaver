@@ -93,13 +93,15 @@ def make_table_ref(
     node_run_id: str,
     logical_table_id: str,
     version: int,
+    role: TableRole = TableRole.CURRENT,
+    storage_kind: TableStorageKind = TableStorageKind.RUNTIME_SQL,
     mutability: TableMutability = TableMutability.PUBLISHED_IMMUTABLE,
     lifecycle_status: LifecycleStatus = LifecycleStatus.PUBLISHED,
 ) -> TableRefModel:
     return TableRefModel(
         table_ref_id=table_ref_id,
-        role=TableRole.CURRENT,
-        storage_kind=TableStorageKind.RUNTIME_SQL,
+        role=role,
+        storage_kind=storage_kind,
         scope=TableScope.WORKFLOW_SCOPE,
         mutability=mutability,
         provider_id="sqlite_runtime",
@@ -188,6 +190,49 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "node_task_results",
     )
     assert "trigger_source" in column_names(database_path, "workflow_runs")
+    assert indexes(database_path, "data_refs")[
+        "idx_data_refs_logical_identity_latest"
+    ] == [
+        "workflow_run_id",
+        "storage_kind",
+        "role",
+        "logical_table_id",
+        "lifecycle_status",
+        "version",
+    ]
+
+
+def test_table_ref_identity_migration_preserves_existing_refs(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    config = alembic_config(database_path)
+    command.upgrade(config, "20260708_0018")
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    existing_ref = make_table_ref(
+        table_ref_id="orders-before-identity-migration",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(existing_ref)
+
+    command.upgrade(config, "head")
+
+    upgraded_store = RuntimeStore.from_sqlite_path(database_path)
+    assert upgraded_store.get_table_ref(existing_ref.table_ref_id) == existing_ref
+    assert indexes(database_path, "data_refs")[
+        "idx_data_refs_logical_identity_latest"
+    ] == [
+        "workflow_run_id",
+        "storage_kind",
+        "role",
+        "logical_table_id",
+        "lifecycle_status",
+        "version",
+    ]
 
 
 def test_runtime_store_round_trips_node_task_input_slot_bindings(
@@ -1257,6 +1302,101 @@ def test_runtime_store_table_ref_round_trip(tmp_path: Path) -> None:
     loaded = store.get_table_ref("table-1")
 
     assert loaded == table_ref
+
+
+def test_runtime_store_latest_table_ref_uses_full_logical_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, first_node = create_producer_context(store)
+    second_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="second-producer",
+        node_type="builtin.producer",
+        node_run_id="node-2",
+    )
+    refs = [
+        make_table_ref(
+            table_ref_id="orders-current-v1",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=first_node.node_run_id,
+            logical_table_id="orders",
+            version=1,
+        ),
+        make_table_ref(
+            table_ref_id="orders-current-v2",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=second_node.node_run_id,
+            logical_table_id="orders",
+            version=2,
+        ),
+        make_table_ref(
+            table_ref_id="orders-current-v3-released",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=second_node.node_run_id,
+            logical_table_id="orders",
+            version=3,
+            lifecycle_status=LifecycleStatus.RELEASED,
+        ),
+        make_table_ref(
+            table_ref_id="orders-auxiliary-v1",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=first_node.node_run_id,
+            logical_table_id="orders",
+            version=1,
+            role=TableRole.AUXILIARY,
+        ),
+        make_table_ref(
+            table_ref_id="orders-memory-v1",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=first_node.node_run_id,
+            logical_table_id="orders",
+            version=1,
+            storage_kind=TableStorageKind.MEMORY,
+            lifecycle_status=LifecycleStatus.ACTIVE,
+        ),
+    ]
+    for table_ref in refs:
+        store.register_table_ref(table_ref)
+
+    latest_current = store.get_latest_table_ref_by_logical_identity(
+        workflow_run_id=run.workflow_run_id,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        role=TableRole.CURRENT,
+        logical_table_id="orders",
+    )
+    latest_auxiliary = store.get_latest_table_ref_by_logical_identity(
+        workflow_run_id=run.workflow_run_id,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        role=TableRole.AUXILIARY,
+        logical_table_id="orders",
+    )
+    latest_memory = store.get_latest_table_ref_by_logical_identity(
+        workflow_run_id=run.workflow_run_id,
+        storage_kind=TableStorageKind.MEMORY,
+        role=TableRole.CURRENT,
+        logical_table_id="orders",
+    )
+
+    assert latest_current == refs[1]
+    assert latest_current.created_by_node_run_id == second_node.node_run_id
+    assert latest_auxiliary == refs[3]
+    assert latest_memory == refs[4]
+
+    released = store.mark_table_ref_released(refs[1].table_ref_id)
+
+    assert released is not None
+    assert (
+        store.get_latest_table_ref_by_logical_identity(
+            workflow_run_id=run.workflow_run_id,
+            storage_kind=TableStorageKind.RUNTIME_SQL,
+            role=TableRole.CURRENT,
+            logical_table_id="orders",
+        )
+        == refs[0]
+    )
 
 
 def test_runtime_store_loop_run_round_trip_and_idempotency(

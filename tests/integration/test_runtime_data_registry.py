@@ -10,7 +10,11 @@ from alembic.config import Config
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
-from flowweaver.protocols.enums import LifecycleStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableRole,
+    TableStorageKind,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel
 
 
@@ -87,6 +91,15 @@ def test_runtime_data_registry_registers_and_publishes_table_refs(
         staging.table_ref_id,
         published.table_ref_id,
     }
+    assert (
+        registry.get_latest_by_logical_identity(
+            workflow_run_id="run-1",
+            storage_kind=TableStorageKind.RUNTIME_SQL,
+            role=TableRole.CURRENT,
+            logical_table_id="orders",
+        )
+        == published
+    )
 
 
 def test_runtime_data_registry_cleans_staging_refs_for_node(

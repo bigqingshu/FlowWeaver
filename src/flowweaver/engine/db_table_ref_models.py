@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from flowweaver.engine.db_base import Base
@@ -8,6 +8,25 @@ from flowweaver.engine.db_base import Base
 
 class DataRefRecord(Base):
     __tablename__ = "data_refs"
+    __table_args__ = (
+        UniqueConstraint(
+            "workflow_run_id",
+            "storage_kind",
+            "role",
+            "logical_table_id",
+            "version",
+            name="uq_data_refs_logical_identity_version",
+        ),
+        Index(
+            "idx_data_refs_logical_identity_latest",
+            "workflow_run_id",
+            "storage_kind",
+            "role",
+            "logical_table_id",
+            "lifecycle_status",
+            "version",
+        ),
+    )
 
     table_ref_id: Mapped[str] = mapped_column(Text, primary_key=True)
     workflow_run_id: Mapped[str] = mapped_column(Text, nullable=False)

@@ -1,3 +1,8 @@
+from unittest.mock import Mock
+
+from flowweaver.nodes.table_node_output_target_lookup import (
+    find_latest_output_target_ref,
+)
 from flowweaver.protocols.enums import TableRole, TableStorageKind
 from flowweaver.workflow_process.table_output_targets import (
     TableOutputTargetKind,
@@ -236,3 +241,35 @@ def test_missing_config_returns_no_config() -> None:
 
     assert resolution.status == TableOutputTargetResolutionStatus.NO_CONFIG
     assert resolution.targets == ()
+
+
+def test_latest_output_target_uses_registry_identity_lookup() -> None:
+    resolution = resolve_configured_output_targets(
+        {
+            "output_target": {
+                "slot": "orders",
+                "target_kind": "existing_runtime_sql",
+                "logical_table_id": "orders",
+            }
+        }
+    )
+    registry = Mock()
+    expected_ref = Mock()
+    registry.get_latest_by_logical_identity.return_value = expected_ref
+    context = Mock()
+    context.registry = registry
+
+    actual = find_latest_output_target_ref(
+        context,
+        workflow_run_id="run-1",
+        target=resolution.targets[0],
+    )
+
+    assert actual is expected_ref
+    registry.get_latest_by_logical_identity.assert_called_once_with(
+        workflow_run_id="run-1",
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        role=TableRole.AUXILIARY,
+        logical_table_id="orders",
+    )
+    registry.list_by_workflow_run.assert_not_called()
