@@ -56,7 +56,7 @@ def loop_iteration_table_ref_to_jsonable(
     table_ref: TableRefModel | None = None,
     source_node_instance_id: str | None = None,
 ) -> dict[str, Any]:
-    payload = {
+    payload: dict[str, Any] = {
         "loop_iteration_id": value.loop_iteration_id,
         "table_ref_id": value.table_ref_id,
         "role": value.role,
