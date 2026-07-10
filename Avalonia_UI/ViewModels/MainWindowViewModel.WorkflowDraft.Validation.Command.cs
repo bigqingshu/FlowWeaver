@@ -20,9 +20,7 @@ public partial class MainWindowViewModel
             return;
         }
 
-        IsValidatingWorkflowDefinitionDraft = true;
-        WorkflowDefinitionValidationMessage = T("definition.validating_draft");
-        WorkflowDefinitionValidationErrorMessage = null;
+        BeginWorkflowDefinitionDraftValidation();
 
         var response = await _apiClient.ValidateWorkflowDraftAsync(
             BuildSettings(),
