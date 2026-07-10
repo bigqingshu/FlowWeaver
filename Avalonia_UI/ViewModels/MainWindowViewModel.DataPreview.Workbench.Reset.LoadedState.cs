@@ -1,3 +1,5 @@
+using Avalonia_UI.Models;
+
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
@@ -5,13 +7,7 @@ public partial class MainWindowViewModel
     private void ResetDataPreviewWorkbenchLoadedState()
     {
         LoadedDataPreviewTableRef = null;
-        dataPreviewWorkbenchLoadedColumns = [];
-        dataPreviewWorkbenchLoadedRows = [];
-        dataPreviewWorkbenchOriginalCellRows = [];
-        dataPreviewWorkbenchEditableCellRows = [];
-        dataPreviewWorkbenchOffset = 0;
-        dataPreviewWorkbenchHasMore = false;
-        dataPreviewWorkbenchRowCount = 0;
+        dataPreviewWorkbenchGridState = new DataPreviewWorkbenchGridState();
         DataPreviewWorkbenchClipboardText = string.Empty;
         IsDataPreviewWorkbenchDraft = false;
         NotifyDataPreviewWorkbenchPagingChanged();

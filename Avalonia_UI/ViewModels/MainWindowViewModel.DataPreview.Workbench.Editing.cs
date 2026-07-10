@@ -1,5 +1,3 @@
-using System;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
@@ -9,29 +7,15 @@ public partial class MainWindowViewModel
         int columnIndex,
         string value)
     {
-        if (!IsValidDataPreviewWorkbenchCellIndex(rowIndex, columnIndex))
+        if (!dataPreviewWorkbenchGridState.TryUpdateCell(
+                rowIndex,
+                columnIndex,
+                value))
         {
             return;
         }
 
-        if (string.Equals(
-                dataPreviewWorkbenchEditableCellRows[rowIndex][columnIndex],
-                value,
-                StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        dataPreviewWorkbenchEditableCellRows[rowIndex][columnIndex] = value;
         DataPreviewWorkbenchClipboardText = string.Empty;
         NotifyDataPreviewWorkbenchDirtyStateChanged();
-    }
-
-    private bool IsValidDataPreviewWorkbenchCellIndex(int rowIndex, int columnIndex)
-    {
-        return rowIndex >= 0
-            && rowIndex < dataPreviewWorkbenchEditableCellRows.Length
-            && columnIndex >= 0
-            && columnIndex < dataPreviewWorkbenchEditableCellRows[rowIndex].Length;
     }
 }

@@ -1,5 +1,3 @@
-using Avalonia_UI.Models;
-
 namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
@@ -17,11 +15,7 @@ public partial class MainWindowViewModel
     public bool HasDataPreviewWorkbenchPasteText =>
         !string.IsNullOrWhiteSpace(DataPreviewWorkbenchPasteText);
 
-    public bool IsDataPreviewWorkbenchDirty =>
-        dataPreviewWorkbenchEditableCellRows.Length > 0
-        && !DataPreviewTableGridBuilder.CellRowsEqual(
-            dataPreviewWorkbenchOriginalCellRows,
-            dataPreviewWorkbenchEditableCellRows);
+    public bool IsDataPreviewWorkbenchDirty => dataPreviewWorkbenchGridState.IsDirty;
 
     public bool CanSaveDataPreviewWorkbenchAsDraft =>
         LoadedDataPreviewTableRef?.HasCapability("SAVE_AS") == true;

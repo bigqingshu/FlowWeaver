@@ -21,9 +21,9 @@ public partial class MainWindowViewModel
 
     public string DataPreviewWorkbenchPageText => F(
         "format.data_preview_workbench_page",
-        dataPreviewWorkbenchLoadedRows.Length == 0 ? 0 : dataPreviewWorkbenchOffset + 1,
-        dataPreviewWorkbenchOffset + dataPreviewWorkbenchLoadedRows.Length,
-        dataPreviewWorkbenchRowCount);
+        dataPreviewWorkbenchGridState.FirstVisibleRowNumber,
+        dataPreviewWorkbenchGridState.LastVisibleRowNumber,
+        dataPreviewWorkbenchGridState.RowCount);
 
     public string DataPreviewWorkbenchSourceText =>
         IsDataPreviewWorkbenchDraft

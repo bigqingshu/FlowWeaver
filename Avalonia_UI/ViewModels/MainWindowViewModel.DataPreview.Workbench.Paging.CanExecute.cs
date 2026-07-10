@@ -7,7 +7,7 @@ public partial class MainWindowViewModel
         return CanUseEngineActions
             && LoadedDataPreviewTableRef is not null
             && !IsLoadingDataPreviewWorkbench
-            && dataPreviewWorkbenchOffset > 0;
+            && dataPreviewWorkbenchGridState.HasPreviousPage;
     }
 
     private bool CanLoadNextDataPreviewWorkbenchPage()
@@ -15,6 +15,6 @@ public partial class MainWindowViewModel
         return CanUseEngineActions
             && LoadedDataPreviewTableRef is not null
             && !IsLoadingDataPreviewWorkbench
-            && dataPreviewWorkbenchHasMore;
+            && dataPreviewWorkbenchGridState.HasMore;
     }
 }

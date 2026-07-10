@@ -21,12 +21,6 @@ public partial class MainWindowViewModel
         bool isDraft)
     {
         IsDataPreviewWorkbenchDraft = isDraft;
-        dataPreviewWorkbenchLoadedColumns = gridState.Columns;
-        dataPreviewWorkbenchLoadedRows = gridState.Rows;
-        dataPreviewWorkbenchOriginalCellRows = gridState.OriginalCellRows;
-        dataPreviewWorkbenchEditableCellRows = gridState.EditableCellRows;
-        dataPreviewWorkbenchOffset = gridState.Offset;
-        dataPreviewWorkbenchHasMore = gridState.HasMore;
-        dataPreviewWorkbenchRowCount = gridState.RowCount;
+        dataPreviewWorkbenchGridState = gridState;
     }
 }

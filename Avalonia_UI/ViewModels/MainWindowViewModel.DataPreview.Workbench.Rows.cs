@@ -8,7 +8,7 @@ public partial class MainWindowViewModel
     private TableDataPreviewRowViewModel CreateDataPreviewWorkbenchRow(int rowIndex)
     {
         return new TableDataPreviewRowViewModel(
-            dataPreviewWorkbenchEditableCellRows[rowIndex]
+            dataPreviewWorkbenchGridState.EditableCellRows[rowIndex]
                 .Select(
                     (value, columnIndex) =>
                         new TableDataPreviewCellViewModel(

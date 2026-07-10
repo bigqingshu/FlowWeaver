@@ -7,7 +7,7 @@ public partial class MainWindowViewModel
     private void ApplyDataPreviewWorkbenchSearch()
     {
         var visibleRowIndexes = DataPreviewTableGridBuilder.GetVisibleRowIndexes(
-            dataPreviewWorkbenchEditableCellRows,
+            dataPreviewWorkbenchGridState.EditableCellRows,
             DataPreviewWorkbenchSearchText);
 
         RefreshDataPreviewWorkbenchColumns();
@@ -18,7 +18,7 @@ public partial class MainWindowViewModel
     private void RefreshDataPreviewWorkbenchColumns()
     {
         DataPreviewWorkbenchColumns.Clear();
-        foreach (var column in dataPreviewWorkbenchLoadedColumns)
+        foreach (var column in dataPreviewWorkbenchGridState.Columns)
         {
             DataPreviewWorkbenchColumns.Add(new TableDataPreviewColumnViewModel(column));
         }

@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 
@@ -17,7 +16,8 @@ public partial class MainWindowViewModel
     {
         await LoadDataPreviewWorkbenchTablePageAsync(
             LoadedDataPreviewTableRef,
-            Math.Max(0, dataPreviewWorkbenchOffset - DataPreviewRowLimit));
+            dataPreviewWorkbenchGridState.GetPreviousPageOffset(
+                DataPreviewRowLimit));
     }
 
     [RelayCommand(CanExecute = nameof(CanLoadNextDataPreviewWorkbenchPage))]
@@ -25,7 +25,8 @@ public partial class MainWindowViewModel
     {
         await LoadDataPreviewWorkbenchTablePageAsync(
             LoadedDataPreviewTableRef,
-            dataPreviewWorkbenchOffset + DataPreviewRowLimit);
+            dataPreviewWorkbenchGridState.GetNextPageOffset(
+                DataPreviewRowLimit));
     }
 
     private bool IsStaleDataPreviewWorkbenchRequest(int requestVersion)

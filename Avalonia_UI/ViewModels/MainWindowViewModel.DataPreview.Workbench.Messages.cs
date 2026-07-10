@@ -19,8 +19,8 @@ public partial class MainWindowViewModel
     {
         return F(
             "format.loaded_data_preview_table_rows",
-            dataPreviewWorkbenchLoadedRows.Length,
-            dataPreviewWorkbenchRowCount,
+            dataPreviewWorkbenchGridState.Rows.Length,
+            dataPreviewWorkbenchGridState.RowCount,
             LoadedDataPreviewTableRef!.LogicalTableId);
     }
 
@@ -29,7 +29,7 @@ public partial class MainWindowViewModel
         return F(
             "format.data_preview_search_matches",
             DataPreviewWorkbenchRows.Count,
-            dataPreviewWorkbenchLoadedRows.Length,
+            dataPreviewWorkbenchGridState.Rows.Length,
             filter);
     }
 }
