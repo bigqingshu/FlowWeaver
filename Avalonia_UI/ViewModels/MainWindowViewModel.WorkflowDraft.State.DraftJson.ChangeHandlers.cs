@@ -9,7 +9,8 @@ public partial class MainWindowViewModel
         RefreshSelectedNodeConfigDraftState();
         RefreshRuntimeOptionsDraftState();
 
-        IsWorkflowDefinitionDraftDirty = value != originalWorkflowDefinitionJson;
+        IsWorkflowDefinitionDraftDirty =
+            workflowDefinitionDraftDocumentState.IsDirty(value);
 
         if (WorkflowDefinitionValidationMessage == T("definition.draft_valid") ||
             WorkflowDefinitionValidationMessage == T("definition.draft_has_issues") ||

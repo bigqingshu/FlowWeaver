@@ -30,7 +30,7 @@ public partial class MainWindowViewModel
         {
             WorkflowDefinitionDetail = null;
             SelectedWorkflowDefinitionNode = null;
-            originalWorkflowDefinitionJson = string.Empty;
+            workflowDefinitionDraftDocumentState.AcceptOriginalDefinition(string.Empty);
             WorkflowDefinitionDraftJson = string.Empty;
             IsWorkflowDefinitionDraftDirty = false;
             HasWorkflowDefinitionRevisionConflict = false;

@@ -14,7 +14,8 @@ public partial class MainWindowViewModel
         }
 
         var selectedNodeId = SelectedWorkflowDefinitionNode?.NodeInstanceId;
-        WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
+        WorkflowDefinitionDraftJson =
+            workflowDefinitionDraftDocumentState.OriginalDefinitionJson;
         if (!string.IsNullOrWhiteSpace(selectedNodeId))
         {
             SelectWorkflowDefinitionDraftNode(selectedNodeId);

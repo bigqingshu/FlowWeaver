@@ -17,8 +17,10 @@ public partial class MainWindowViewModel
             _nodeEditorResolver);
         SelectedWorkflowDefinitionNode =
             WorkflowDefinitionDetail.Nodes.FirstOrDefault();
-        originalWorkflowDefinitionJson = WorkflowDefinitionDetail.RawDefinitionJson;
-        WorkflowDefinitionDraftJson = originalWorkflowDefinitionJson;
+        workflowDefinitionDraftDocumentState.AcceptOriginalDefinition(
+            WorkflowDefinitionDetail.RawDefinitionJson);
+        WorkflowDefinitionDraftJson =
+            workflowDefinitionDraftDocumentState.OriginalDefinitionJson;
         IsWorkflowDefinitionDraftDirty = false;
         HasWorkflowDefinitionRevisionConflict = false;
         WorkflowDefinitionValidationMessage = T("definition.draft_loaded");
