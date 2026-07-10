@@ -1,0 +1,71 @@
+using System;
+using System.IO;
+using System.Linq;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Avalonia_UI.Tests;
+
+[TestClass]
+public sealed class RunLoopMonitorViewStructureTests
+{
+    [TestMethod]
+    public void RunMonitorKeepsThreeColumnsAndHostsLoopMonitorInDetailTabs()
+    {
+        var pageXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Pages",
+            "RunMonitorPage.axaml");
+
+        StringAssert.Contains(pageXaml, "ColumnDefinitions=\"340, 1.3*, 1*\"");
+        StringAssert.Contains(pageXaml, "<TabControl Grid.Column=\"2\">");
+        StringAssert.Contains(pageXaml, "<rm:RunDetailPanelView />");
+        StringAssert.Contains(
+            pageXaml,
+            "<rm:RunLoopMonitorView DataContext=\"{Binding RunLoopMonitor}\" />");
+        Assert.IsFalse(pageXaml.Contains("Grid.Column=\"3\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void LoopMonitorViewLoadsSelectionsProgressively()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "RunMonitor",
+            "RunLoopMonitorView.axaml");
+
+        StringAssert.Contains(xaml, "x:DataType=\"vm:RunLoopMonitorViewModel\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding Loops}\"");
+        StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedLoop, Mode=TwoWay}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding Iterations}\"");
+        StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedIteration, Mode=TwoWay}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationNodes}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationTableRefs}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding LoadMoreLoopsCommand}\"");
+        Assert.IsFalse(xaml.Contains("IEngineHostApiClient", StringComparison.Ordinal));
+    }
+
+    private static string ReadSourceFile(params string[] pathParts)
+    {
+        var repoRoot = GetRepoRoot();
+        return File.ReadAllText(Path.Combine(pathParts.Prepend(repoRoot).ToArray()));
+    }
+
+    private static string GetRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "Avalonia_UI")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Repository root was not found.");
+    }
+}

@@ -5252,6 +5252,39 @@ public sealed class MainWindowViewModelWorkflowTests
             viewModel.WorkflowDefinitionDraftStructure?.Nodes[0].NodeInstanceId);
     }
 
+    [TestMethod]
+    public async Task SelectingRunLoadsOnlyFirstLoopPageThroughBridge()
+    {
+        var apiClient = new FakeApiClient
+        {
+            LoopRunsResponse = ApiResponseEnvelope<List<LoopRunDto>>.Success(
+                new List<LoopRunDto>
+                {
+                    new()
+                    {
+                        LoopRunId = "loop-run-1",
+                        WorkflowRunId = "run-loop",
+                        LoopId = "orders_loop",
+                        StartNodeInstanceId = "start",
+                        JudgeNodeInstanceId = "judge",
+                        Status = "RUNNING",
+                        CurrentIteration = 1,
+                        MaxIterations = 3,
+                    },
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(
+            Run("run-loop", "wf-1", "RUNNING"));
+        await viewModel.RunLoopMonitor.WaitForPendingLoadAsync();
+
+        Assert.AreEqual(1, apiClient.ListLoopRunsCallCount);
+        Assert.AreEqual("run-loop", apiClient.LastLoopWorkflowRunId);
+        Assert.HasCount(1, viewModel.RunLoopMonitor.Loops);
+        Assert.IsEmpty(viewModel.RunLoopMonitor.Iterations);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
@@ -5497,6 +5530,11 @@ public sealed class MainWindowViewModelWorkflowTests
                     HasMore = false,
                 });
 
+        public ApiResponseEnvelope<List<LoopRunDto>> LoopRunsResponse { get; set; } =
+            ApiResponseEnvelope<List<LoopRunDto>>.Failure(
+                "NOT_CONFIGURED",
+                "No loop run response configured.");
+
         public EngineHostConnectionSettings? LastSettings { get; private set; }
 
         public string? LastWorkflowDetailId { get; private set; }
@@ -5538,6 +5576,10 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? LastTableRowsTableRefId { get; private set; }
 
         public string? CancelledWorkflowRunId { get; private set; }
+
+        public int ListLoopRunsCallCount { get; private set; }
+
+        public string? LastLoopWorkflowRunId { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -5754,10 +5796,9 @@ public sealed class MainWindowViewModelWorkflowTests
             IReadOnlyCollection<string>? statuses = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<List<LoopRunDto>>.Failure(
-                    "NOT_CONFIGURED",
-                    "No loop run response configured."));
+            ListLoopRunsCallCount++;
+            LastLoopWorkflowRunId = workflowRunId;
+            return Task.FromResult(LoopRunsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<LoopIterationRunDto>>> ListLoopIterationsAsync(

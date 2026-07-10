@@ -15,6 +15,9 @@ public partial class MainWindowViewModel
             StringComparison.Ordinal);
         if (runChanged)
         {
+            _ = RunLoopMonitor.SelectRunAsync(
+                BuildSettings(),
+                newValue?.WorkflowRunId);
             nodeRunsLoadVersion++;
             tableRefsLoadVersion++;
             IsLoadingNodeRuns = false;

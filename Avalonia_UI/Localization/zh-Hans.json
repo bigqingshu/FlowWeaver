@@ -1103,5 +1103,16 @@
   "workflow.loop_regions.empty": "当前草稿没有循环区域。",
   "workflow.loop_regions.count_suffix": "个循环",
   "workflow.loop_regions.applied": "循环区域已写入草稿并提交后端校验。",
-  "workflow.loop_regions.deleted": "循环区域已从草稿删除并提交后端校验。"
+  "workflow.loop_regions.deleted": "循环区域已从草稿删除并提交后端校验。",
+  "runs.loop_monitor.section": "循环监视",
+  "runs.loop_monitor.overview": "运行概览",
+  "runs.loop_monitor.loops": "循环",
+  "runs.loop_monitor.iterations": "轮次",
+  "runs.loop_monitor.nodes": "本轮节点",
+  "runs.loop_monitor.tables": "本轮表",
+  "runs.loop_monitor.load_more": "下一页",
+  "runs.loop_monitor.select_run": "选择运行后查看循环。",
+  "runs.loop_monitor.empty": "当前运行没有循环记录。",
+  "runs.loop_monitor.select_loop": "选择循环后查看轮次。",
+  "runs.loop_monitor.select_iteration": "选择轮次后查看节点和表。"
 }

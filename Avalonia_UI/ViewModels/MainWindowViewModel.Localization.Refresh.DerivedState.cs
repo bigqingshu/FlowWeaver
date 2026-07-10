@@ -14,6 +14,7 @@ public partial class MainWindowViewModel
         RefreshWorkflowDefinitionDraftStructureState();
         RefreshWorkflowLoopRegionsFromDraft();
         WorkflowLoopRegions.RefreshLocalizedText();
+        RunLoopMonitor.RefreshLocalizedText();
         RefreshSelectedNodeConfigDraftState();
     }
 }

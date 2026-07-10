@@ -25,6 +25,9 @@ public partial class MainWindowViewModel
                 runtimeEvent.EventType,
                 runtimeEvent.SequenceNumber);
         RuntimeEventStreamErrorMessage = null;
+        RunLoopMonitor.QueueRefresh(
+            BuildSettings(),
+            runtimeEvent.WorkflowRunId);
 
         await RecoverRuntimeStateAsync(
             runtimeEvent.WorkflowRunId,

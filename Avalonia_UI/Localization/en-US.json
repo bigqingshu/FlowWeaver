@@ -1103,5 +1103,16 @@
   "workflow.loop_regions.empty": "The current draft has no loop regions.",
   "workflow.loop_regions.count_suffix": "loop(s)",
   "workflow.loop_regions.applied": "Loop region was written to the draft and sent for backend validation.",
-  "workflow.loop_regions.deleted": "Loop region was removed from the draft and sent for backend validation."
+  "workflow.loop_regions.deleted": "Loop region was removed from the draft and sent for backend validation.",
+  "runs.loop_monitor.section": "Loop monitor",
+  "runs.loop_monitor.overview": "Run overview",
+  "runs.loop_monitor.loops": "Loops",
+  "runs.loop_monitor.iterations": "Iterations",
+  "runs.loop_monitor.nodes": "Iteration nodes",
+  "runs.loop_monitor.tables": "Iteration tables",
+  "runs.loop_monitor.load_more": "Next page",
+  "runs.loop_monitor.select_run": "Select a run to view loops.",
+  "runs.loop_monitor.empty": "This run has no loop records.",
+  "runs.loop_monitor.select_loop": "Select a loop to view iterations.",
+  "runs.loop_monitor.select_iteration": "Select an iteration to view nodes and tables."
 }

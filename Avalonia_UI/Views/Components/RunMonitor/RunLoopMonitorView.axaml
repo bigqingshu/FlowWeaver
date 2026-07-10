@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.RunLoopMonitorView"
+             x:DataType="vm:RunLoopMonitorViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding SectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ProgressBar Grid.Column="1"
+                             Width="72"
+                             Height="8"
+                             IsIndeterminate="True"
+                             IsVisible="{Binding IsBusy}"/>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="88,*,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding LoopsText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding Loops}"
+                          SelectedItem="{Binding SelectedLoop, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="vm:LoopRunListItemViewModel"
+                                      x:DataType="vm:LoopRunListItemViewModel">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding LoopId}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding BoundaryText}"
+                                               FontSize="11"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding Status}" FontSize="11"/>
+                                    <TextBlock Text="{Binding ProgressText}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="2"
+                        Content="{Binding LoadMoreText}"
+                        Command="{Binding LoadMoreLoopsCommand}"
+                        MinWidth="78"/>
+            </Grid>
+
+            <Grid Grid.Row="2" ColumnDefinitions="88,*,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding IterationsText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding Iterations}"
+                          SelectedItem="{Binding SelectedIteration, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="vm:LoopIterationListItemViewModel"
+                                      x:DataType="vm:LoopIterationListItemViewModel">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                <TextBlock Text="{Binding IndexText}" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding LoopIterationId}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Status}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="2"
+                        Content="{Binding LoadMoreText}"
+                        Command="{Binding LoadMoreIterationsCommand}"
+                        MinWidth="78"/>
+            </Grid>
+
+            <TabControl Grid.Row="3">
+                <TabItem Header="{Binding NodesText}">
+                    <ListBox ItemsSource="{Binding IterationNodes}"
+                             MinHeight="180">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:LoopIterationNodeListItemViewModel"
+                                          x:DataType="vm:LoopIterationNodeListItemViewModel">
+                                <Grid Margin="8"
+                                      ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto"
+                                      ColumnSpacing="8">
+                                    <TextBlock Text="{Binding NodeInstanceId}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Status}"/>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding Role}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
+                                               Text="{Binding ProgressText}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </TabItem>
+                <TabItem Header="{Binding TablesText}">
+                    <ListBox ItemsSource="{Binding IterationTableRefs}"
+                             MinHeight="180">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:LoopIterationTableRefListItemViewModel"
+                                          x:DataType="vm:LoopIterationTableRefListItemViewModel">
+                                <Grid Margin="8"
+                                      ColumnDefinitions="*,Auto"
+                                      RowDefinitions="Auto,Auto"
+                                      ColumnSpacing="8">
+                                    <TextBlock Text="{Binding LogicalTableId}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Role}"/>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding SourceText}"
+                                               FontSize="11"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="1"
+                                               Grid.Column="1"
+                                               Text="{Binding LifecycleStatus}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </TabItem>
+            </TabControl>
+
+            <StackPanel Grid.Row="4" Spacing="4">
+                <TextBlock Text="{Binding Message}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
