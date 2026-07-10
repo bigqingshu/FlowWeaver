@@ -6,9 +6,7 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private void RebuildDataPreviewStates(
-        string? preferredStateKey = null,
-        string? preferredTableRefId = null)
+    private void RebuildDataPreviewStates()
     {
         DataPreviewStates.Clear();
         foreach (var state in DataPreviewStateListItemViewModel.FromTableRefs(TableRefs))
@@ -16,17 +14,24 @@ public partial class MainWindowViewModel
             DataPreviewStates.Add(state);
         }
 
-        var selectedState =
-            FindDataPreviewStateByKey(preferredStateKey)
-            ?? FindDataPreviewStateByTableRefId(preferredTableRefId)
-            ?? DataPreviewStates.FirstOrDefault();
-        SelectedDataPreviewState = selectedState;
+        var selection = dataPreviewSelectionState.Resolve(
+            DataPreviewStates
+                .Select(state => new DataPreviewStateSelectionCandidate(
+                    state.StateKey,
+                    state.TableRefs
+                        .Select(tableRef => tableRef.TableRefId)
+                        .ToArray()))
+                .ToArray());
+        SelectedDataPreviewState = FindDataPreviewStateByKey(selection.StateKey);
 
-        if (!string.IsNullOrWhiteSpace(preferredTableRefId))
+        if (!string.IsNullOrWhiteSpace(selection.TableRefId))
         {
             SelectedDataPreviewTableOption =
                 DataPreviewTableOptions.FirstOrDefault(tableRef =>
-                    string.Equals(tableRef.TableRefId, preferredTableRefId, StringComparison.Ordinal))
+                    string.Equals(
+                        tableRef.TableRefId,
+                        selection.TableRefId,
+                        StringComparison.Ordinal))
                 ?? SelectedDataPreviewTableOption;
         }
     }

@@ -9,9 +9,10 @@ public partial class MainWindowViewModel
     private void ApplyRefreshedTableRefs(IReadOnlyList<TableRefDto> tableRefs)
     {
         var previousSelectedTableRefId = SelectedDataPreviewTableRef?.TableRefId;
-        var previousSelectedStateKey = SelectedDataPreviewState?.StateKey;
-        var previousSelectedTableOptionId =
-            SelectedDataPreviewTableOption?.TableRefId ?? previousSelectedTableRefId;
+        dataPreviewSelectionState.Capture(
+            SelectedDataPreviewState?.StateKey,
+            SelectedDataPreviewTableOption?.TableRefId
+                ?? previousSelectedTableRefId);
 
         TableRefs.Clear();
         foreach (var tableRef in tableRefs)
@@ -19,9 +20,7 @@ public partial class MainWindowViewModel
             TableRefs.Add(new TableRefListItemViewModel(tableRef));
         }
 
-        RebuildDataPreviewStates(
-            previousSelectedStateKey,
-            previousSelectedTableOptionId);
+        RebuildDataPreviewStates();
         SelectedDataPreviewTableRef = TableRefs.FirstOrDefault(
             tableRef => tableRef.TableRefId == previousSelectedTableRefId)
             ?? SelectedDataPreviewTableOption

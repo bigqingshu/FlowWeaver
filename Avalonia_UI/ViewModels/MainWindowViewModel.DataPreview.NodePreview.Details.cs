@@ -34,7 +34,10 @@ public partial class MainWindowViewModel
                     TableRefs.Add(new TableRefListItemViewModel(tableRef));
                 }
 
-                RebuildDataPreviewStates(preferredTableRefId: tableRefId);
+                dataPreviewSelectionState.Capture(
+                    stateKey: null,
+                    tableRefId);
+                RebuildDataPreviewStates();
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
                 TableRefErrorMessage = null;
                 target = TableRefs.FirstOrDefault(
