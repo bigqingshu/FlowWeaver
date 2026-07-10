@@ -5,6 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_event_sink import DatabaseEventSink
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -12,6 +13,8 @@ from flowweaver.engine.table_provider_registry import (
     TableProviderRegistry,
     create_default_table_provider_registry,
 )
+from flowweaver.node_executor import BuiltinTableNodeExecutor
+from flowweaver.nodes.builtin_table import LOOP_JUDGE_NODE_TYPE
 from flowweaver.protocols.enums import (
     LoopIterationRunStatus,
     LoopRunStatus,
@@ -61,8 +64,14 @@ def enabled_loop_definition() -> WorkflowDefinitionModel:
                 },
                 {
                     "node_instance_id": "loop_judge",
-                    "node_type": "core.loop_judge",
+                    "node_type": LOOP_JUDGE_NODE_TYPE,
                     "node_version": "1.0",
+                    "config": {
+                        "loop_id": "orders_loop",
+                        "condition_mode": "always_success",
+                        "on_success": "continue_loop",
+                        "on_fail": "end_loop",
+                    },
                 },
                 {
                     "node_instance_id": "after_loop",
@@ -203,13 +212,42 @@ def create_control_output(
             {
                 "signal_type": "loop_decision",
                 "selected_branch": selected_branch,
-                "actual_control": "true",
+                "actual_control": "false",
                 "source_node_id": "loop_judge",
                 "target_anchor": "orders_loop",
                 "details": details,
             }
         ],
     )
+    published = provider.published_ref_from_staging(staging)
+    provider.publish_staging(staging, published)
+    store.register_table_ref(published)
+    return published
+
+
+def create_data_output(
+    store: RuntimeStore,
+    provider: SQLiteRuntimeTableProvider,
+    *,
+    workflow_run_id: str,
+    node_run_id: str,
+    output_name: str,
+) -> TableRefModel:
+    staging = provider.create_staging_table(
+        workflow_run_id=workflow_run_id,
+        node_run_id=node_run_id,
+        output_name=output_name,
+        schema=[
+            FieldSchemaModel(
+                field_id="amount",
+                name="amount",
+                data_type="INTEGER",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+    )
+    provider.insert_rows(staging, [{"amount": 2}])
     published = provider.published_ref_from_staging(staging)
     provider.publish_staging(staging, published)
     store.register_table_ref(published)
@@ -259,6 +297,7 @@ def submit_and_accept_candidate(
     process_id: str,
     process_generation: int,
     candidate: ReadyNodeCandidate,
+    config: dict | None = None,
 ) -> NodeTaskModel:
     task = manager.submit_ready_node(
         workflow_run_id=workflow_run_id,
@@ -267,6 +306,7 @@ def submit_and_accept_candidate(
         node_instance_id=candidate.node_run.node_instance_id,
         node_run_id=candidate.node_run.node_run_id,
         input_refs=list(candidate.input_refs),
+        config=config,
     )
     assert task is not None
     accepted = manager.accept_task(task_id=task.task_id, executor_id="executor-1")
@@ -415,6 +455,12 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         dag=dag,
     )
     manager = create_manager(store, registry, definition=definition, dag=dag)
+    executor = BuiltinTableNodeExecutor(
+        executor_id="executor-1",
+        store=store,
+        registry=RuntimeDataRegistry(store=store, table_provider=provider),
+        table_provider=provider,
+    )
 
     first_entry = ready_candidate(
         store,
@@ -444,7 +490,18 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         process_generation=process_generation,
         candidate=first_body,
     )
-    apply_success(manager, first_body_task, output_refs=["first-body-output"])
+    first_body_output = create_data_output(
+        store,
+        provider,
+        workflow_run_id=workflow_run_id,
+        node_run_id=first_body_task.node_run_id,
+        output_name="first_body_output",
+    )
+    apply_success(
+        manager,
+        first_body_task,
+        output_refs=[first_body_output.table_ref_id],
+    )
 
     first_judge = ready_candidate(
         store,
@@ -452,7 +509,7 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         dag=dag,
         node_instance_id="loop_judge",
     )
-    assert first_judge.input_refs == ("first-body-output",)
+    assert first_judge.input_refs == (first_body_output.table_ref_id,)
     first_judge_task = submit_and_accept_candidate(
         manager,
         workflow_run_id=workflow_run_id,
@@ -460,15 +517,16 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         process_generation=process_generation,
         candidate=first_judge,
     )
-    continue_output = create_control_output(
-        store,
-        provider,
-        workflow_run_id=workflow_run_id,
-        node_run_id=first_judge_task.node_run_id,
-        selected_branch="continue_loop",
-        details='{"next_input_selector":{"row_index":1}}',
+    continue_result = executor.execute(first_judge_task)
+    assert continue_result.status == NodeResultStatus.SUCCEEDED
+    continue_ref = store.get_table_ref(continue_result.output_refs[0])
+    assert continue_ref is not None
+    assert (
+        provider.read_rows(continue_ref, offset=0, limit=1)[0]["actual_control"]
+        == "false"
     )
-    apply_success(manager, first_judge_task, output_refs=[continue_output.table_ref_id])
+    continued = manager.apply_result(continue_result)
+    assert continued.status == NodeTaskApplyStatus.APPLIED
 
     loop = store.get_loop_run_for_workflow_loop(
         workflow_run_id=workflow_run_id,
@@ -510,7 +568,18 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         process_generation=process_generation,
         candidate=second_body,
     )
-    apply_success(manager, second_body_task, output_refs=["second-body-output"])
+    second_body_output = create_data_output(
+        store,
+        provider,
+        workflow_run_id=workflow_run_id,
+        node_run_id=second_body_task.node_run_id,
+        output_name="second_body_output",
+    )
+    apply_success(
+        manager,
+        second_body_task,
+        output_refs=[second_body_output.table_ref_id],
+    )
 
     second_judge = ready_candidate(
         store,
@@ -519,22 +588,30 @@ def test_enabled_loop_runtime_runs_two_iterations_and_releases_exit(
         node_instance_id="loop_judge",
     )
     assert second_judge.node_run.node_run_id != first_judge.node_run.node_run_id
-    assert second_judge.input_refs == ("second-body-output",)
+    assert second_judge.input_refs == (second_body_output.table_ref_id,)
     second_judge_task = submit_and_accept_candidate(
         manager,
         workflow_run_id=workflow_run_id,
         process_id=process_id,
         process_generation=process_generation,
         candidate=second_judge,
+        config={
+            "loop_id": "orders_loop",
+            "condition_mode": "always_success",
+            "on_success": "end_loop",
+            "on_fail": "end_loop",
+        },
     )
-    end_output = create_control_output(
-        store,
-        provider,
-        workflow_run_id=workflow_run_id,
-        node_run_id=second_judge_task.node_run_id,
-        selected_branch="end_loop",
+    end_result = executor.execute(second_judge_task)
+    assert end_result.status == NodeResultStatus.SUCCEEDED
+    end_ref = store.get_table_ref(end_result.output_refs[0])
+    assert end_ref is not None
+    assert (
+        provider.read_rows(end_ref, offset=0, limit=1)[0]["actual_control"]
+        == "false"
     )
-    apply_success(manager, second_judge_task, output_refs=[end_output.table_ref_id])
+    ended = manager.apply_result(end_result)
+    assert ended.status == NodeTaskApplyStatus.APPLIED
 
     loop = store.get_loop_run(loop.loop_run_id)
     assert loop is not None

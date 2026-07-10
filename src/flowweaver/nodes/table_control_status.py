@@ -36,6 +36,7 @@ def publish_control_status(
     signal_status: str,
     source_node_id: str,
     action: str,
+    output_name: str | None = None,
     target_node_id: str = "",
     target_anchor: str = "",
     condition_result: str = "",
@@ -58,7 +59,7 @@ def publish_control_status(
     }
     return context.publish_rows(
         task,
-        output_name=f"{task.node_instance_id}_output",
+        output_name=output_name or f"{task.node_instance_id}_output",
         schema=control_status_schema(),
         rows=[row],
     )

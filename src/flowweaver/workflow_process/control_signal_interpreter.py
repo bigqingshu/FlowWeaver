@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
@@ -23,6 +23,8 @@ class ControlSignalInterpretationStatus(str, Enum):
     OUTPUT_TABLE_NOT_FOUND = "OUTPUT_TABLE_NOT_FOUND"
     OUTPUT_PROVIDER_NOT_FOUND = "OUTPUT_PROVIDER_NOT_FOUND"
     LOOP_ITERATION_NOT_ASSOCIATED = "LOOP_ITERATION_NOT_ASSOCIATED"
+    LOOP_JUDGE_ROLE_REQUIRED = "LOOP_JUDGE_ROLE_REQUIRED"
+    LOOP_JUDGE_ASSOCIATION_AMBIGUOUS = "LOOP_JUDGE_ASSOCIATION_AMBIGUOUS"
     LOOP_ITERATION_NOT_FOUND = "LOOP_ITERATION_NOT_FOUND"
     LOOP_NOT_FOUND = "LOOP_NOT_FOUND"
     TARGET_LOOP_MISMATCH = "TARGET_LOOP_MISMATCH"
@@ -97,21 +99,34 @@ def _apply_control_signal(
             signal=signal,
             detail=signal.signal_type,
         )
-    if not signal.actual_control:
-        return ControlSignalInterpretationResult(
-            ControlSignalInterpretationStatus.IGNORED_PREVIEW_SIGNAL,
-            signal=signal,
-        )
     links = store.list_loop_iteration_node_runs_by_node_run(
         completed_node.node_run_id,
     )
     if not links:
+        if not signal.actual_control:
+            return ControlSignalInterpretationResult(
+                ControlSignalInterpretationStatus.IGNORED_PREVIEW_SIGNAL,
+                signal=signal,
+            )
         return ControlSignalInterpretationResult(
             ControlSignalInterpretationStatus.LOOP_ITERATION_NOT_ASSOCIATED,
             signal=signal,
             detail=completed_node.node_run_id,
         )
-    link = links[-1]
+    judge_links = [link for link in links if link.role == "JUDGE"]
+    if not judge_links:
+        return ControlSignalInterpretationResult(
+            ControlSignalInterpretationStatus.LOOP_JUDGE_ROLE_REQUIRED,
+            signal=signal,
+            detail=completed_node.node_run_id,
+        )
+    if len(judge_links) != 1:
+        return ControlSignalInterpretationResult(
+            ControlSignalInterpretationStatus.LOOP_JUDGE_ASSOCIATION_AMBIGUOUS,
+            signal=signal,
+            detail=str(len(judge_links)),
+        )
+    link = judge_links[0]
     iteration = store.get_loop_iteration_run(link.loop_iteration_id)
     if iteration is None:
         return ControlSignalInterpretationResult(
@@ -126,6 +141,15 @@ def _apply_control_signal(
             signal=signal,
             detail=iteration.loop_run_id,
         )
+    if (
+        link.node_instance_id != completed_node.node_instance_id
+        or loop.judge_node_instance_id != completed_node.node_instance_id
+    ):
+        return ControlSignalInterpretationResult(
+            ControlSignalInterpretationStatus.LOOP_JUDGE_ROLE_REQUIRED,
+            signal=signal,
+            detail=completed_node.node_instance_id,
+        )
     target_loop = _target_loop_id(signal)
     if target_loop is not None and target_loop not in {
         loop.loop_id,
@@ -136,17 +160,18 @@ def _apply_control_signal(
             signal=signal,
             detail=target_loop,
         )
+    authorized_signal = replace(signal, actual_control=True)
     advance_result = advance_serial_loop_from_decision(
         store,
         loop_run_id=loop.loop_run_id,
         loop_iteration_id=iteration.loop_iteration_id,
-        signal=signal,
-        next_input_table_ref_id=_next_input_table_ref_id(signal),
-        next_input_selector=_next_input_selector(signal),
+        signal=authorized_signal,
+        next_input_table_ref_id=_next_input_table_ref_id(authorized_signal),
+        next_input_selector=_next_input_selector(authorized_signal),
     )
     return ControlSignalInterpretationResult(
         ControlSignalInterpretationStatus.LOOP_DECISION_APPLIED,
-        signal=signal,
+        signal=authorized_signal,
         advance_result=advance_result,
     )
 

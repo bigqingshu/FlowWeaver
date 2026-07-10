@@ -74,6 +74,7 @@ class LoopJudgeNodeHandler:
                 signal_type="loop_decision",
                 signal_status="matched" if condition_result else "not_matched",
                 source_node_id=task.node_instance_id,
+                output_name=f"{task.node_instance_id}_{task.node_run_id}_output",
                 target_anchor=loop_id,
                 condition_result=_bool_status(condition_result),
                 selected_branch=selected_action,

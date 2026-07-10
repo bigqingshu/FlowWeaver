@@ -158,11 +158,14 @@ def start_loop_for_judge(
     *,
     workflow_run_id: str,
     judge: NodeRun,
+    loop_run_id: str = "loop-run-1",
+    loop_id: str = "orders_loop",
+    role: str | None = "JUDGE",
 ) -> str:
     loop = store.create_loop_run(
-        loop_run_id="loop-run-1",
+        loop_run_id=loop_run_id,
         workflow_run_id=workflow_run_id,
-        loop_id="orders_loop",
+        loop_id=loop_id,
         start_node_instance_id="loop-start",
         judge_node_instance_id="judge",
         max_iterations=3,
@@ -170,12 +173,13 @@ def start_loop_for_judge(
     assert loop is not None
     started = start_serial_loop(store, loop_run_id=loop.loop_run_id)
     assert started.iteration is not None
-    linked = store.add_loop_iteration_node_run(
-        loop_iteration_id=started.iteration.loop_iteration_id,
-        node_run_id=judge.node_run_id,
-        role="JUDGE",
-    )
-    assert linked is not None
+    if role is not None:
+        linked = store.add_loop_iteration_node_run(
+            loop_iteration_id=started.iteration.loop_iteration_id,
+            node_run_id=judge.node_run_id,
+            role=role,
+        )
+        assert linked is not None
     return loop.loop_run_id
 
 
@@ -189,6 +193,7 @@ def create_control_output(
     actual_control: str,
     signal_type: str = "loop_decision",
     details: str = '{"next_input_selector":{"row_index":1}}',
+    target_anchor: str = "orders_loop",
 ) -> TableRefModel:
     staging = provider.create_staging_table(
         workflow_run_id=workflow_run_id,
@@ -204,7 +209,7 @@ def create_control_output(
                 "selected_branch": selected_branch,
                 "actual_control": actual_control,
                 "source_node_id": "judge",
-                "target_anchor": "orders_loop",
+                "target_anchor": target_anchor,
                 "details": details,
             }
         ],
@@ -258,7 +263,7 @@ def test_node_success_control_output_creates_next_iteration(
         workflow_run_id=run.workflow_run_id,
         node_run_id=task.node_run_id,
         selected_branch="continue_loop",
-        actual_control="true",
+        actual_control="false",
     )
     result = NodeTaskResultModel(
         task_id=task.task_id,
@@ -289,7 +294,7 @@ def test_node_success_control_output_creates_next_iteration(
     assert entry_node.status == "READY"
 
 
-def test_control_output_preview_signal_has_no_loop_side_effect(
+def test_unassociated_preview_signal_has_no_loop_side_effect(
     tmp_path: Path,
 ) -> None:
     store, provider, registry = make_store_provider_registry(tmp_path)
@@ -298,6 +303,7 @@ def test_control_output_preview_signal_has_no_loop_side_effect(
         store,
         workflow_run_id=run.workflow_run_id,
         judge=judge,
+        role=None,
     )
     control_output = create_control_output(
         store,
@@ -342,7 +348,7 @@ def test_control_output_duplicate_interpretation_is_idempotent(
         workflow_run_id=run.workflow_run_id,
         node_run_id=judge.node_run_id,
         selected_branch="continue_loop",
-        actual_control="true",
+        actual_control="false",
     )
 
     first = interpret_control_outputs_after_node_success(
@@ -361,12 +367,158 @@ def test_control_output_duplicate_interpretation_is_idempotent(
     )
 
     assert first.status == ControlSignalInterpretationStatus.LOOP_DECISION_APPLIED
+    assert first.signal is not None
+    assert first.signal.actual_control is True
     assert first.advance_result is not None
     assert first.advance_result.status == SerialLoopAdvanceStatus.CREATED_NEXT_ITERATION
     assert second.status == ControlSignalInterpretationStatus.LOOP_DECISION_APPLIED
     assert second.advance_result is not None
     assert second.advance_result.status == SerialLoopAdvanceStatus.ALREADY_ADVANCED
     assert len(store.list_loop_iteration_runs(loop_run_id)) == 2
+
+
+def test_unassociated_actual_control_signal_is_rejected(
+    tmp_path: Path,
+) -> None:
+    store, provider, registry = make_store_provider_registry(tmp_path)
+    run, _process_id, judge, _manager = create_running_judge_process(store, registry)
+    loop_run_id = start_loop_for_judge(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        judge=judge,
+        role=None,
+    )
+    control_output = create_control_output(
+        store,
+        provider,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=judge.node_run_id,
+        selected_branch="continue_loop",
+        actual_control="true",
+    )
+
+    interpreted = interpret_control_outputs_after_node_success(
+        store,
+        registry,
+        workflow_run_id=run.workflow_run_id,
+        completed_node=judge,
+        output_refs=[control_output.table_ref_id],
+    )
+
+    assert (
+        interpreted.status
+        == ControlSignalInterpretationStatus.LOOP_ITERATION_NOT_ASSOCIATED
+    )
+    assert len(store.list_loop_iteration_runs(loop_run_id)) == 1
+
+
+def test_control_output_body_role_has_no_loop_side_effect(
+    tmp_path: Path,
+) -> None:
+    store, provider, registry = make_store_provider_registry(tmp_path)
+    run, _process_id, judge, _manager = create_running_judge_process(store, registry)
+    loop_run_id = start_loop_for_judge(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        judge=judge,
+        role="BODY",
+    )
+    control_output = create_control_output(
+        store,
+        provider,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=judge.node_run_id,
+        selected_branch="continue_loop",
+        actual_control="false",
+    )
+
+    interpreted = interpret_control_outputs_after_node_success(
+        store,
+        registry,
+        workflow_run_id=run.workflow_run_id,
+        completed_node=judge,
+        output_refs=[control_output.table_ref_id],
+    )
+
+    assert (
+        interpreted.status
+        == ControlSignalInterpretationStatus.LOOP_JUDGE_ROLE_REQUIRED
+    )
+    assert len(store.list_loop_iteration_runs(loop_run_id)) == 1
+
+
+def test_control_output_duplicate_judge_association_is_rejected(
+    tmp_path: Path,
+) -> None:
+    store, provider, registry = make_store_provider_registry(tmp_path)
+    run, _process_id, judge, _manager = create_running_judge_process(store, registry)
+    first_loop_run_id = start_loop_for_judge(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        judge=judge,
+    )
+    second_loop_run_id = start_loop_for_judge(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        judge=judge,
+        loop_run_id="loop-run-2",
+        loop_id="orders_loop_2",
+    )
+    control_output = create_control_output(
+        store,
+        provider,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=judge.node_run_id,
+        selected_branch="continue_loop",
+        actual_control="false",
+    )
+
+    interpreted = interpret_control_outputs_after_node_success(
+        store,
+        registry,
+        workflow_run_id=run.workflow_run_id,
+        completed_node=judge,
+        output_refs=[control_output.table_ref_id],
+    )
+
+    assert (
+        interpreted.status
+        == ControlSignalInterpretationStatus.LOOP_JUDGE_ASSOCIATION_AMBIGUOUS
+    )
+    assert len(store.list_loop_iteration_runs(first_loop_run_id)) == 1
+    assert len(store.list_loop_iteration_runs(second_loop_run_id)) == 1
+
+
+def test_control_output_target_loop_mismatch_has_no_side_effect(
+    tmp_path: Path,
+) -> None:
+    store, provider, registry = make_store_provider_registry(tmp_path)
+    run, _process_id, judge, _manager = create_running_judge_process(store, registry)
+    loop_run_id = start_loop_for_judge(
+        store,
+        workflow_run_id=run.workflow_run_id,
+        judge=judge,
+    )
+    control_output = create_control_output(
+        store,
+        provider,
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=judge.node_run_id,
+        selected_branch="continue_loop",
+        actual_control="false",
+        target_anchor="other_loop",
+    )
+
+    interpreted = interpret_control_outputs_after_node_success(
+        store,
+        registry,
+        workflow_run_id=run.workflow_run_id,
+        completed_node=judge,
+        output_refs=[control_output.table_ref_id],
+    )
+
+    assert interpreted.status == ControlSignalInterpretationStatus.TARGET_LOOP_MISMATCH
+    assert len(store.list_loop_iteration_runs(loop_run_id)) == 1
 
 
 def test_control_output_non_loop_signal_is_rejected_without_side_effect(
