@@ -8,7 +8,9 @@ public partial class MainWindowViewModel
     private void RefreshWorkflowDefinitionDraftNodes()
     {
         var selectedNodeId = SelectedWorkflowDefinitionNode?.NodeInstanceId;
-        var hadSelectedNode = !string.IsNullOrWhiteSpace(selectedNodeId);
+        workflowNodeSelectionState.Capture(
+            selectedNodeId,
+            !string.IsNullOrWhiteSpace(selectedNodeId));
         var batchSelectedNodeIds = WorkflowDefinitionDraftNodes
             .Where(node => node.IsBatchSelected)
             .Select(node => node.NodeInstanceId)
@@ -16,9 +18,7 @@ public partial class MainWindowViewModel
 
         RebuildWorkflowDefinitionDraftNodeItems(batchSelectedNodeIds);
 
-        RestoreWorkflowDefinitionDraftNodeSelection(
-            selectedNodeId,
-            hadSelectedNode);
+        RestoreWorkflowDefinitionDraftNodeSelection();
         NotifyWorkflowDefinitionDraftNodeListPresentationChanged();
         RefreshWorkflowDefinitionBatchSelectionState();
     }
