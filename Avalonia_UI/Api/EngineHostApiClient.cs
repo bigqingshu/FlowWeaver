@@ -247,6 +247,33 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<NodeRunPageDto>> ListNodeRunsPageAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 100,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("paged", "true"),
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+        if (statuses is not null)
+        {
+            query.AddRange(statuses.Select(status => new KeyValuePair<string, string?>("status", status)));
+        }
+
+        return SendAsync<NodeRunPageDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/nodes",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelRunAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,
@@ -268,6 +295,52 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             settings,
             HttpMethod.Get,
             $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/table-refs",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 100,
+        string? nodeRunId = null,
+        string? tableType = null,
+        IReadOnlyCollection<string>? lifecycleStatuses = null,
+        string? logicalTableId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("paged", "true"),
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+        if (!string.IsNullOrWhiteSpace(nodeRunId))
+        {
+            query.Add(new KeyValuePair<string, string?>("node_run_id", nodeRunId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(tableType))
+        {
+            query.Add(new KeyValuePair<string, string?>("table_type", tableType));
+        }
+
+        if (lifecycleStatuses is not null)
+        {
+            query.AddRange(lifecycleStatuses.Select(
+                status => new KeyValuePair<string, string?>("lifecycle", status)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(logicalTableId))
+        {
+            query.Add(new KeyValuePair<string, string?>("logical_table_id", logicalTableId));
+        }
+
+        return SendAsync<RunTableDirectoryPageDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/table-refs",
+            query: query,
             cancellationToken: cancellationToken);
     }
 

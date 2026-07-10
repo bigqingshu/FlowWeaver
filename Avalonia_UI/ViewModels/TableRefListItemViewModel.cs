@@ -11,12 +11,21 @@ public sealed class TableRefListItemViewModel
         TableRefId = tableRef.TableRefId;
         WorkflowRunId = tableRef.WorkflowRunId;
         NodeRunId = tableRef.NodeRunId;
+        SourceNodeRunId = tableRef.SourceNodeRunId;
+        SourceNodeInstanceId = tableRef.SourceNodeInstanceId;
         Role = tableRef.Role;
         StorageKind = tableRef.StorageKind;
         Scope = tableRef.Scope;
         Mutability = tableRef.Mutability;
         ProviderId = tableRef.ProviderId;
+        ResourceProfileId = tableRef.ResourceProfileId;
+        MountId = tableRef.MountId;
         LogicalTableId = tableRef.LogicalTableId;
+        OutputSlot = tableRef.OutputSlot;
+        TableType = tableRef.TableType;
+        PreviewPersistence = tableRef.PreviewPersistence;
+        CanReadRows = tableRef.CanReadRows;
+        SupportsPagedRows = tableRef.SupportsPagedRows;
         Version = tableRef.Version;
         Capabilities = tableRef.Capabilities;
         LifecycleStatus = tableRef.LifecycleStatus;
@@ -29,6 +38,10 @@ public sealed class TableRefListItemViewModel
 
     public string NodeRunId { get; }
 
+    public string? SourceNodeRunId { get; }
+
+    public string? SourceNodeInstanceId { get; }
+
     public string Role { get; }
 
     public string StorageKind { get; }
@@ -39,7 +52,21 @@ public sealed class TableRefListItemViewModel
 
     public string ProviderId { get; }
 
+    public string? ResourceProfileId { get; }
+
+    public string? MountId { get; }
+
     public string LogicalTableId { get; }
+
+    public string? OutputSlot { get; }
+
+    public string TableType { get; }
+
+    public string PreviewPersistence { get; }
+
+    public bool CanReadRows { get; }
+
+    public bool SupportsPagedRows { get; }
 
     public int Version { get; }
 

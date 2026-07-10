@@ -1004,6 +1004,20 @@ public sealed class MainWindowViewModelLocalizationTests
             return Task.FromResult(NodeRunsResponse);
         }
 
+        public Task<ApiResponseEnvelope<NodeRunPageDto>> ListNodeRunsPageAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            int offset = 0,
+            int limit = 100,
+            IReadOnlyCollection<string>? statuses = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<NodeRunPageDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No paged node run response configured."));
+        }
+
         public Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelRunAsync(
             EngineHostConnectionSettings settings,
             string workflowRunId,
@@ -1018,6 +1032,23 @@ public sealed class MainWindowViewModelLocalizationTests
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            int offset = 0,
+            int limit = 100,
+            string? nodeRunId = null,
+            string? tableType = null,
+            IReadOnlyCollection<string>? lifecycleStatuses = null,
+            string? logicalTableId = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<RunTableDirectoryPageDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No run table directory response configured."));
         }
 
         public Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(

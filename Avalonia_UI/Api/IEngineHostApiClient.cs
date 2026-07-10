@@ -97,6 +97,14 @@ public interface IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<NodeRunPageDto>> ListNodeRunsPageAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 100,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelRunAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,
@@ -105,6 +113,17 @@ public interface IEngineHostApiClient
     Task<ApiResponseEnvelope<List<TableRefDto>>> ListTableRefsAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 100,
+        string? nodeRunId = null,
+        string? tableType = null,
+        IReadOnlyCollection<string>? lifecycleStatuses = null,
+        string? logicalTableId = null,
         CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(

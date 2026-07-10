@@ -27,6 +27,26 @@ public sealed class NodeDefinitionListItemViewModelTests
             [
                 new NodePortDefinitionDto { Name = "out", Required = false },
             ],
+            InputTableSlots =
+            [
+                new NodeTableInputSlotDto
+                {
+                    Name = "source",
+                    Required = true,
+                    AllowedStorageKinds = ["RUNTIME_SQL", "MEMORY"],
+                    DefaultSource = "upstream_current",
+                },
+            ],
+            OutputTableSlots =
+            [
+                new NodeTableOutputSlotDto
+                {
+                    Name = "result",
+                    DefaultRole = "CURRENT",
+                    AllowCurrent = true,
+                    AllowNewMemory = true,
+                },
+            ],
             ExecutionMode = "PROCESS_POOL",
             DefaultTimeoutSeconds = 60,
             RetrySafe = false,
@@ -48,6 +68,10 @@ public sealed class NodeDefinitionListItemViewModelTests
         Assert.AreEqual("FilterRowsNode@1.0", item.TypeText);
         Assert.AreEqual("in*, side", item.InputPortsText);
         Assert.AreEqual("out", item.OutputPortsText);
+        Assert.AreEqual("source", item.InputTableSlots[0].Name);
+        Assert.AreEqual("upstream_current", item.InputTableSlots[0].DefaultSource);
+        Assert.AreEqual("result", item.OutputTableSlots[0].Name);
+        Assert.IsTrue(item.OutputTableSlots[0].AllowNewMemory);
         Assert.AreEqual("60s", item.TimeoutText);
         Assert.AreEqual(
             "2 config field(s): field, operator",

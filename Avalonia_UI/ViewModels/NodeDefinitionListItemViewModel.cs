@@ -18,6 +18,8 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
         DisplayName = definition.DisplayName;
         InputPorts = definition.InputPorts;
         OutputPorts = definition.OutputPorts;
+        InputTableSlots = definition.InputTableSlots;
+        OutputTableSlots = definition.OutputTableSlots;
         ExecutionMode = definition.ExecutionMode;
         DefaultTimeoutSeconds = definition.DefaultTimeoutSeconds;
         RetrySafe = definition.RetrySafe;
@@ -36,6 +38,10 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
     public NodePortDefinitionDto[] InputPorts { get; }
 
     public NodePortDefinitionDto[] OutputPorts { get; }
+
+    public NodeTableInputSlotDto[] InputTableSlots { get; }
+
+    public NodeTableOutputSlotDto[] OutputTableSlots { get; }
 
     public string ExecutionMode { get; }
 

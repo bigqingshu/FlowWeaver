@@ -20,6 +20,57 @@ public sealed record NodePortDefinitionDto
     public bool Required { get; init; }
 }
 
+public sealed record NodeTableInputSlotDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("required")]
+    public bool Required { get; init; }
+
+    [JsonPropertyName("allowed_storage_kinds")]
+    public string[] AllowedStorageKinds { get; init; } = [];
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; init; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
+
+    [JsonPropertyName("default_source")]
+    public string? DefaultSource { get; init; }
+}
+
+public sealed record NodeTableOutputSlotDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("default_role")]
+    public string DefaultRole { get; init; } = string.Empty;
+
+    [JsonPropertyName("allow_current")]
+    public bool AllowCurrent { get; init; }
+
+    [JsonPropertyName("allow_new_memory")]
+    public bool AllowNewMemory { get; init; }
+
+    [JsonPropertyName("allow_new_runtime_sql")]
+    public bool AllowNewRuntimeSql { get; init; }
+
+    [JsonPropertyName("allow_existing_memory")]
+    public bool AllowExistingMemory { get; init; }
+
+    [JsonPropertyName("allow_existing_runtime_sql")]
+    public bool AllowExistingRuntimeSql { get; init; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; init; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
+}
+
 public sealed record NodeDefinitionDto
 {
     [JsonPropertyName("node_type")]
@@ -36,6 +87,12 @@ public sealed record NodeDefinitionDto
 
     [JsonPropertyName("output_ports")]
     public NodePortDefinitionDto[] OutputPorts { get; init; } = [];
+
+    [JsonPropertyName("input_table_slots")]
+    public NodeTableInputSlotDto[] InputTableSlots { get; init; } = [];
+
+    [JsonPropertyName("output_table_slots")]
+    public NodeTableOutputSlotDto[] OutputTableSlots { get; init; } = [];
 
     [JsonPropertyName("execution_mode")]
     public string ExecutionMode { get; init; } = string.Empty;
@@ -320,6 +377,24 @@ public sealed record NodeRunDto
     public JsonElement? Error { get; init; }
 }
 
+public sealed record NodeRunPageDto
+{
+    [JsonPropertyName("items")]
+    public NodeRunDto[] Items { get; init; } = [];
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
+}
+
 public sealed record RuntimeEventDto
 {
     [JsonPropertyName("event_id")]
@@ -358,6 +433,12 @@ public sealed record TableRefDto
     [JsonPropertyName("node_run_id")]
     public string NodeRunId { get; init; } = string.Empty;
 
+    [JsonPropertyName("source_node_run_id")]
+    public string? SourceNodeRunId { get; init; }
+
+    [JsonPropertyName("source_node_instance_id")]
+    public string? SourceNodeInstanceId { get; init; }
+
     [JsonPropertyName("role")]
     public string Role { get; init; } = string.Empty;
 
@@ -373,11 +454,32 @@ public sealed record TableRefDto
     [JsonPropertyName("provider_id")]
     public string ProviderId { get; init; } = string.Empty;
 
+    [JsonPropertyName("resource_profile_id")]
+    public string? ResourceProfileId { get; init; }
+
+    [JsonPropertyName("mount_id")]
+    public string? MountId { get; init; }
+
     [JsonPropertyName("logical_table_id")]
     public string LogicalTableId { get; init; } = string.Empty;
 
+    [JsonPropertyName("output_slot")]
+    public string? OutputSlot { get; init; }
+
+    [JsonPropertyName("table_type")]
+    public string TableType { get; init; } = string.Empty;
+
+    [JsonPropertyName("preview_persistence")]
+    public string PreviewPersistence { get; init; } = string.Empty;
+
+    [JsonPropertyName("can_read_rows")]
+    public bool CanReadRows { get; init; }
+
+    [JsonPropertyName("supports_paged_rows")]
+    public bool SupportsPagedRows { get; init; }
+
     [JsonPropertyName("schema")]
-    public JsonElement Schema { get; init; }
+    public JsonElement? Schema { get; init; }
 
     [JsonPropertyName("schema_fingerprint")]
     public string SchemaFingerprint { get; init; } = string.Empty;
@@ -393,6 +495,24 @@ public sealed record TableRefDto
 
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
+}
+
+public sealed record RunTableDirectoryPageDto
+{
+    [JsonPropertyName("items")]
+    public TableRefDto[] Items { get; init; } = [];
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
 }
 
 public sealed record TableFieldSchemaDto

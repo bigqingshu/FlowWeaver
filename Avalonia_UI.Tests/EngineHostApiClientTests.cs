@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
+using Avalonia_UI.Services;
+using Avalonia_UI.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Avalonia_UI.Tests;
@@ -58,7 +60,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":[{"node_type":"GenerateTestTableNode","node_version":"1.0","display_name":"Generate Test Table","input_ports":[],"output_ports":[{"name":"out","required":false}],"execution_mode":"PROCESS_POOL","default_timeout_seconds":60,"retry_safe":false,"ui_visibility":"visible","config_schema_version":"1.0","config_schema":{"type":"object","properties":{"rows":{"type":"integer","title":"Rows","required":true,"default":3,"minimum":0}}}}],"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":[{"node_type":"GenerateTestTableNode","node_version":"1.0","display_name":"Generate Test Table","input_ports":[],"output_ports":[{"name":"out","required":false}],"input_table_slots":[{"name":"source","required":true,"allowed_storage_kinds":["RUNTIME_SQL","MEMORY"],"display_name":"Source","description":"Source table","default_source":"upstream_current"}],"output_table_slots":[{"name":"result","default_role":"CURRENT","allow_current":true,"allow_new_memory":true,"allow_new_runtime_sql":true,"allow_existing_memory":false,"allow_existing_runtime_sql":true,"display_name":"Result","description":"Result table"}],"execution_mode":"PROCESS_POOL","default_timeout_seconds":60,"retry_safe":false,"ui_visibility":"visible","config_schema_version":"1.0","config_schema":{"type":"object","properties":{"rows":{"type":"integer","title":"Rows","required":true,"default":3,"minimum":0}}}}],"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
@@ -72,6 +74,15 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual(new Uri("http://127.0.0.1:8000/api/v1/node-definitions"), handler.RequestUri);
         Assert.AreEqual("GenerateTestTableNode", result.Data?[0].NodeType);
         Assert.AreEqual("out", result.Data?[0].OutputPorts[0].Name);
+        Assert.AreEqual("source", result.Data?[0].InputTableSlots[0].Name);
+        Assert.IsTrue(result.Data?[0].InputTableSlots[0].Required);
+        CollectionAssert.AreEqual(
+            new[] { "RUNTIME_SQL", "MEMORY" },
+            result.Data?[0].InputTableSlots[0].AllowedStorageKinds);
+        Assert.AreEqual("upstream_current", result.Data?[0].InputTableSlots[0].DefaultSource);
+        Assert.AreEqual("result", result.Data?[0].OutputTableSlots[0].Name);
+        Assert.IsTrue(result.Data?[0].OutputTableSlots[0].AllowNewRuntimeSql);
+        Assert.IsTrue(result.Data?[0].OutputTableSlots[0].AllowExistingRuntimeSql);
         Assert.AreEqual("visible", result.Data?[0].UiVisibility);
         Assert.AreEqual("1.0", result.Data?[0].ConfigSchemaVersion);
         Assert.IsTrue(result.Data?[0].ConfigSchema.HasValue);
@@ -417,6 +428,31 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListNodeRunsPageAsyncBuildsPagedFilterQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"node_run_id":"node-run-1","workflow_run_id":"run-1","node_instance_id":"node-1","node_type":"FilterRowsNode","status":"RUNNING","state_version":2,"executor_id":null,"progress":0.5,"current_stage":"filter","attempt":1,"started_at":"2026-07-10T01:02:03Z","finished_at":null,"last_heartbeat":null,"error":null}],"offset":5,"limit":25,"total":6,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListNodeRunsPageAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            offset: 5,
+            limit: 25,
+            statuses: ["RUNNING", "PENDING"]);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/nodes?paged=true&offset=5&limit=25&status=RUNNING&status=PENDING"),
+            handler.RequestUri);
+        Assert.AreEqual(6, result.Data?.Total);
+        Assert.AreEqual("node-1", result.Data?.Items[0].NodeInstanceId);
+        Assert.IsFalse(result.Data?.HasMore);
+    }
+
+    [TestMethod]
     public async Task CancelRunAsyncPostsToCancelPath()
     {
         HttpMethod? method = null;
@@ -458,6 +494,76 @@ public sealed class EngineHostApiClientTests
         Assert.IsTrue(result.Ok);
         Assert.AreEqual(
             new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/table-refs"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task ListRunTableDirectoryAsyncBuildsPagedFilterQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"table_ref_id":"table-1","workflow_run_id":"run-1","node_run_id":"node-run-1","source_node_run_id":"node-run-1","source_node_instance_id":"node-1","role":"AUXILIARY","storage_kind":"RUNTIME_SQL","scope":"WORKFLOW_RUN","mutability":"IMMUTABLE","provider_id":"runtime-sql","resource_profile_id":"profile-1","mount_id":"mount-1","logical_table_id":"orders","output_slot":"result","table_type":"runtime_sql_table","preview_persistence":"workflow_run_sql","can_read_rows":true,"supports_paged_rows":true,"schema_fingerprint":"fp","version":2,"capabilities":["READ"],"lifecycle_status":"PUBLISHED","created_at":"2026-07-10T01:02:03Z"}],"offset":0,"limit":20,"total":1,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListRunTableDirectoryAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            limit: 20,
+            nodeRunId: "node run 1",
+            tableType: "runtime_sql_table",
+            lifecycleStatuses: ["ACTIVE", "PUBLISHED"],
+            logicalTableId: "daily orders");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/table-refs?paged=true&offset=0&limit=20&node_run_id=node%20run%201&table_type=runtime_sql_table&lifecycle=ACTIVE&lifecycle=PUBLISHED&logical_table_id=daily%20orders"),
+            handler.RequestUri);
+        Assert.AreEqual(1, result.Data?.Total);
+        Assert.AreEqual("node-1", result.Data?.Items[0].SourceNodeInstanceId);
+        Assert.AreEqual("result", result.Data?.Items[0].OutputSlot);
+        Assert.AreEqual("runtime_sql_table", result.Data?.Items[0].TableType);
+        Assert.AreEqual("workflow_run_sql", result.Data?.Items[0].PreviewPersistence);
+        Assert.IsTrue(result.Data?.Items[0].CanReadRows);
+        Assert.IsTrue(result.Data?.Items[0].SupportsPagedRows);
+        Assert.IsFalse(result.Data?.Items[0].Schema.HasValue);
+
+        var item = new TableRefListItemViewModel(result.Data!.Items[0]);
+        Assert.AreEqual("node-1", item.SourceNodeInstanceId);
+        Assert.AreEqual("profile-1", item.ResourceProfileId);
+        Assert.IsTrue(item.SupportsPagedRows);
+    }
+
+    [TestMethod]
+    public async Task RunTableDirectoryServiceUsesOnlyPagedDirectoryQueries()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[],"offset":0,"limit":10,"total":0,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var service = new RunTableDirectoryService(
+            new EngineHostApiClient(new HttpClient(handler)));
+
+        var nodeResult = await service.ListNodeRunsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run-1",
+            limit: 10);
+
+        Assert.IsTrue(nodeResult.Ok);
+        Assert.AreEqual(1, handler.SendCount);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/nodes?paged=true&offset=0&limit=10"),
+            handler.RequestUri);
+
+        var tableResult = await service.ListTableRefsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run-1",
+            limit: 10);
+
+        Assert.IsTrue(tableResult.Ok);
+        Assert.AreEqual(2, handler.SendCount);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run-1/table-refs?paged=true&offset=0&limit=10"),
             handler.RequestUri);
     }
 
