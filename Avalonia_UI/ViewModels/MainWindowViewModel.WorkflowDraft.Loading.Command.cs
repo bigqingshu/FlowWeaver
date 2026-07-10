@@ -14,12 +14,7 @@ public partial class MainWindowViewModel
         }
 
         var workflowId = SelectedWorkflow.WorkflowId;
-        var requestVersion = ++workflowDefinitionLoadVersion;
-        IsLoadingWorkflowDefinition = true;
-        WorkflowDefinitionMessage = F(
-            "format.loading_definition_for",
-            SelectedWorkflow.Name);
-        WorkflowDefinitionErrorMessage = null;
+        var requestVersion = BeginWorkflowDefinitionLoad(SelectedWorkflow.Name);
 
         try
         {
@@ -61,10 +56,7 @@ public partial class MainWindowViewModel
         }
         finally
         {
-            if (requestVersion == workflowDefinitionLoadVersion)
-            {
-                IsLoadingWorkflowDefinition = false;
-            }
+            CompleteWorkflowDefinitionLoad(requestVersion);
         }
     }
 }
