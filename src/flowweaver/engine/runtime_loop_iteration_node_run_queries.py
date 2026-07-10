@@ -39,6 +39,7 @@ def list_loop_iteration_node_runs_from_session(
         select(LoopIterationNodeRunRecord)
         .where(LoopIterationNodeRunRecord.loop_iteration_id == loop_iteration_id)
         .order_by(
+            LoopIterationNodeRunRecord.role,
             LoopIterationNodeRunRecord.node_instance_id,
             LoopIterationNodeRunRecord.node_run_id,
         )

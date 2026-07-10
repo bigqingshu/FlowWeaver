@@ -108,12 +108,16 @@ class RuntimeLoopRunStoreMixin:
         workflow_run_id: str,
         *,
         statuses: Iterable[LoopRunStatus | str] | None = None,
+        offset: int = 0,
+        limit: int | None = None,
     ) -> list[LoopRun]:
         with self._session_factory() as session:
             return _list_loop_runs(
                 session,
                 workflow_run_id,
                 statuses=statuses,
+                offset=offset,
+                limit=limit,
             )
 
     def update_loop_run_status(

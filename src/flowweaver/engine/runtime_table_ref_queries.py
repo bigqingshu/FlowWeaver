@@ -71,6 +71,20 @@ def list_table_refs_by_workflow_run_from_session(
     return [_table_ref_from_record(record) for record in records]
 
 
+def list_table_refs_by_ids_from_session(
+    session: Session,
+    table_ref_ids: list[str],
+) -> list[TableRefModel]:
+    if not table_ref_ids:
+        return []
+    records = session.scalars(
+        select(DataRefRecord)
+        .where(DataRefRecord.table_ref_id.in_(table_ref_ids))
+        .order_by(DataRefRecord.table_ref_id)
+    ).all()
+    return [_table_ref_from_record(record) for record in records]
+
+
 def list_table_refs_by_node_run_from_session(
     session: Session,
     *,

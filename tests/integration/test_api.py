@@ -1585,10 +1585,39 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
         role=LoopIterationTableRefRole.INPUT,
     )
     assert linked_ref is not None
+    linked_node = store.add_loop_iteration_node_run(
+        loop_iteration_id=iteration.loop_iteration_id,
+        node_run_id=node.node_run_id,
+        role="BODY",
+    )
+    assert linked_node is not None
+    second_loop = store.create_loop_run(
+        loop_run_id="loop-run-2",
+        workflow_run_id=run.workflow_run_id,
+        loop_id="archive_loop",
+        start_node_instance_id="archive-start",
+        judge_node_instance_id="archive-judge",
+        max_iterations=2,
+    )
+    assert second_loop is not None
+    second_iteration = store.create_loop_iteration_run(
+        loop_iteration_id="loop-iteration-2",
+        loop_run_id=loop.loop_run_id,
+        iteration_index=1,
+    )
+    assert second_iteration is not None
 
     loops = response_data(
         client.get(
             f"/api/v1/runs/{run.workflow_run_id}/loops",
+            params={"offset": 0, "limit": 1},
+            headers=auth_headers(),
+        )
+    )
+    second_loop_page = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops",
+            params={"offset": 1, "limit": 1},
             headers=auth_headers(),
         )
     )
@@ -1601,6 +1630,14 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
     iterations = response_data(
         client.get(
             f"/api/v1/runs/{run.workflow_run_id}/loops/{loop.loop_run_id}/iterations",
+            params={"offset": 0, "limit": 1},
+            headers=auth_headers(),
+        )
+    )
+    second_iteration_page = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/{loop.loop_run_id}/iterations",
+            params={"offset": 1, "limit": 1},
             headers=auth_headers(),
         )
     )
@@ -1628,13 +1665,38 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
             headers=auth_headers(),
         )
     )
+    iteration_nodes = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/loops/"
+            f"{loop.loop_run_id}/iterations/"
+            f"{iteration.loop_iteration_id}/nodes",
+            headers=auth_headers(),
+        )
+    )
+    invalid_pagination = client.get(
+        f"/api/v1/runs/{run.workflow_run_id}/loops",
+        params={"offset": -1, "limit": 1},
+        headers=auth_headers(),
+    )
+    wrong_loop_iteration = client.get(
+        f"/api/v1/runs/{run.workflow_run_id}/loops/"
+        f"{second_loop.loop_run_id}/iterations/"
+        f"{iteration.loop_iteration_id}/nodes",
+        headers=auth_headers(),
+    )
 
     assert [item["loop_run_id"] for item in loops] == [loop.loop_run_id]
+    assert [item["loop_run_id"] for item in second_loop_page] == [
+        second_loop.loop_run_id
+    ]
     assert loaded_loop["loop_id"] == "orders_loop"
     assert loaded_loop["status"] == LoopRunStatus.RUNNING.value
     assert loaded_loop["current_iteration"] == 0
     assert [item["loop_iteration_id"] for item in iterations] == [
         iteration.loop_iteration_id
+    ]
+    assert [item["loop_iteration_id"] for item in second_iteration_page] == [
+        second_iteration.loop_iteration_id
     ]
     assert loaded_iteration["iteration_index"] == 0
     assert loaded_iteration["status"] == LoopIterationRunStatus.RUNNING.value
@@ -1642,6 +1704,28 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
     assert table_refs == filtered_table_refs
     assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
     assert table_refs[0]["role"] == LoopIterationTableRefRole.INPUT.value
+    assert table_refs[0]["logical_table_id"] == "loop_input"
+    assert table_refs[0]["storage_kind"] == TableStorageKind.RUNTIME_SQL.value
+    assert table_refs[0]["source_node_run_id"] == node.node_run_id
+    assert iteration_nodes == [
+        {
+            "loop_iteration_id": iteration.loop_iteration_id,
+            "node_run_id": node.node_run_id,
+            "node_instance_id": "loop-body",
+            "role": "BODY",
+            "node_type": "core.transform",
+            "status": node.status,
+            "progress": node.progress,
+            "current_stage": node.current_stage,
+            "attempt": node.attempt,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+        }
+    ]
+    assert invalid_pagination.status_code == 422
+    assert response_error(invalid_pagination)["error_code"] == "INVALID_PAGINATION"
+    assert wrong_loop_iteration.status_code == 404
 
 
 def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:

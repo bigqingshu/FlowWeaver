@@ -34,6 +34,20 @@ def get_node_run_for_instance_from_session(
     return _node_run_from_record(record)
 
 
+def list_node_runs_by_ids_from_session(
+    session: Session,
+    node_run_ids: list[str],
+) -> list[NodeRun]:
+    if not node_run_ids:
+        return []
+    records = session.scalars(
+        select(NodeRunRecord)
+        .where(NodeRunRecord.node_run_id.in_(node_run_ids))
+        .order_by(NodeRunRecord.node_instance_id, NodeRunRecord.node_run_id)
+    ).all()
+    return [_node_run_from_record(record) for record in records]
+
+
 def list_node_runs_from_session(
     session: Session,
     workflow_run_id: str,

@@ -20,6 +20,9 @@ from flowweaver.engine.runtime_node_run_queries import (
     get_node_run_from_session as _get_node_run,
 )
 from flowweaver.engine.runtime_node_run_queries import (
+    list_node_runs_by_ids_from_session as _list_node_runs_by_ids,
+)
+from flowweaver.engine.runtime_node_run_queries import (
     list_node_runs_from_session as _list_node_runs,
 )
 from flowweaver.engine.runtime_node_run_status_update import (
@@ -107,6 +110,10 @@ class RuntimeNodeRunStoreMixin:
     def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
         with self._session_factory() as session:
             return _list_node_runs(session, workflow_run_id)
+
+    def list_node_runs_by_ids(self, node_run_ids: list[str]) -> list[NodeRun]:
+        with self._session_factory() as session:
+            return _list_node_runs_by_ids(session, node_run_ids)
 
     def update_node_run_status(
         self,

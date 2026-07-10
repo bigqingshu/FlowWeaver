@@ -118,9 +118,17 @@ class RuntimeLoopIterationRunStoreMixin(RuntimeLoopRunStoreMixin):
         loop_run_id: str,
         *,
         statuses: Iterable[LoopIterationRunStatus | str] | None = None,
+        offset: int = 0,
+        limit: int | None = None,
     ) -> list[LoopIterationRun]:
         with self._session_factory() as session:
-            return _list_iterations(session, loop_run_id, statuses=statuses)
+            return _list_iterations(
+                session,
+                loop_run_id,
+                statuses=statuses,
+                offset=offset,
+                limit=limit,
+            )
 
     def update_loop_iteration_run_status(
         self,

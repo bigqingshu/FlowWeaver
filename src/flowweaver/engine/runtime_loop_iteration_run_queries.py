@@ -47,6 +47,8 @@ def list_loop_iteration_runs_from_session(
     loop_run_id: str,
     *,
     statuses: Iterable[LoopIterationRunStatus | str] | None = None,
+    offset: int = 0,
+    limit: int | None = None,
 ) -> list[LoopIterationRun]:
     statement = (
         select(LoopIterationRunRecord)
@@ -59,6 +61,9 @@ def list_loop_iteration_runs_from_session(
                 _loop_iteration_status_values(statuses)
             )
         )
+    statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
     return [
         _loop_iteration_run_from_record(record)
         for record in session.scalars(statement)

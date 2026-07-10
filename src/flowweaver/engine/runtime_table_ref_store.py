@@ -16,6 +16,9 @@ from flowweaver.engine.runtime_table_ref_queries import (
     get_table_ref_from_session as _get_table_ref,
 )
 from flowweaver.engine.runtime_table_ref_queries import (
+    list_table_refs_by_ids_from_session as _list_by_ids,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
     list_table_refs_by_node_run_from_session as _list_by_node_run,
 )
 from flowweaver.engine.runtime_table_ref_queries import (
@@ -63,6 +66,13 @@ class RuntimeTableRefStoreMixin:
     ) -> list[TableRefModel]:
         with self._session_factory() as session:
             return _list_by_workflow_run(session, workflow_run_id)
+
+    def list_table_refs_by_ids(
+        self,
+        table_ref_ids: list[str],
+    ) -> list[TableRefModel]:
+        with self._session_factory() as session:
+            return _list_by_ids(session, table_ref_ids)
 
     def list_table_refs_by_node_run(
         self,

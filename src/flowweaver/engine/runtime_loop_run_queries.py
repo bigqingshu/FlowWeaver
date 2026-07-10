@@ -45,6 +45,8 @@ def list_loop_runs_from_session(
     workflow_run_id: str,
     *,
     statuses: Iterable[LoopRunStatus | str] | None = None,
+    offset: int = 0,
+    limit: int | None = None,
 ) -> list[LoopRun]:
     statement = (
         select(LoopRunRecord)
@@ -55,4 +57,7 @@ def list_loop_runs_from_session(
         statement = statement.where(
             LoopRunRecord.status.in_(_loop_run_status_values(statuses))
         )
+    statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
     return [_loop_run_from_record(record) for record in session.scalars(statement)]

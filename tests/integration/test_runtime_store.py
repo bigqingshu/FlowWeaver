@@ -1399,6 +1399,56 @@ def test_runtime_store_latest_table_ref_uses_full_logical_identity(
     )
 
 
+def test_runtime_store_loop_queries_apply_pagination_and_batch_node_lookup(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, first_node = create_producer_context(store)
+    second_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="second-node",
+        node_type="builtin.transform",
+        node_run_id="node-2",
+    )
+    loops = []
+    for index in range(3):
+        loop = store.create_loop_run(
+            workflow_run_id=run.workflow_run_id,
+            loop_run_id=f"loop-run-{index}",
+            loop_id=f"loop-{index}",
+            start_node_instance_id="start",
+            judge_node_instance_id="judge",
+            max_iterations=3,
+        )
+        assert loop is not None
+        loops.append(loop)
+    iterations = []
+    for index in range(3):
+        iteration = store.create_loop_iteration_run(
+            loop_run_id=loops[0].loop_run_id,
+            loop_iteration_id=f"iteration-{index}",
+            iteration_index=index,
+        )
+        assert iteration is not None
+        iterations.append(iteration)
+
+    assert store.list_loop_runs(
+        run.workflow_run_id,
+        offset=1,
+        limit=1,
+    ) == [loops[1]]
+    assert store.list_loop_iteration_runs(
+        loops[0].loop_run_id,
+        offset=1,
+        limit=1,
+    ) == [iterations[1]]
+    assert store.list_node_runs_by_ids(
+        [second_node.node_run_id, "missing", first_node.node_run_id]
+    ) == [second_node, first_node]
+
+
 def test_runtime_store_loop_run_round_trip_and_idempotency(
     tmp_path: Path,
 ) -> None:

@@ -3,10 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from flowweaver.engine.runtime_models import (
+    LoopIterationNodeRun,
     LoopIterationRun,
     LoopIterationTableRef,
     LoopRun,
+    NodeRun,
 )
+from flowweaver.protocols.table_ref import TableRefModel
 
 
 def loop_run_to_jsonable(value: LoopRun) -> dict[str, Any]:
@@ -50,10 +53,51 @@ def loop_iteration_run_to_jsonable(
 
 def loop_iteration_table_ref_to_jsonable(
     value: LoopIterationTableRef,
+    table_ref: TableRefModel | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "loop_iteration_id": value.loop_iteration_id,
         "table_ref_id": value.table_ref_id,
         "role": value.role,
         "created_at": value.created_at.isoformat(),
+    }
+    if table_ref is not None:
+        output_slot = table_ref.opaque_handle.get("output_slot")
+        if not isinstance(output_slot, str) or not output_slot:
+            output_slot = table_ref.opaque_handle.get("output_name")
+        payload.update(
+            {
+                "logical_table_id": table_ref.logical_table_id,
+                "storage_kind": table_ref.storage_kind.value,
+                "table_role": table_ref.role.value,
+                "version": table_ref.version,
+                "lifecycle_status": table_ref.lifecycle_status.value,
+                "source_node_run_id": table_ref.created_by_node_run_id,
+                "output_slot": output_slot,
+            }
+        )
+    return payload
+
+
+def loop_iteration_node_run_to_jsonable(
+    value: LoopIterationNodeRun,
+    node_run: NodeRun,
+) -> dict[str, Any]:
+    return {
+        "loop_iteration_id": value.loop_iteration_id,
+        "node_run_id": value.node_run_id,
+        "node_instance_id": value.node_instance_id,
+        "role": value.role,
+        "node_type": node_run.node_type,
+        "status": node_run.status,
+        "progress": node_run.progress,
+        "current_stage": node_run.current_stage,
+        "attempt": node_run.attempt,
+        "started_at": (
+            node_run.started_at.isoformat() if node_run.started_at else None
+        ),
+        "finished_at": (
+            node_run.finished_at.isoformat() if node_run.finished_at else None
+        ),
+        "error": node_run.error,
     }
