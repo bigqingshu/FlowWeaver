@@ -225,3 +225,57 @@
 - 已明确高优先级拆分区域：`WorkflowDraft`、`DataPreview`、`RuntimeOptions`。
 - 已明确最稳拆分顺序：纯逻辑抽取、partial 文件级拆分、内部 state、最后评估子 VM。
 - 未进行代码实现，避免影响当前 UI 行为。
+
+## 实施验收更新（2026-07-10）
+
+### MVVM-SPLIT-1：纯逻辑抽取
+
+已完成并具有独立测试：
+
+- `WorkflowDefinitionDraftParseCache`：统一缓存草稿结构、线性链分析和 runtime options 读取结果。
+- `NodeDefinitionCatalogCacheState`：统一节点目录命中、schema catalog key 和 lookup key 边界。
+- `RuntimeOptionsDraftStateMapper`：统一 workflow/node runtime options 草稿字段映射。
+- `DataPreviewTableGridBuilder`：统一表格构建、搜索、TSV 和复制解析逻辑。
+
+### MVVM-SPLIT-2：WorkflowDraft partial 文件级拆分
+
+已完成当前阶段收口：
+
+- `WorkflowDraft` 已按 Document、Catalog、Nodes、NodeConfig、Connections、Parse、Persistence 和 Validation 等职责拆分。
+- `DataPreview` 已按 NodePreview、Selection、TableRefs、Workbench 和 Presentation 等职责拆分。
+- `RuntimeOptions` 已按 Json、State、Structured、Validation 和 Presentation 等职责拆分。
+- XAML 绑定名、命令名、公开属性名和页面 `x:DataType` 均未迁移。
+
+### MVVM-SPLIT-3：内部 State 对象
+
+已完成当前最小内部状态边界：
+
+- `WorkflowNodeSelectionState`：保存并恢复节点列表刷新前后的选择。
+- `WorkflowDefinitionDraftDocumentState`：保存草稿原始基线并统一 dirty 判断。
+- `DataPreviewSelectionState`：保存并恢复数据预览 state/table 两级选择。
+- `DataPreviewWorkbenchGridState`：统一工作台列、原始/可编辑行、dirty、还原和分页状态。
+
+上述 state 均不改变根 VM 的公开绑定属性，并具有独立单元测试；根 VM 继续作为 compatibility facade。
+
+### MVVM-SPLIT-4：页面子 ViewModel 迁移评估
+
+评估结论：本轮不迁移页面 DataContext。
+
+当前所有内置页面仍以 `MainWindowViewModel` 为 `x:DataType`。最小候选为 `LogsPage`，但其现有逻辑仍共同依赖：
+
+- EngineHost API client 和连接设置构建。
+- 应用级取消令牌与连接可用状态。
+- 本地化格式化和 API 错误格式化。
+- 根 VM 的全局命令状态刷新入口。
+
+直接迁移会要求同时新增共享 EngineHost session/context、页面级本地化适配和 XAML DataContext 转发，超过本轮“先内部减脂、最后只评估子 VM”的边界。
+
+后续若单独进入 MVVM-SPLIT-4 实施，建议先建立只读的应用会话上下文，再以 `LogsPageViewModel` 为首个单页迁移候选；不得跨页面批量迁移。
+
+### 当前验收结果
+
+- 仅修改 Avalonia 前端及本职责文档，未修改后端 API 或运行时实现。
+- 未修改任何 `.axaml` 的 `x:DataType`、命令名、属性名和绑定路径。
+- `MainWindowViewModel` 已完成纯逻辑抽取、领域 partial 拆分和首批内部 state 接入。
+- Avalonia 完整测试：`464 passed, 0 failed`。
+- 现有三条 `MSTEST0037` 为既有结构测试建议，不影响阶段验收。
