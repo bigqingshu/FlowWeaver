@@ -6,6 +6,11 @@ from flowweaver.workflow.definition import (
 )
 from flowweaver.workflow.validation_models import WorkflowValidationIssue
 
+_EXPECTED_LOOP_BRANCHES = {
+    "continue_branch": "continue_loop",
+    "end_branch": "end_loop",
+}
+
 
 def validate_control_protocol(
     model: WorkflowDefinitionModel,
@@ -132,16 +137,25 @@ def validate_control_protocol(
                     role="end",
                     errors=errors,
                 )
-        for branch_key, branch_name in (
-            ("continue_branch", region.continue_branch),
-            ("end_branch", region.end_branch),
-        ):
+        for branch_key, expected_branch in _EXPECTED_LOOP_BRANCHES.items():
+            branch_name = getattr(region, branch_key)
             if not branch_name.strip():
                 errors.append(
                     WorkflowValidationIssue(
                         code="LOOP_REGION_BRANCH_REQUIRED",
                         path=f"{path}.{branch_key}",
                         message=f"Loop region {branch_key} must not be blank",
+                    )
+                )
+            elif branch_name != expected_branch:
+                errors.append(
+                    WorkflowValidationIssue(
+                        code="LOOP_REGION_BRANCH_UNSUPPORTED",
+                        path=f"{path}.{branch_key}",
+                        message=(
+                            f"Loop region {branch_key} must be "
+                            f"{expected_branch} in control protocol 1.0"
+                        ),
                     )
                 )
 

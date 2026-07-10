@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from flowweaver.nodes.registry import NodeConfigFieldSpec, NodeConfigSchemaSpec
 
+_CONTINUE_LOOP_BRANCH = "continue_loop"
+_END_LOOP_BRANCH = "end_loop"
+_LOOP_BRANCHES = (_CONTINUE_LOOP_BRANCH, _END_LOOP_BRANCH)
+
 
 def _loop_start_schema() -> NodeConfigSchemaSpec:
     return NodeConfigSchemaSpec(
@@ -93,14 +97,14 @@ def _loop_judge_schema() -> NodeConfigSchemaSpec:
             "on_success": NodeConfigFieldSpec(
                 type="enum",
                 title="On Success",
-                default="continue_loop",
-                enum=("continue_loop", "end_loop"),
+                default=_CONTINUE_LOOP_BRANCH,
+                enum=_LOOP_BRANCHES,
             ),
             "on_fail": NodeConfigFieldSpec(
                 type="enum",
                 title="On Fail",
-                default="end_loop",
-                enum=("continue_loop", "end_loop"),
+                default=_END_LOOP_BRANCH,
+                enum=_LOOP_BRANCHES,
             ),
             "result_table_name": NodeConfigFieldSpec(
                 type="string",

@@ -43,6 +43,57 @@ def registry() -> NodeRegistry:
     return node_registry
 
 
+def enabled_loop_definition_for_branch_validation() -> dict:
+    return {
+        "schema_version": "1.0",
+        "nodes": [
+            {
+                "node_instance_id": "loop_start",
+                "node_type": "core.loop_start",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "body",
+                "node_type": "core.transform",
+                "node_version": "1.0",
+            },
+            {
+                "node_instance_id": "loop_judge",
+                "node_type": "core.loop_judge",
+                "node_version": "1.0",
+            },
+        ],
+        "connections": [
+            {
+                "connection_id": "start-to-body",
+                "source_node_id": "loop_start",
+                "source_port": "status",
+                "target_node_id": "body",
+                "target_port": "in",
+            },
+            {
+                "connection_id": "body-to-judge",
+                "source_node_id": "body",
+                "source_port": "out",
+                "target_node_id": "loop_judge",
+                "target_port": "in",
+            },
+        ],
+        "control_protocol": {
+            "mode": "enabled",
+            "loop_regions": [
+                {
+                    "loop_id": "orders_loop",
+                    "start_node_id": "loop_start",
+                    "judge_node_id": "loop_judge",
+                    "body_node_ids": ["body"],
+                    "enabled": True,
+                }
+            ],
+        },
+    }
+
+
 def test_valid_dag_passes_validation() -> None:
     result = validate_workflow_definition(
         {
@@ -299,6 +350,38 @@ def test_real_control_protocol_enabled_loop_passes_validation() -> None:
 
     assert result.valid is True
     assert result.errors == []
+
+
+def test_custom_continue_branch_is_rejected() -> None:
+    definition = enabled_loop_definition_for_branch_validation()
+    definition["control_protocol"]["loop_regions"][0]["continue_branch"] = (
+        "repeat"
+    )
+
+    result = validate_workflow_definition(definition, registry())
+
+    assert result.valid is False
+    assert [(error.code, error.path) for error in result.errors] == [
+        (
+            "LOOP_REGION_BRANCH_UNSUPPORTED",
+            "control_protocol.loop_regions[0].continue_branch",
+        )
+    ]
+
+
+def test_custom_end_branch_is_rejected() -> None:
+    definition = enabled_loop_definition_for_branch_validation()
+    definition["control_protocol"]["loop_regions"][0]["end_branch"] = "stop"
+
+    result = validate_workflow_definition(definition, registry())
+
+    assert result.valid is False
+    assert [(error.code, error.path) for error in result.errors] == [
+        (
+            "LOOP_REGION_BRANCH_UNSUPPORTED",
+            "control_protocol.loop_regions[0].end_branch",
+        )
+    ]
 
 
 def test_loop_region_enabled_requires_enabled_control_protocol() -> None:
