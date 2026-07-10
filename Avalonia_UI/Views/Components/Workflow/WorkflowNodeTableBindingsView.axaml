@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowNodeTableBindingsView"
+             x:DataType="vm:WorkflowNodeTableBindingsViewModel">
+    <StackPanel Spacing="10"
+                IsVisible="{Binding HasSlots}">
+        <Border Classes="Card"
+                Padding="14"
+                IsVisible="{Binding HasInputSlots}">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                <TextBlock Text="{Binding InputSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding InputBindings}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:NodeTableInputBindingViewModel"
+                                      x:DataType="vm:NodeTableInputBindingViewModel">
+                            <Grid ColumnDefinitions="180,*"
+                                  RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="10"
+                                  RowSpacing="4"
+                                  Margin="0,0,0,10">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding SlotTitleText}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding RequiredText}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding Sources}"
+                                          SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                                          MinWidth="260">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:NodeTableInputSourceOptionViewModel"
+                                                      x:DataType="vm:NodeTableInputSourceOptionViewModel">
+                                            <TextBlock Text="{Binding DisplayText}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="1"
+                                           Text="{Binding Description}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <Border Classes="Card"
+                Padding="14"
+                IsVisible="{Binding HasOutputSlots}">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                <TextBlock Text="{Binding OutputSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding OutputTargets}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:NodeTableOutputTargetViewModel"
+                                      x:DataType="vm:NodeTableOutputTargetViewModel">
+                            <Grid ColumnDefinitions="180,220,*"
+                                  RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="10"
+                                  RowSpacing="4"
+                                  Margin="0,0,0,10">
+                                <TextBlock Text="{Binding SlotTitleText}"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding TargetKinds}"
+                                          SelectedItem="{Binding SelectedTargetKind, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:NodeTableOutputTargetKindOptionViewModel"
+                                                      x:DataType="vm:NodeTableOutputTargetKindOptionViewModel">
+                                            <TextBlock Text="{Binding DisplayText}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBox Grid.Column="2"
+                                         Text="{Binding LogicalTableId, Mode=TwoWay}"
+                                         Watermark="{Binding TableNameText}"
+                                         IsVisible="{Binding IsNewTarget}"/>
+                                <ComboBox Grid.Column="2"
+                                          ItemsSource="{Binding ExistingTargets}"
+                                          SelectedItem="{Binding SelectedExistingTarget, Mode=TwoWay}"
+                                          IsVisible="{Binding IsExistingTarget}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="vm:NodeTableExistingOutputOptionViewModel"
+                                                      x:DataType="vm:NodeTableExistingOutputOptionViewModel">
+                                            <TextBlock Text="{Binding DisplayText}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="1"
+                                           Grid.ColumnSpan="2"
+                                           Text="{Binding Description}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <StackPanel Spacing="3">
+                <TextBlock Text="{Binding Message}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasError}"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="{Binding ApplyText}"
+                    Command="{Binding ApplyBindingsCommand}"
+                    MinWidth="112"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

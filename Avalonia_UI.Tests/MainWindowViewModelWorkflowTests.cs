@@ -5230,6 +5230,214 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task TableBindingBridgeBuildsDeclaredSlotsAndAppliesOnlyBindingFields()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+            [
+                new NodeDefinitionDto
+                {
+                    NodeType = "SourceNode",
+                    NodeVersion = "1.0",
+                    DisplayName = "Source",
+                    OutputTableSlots =
+                    [
+                        new NodeTableOutputSlotDto
+                        {
+                            Name = "out",
+                            DefaultRole = "AUXILIARY",
+                            AllowNewMemory = true,
+                        },
+                    ],
+                },
+                new NodeDefinitionDto
+                {
+                    NodeType = "TargetNode",
+                    NodeVersion = "1.0",
+                    DisplayName = "Target",
+                    InputTableSlots =
+                    [
+                        new NodeTableInputSlotDto
+                        {
+                            Name = "in",
+                            Required = true,
+                            AllowedStorageKinds = ["MEMORY", "RUNTIME_SQL"],
+                            DefaultSource = "upstream_current",
+                        },
+                    ],
+                    OutputTableSlots =
+                    [
+                        new NodeTableOutputSlotDto
+                        {
+                            Name = "out",
+                            DefaultRole = "CURRENT",
+                            AllowCurrent = true,
+                            AllowNewRuntimeSql = true,
+                            AllowExistingMemory = true,
+                        },
+                    ],
+                },
+            ]),
+            ValidateWorkflowDraftResponse =
+                ApiResponseEnvelope<WorkflowValidationResultDto>.Success(
+                    new WorkflowValidationResultDto { Valid = true }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson =
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id":"source",
+                  "node_type":"SourceNode",
+                  "node_version":"1.0",
+                  "config":{
+                    "output_targets":{
+                      "out":{"target_kind":"new_memory","logical_table_id":"orders"}
+                    }
+                  }
+                },
+                {
+                  "node_instance_id":"target",
+                  "node_type":"TargetNode",
+                  "node_version":"1.0",
+                  "config":{"business_field":42,"plugin_unknown":{"keep":true}}
+                }
+              ],
+              "connections":[
+                {"connection_id":"c1","source_node_id":"source","target_node_id":"target"}
+              ],
+              "control_protocol":{"mode":"preview"}
+            }
+            """;
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDraftNodes
+            .Single(node => node.NodeInstanceId == "target");
+
+        Assert.IsTrue(viewModel.WorkflowNodeTableBindings.HasSlots);
+        Assert.HasCount(1, viewModel.WorkflowNodeTableBindings.InputBindings);
+        Assert.HasCount(1, viewModel.WorkflowNodeTableBindings.OutputTargets);
+        var input = viewModel.WorkflowNodeTableBindings.InputBindings[0];
+        var output = viewModel.WorkflowNodeTableBindings.OutputTargets[0];
+        CollectionAssert.AreEqual(
+            new[] { "MEMORY", "RUNTIME_SQL" },
+            input.AllowedStorageKinds);
+        CollectionAssert.AreEqual(
+            new[] { "current", "new_runtime_sql", "existing_memory" },
+            output.TargetKinds.Select(option => option.Value).ToArray());
+        Assert.HasCount(1, output.ExistingTargets);
+
+        input.SelectedSource = input.Sources.Single(source => source.Binding.IsCurrent);
+        input.SelectedSource = input.Sources.Single(source => source.Binding.IsUpstreamTable);
+        Assert.AreEqual(
+            NodeTableOutputTargetDraft.ExistingMemoryTargetKind,
+            output.SelectedTargetKind?.Value);
+        Assert.AreEqual("orders", output.SelectedExistingTarget?.Candidate.LogicalTableId);
+
+        output.SelectedTargetKind = output.TargetKinds.Single(option =>
+            option.Value == NodeTableOutputTargetDraft.NewRuntimeSqlTargetKind);
+        output.LogicalTableId = "custom_result";
+        input.SelectedSource = input.Sources.Single(source => source.Binding.IsCurrent);
+        input.SelectedSource = input.Sources.Single(source => source.Binding.IsUpstreamTable);
+
+        Assert.AreEqual(
+            NodeTableOutputTargetDraft.NewRuntimeSqlTargetKind,
+            output.SelectedTargetKind.Value);
+        Assert.AreEqual("custom_result", output.LogicalTableId);
+        await viewModel.WorkflowNodeTableBindings.ApplyBindingsCommand.ExecuteAsync(null);
+
+        Assert.IsNotNull(apiClient.ValidatedWorkflowDraftDefinition);
+        var root = apiClient.ValidatedWorkflowDraftDefinition.Value;
+        var config = root.GetProperty("nodes")[1].GetProperty("config");
+        Assert.AreEqual(42, config.GetProperty("business_field").GetInt32());
+        Assert.IsTrue(config.GetProperty("plugin_unknown").GetProperty("keep").GetBoolean());
+        Assert.AreEqual(
+            "source",
+            config.GetProperty("input_sources").GetProperty("in")
+                .GetProperty("source_node_instance_id").GetString());
+        Assert.AreEqual(
+            "custom_result",
+            config.GetProperty("output_targets").GetProperty("out")
+                .GetProperty("logical_table_id").GetString());
+        Assert.AreEqual(
+            "preview",
+            root.GetProperty("control_protocol").GetProperty("mode").GetString());
+        Assert.DoesNotContain("table_ref_id", root.GetRawText());
+    }
+
+    [TestMethod]
+    public async Task TableBindingComponentHidesWhenDefinitionDeclaresNoSlots()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+            [NodeDefinition("NoTableNode", "No table")]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"nodes":[{"node_instance_id":"node","node_type":"NoTableNode","node_version":"1.0","config":{}}],"connections":[]}""";
+
+        Assert.IsFalse(viewModel.WorkflowNodeTableBindings.HasSlots);
+        Assert.IsFalse(viewModel.WorkflowNodeTableBindings.ApplyBindingsCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task TableBindingBridgeBuildsMultipleDeclaredSlotRows()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+            [
+                new NodeDefinitionDto
+                {
+                    NodeType = "MultiTableNode",
+                    NodeVersion = "1.0",
+                    DisplayName = "Multi table",
+                    InputTableSlots =
+                    [
+                        new NodeTableInputSlotDto { Name = "main", Required = true },
+                        new NodeTableInputSlotDto { Name = "rules" },
+                    ],
+                    OutputTableSlots =
+                    [
+                        new NodeTableOutputSlotDto
+                        {
+                            Name = "out",
+                            DefaultRole = "CURRENT",
+                            AllowCurrent = true,
+                        },
+                        new NodeTableOutputSlotDto
+                        {
+                            Name = "audit",
+                            DefaultRole = "CURRENT",
+                            AllowCurrent = true,
+                        },
+                    ],
+                },
+            ]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"nodes":[{"node_instance_id":"multi","node_type":"MultiTableNode","node_version":"1.0","config":{}}],"connections":[]}""";
+
+        Assert.HasCount(2, viewModel.WorkflowNodeTableBindings.InputBindings);
+        Assert.HasCount(2, viewModel.WorkflowNodeTableBindings.OutputTargets);
+        CollectionAssert.AreEqual(
+            new[] { "main", "rules" },
+            viewModel.WorkflowNodeTableBindings.InputBindings
+                .Select(binding => binding.SlotName)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "out", "audit" },
+            viewModel.WorkflowNodeTableBindings.OutputTargets
+                .Select(target => target.SlotName)
+                .ToArray());
+    }
+
+    [TestMethod]
     public async Task AdvancedDraftJsonDebounceAppliesOnlyLatestInput()
     {
         var viewModel = CreateViewModel(

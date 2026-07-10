@@ -13,6 +13,7 @@ public partial class MainWindowViewModel
         InvalidateWorkflowDefinitionDraftParseCache();
         RefreshWorkflowDefinitionDraftStructureState();
         RefreshWorkflowLoopRegionsFromDraft();
+        RefreshWorkflowNodeTableBindingsFromDraft(force: true);
         WorkflowLoopRegions.RefreshLocalizedText();
         RunLoopMonitor.RefreshLocalizedText();
         RefreshSelectedNodeConfigDraftState();

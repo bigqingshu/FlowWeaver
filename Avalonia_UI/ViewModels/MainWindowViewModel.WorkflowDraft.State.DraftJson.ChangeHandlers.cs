@@ -4,10 +4,12 @@ public partial class MainWindowViewModel
 {
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
+        AdvanceWorkflowNodeTableBindingsDraftRevision();
         SynchronizeAdvancedWorkflowDraftJson(value);
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
         RefreshWorkflowDefinitionDraftStructureState();
         RefreshWorkflowLoopRegionsFromDraft();
+        RefreshWorkflowNodeTableBindingsFromDraft();
         RefreshSelectedNodeConfigDraftState();
         RefreshRuntimeOptionsDraftState();
 

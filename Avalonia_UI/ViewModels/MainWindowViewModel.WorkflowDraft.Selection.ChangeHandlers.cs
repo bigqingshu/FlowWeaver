@@ -12,6 +12,7 @@ public partial class MainWindowViewModel
         ResetDataPreviewSelectionState();
         RefreshSelectedNodeDisplayNameDraftState();
         RefreshSelectedNodeConfigDraftState();
+        RefreshWorkflowNodeTableBindingsFromDraft();
         SelectedRuntimeOptionsNode = value;
         ApplySelectedNodeDisplayNameDraftCommand.NotifyCanExecuteChanged();
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();

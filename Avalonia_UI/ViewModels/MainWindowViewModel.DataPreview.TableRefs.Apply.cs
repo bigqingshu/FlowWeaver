@@ -25,5 +25,6 @@ public partial class MainWindowViewModel
             tableRef => tableRef.TableRefId == previousSelectedTableRefId)
             ?? SelectedDataPreviewTableOption
             ?? TableRefs.FirstOrDefault();
+        NotifyWorkflowNodeTableBindingsTableCatalogChanged();
     }
 }

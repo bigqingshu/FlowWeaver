@@ -33,6 +33,28 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task TableBindingLabelsKeepLocalizedTextAndStableEnglishValues()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        Assert.AreEqual(
+            "新建运行内 SQL 表",
+            localizationService.GetString(
+                "workflow.table_bindings.target.new_runtime_sql"));
+
+        await localizationService.SetLanguageAsync("en-US");
+        Assert.AreEqual(
+            "New runtime SQL table",
+            localizationService.GetString(
+                "workflow.table_bindings.target.new_runtime_sql"));
+
+        var option = new NodeTableOutputTargetKindOptionViewModel(
+            NodeTableOutputTargetDraft.NewRuntimeSqlTargetKind,
+            "localized");
+        Assert.AreEqual("new_runtime_sql", option.Value);
+    }
+
+    [TestMethod]
     public async Task LoadUiSettingsAppliesPersistedLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore
@@ -55,6 +77,9 @@ public sealed class MainWindowViewModelLocalizationTests
             viewModel.WorkflowRunGuardText);
         Assert.AreEqual("工作流定义", viewModel.WorkflowDefinitionSectionText);
         Assert.AreEqual("循环区域", viewModel.WorkflowLoopRegions.SectionText);
+        Assert.AreEqual("输入表", viewModel.WorkflowNodeTableBindings.InputSectionText);
+        Assert.AreEqual("输出目标", viewModel.WorkflowNodeTableBindings.OutputSectionText);
+        Assert.AreEqual("应用表绑定", viewModel.WorkflowNodeTableBindings.ApplyText);
         Assert.AreEqual("真实最大轮数", viewModel.WorkflowLoopRegions.MaxIterationsText);
         Assert.AreEqual("启用真实循环", viewModel.WorkflowLoopRegions.EnabledText);
         Assert.AreEqual("循环监视", viewModel.RunLoopMonitor.SectionText);

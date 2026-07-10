@@ -24,6 +24,7 @@ public partial class MainWindowViewModel
             IsLoadingTableRefs = false;
             NodeRuns.Clear();
             TableRefs.Clear();
+            NotifyWorkflowNodeTableBindingsTableCatalogChanged();
             NodeRunMessage = newValue is null
                 ? T("status.select_run_node_status")
                 : F("format.selected_run_refresh_nodes", newValue.WorkflowRunId);

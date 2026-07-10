@@ -75,6 +75,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _localizationService = localizationService ?? new JsonLocalizationService();
 
         InitializeWorkflowLoopRegions();
+        InitializeWorkflowNodeTableBindings();
         InitializeRunLoopMonitor(apiClient);
         InitializeLanguageMenuItems();
         InitializeThemeMenuItems();

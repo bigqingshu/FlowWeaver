@@ -63,6 +63,8 @@
 
         <workflow:WorkflowSelectedNodeConfigView />
 
+        <workflow:WorkflowNodeTableBindingsView DataContext="{Binding WorkflowNodeTableBindings}" />
+
         <workflow:WorkflowRuntimeOptionsSummaryView />
 
         <workflow:WorkflowEditorView />

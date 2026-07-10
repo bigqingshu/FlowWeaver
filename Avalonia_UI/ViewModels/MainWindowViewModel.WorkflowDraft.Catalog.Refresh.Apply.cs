@@ -24,6 +24,7 @@ public partial class MainWindowViewModel
         NotifyNodeDefinitionCatalogPresentationStateChanged();
         RefreshWorkflowDefinitionDraftStructureState();
         RefreshSelectedNodeConfigDraftState();
+        UpdateWorkflowNodeTableBindingsNodeCatalog(catalogState?.CatalogHash);
         NodeDefinitionCatalogMessage =
             F("format.loaded_node_definitions", NodeDefinitions.Count);
     }
