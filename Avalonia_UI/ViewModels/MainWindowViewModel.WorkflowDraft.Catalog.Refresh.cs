@@ -7,10 +7,7 @@ public partial class MainWindowViewModel
 {
     private async Task RefreshNodeDefinitionsCoreAsync(bool allowStateCacheHit)
     {
-        var requestVersion = ++nodeDefinitionsLoadVersion;
-        IsLoadingNodeDefinitions = true;
-        NodeDefinitionCatalogMessage = T("node_catalog.loading");
-        NodeDefinitionCatalogErrorMessage = null;
+        var requestVersion = BeginNodeDefinitionsRefresh();
         var settings = BuildSettings();
         var connectionKey = NodeDefinitionCatalogCacheState.BuildConnectionKey(settings);
 
@@ -48,10 +45,7 @@ public partial class MainWindowViewModel
         }
         finally
         {
-            if (requestVersion == nodeDefinitionsLoadVersion)
-            {
-                IsLoadingNodeDefinitions = false;
-            }
+            CompleteNodeDefinitionsRefresh(requestVersion);
         }
     }
 
