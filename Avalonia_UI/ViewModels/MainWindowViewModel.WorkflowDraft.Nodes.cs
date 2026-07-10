@@ -14,27 +14,7 @@ public partial class MainWindowViewModel
             .Select(node => node.NodeInstanceId)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var node in WorkflowDefinitionDraftNodes)
-        {
-            node.PropertyChanged -= OnWorkflowDefinitionDraftNodeItemPropertyChanged;
-        }
-
-        WorkflowDefinitionDraftNodes.Clear();
-
-        if (WorkflowDefinitionDraftStructure is not null)
-        {
-            var displayOrder = 1;
-            foreach (var node in WorkflowDefinitionDraftStructure.Nodes)
-            {
-                var nodeItem = CreateWorkflowDefinitionDraftNodeListItem(
-                    node,
-                    displayOrder,
-                    batchSelectedNodeIds.Contains(node.NodeInstanceId));
-                nodeItem.PropertyChanged += OnWorkflowDefinitionDraftNodeItemPropertyChanged;
-                WorkflowDefinitionDraftNodes.Add(nodeItem);
-                displayOrder++;
-            }
-        }
+        RebuildWorkflowDefinitionDraftNodeItems(batchSelectedNodeIds);
 
         RestoreWorkflowDefinitionDraftNodeSelection(
             selectedNodeId,
