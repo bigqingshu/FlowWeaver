@@ -11,6 +11,7 @@ public partial class MainWindowViewModel
     partial void OnSelectedWorkflowChanged(WorkflowListItemViewModel? value)
     {
         workflowDefinitionLoadVersion++;
+        RefreshBackgroundRunManagementContext();
         StartSelectedWorkflowCommand.NotifyCanExecuteChanged();
         PreviewSelectedWorkflowNodeCommand.NotifyCanExecuteChanged();
         LoadSelectedWorkflowDefinitionCommand.NotifyCanExecuteChanged();

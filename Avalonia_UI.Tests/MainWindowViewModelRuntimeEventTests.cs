@@ -64,7 +64,8 @@ public sealed class MainWindowViewModelRuntimeEventTests
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
         Assert.HasCount(1, viewModel.NodeRuns);
         Assert.AreEqual("25%", viewModel.NodeRuns[0].ProgressText);
-        Assert.IsGreaterThanOrEqualTo(2, apiClient.ListRunsCallCount);
+        Assert.AreEqual(1, apiClient.ListRunsCallCount);
+        Assert.AreEqual(1, apiClient.GetRunCallCount);
         Assert.IsGreaterThanOrEqualTo(2, apiClient.ListNodeRunsCallCount);
         Assert.AreEqual("Event stream stopped.", viewModel.RuntimeEventStreamMessage);
     }
@@ -96,6 +97,7 @@ public sealed class MainWindowViewModelRuntimeEventTests
         Assert.AreEqual("NODE_FINISHED", viewModel.RuntimeEvents[0].EventType);
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
         Assert.IsGreaterThanOrEqualTo(3, apiClient.ListRunsCallCount);
+        Assert.AreEqual(1, apiClient.GetRunCallCount);
         Assert.AreEqual("Event stream stopped.", viewModel.RuntimeEventStreamMessage);
     }
 
@@ -377,6 +379,8 @@ public sealed class MainWindowViewModelRuntimeEventTests
 
         public int ListNodeRunsCallCount { get; private set; }
 
+        public int GetRunCallCount { get; private set; }
+
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
             CancellationToken cancellationToken = default)
@@ -645,10 +649,8 @@ public sealed class MainWindowViewModelRuntimeEventTests
             int limit = 100,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<List<WorkflowRunDto>>.Failure(
-                    "NOT_CONFIGURED",
-                    "No paged run response configured."));
+            ListRunsCallCount++;
+            return Task.FromResult(RunsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
@@ -661,6 +663,22 @@ public sealed class MainWindowViewModelRuntimeEventTests
                 ApiResponseEnvelope<WorkflowRunDto>.Failure(
                     "NOT_CONFIGURED",
                     "No retry response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            GetRunCallCount++;
+            var run = RunsResponse.Data?.Find(
+                item => item.WorkflowRunId == workflowRunId);
+            return Task.FromResult(
+                run is null
+                    ? ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                        "WORKFLOW_RUN_NOT_FOUND",
+                        "Workflow run not found.")
+                    : ApiResponseEnvelope<WorkflowRunDto>.Success(run));
         }
 
         public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(

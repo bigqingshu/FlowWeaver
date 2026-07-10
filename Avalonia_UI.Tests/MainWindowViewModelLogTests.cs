@@ -414,9 +414,8 @@ public sealed class MainWindowViewModelLogTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(
-                ApiResponseEnvelope<List<WorkflowRunDto>>.Failure(
-                    "NOT_CONFIGURED",
-                    "No paged run response configured."));
+                ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                    new List<WorkflowRunDto>()));
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
@@ -429,6 +428,17 @@ public sealed class MainWindowViewModelLogTests
                 ApiResponseEnvelope<WorkflowRunDto>.Failure(
                     "NOT_CONFIGURED",
                     "No retry response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No run response configured."));
         }
 
         public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(

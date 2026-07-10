@@ -467,6 +467,28 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetRunAsyncUsesEscapedRunPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"ok":true,"data":{"workflow_run_id":"run-1","workflow_id":"wf-1","revision_id":"rev-1","workflow_version":2,"definition_hash":"hash","status":"RUNNING","run_mode":"full","trigger_source":"manual","target_node_instance_id":null,"state_version":1,"owner_process_id":null,"process_generation":0,"fencing_token":null,"input_snapshot_id":null,"started_at":null,"finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetRunAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201"),
+            handler.RequestUri);
+        Assert.AreEqual("run-1", result.Data?.WorkflowRunId);
+    }
+
+    [TestMethod]
     public async Task RetryWorkflowRunAsyncPostsTriggerSource()
     {
         string? body = null;

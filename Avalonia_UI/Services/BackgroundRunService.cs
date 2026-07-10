@@ -51,6 +51,14 @@ public sealed class BackgroundRunService : IBackgroundRunService
             cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return _apiClient.GetRunAsync(settings, workflowRunId, cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

@@ -1,6 +1,4 @@
-using System.Linq;
 using System.Threading.Tasks;
-using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
@@ -18,41 +16,22 @@ public partial class MainWindowViewModel
         return LoadRunsAsync();
     }
 
-    private async Task LoadRunsAsync(string? selectWorkflowRunId = null)
+    private async Task LoadRunsAsync(
+        string? selectWorkflowRunId = null,
+        bool allowWhenActionsDisabled = false)
     {
-        IsLoadingRuns = true;
-        RunMessage = SelectedWorkflow is null
-            ? T("runs.loading")
-            : F("format.loading_runs_for", SelectedWorkflow.Name);
-        RunErrorMessage = null;
-
-        var workflowId = SelectedWorkflow?.WorkflowId;
-        var response = await _apiClient.ListRunsAsync(
-            BuildSettings(),
-            workflowId,
-            cancellationToken: _shutdown.Token);
-
-        if (response.Ok && response.Data is not null)
+        RefreshBackgroundRunManagementContext();
+        await BackgroundRunManagement.LoadPageAsync(
+            selectWorkflowRunId,
+            resetOffset: selectWorkflowRunId is not null,
+            allowWhenActionsDisabled: allowWhenActionsDisabled);
+        SelectedRun = BackgroundRunManagement.SelectedRun;
+        if (!BackgroundRunManagement.HasError)
         {
-            var previousRunId = selectWorkflowRunId ?? SelectedRun?.WorkflowRunId;
-            Runs.Clear();
-            foreach (var run in response.Data)
-            {
-                Runs.Add(new WorkflowRunListItemViewModel(run));
-            }
-
-            SelectedRun = Runs.FirstOrDefault(run => run.WorkflowRunId == previousRunId)
-                ?? Runs.FirstOrDefault();
-            RunMessage = workflowId is null
+            RunMessage = SelectedWorkflow is null
                 ? F("format.loaded_runs", Runs.Count)
-                : F("format.loaded_runs_for", Runs.Count, SelectedWorkflow?.Name);
-            IsLoadingRuns = false;
-            return;
+                : F("format.loaded_runs_for", Runs.Count, SelectedWorkflow.Name);
         }
-
-        RunMessage = T("runs.refresh_failed");
-        RunErrorMessage = DescribeError(response);
-        IsLoadingRuns = false;
     }
 
 }

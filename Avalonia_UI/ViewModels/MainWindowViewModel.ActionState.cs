@@ -14,6 +14,7 @@ public partial class MainWindowViewModel
         NotifyRuntimeEventLogActionStateChanged();
         NotifyDataPreviewActionStateChanged();
         NotifySharedPublicationActionStateChanged();
+        RefreshBackgroundRunManagementContext();
     }
 
 }

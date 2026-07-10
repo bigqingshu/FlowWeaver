@@ -25,6 +25,11 @@ public interface IBackgroundRunService
         int limit = 100,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

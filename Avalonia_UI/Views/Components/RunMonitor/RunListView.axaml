@@ -4,8 +4,8 @@
              x:Class="Avalonia_UI.Views.Components.RunMonitor.RunListView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
-        <Grid RowDefinitions="Auto,*" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding RunsSectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
@@ -21,27 +21,53 @@
                         Content="{Binding RefreshText}"
                         Command="{Binding RefreshRunsCommand}"
                         MinWidth="84"/>
-                <Panel Grid.Column="3" Background="Transparent" ToolTip.Tip="{Binding CancelSelectedRunDisabledReasonText}">
-                    <Button Content="{Binding CancelText}"
-                            IsEnabled="{Binding CanUseCancelSelectedRunAction}"
-                            MinWidth="78">
-                        <Button.Flyout>
-                            <Flyout>
-                                <StackPanel Spacing="10">
-                                    <TextBlock Text="{Binding CancelConfirmTitleText}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding CancelConfirmMessageText}" MaxWidth="250" TextWrapping="Wrap"/>
-                                    <Button Content="{Binding CancelText}"
-                                            Command="{Binding CancelSelectedRunCommand}"
-                                            Classes="Primary"
-                                            HorizontalAlignment="Right"/>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                </Panel>
             </Grid>
 
-            <ListBox Grid.Row="1"
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,*,*"
+                  ColumnSpacing="10">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding BackgroundRunManagement.TriggerSourceFilterText}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox ItemsSource="{Binding BackgroundRunManagement.TriggerSourceOptions}"
+                              SelectedItem="{Binding BackgroundRunManagement.SelectedTriggerSource, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:BackgroundRunFilterOptionViewModel"
+                                          x:DataType="vm:BackgroundRunFilterOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Text="{Binding BackgroundRunManagement.RunModeFilterText}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox ItemsSource="{Binding BackgroundRunManagement.RunModeOptions}"
+                              SelectedItem="{Binding BackgroundRunManagement.SelectedRunMode, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:BackgroundRunFilterOptionViewModel"
+                                          x:DataType="vm:BackgroundRunFilterOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                    <TextBlock Text="{Binding BackgroundRunManagement.StatusFilterText}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox ItemsSource="{Binding BackgroundRunManagement.StatusOptions}"
+                              SelectedItem="{Binding BackgroundRunManagement.SelectedStatus, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:BackgroundRunFilterOptionViewModel"
+                                          x:DataType="vm:BackgroundRunFilterOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+
+            <ListBox Grid.Row="2"
                      ItemsSource="{Binding Runs}"
                      SelectedItem="{Binding SelectedRun}"
                      BorderBrush="{DynamicResource ControlBorderBrush}"
@@ -50,19 +76,108 @@
                     <DataTemplate DataType="vm:WorkflowRunListItemViewModel"
                                   x:DataType="vm:WorkflowRunListItemViewModel">
                         <Grid ColumnDefinitions="*,Auto"
-                              RowDefinitions="Auto,Auto,Auto"
+                              RowDefinitions="Auto,Auto,Auto,Auto"
                               ColumnSpacing="12"
                               Margin="8">
                             <TextBlock Text="{Binding WorkflowRunId}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}"/>
                             <TextBlock Grid.Column="1" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="1" Text="{Binding WorkflowText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StartedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="2" Text="{Binding CompletionReasonText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FinishedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2" Text="{Binding TriggerSourceText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RunModeText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="3" Text="{Binding CompletionReasonText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FinishedAtText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="{Binding BackgroundRunManagement.PreviousPageText}"
+                            Command="{Binding BackgroundRunManagement.PreviousPageCommand}"
+                            MinWidth="78"/>
+                    <TextBlock Text="{Binding BackgroundRunManagement.PageText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <Button Content="{Binding BackgroundRunManagement.NextPageText}"
+                            Command="{Binding BackgroundRunManagement.NextPageCommand}"
+                            MinWidth="78"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="{Binding BackgroundRunManagement.RetryText}"
+                            IsEnabled="{Binding BackgroundRunManagement.CanRetrySelectedRun}"
+                            MinWidth="78">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding BackgroundRunManagement.RetryText}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding BackgroundRunManagement.RetryConfirmText}"
+                                               MaxWidth="300"
+                                               TextWrapping="Wrap"/>
+                                    <Button Content="{Binding BackgroundRunManagement.RetryText}"
+                                            Command="{Binding BackgroundRunManagement.RetryCommand}"
+                                            Classes="Primary"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Content="{Binding BackgroundRunManagement.CleanupText}"
+                            IsEnabled="{Binding BackgroundRunManagement.CanCleanupSelectedRun}"
+                            MinWidth="78">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupText}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupConfirmText}"
+                                               MaxWidth="300"
+                                               TextWrapping="Wrap"/>
+                                    <Button Content="{Binding BackgroundRunManagement.CleanupText}"
+                                            Command="{Binding BackgroundRunManagement.CleanupTablesCommand}"
+                                            Classes="Primary"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Panel Background="Transparent"
+                           ToolTip.Tip="{Binding CancelSelectedRunDisabledReasonText}">
+                        <Button Content="{Binding CancelText}"
+                                IsEnabled="{Binding CanUseCancelSelectedRunAction}"
+                                MinWidth="78">
+                            <Button.Flyout>
+                                <Flyout>
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="{Binding CancelConfirmTitleText}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding CancelConfirmMessageText}"
+                                                   MaxWidth="250"
+                                                   TextWrapping="Wrap"/>
+                                        <Button Content="{Binding CancelText}"
+                                                Command="{Binding CancelSelectedRunCommand}"
+                                                Classes="Primary"
+                                                HorizontalAlignment="Right"/>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                    </Panel>
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Grid.Row="4" Spacing="4">
+                <TextBlock Text="{Binding RunMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding RunErrorMessage}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasRunError}"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+            </StackPanel>
         </Grid>
     </Border>
 </UserControl>

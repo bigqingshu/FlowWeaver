@@ -623,6 +623,38 @@ public sealed class WorkflowSummaryViewStructureTests
     }
 
     [TestMethod]
+    public void WorkflowAndRunViewsExposeBackgroundRunManagement()
+    {
+        var workflowXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowListView.axaml");
+        var runXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "RunMonitor",
+            "RunListView.axaml");
+
+        StringAssert.Contains(
+            workflowXaml,
+            "Command=\"{Binding BackgroundRunManagement.StartCommand}\"");
+        StringAssert.Contains(
+            runXaml,
+            "SelectedItem=\"{Binding BackgroundRunManagement.SelectedTriggerSource, Mode=TwoWay}\"");
+        StringAssert.Contains(
+            runXaml,
+            "Command=\"{Binding BackgroundRunManagement.RetryCommand}\"");
+        StringAssert.Contains(
+            runXaml,
+            "Command=\"{Binding BackgroundRunManagement.CleanupTablesCommand}\"");
+        StringAssert.Contains(runXaml, "Text=\"{Binding TriggerSourceText}\"");
+        StringAssert.Contains(runXaml, "Text=\"{Binding RunModeText}\"");
+    }
+
+    [TestMethod]
     public void ConnectionsSectionIsCollapsedBehindToggleByDefault()
     {
         var xaml = ReadSourceFile(

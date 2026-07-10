@@ -18,6 +18,27 @@ namespace Avalonia_UI.Tests;
 public sealed class MainWindowViewModelLocalizationTests
 {
     [TestMethod]
+    public async Task BackgroundRunManagementLabelsAreLocalized()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        Assert.AreEqual(
+            "后台运行",
+            localizationService.GetString("runs.background.start"));
+        Assert.AreEqual(
+            "后台手动",
+            localizationService.GetString("runs.trigger.background_manual"));
+
+        await localizationService.SetLanguageAsync("en-US");
+        Assert.AreEqual(
+            "Clean run tables",
+            localizationService.GetString("runs.background.cleanup"));
+        Assert.AreEqual(
+            "Preview to node",
+            localizationService.GetString("runs.mode.preview_to_node"));
+    }
+
+    [TestMethod]
     public async Task LoopStartMaxLoopCountTitleClarifiesPreviewOnly()
     {
         var localizationService = new JsonLocalizationService();
@@ -1232,10 +1253,7 @@ public sealed class MainWindowViewModelLocalizationTests
             int limit = 100,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<List<WorkflowRunDto>>.Failure(
-                    "NOT_CONFIGURED",
-                    "No paged run response configured."));
+            return Task.FromResult(RunsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
@@ -1248,6 +1266,21 @@ public sealed class MainWindowViewModelLocalizationTests
                 ApiResponseEnvelope<WorkflowRunDto>.Failure(
                     "NOT_CONFIGURED",
                     "No retry response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            var run = RunsResponse.Data?.Find(
+                item => item.WorkflowRunId == workflowRunId);
+            return Task.FromResult(
+                run is null
+                    ? ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                        "WORKFLOW_RUN_NOT_FOUND",
+                        "Workflow run not found.")
+                    : ApiResponseEnvelope<WorkflowRunDto>.Success(run));
         }
 
         public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(

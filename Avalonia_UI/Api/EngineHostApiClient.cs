@@ -301,6 +301,18 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowRunDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<NodeRunDto>>> ListNodeRunsAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

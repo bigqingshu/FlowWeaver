@@ -3,10 +3,15 @@ using Avalonia_UI.Api;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class WorkflowRunListItemViewModel
+public sealed class WorkflowRunListItemViewModel : ViewModelBase
 {
-    public WorkflowRunListItemViewModel(WorkflowRunDto run)
+    private readonly Func<string, string> translate;
+
+    public WorkflowRunListItemViewModel(
+        WorkflowRunDto run,
+        Func<string, string>? translate = null)
     {
+        this.translate = translate ?? DefaultText;
         WorkflowRunId = run.WorkflowRunId;
         WorkflowId = run.WorkflowId;
         RevisionId = run.RevisionId;
@@ -51,8 +56,35 @@ public sealed class WorkflowRunListItemViewModel
     public string CompletionReasonText =>
         string.IsNullOrWhiteSpace(CompletionReason) ? "-" : CompletionReason;
 
+    public string RunModeText =>
+        $"{translate($"runs.mode.{RunMode}")} ({RunMode})";
+
+    public string TriggerSourceText =>
+        $"{translate($"runs.trigger.{TriggerSource}")} ({TriggerSource})";
+
+    public bool IsTerminal => Status is
+        "SUCCEEDED" or "FAILED" or "CANCELLED" or "ABORTED";
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(RunModeText));
+        OnPropertyChanged(nameof(TriggerSourceText));
+    }
+
     private static string FormatTimestamp(DateTimeOffset? value)
     {
         return value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+    }
+
+    private static string DefaultText(string key)
+    {
+        return key switch
+        {
+            "runs.mode.full" => "Full run",
+            "runs.mode.preview_to_node" => "Preview to node",
+            "runs.trigger.manual" => "Manual",
+            "runs.trigger.background_manual" => "Background manual",
+            _ => key,
+        };
     }
 }

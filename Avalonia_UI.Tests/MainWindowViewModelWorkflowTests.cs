@@ -5041,6 +5041,89 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task ManualAndBackgroundRunsReuseDetailsAndTablePreviewPaths()
+    {
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+            [
+                Run("run-manual", "wf-1", "SUCCEEDED") with
+                {
+                    RunMode = "full",
+                    TriggerSource = "manual",
+                },
+                Run("run-background", "wf-1", "SUCCEEDED") with
+                {
+                    RunMode = "full",
+                    TriggerSource = "background_manual",
+                },
+            ]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-1", "Daily Load", 1));
+
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+
+        viewModel.SelectedRun = viewModel.Runs.Single(
+            run => run.WorkflowRunId == "run-background");
+        await viewModel.RefreshNodeRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.ListNodeRunsCallCount);
+        Assert.AreEqual(2, apiClient.ListRunTableDirectoryCallCount);
+        Assert.AreEqual("run-background", apiClient.LastNodeRunWorkflowRunId);
+        Assert.AreEqual("run-background", apiClient.LastTableRefWorkflowRunId);
+    }
+
+    [TestMethod]
+    public async Task CleanupTerminalRunRefreshesTableRefsAsUnreadable()
+    {
+        var readable = TableRef("table-1", "run-1", "node-run-1");
+        var released = readable with
+        {
+            CanReadRows = false,
+            SupportsPagedRows = false,
+            Capabilities = [],
+            LifecycleStatus = "RELEASED",
+        };
+        var apiClient = new FakeApiClient
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-1", "wf-1", "SUCCEEDED")]),
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success([readable]),
+            CleanupRunTableRefsResponse =
+                ApiResponseEnvelope<RunTableCleanupResultDto>.Success(
+                    new RunTableCleanupResultDto
+                    {
+                        WorkflowRunId = "run-1",
+                        CleanedCount = 1,
+                        CleanedTableRefs = [released],
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedWorkflow = new WorkflowListItemViewModel(
+            Workflow("wf-1", "Daily Load", 1));
+        await viewModel.RefreshRunsCommand.ExecuteAsync(null);
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        Assert.IsTrue(viewModel.TableRefs.Single().CanReadRows);
+        apiClient.TableRefsResponse =
+            ApiResponseEnvelope<List<TableRefDto>>.Success([released]);
+
+        await viewModel.BackgroundRunManagement.CleanupTablesCommand.ExecuteAsync(null);
+        await WaitUntilAsync(
+            () => apiClient.ListRunTableDirectoryCallCount >= 2
+                && viewModel.TableRefs.Count == 1
+                && !viewModel.TableRefs[0].CanReadRows);
+
+        Assert.AreEqual("run-1", apiClient.LastCleanedWorkflowRunId);
+        Assert.IsFalse(viewModel.TableRefs[0].CanReadRows);
+        Assert.AreEqual("RELEASED", viewModel.TableRefs[0].LifecycleStatus);
+    }
+
+    [TestMethod]
     public async Task CancelSelectedRunSendsRunIdAndRefreshesRuns()
     {
         var apiClient = new FakeApiClient
@@ -5521,6 +5604,21 @@ public sealed class MainWindowViewModelWorkflowTests
         };
     }
 
+    private static async Task WaitUntilAsync(Func<bool> predicate)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (predicate())
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.Fail("The expected asynchronous state was not reached.");
+    }
+
     private static WorkflowDefinitionDto Workflow(
         string workflowId,
         string name,
@@ -5738,6 +5836,11 @@ public sealed class MainWindowViewModelWorkflowTests
         public ApiResponseEnvelope<WorkflowProcessDto> CancelRunResponse { get; set; } =
             ApiResponseEnvelope<WorkflowProcessDto>.Failure("NOT_CONFIGURED", "No cancel response configured.");
 
+        public ApiResponseEnvelope<RunTableCleanupResultDto> CleanupRunTableRefsResponse { get; set; } =
+            ApiResponseEnvelope<RunTableCleanupResultDto>.Failure(
+                "NOT_CONFIGURED",
+                "No table cleanup response configured.");
+
         public ApiResponseEnvelope<List<TableRefDto>> TableRefsResponse { get; set; } =
             ApiResponseEnvelope<List<TableRefDto>>.Success(new List<TableRefDto>());
 
@@ -5806,6 +5909,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public int ListLoopRunsCallCount { get; private set; }
 
         public string? LastLoopWorkflowRunId { get; private set; }
+
+        public string? LastCleanedWorkflowRunId { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -6150,10 +6255,13 @@ public sealed class MainWindowViewModelWorkflowTests
             int limit = 100,
             CancellationToken cancellationToken = default)
         {
+            LastSettings = settings;
+            LastRunWorkflowId = workflowId;
+            ListRunsCallCount++;
             return Task.FromResult(
-                ApiResponseEnvelope<List<WorkflowRunDto>>.Failure(
-                    "NOT_CONFIGURED",
-                    "No paged run response configured."));
+                RunsResponses.Count > 0
+                    ? RunsResponses.Dequeue()
+                    : RunsResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
@@ -6168,15 +6276,29 @@ public sealed class MainWindowViewModelWorkflowTests
                     "No retry response configured."));
         }
 
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> GetRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            var run = RunsResponse.Data?.Find(
+                item => item.WorkflowRunId == workflowRunId);
+            return Task.FromResult(
+                run is null
+                    ? ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                        "WORKFLOW_RUN_NOT_FOUND",
+                        "Workflow run not found.")
+                    : ApiResponseEnvelope<WorkflowRunDto>.Success(run));
+        }
+
         public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(
             EngineHostConnectionSettings settings,
             string workflowRunId,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<RunTableCleanupResultDto>.Failure(
-                    "NOT_CONFIGURED",
-                    "No table cleanup response configured."));
+            LastSettings = settings;
+            LastCleanedWorkflowRunId = workflowRunId;
+            return Task.FromResult(CleanupRunTableRefsResponse);
         }
 
         public Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(

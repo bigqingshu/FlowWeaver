@@ -12,8 +12,25 @@ public partial class MainWindowViewModel
     {
         try
         {
-            await LoadRunsAsync(selectWorkflowRunId);
-            if (SelectedRun is not null)
+            if (selectWorkflowRunId is null)
+            {
+                await LoadRunsAsync(allowWhenActionsDisabled: true);
+                if (SelectedRun is not null)
+                {
+                    await LoadNodeRunsForSelectedRunAsync();
+                }
+
+                return;
+            }
+
+            RefreshBackgroundRunManagementContext();
+            await BackgroundRunManagement.MergeRunAsync(
+                selectWorkflowRunId,
+                cancellationToken);
+            if (string.Equals(
+                    SelectedRun?.WorkflowRunId,
+                    selectWorkflowRunId,
+                    StringComparison.Ordinal))
             {
                 await LoadNodeRunsForSelectedRunAsync();
             }
