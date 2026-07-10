@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.Models;
@@ -19,6 +20,10 @@ public sealed class WorkflowDefinitionDraftParseCache
     private readonly Func<
         WorkflowDefinitionDraftSnapshot,
         WorkflowLoopRegionDraftReadResult> readLoopRegions;
+    private readonly Func<
+        WorkflowDefinitionDraftSnapshot,
+        string,
+        NodeTableBindingsDraftReadResult> readNodeTableBindings;
 
     private string? cachedDraftJson;
     private WorkflowDefinitionDraftSnapshot? cachedSnapshot;
@@ -30,6 +35,8 @@ public sealed class WorkflowDefinitionDraftParseCache
     private bool hasCachedRuntimeOptions;
     private WorkflowLoopRegionDraftReadResult? cachedLoopRegions;
     private bool hasCachedLoopRegions;
+    private readonly Dictionary<string, NodeTableBindingsDraftReadResult>
+        cachedNodeTableBindings = new(StringComparer.Ordinal);
 
     public WorkflowDefinitionDraftParseCache()
         : this(
@@ -37,7 +44,8 @@ public sealed class WorkflowDefinitionDraftParseCache
             WorkflowDefinitionDraftStructureBuilder.Build,
             WorkflowDefinitionLinearChainAnalyzer.Analyze,
             RuntimeOptionsDraftReader.Read,
-            WorkflowLoopRegionDraftReader.Read)
+            WorkflowLoopRegionDraftReader.Read,
+            NodeTableBindingsDraftReader.Read)
     {
     }
 
@@ -55,13 +63,19 @@ public sealed class WorkflowDefinitionDraftParseCache
             RuntimeOptionsDraftReadResult> readRuntimeOptions,
         Func<
             WorkflowDefinitionDraftSnapshot,
-            WorkflowLoopRegionDraftReadResult> readLoopRegions)
+            WorkflowLoopRegionDraftReadResult> readLoopRegions,
+        Func<
+            WorkflowDefinitionDraftSnapshot,
+            string,
+            NodeTableBindingsDraftReadResult>? readNodeTableBindings = null)
     {
         this.parseSnapshot = parseSnapshot;
         this.buildStructure = buildStructure;
         this.analyzeLinearChain = analyzeLinearChain;
         this.readRuntimeOptions = readRuntimeOptions;
         this.readLoopRegions = readLoopRegions;
+        this.readNodeTableBindings = readNodeTableBindings ??
+            NodeTableBindingsDraftReader.Read;
     }
 
     public WorkflowDefinitionDraftSnapshot? GetSnapshot(
@@ -161,6 +175,30 @@ public sealed class WorkflowDefinitionDraftParseCache
         return cachedLoopRegions!;
     }
 
+    public NodeTableBindingsDraftReadResult GetNodeTableBindings(
+        string workflowDefinitionDraftJson,
+        string nodeInstanceId)
+    {
+        if (string.IsNullOrWhiteSpace(workflowDefinitionDraftJson))
+        {
+            return new NodeTableBindingsDraftReadResult
+            {
+                Status = NodeTableBindingsDraftReadStatus.Succeeded,
+            };
+        }
+
+        EnsureCurrentDraftJson(workflowDefinitionDraftJson);
+        if (!cachedNodeTableBindings.TryGetValue(nodeInstanceId, out var result))
+        {
+            result = readNodeTableBindings(
+                GetOrCreateSnapshot(workflowDefinitionDraftJson),
+                nodeInstanceId);
+            cachedNodeTableBindings[nodeInstanceId] = result;
+        }
+
+        return result;
+    }
+
     public void Invalidate()
     {
         cachedDraftJson = null;
@@ -199,5 +237,6 @@ public sealed class WorkflowDefinitionDraftParseCache
         hasCachedRuntimeOptions = false;
         cachedLoopRegions = null;
         hasCachedLoopRegions = false;
+        cachedNodeTableBindings.Clear();
     }
 }

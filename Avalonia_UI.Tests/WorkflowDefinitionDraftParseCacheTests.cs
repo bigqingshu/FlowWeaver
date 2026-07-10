@@ -14,6 +14,7 @@ public sealed class WorkflowDefinitionDraftParseCacheTests
         var linearCalls = 0;
         var runtimeCalls = 0;
         var loopCalls = 0;
+        var tableBindingCalls = 0;
         var cache = new WorkflowDefinitionDraftParseCache(
             json =>
             {
@@ -49,6 +50,14 @@ public sealed class WorkflowDefinitionDraftParseCacheTests
                 {
                     Status = WorkflowLoopRegionDraftReadStatus.Succeeded,
                 };
+            },
+            (_, _) =>
+            {
+                tableBindingCalls++;
+                return new NodeTableBindingsDraftReadResult
+                {
+                    Status = NodeTableBindingsDraftReadStatus.Succeeded,
+                };
             });
 
         const string draftJson = """{"nodes":[],"connections":[]}""";
@@ -62,17 +71,21 @@ public sealed class WorkflowDefinitionDraftParseCacheTests
         var secondRuntime = cache.GetRuntimeOptions(draftJson);
         var firstLoops = cache.GetLoopRegions(draftJson);
         var secondLoops = cache.GetLoopRegions(draftJson);
+        var firstTableBindings = cache.GetNodeTableBindings(draftJson, "node-1");
+        var secondTableBindings = cache.GetNodeTableBindings(draftJson, "node-1");
 
         Assert.AreSame(firstSnapshot, secondSnapshot);
         Assert.AreSame(firstStructure, secondStructure);
         Assert.AreSame(firstLinear, secondLinear);
         Assert.AreSame(firstRuntime, secondRuntime);
         Assert.AreSame(firstLoops, secondLoops);
+        Assert.AreSame(firstTableBindings, secondTableBindings);
         Assert.AreEqual(1, parseCalls);
         Assert.AreEqual(1, structureCalls);
         Assert.AreEqual(1, linearCalls);
         Assert.AreEqual(1, runtimeCalls);
         Assert.AreEqual(1, loopCalls);
+        Assert.AreEqual(1, tableBindingCalls);
     }
 
     [TestMethod]
