@@ -1,0 +1,207 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowLoopRegionsView"
+             x:DataType="vm:WorkflowLoopRegionsViewModel">
+    <Border Classes="Card" Padding="14">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding SectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding CountText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Button Grid.Column="2"
+                        Content="{Binding AddText}"
+                        Command="{Binding StartNewDraftCommand}"
+                        MinWidth="84"/>
+            </Grid>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="220,*"
+                  ColumnSpacing="12"
+                  IsVisible="{Binding HasNodes}">
+                <Grid RowDefinitions="Auto,*" RowSpacing="6">
+                    <TextBlock Text="{Binding EmptyText}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasNoRegions}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding Regions}"
+                             SelectedItem="{Binding SelectedRegion, Mode=TwoWay}"
+                             MinHeight="150"
+                             MaxHeight="360">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowLoopRegionListItemViewModel"
+                                          x:DataType="vm:WorkflowLoopRegionListItemViewModel">
+                                <Grid Margin="8"
+                                      RowDefinitions="Auto,Auto,Auto"
+                                      RowSpacing="3">
+                                    <TextBlock Text="{Binding LoopId}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding BoundaryText}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding IterationText}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding EnabledText}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </Grid>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+
+                <Grid Grid.Column="1"
+                      RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                      ColumnDefinitions="130,*"
+                      RowSpacing="8"
+                      ColumnSpacing="10">
+                    <TextBlock Text="{Binding LoopIdText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBox Grid.Column="1"
+                             Text="{Binding LoopIdDraft, Mode=TwoWay}"/>
+
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding StartNodeText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Grid.Row="1"
+                              Grid.Column="1"
+                              ItemsSource="{Binding NodeOptions}"
+                              SelectedItem="{Binding SelectedStartNode, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowLoopRegionNodeOptionViewModel"
+                                          x:DataType="vm:WorkflowLoopRegionNodeOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding JudgeNodeText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Grid.Row="2"
+                              Grid.Column="1"
+                              ItemsSource="{Binding NodeOptions}"
+                              SelectedItem="{Binding SelectedJudgeNode, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowLoopRegionNodeOptionViewModel"
+                                          x:DataType="vm:WorkflowLoopRegionNodeOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="3"
+                               Text="{Binding EndNodeText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ComboBox Grid.Row="3"
+                              Grid.Column="1"
+                              ItemsSource="{Binding EndNodeOptions}"
+                              SelectedItem="{Binding SelectedEndNode, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:WorkflowLoopRegionNodeOptionViewModel"
+                                          x:DataType="vm:WorkflowLoopRegionNodeOptionViewModel">
+                                <TextBlock Text="{Binding DisplayText}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="4"
+                               Text="{Binding MaxIterationsText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <NumericUpDown Grid.Row="4"
+                                   Grid.Column="1"
+                                   Minimum="1"
+                                   Maximum="100000"
+                                   Increment="1"
+                                   Value="{Binding MaxIterationsDraft, Mode=TwoWay}"/>
+
+                    <TextBlock Grid.Row="5"
+                               Text="{Binding EnabledText}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <ToggleSwitch Grid.Row="5"
+                                  Grid.Column="1"
+                                  IsChecked="{Binding IsEnabledDraft, Mode=TwoWay}"/>
+
+                    <StackPanel Grid.Row="6"
+                                Grid.ColumnSpan="2"
+                                Spacing="6">
+                        <TextBlock Text="{Binding BodyNodesText}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ScrollViewer MaxHeight="150"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding BodyNodeOptions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkflowLoopRegionNodeOptionViewModel"
+                                                  x:DataType="vm:WorkflowLoopRegionNodeOptionViewModel">
+                                        <CheckBox Content="{Binding DisplayText}"
+                                                  IsChecked="{Binding IsBodySelected, Mode=TwoWay}"
+                                                  Margin="0,2"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="8">
+                            <Button Content="{Binding ApplyText}"
+                                    Command="{Binding ApplyDraftCommand}"
+                                    MinWidth="84"/>
+                            <Button x:Name="DeleteLoopRegionButton"
+                                    Content="{Binding DeleteText}"
+                                    IsEnabled="{Binding CanDeleteSelectedRegion}"
+                                    MinWidth="84">
+                                <Button.Flyout>
+                                    <Flyout>
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="{Binding DeleteConfirmTitleText}"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding DeleteConfirmMessageText}"
+                                                       MaxWidth="280"
+                                                       TextWrapping="Wrap"/>
+                                            <Button Content="{Binding DeleteText}"
+                                                    Click="ConfirmDeleteLoopRegion"
+                                                    HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <StackPanel Grid.Row="2" Spacing="4">
+                <TextBlock Text="{Binding Message}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasError}"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

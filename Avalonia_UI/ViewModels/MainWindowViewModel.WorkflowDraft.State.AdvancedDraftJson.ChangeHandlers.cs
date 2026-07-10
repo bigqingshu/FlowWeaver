@@ -6,4 +6,14 @@ public partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(ShowAdvancedDraftJsonText));
     }
+
+    partial void OnAdvancedWorkflowDefinitionDraftJsonChanged(string value)
+    {
+        if (isSynchronizingAdvancedWorkflowDraftJson)
+        {
+            return;
+        }
+
+        ScheduleAdvancedWorkflowDraftJsonApply(value);
+    }
 }

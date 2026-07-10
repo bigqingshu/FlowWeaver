@@ -12,6 +12,8 @@ public partial class MainWindowViewModel
         RefreshShellNavigationItems();
         InvalidateWorkflowDefinitionDraftParseCache();
         RefreshWorkflowDefinitionDraftStructureState();
+        RefreshWorkflowLoopRegionsFromDraft();
+        WorkflowLoopRegions.RefreshLocalizedText();
         RefreshSelectedNodeConfigDraftState();
     }
 }

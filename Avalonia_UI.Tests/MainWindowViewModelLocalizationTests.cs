@@ -18,6 +18,21 @@ namespace Avalonia_UI.Tests;
 public sealed class MainWindowViewModelLocalizationTests
 {
     [TestMethod]
+    public async Task LoopStartMaxLoopCountTitleClarifiesPreviewOnly()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        Assert.AreEqual(
+            "最大循环次数（仅预览）",
+            localizationService.GetString("node_config.LoopStartNode.max_loop_count.title"));
+
+        await localizationService.SetLanguageAsync("en-US");
+        Assert.AreEqual(
+            "Max Loop Count (Preview Only)",
+            localizationService.GetString("node_config.LoopStartNode.max_loop_count.title"));
+    }
+
+    [TestMethod]
     public async Task LoadUiSettingsAppliesPersistedLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore
@@ -39,6 +54,9 @@ public sealed class MainWindowViewModelLocalizationTests
             "运行和预览会使用当前已保存的工作流版本。",
             viewModel.WorkflowRunGuardText);
         Assert.AreEqual("工作流定义", viewModel.WorkflowDefinitionSectionText);
+        Assert.AreEqual("循环区域", viewModel.WorkflowLoopRegions.SectionText);
+        Assert.AreEqual("真实最大轮数", viewModel.WorkflowLoopRegions.MaxIterationsText);
+        Assert.AreEqual("启用真实循环", viewModel.WorkflowLoopRegions.EnabledText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
         Assert.AreEqual("应用名称", viewModel.ApplyNodeDisplayNameText);
@@ -106,6 +124,7 @@ public sealed class MainWindowViewModelLocalizationTests
             "运行和预览会使用当前已保存的工作流版本。",
             viewModel.WorkflowRunGuardText);
         Assert.AreEqual("节点类型", viewModel.NodeTypeText);
+        Assert.AreEqual("循环区域", viewModel.WorkflowLoopRegions.SectionText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
         Assert.AreEqual("应用名称", viewModel.ApplyNodeDisplayNameText);

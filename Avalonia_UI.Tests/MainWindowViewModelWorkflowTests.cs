@@ -5180,11 +5180,84 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.IsFalse(viewModel.HasNodeRunError);
     }
 
+    [TestMethod]
+    public async Task LoopRegionBridgeAppliesDraftMarksDirtyAndValidatesBackend()
+    {
+        const string workflowJson =
+            """
+            {
+              "nodes": [
+                {"node_instance_id":"start","node_type":"LoopStartNode","node_version":"1.0","config":{"loop_id":"orders_loop"}},
+                {"node_instance_id":"body","node_type":"FilterRowsNode","node_version":"1.0","config":{}},
+                {"node_instance_id":"judge","node_type":"LoopJudgeNode","node_version":"1.0","config":{"loop_id":"orders_loop"}}
+              ],
+              "connections": [],
+              "control_protocol": {
+                "mode":"preview",
+                "loop_regions":[{
+                  "loop_id":"orders_loop",
+                  "start_node_id":"start",
+                  "judge_node_id":"judge",
+                  "body_node_ids":["body"],
+                  "max_iterations":3
+                }]
+              }
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            ValidateWorkflowDraftResponse =
+                ApiResponseEnvelope<WorkflowValidationResultDto>.Success(
+                    new WorkflowValidationResultDto { Valid = true }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.WorkflowDefinitionDraftJson = workflowJson;
+        viewModel.WorkflowLoopRegions.SelectedRegion = viewModel.WorkflowLoopRegions.Regions[0];
+        viewModel.WorkflowLoopRegions.MaxIterationsDraft = 7;
+
+        await viewModel.WorkflowLoopRegions.ApplyDraftCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+        Assert.IsNotNull(apiClient.ValidatedWorkflowDraftDefinition);
+        Assert.AreEqual(
+            7,
+            apiClient.ValidatedWorkflowDraftDefinition.Value
+                .GetProperty("control_protocol")
+                .GetProperty("loop_regions")[0]
+                .GetProperty("max_iterations")
+                .GetInt32());
+        Assert.AreEqual("Workflow draft is valid.", viewModel.WorkflowDefinitionValidationMessage);
+    }
+
+    [TestMethod]
+    public async Task AdvancedDraftJsonDebounceAppliesOnlyLatestInput()
+    {
+        var viewModel = CreateViewModel(
+            new FakeApiClient(),
+            workflowDraftJsonDebounceDelay: cancellationToken =>
+                Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken));
+        const string initial = """{"nodes":[],"connections":[]}""";
+        const string first = """{"nodes":[{"node_instance_id":"old"}],"connections":[]}""";
+        const string latest = """{"nodes":[{"node_instance_id":"latest"}],"connections":[]}""";
+        viewModel.WorkflowDefinitionDraftJson = initial;
+
+        viewModel.AdvancedWorkflowDefinitionDraftJson = first;
+        viewModel.AdvancedWorkflowDefinitionDraftJson = latest;
+
+        Assert.AreEqual(initial, viewModel.WorkflowDefinitionDraftJson);
+        await Task.Delay(100);
+        Assert.AreEqual(latest, viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(
+            "latest",
+            viewModel.WorkflowDefinitionDraftStructure?.Nodes[0].NodeInstanceId);
+    }
+
     private static MainWindowViewModel CreateViewModel(
         FakeApiClient apiClient,
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
         IWorkflowImportFileService? workflowImportFileService = null,
-        IWorkflowExportFileService? workflowExportFileService = null)
+        IWorkflowExportFileService? workflowExportFileService = null,
+        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
@@ -5192,7 +5265,8 @@ public sealed class MainWindowViewModelWorkflowTests
             new EngineHostRuntimeEventStreamClient(),
             dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay,
             workflowImportFileService: workflowImportFileService,
-            workflowExportFileService: workflowExportFileService)
+            workflowExportFileService: workflowExportFileService,
+            workflowDraftJsonDebounceDelay: workflowDraftJsonDebounceDelay)
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",

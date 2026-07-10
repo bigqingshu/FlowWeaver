@@ -54,7 +54,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ILocalizationService? localizationService = null,
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
         IWorkflowImportFileService? workflowImportFileService = null,
-        IWorkflowExportFileService? workflowExportFileService = null)
+        IWorkflowExportFileService? workflowExportFileService = null,
+        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
@@ -62,6 +63,8 @@ public partial class MainWindowViewModel : ViewModelBase
         _runtimeEventReconnectDelay = runtimeEventReconnectDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromSeconds(2), cancellationToken));
         _dataPreviewRunRefreshDelay = dataPreviewRunRefreshDelay
+            ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
+        _workflowDraftJsonDebounceDelay = workflowDraftJsonDebounceDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
         _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
@@ -71,6 +74,7 @@ public partial class MainWindowViewModel : ViewModelBase
             workflowExportFileService ?? new AvaloniaWorkflowExportFileService();
         _localizationService = localizationService ?? new JsonLocalizationService();
 
+        InitializeWorkflowLoopRegions();
         InitializeLanguageMenuItems();
         InitializeThemeMenuItems();
         RefreshDefaultMessagesForCurrentLanguage(previousDefaults: null);

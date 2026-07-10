@@ -118,6 +118,7 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <workflow:WorkflowLoopRegionsView DataContext="{Binding WorkflowLoopRegions}" />
         <workflow:WorkflowRecentEventsView />
         </StackPanel>
     </ScrollViewer>

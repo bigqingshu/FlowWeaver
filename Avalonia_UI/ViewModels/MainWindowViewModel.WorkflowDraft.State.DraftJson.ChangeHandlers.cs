@@ -4,8 +4,10 @@ public partial class MainWindowViewModel
 {
     partial void OnWorkflowDefinitionDraftJsonChanged(string value)
     {
+        SynchronizeAdvancedWorkflowDraftJson(value);
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
         RefreshWorkflowDefinitionDraftStructureState();
+        RefreshWorkflowLoopRegionsFromDraft();
         RefreshSelectedNodeConfigDraftState();
         RefreshRuntimeOptionsDraftState();
 

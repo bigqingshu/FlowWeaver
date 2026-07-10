@@ -6,4 +6,7 @@ public partial class MainWindowViewModel
 {
     [ObservableProperty]
     private bool isWorkflowDraftJsonAdvancedVisible;
+
+    [ObservableProperty]
+    private string advancedWorkflowDefinitionDraftJson = string.Empty;
 }

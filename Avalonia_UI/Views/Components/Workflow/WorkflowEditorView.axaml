@@ -42,7 +42,7 @@
                             MinWidth="78"/>
                 </Grid>
 
-                <TextBox Text="{Binding WorkflowDefinitionDraftJson}"
+                <TextBox Text="{Binding AdvancedWorkflowDefinitionDraftJson, Mode=TwoWay}"
                          AcceptsReturn="True"
                          TextWrapping="Wrap"
                          FontFamily="Consolas"
