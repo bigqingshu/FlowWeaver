@@ -126,6 +126,38 @@ public interface IEngineHostApiClient
         string? logicalTableId = null,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<List<LoopRunDto>>> ListLoopRunsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<List<LoopIterationRunDto>>> ListLoopIterationsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<List<LoopIterationNodeRunDto>>> ListLoopIterationNodeRunsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        string loopIterationId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<List<LoopIterationTableRefDto>>> ListLoopIterationTableRefsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        string loopIterationId,
+        string? role = null,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
         EngineHostConnectionSettings settings,
         string tableRefId,

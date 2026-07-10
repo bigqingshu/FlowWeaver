@@ -1280,6 +1280,61 @@ public sealed class MainWindowViewModelDataTests
                     "No run table directory response configured."));
         }
 
+        public Task<ApiResponseEnvelope<List<LoopRunDto>>> ListLoopRunsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            int offset = 0,
+            int limit = 50,
+            IReadOnlyCollection<string>? statuses = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<List<LoopRunDto>>.Failure(
+                    "NOT_CONFIGURED",
+                    "No loop run response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<List<LoopIterationRunDto>>> ListLoopIterationsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            string loopRunId,
+            int offset = 0,
+            int limit = 50,
+            IReadOnlyCollection<string>? statuses = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<List<LoopIterationRunDto>>.Failure(
+                    "NOT_CONFIGURED",
+                    "No loop iteration response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<List<LoopIterationNodeRunDto>>> ListLoopIterationNodeRunsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            string loopRunId,
+            string loopIterationId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<List<LoopIterationNodeRunDto>>.Failure(
+                    "NOT_CONFIGURED",
+                    "No loop iteration node response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<List<LoopIterationTableRefDto>>> ListLoopIterationTableRefsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            string loopRunId,
+            string loopIterationId,
+            string? role = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<List<LoopIterationTableRefDto>>.Failure(
+                    "NOT_CONFIGURED",
+                    "No loop iteration table response configured."));
+        }
         public Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
             EngineHostConnectionSettings settings,
             string tableRefId,

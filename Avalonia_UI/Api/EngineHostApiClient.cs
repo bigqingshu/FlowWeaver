@@ -344,6 +344,75 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<List<LoopRunDto>>> ListLoopRunsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = BuildPagedStatusQuery(offset, limit, statuses);
+        return SendAsync<List<LoopRunDto>>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/loops",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<List<LoopIterationRunDto>>> ListLoopIterationsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        int offset = 0,
+        int limit = 50,
+        IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = BuildPagedStatusQuery(offset, limit, statuses);
+        return SendAsync<List<LoopIterationRunDto>>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/loops/" +
+            $"{Uri.EscapeDataString(loopRunId)}/iterations",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<List<LoopIterationNodeRunDto>>> ListLoopIterationNodeRunsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        string loopIterationId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<List<LoopIterationNodeRunDto>>(
+            settings,
+            HttpMethod.Get,
+            BuildLoopIterationPath(workflowRunId, loopRunId, loopIterationId, "nodes"),
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<List<LoopIterationTableRefDto>>> ListLoopIterationTableRefsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string loopRunId,
+        string loopIterationId,
+        string? role = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = string.IsNullOrWhiteSpace(role)
+            ? null
+            : new[] { new KeyValuePair<string, string?>("role", role) };
+        return SendAsync<List<LoopIterationTableRefDto>>(
+            settings,
+            HttpMethod.Get,
+            BuildLoopIterationPath(workflowRunId, loopRunId, loopIterationId, "table-refs"),
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
         EngineHostConnectionSettings settings,
         string tableRefId,
@@ -566,5 +635,34 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             "INVALID_RESPONSE",
             "EngineHost response was not valid JSON.");
         return false;
+    }
+
+    private static List<KeyValuePair<string, string?>> BuildPagedStatusQuery(
+        int offset,
+        int limit,
+        IReadOnlyCollection<string>? statuses)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+        if (statuses is not null)
+        {
+            query.AddRange(statuses.Select(status => new KeyValuePair<string, string?>("status", status)));
+        }
+
+        return query;
+    }
+
+    private static string BuildLoopIterationPath(
+        string workflowRunId,
+        string loopRunId,
+        string loopIterationId,
+        string suffix)
+    {
+        return $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/loops/" +
+               $"{Uri.EscapeDataString(loopRunId)}/iterations/" +
+               $"{Uri.EscapeDataString(loopIterationId)}/{suffix}";
     }
 }

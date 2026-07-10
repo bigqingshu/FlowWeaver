@@ -568,6 +568,109 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListLoopRunsAsyncBuildsPagedStatusQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[{"loop_run_id":"loop-run-1","workflow_run_id":"run-1","loop_id":"orders-loop","start_node_instance_id":"start-1","judge_node_instance_id":"judge-1","status":"RUNNING","state_version":2,"current_iteration":1,"max_iterations":5,"exit_reason":null,"started_at":"2026-07-10T01:02:03Z","finished_at":null,"error":null,"created_at":"2026-07-10T01:01:03Z"}],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListLoopRunsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            offset: 10,
+            limit: 20,
+            statuses: ["RUNNING", "COMPLETED"]);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/loops?offset=10&limit=20&status=RUNNING&status=COMPLETED"),
+            handler.RequestUri);
+        Assert.AreEqual("orders-loop", result.Data?[0].LoopId);
+        Assert.AreEqual(1, result.Data?[0].CurrentIteration);
+        Assert.AreEqual(5, result.Data?[0].MaxIterations);
+    }
+
+    [TestMethod]
+    public async Task ListLoopIterationsAsyncBuildsPagedStatusQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[{"loop_iteration_id":"iteration-1","loop_run_id":"loop-run-1","iteration_index":2,"status":"RUNNING","state_version":3,"input_table_ref_id":"input-1","input_selector":{"row_index":2},"output_table_ref_id":"output-1","failed_node_run_id":null,"started_at":"2026-07-10T01:02:03Z","finished_at":null,"error":null,"created_at":"2026-07-10T01:01:03Z"}],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListLoopIterationsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            "loop run 1",
+            offset: 5,
+            limit: 15,
+            statuses: ["RUNNING"]);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/loops/loop%20run%201/iterations?offset=5&limit=15&status=RUNNING"),
+            handler.RequestUri);
+        Assert.AreEqual(2, result.Data?[0].IterationIndex);
+        Assert.AreEqual(2, result.Data?[0].InputSelector?.GetProperty("row_index").GetInt32());
+    }
+
+    [TestMethod]
+    public async Task ListLoopIterationNodeRunsAsyncUsesIterationNodesPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[{"loop_iteration_id":"iteration-1","node_run_id":"node-run-1","node_instance_id":"body-1","role":"BODY","node_type":"FilterRowsNode","status":"RUNNING","progress":0.5,"current_stage":"filter","attempt":1,"started_at":"2026-07-10T01:02:03Z","finished_at":null,"error":null}],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListLoopIterationNodeRunsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            "loop run 1",
+            "iteration 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/loops/loop%20run%201/iterations/iteration%201/nodes"),
+            handler.RequestUri);
+        Assert.AreEqual("BODY", result.Data?[0].Role);
+        Assert.AreEqual("body-1", result.Data?[0].NodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task ListLoopIterationTableRefsAsyncBuildsRoleQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[{"loop_iteration_id":"iteration-1","table_ref_id":"table-1","role":"OUTPUT","logical_table_id":"orders","storage_kind":"RUNTIME_SQL","table_role":"CURRENT","version":2,"lifecycle_status":"PUBLISHED","source_node_run_id":"node-run-1","source_node_instance_id":"body-1","output_slot":"result","created_at":"2026-07-10T01:02:03Z"}],"error":null,"request_id":"req"}"""),
+        });
+        var service = new LoopRunQueryService(
+            new EngineHostApiClient(new HttpClient(handler)));
+
+        var result = await service.ListIterationTableRefsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            "loop run 1",
+            "iteration 1",
+            role: "OUTPUT");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/loops/loop%20run%201/iterations/iteration%201/table-refs?role=OUTPUT"),
+            handler.RequestUri);
+        Assert.AreEqual("OUTPUT", result.Data?[0].Role);
+        Assert.AreEqual("body-1", result.Data?[0].SourceNodeInstanceId);
+        Assert.AreEqual("result", result.Data?[0].OutputSlot);
+    }
+
+    [TestMethod]
     public async Task GetTableDataSchemaAsyncUsesDataSchemaPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -769,6 +872,8 @@ public sealed class EngineHostApiClientTests
 
         public Uri? RequestUri { get; private set; }
 
+        public HttpMethod? RequestMethod { get; private set; }
+
         public System.Net.Http.Headers.AuthenticationHeaderValue? Authorization { get; private set; }
 
         public int SendCount { get; private set; }
@@ -779,6 +884,7 @@ public sealed class EngineHostApiClientTests
         {
             SendCount++;
             RequestUri = request.RequestUri;
+            RequestMethod = request.Method;
             Authorization = request.Headers.Authorization;
             return Task.FromResult(_send(request));
         }

@@ -395,6 +395,171 @@ public sealed record NodeRunPageDto
     public bool HasMore { get; init; }
 }
 
+public sealed record LoopRunDto
+{
+    [JsonPropertyName("loop_run_id")]
+    public string LoopRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("workflow_run_id")]
+    public string WorkflowRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("loop_id")]
+    public string LoopId { get; init; } = string.Empty;
+
+    [JsonPropertyName("start_node_instance_id")]
+    public string StartNodeInstanceId { get; init; } = string.Empty;
+
+    [JsonPropertyName("judge_node_instance_id")]
+    public string JudgeNodeInstanceId { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("state_version")]
+    public int StateVersion { get; init; }
+
+    [JsonPropertyName("current_iteration")]
+    public int CurrentIteration { get; init; }
+
+    [JsonPropertyName("max_iterations")]
+    public int MaxIterations { get; init; }
+
+    [JsonPropertyName("exit_reason")]
+    public string? ExitReason { get; init; }
+
+    [JsonPropertyName("started_at")]
+    public DateTimeOffset? StartedAt { get; init; }
+
+    [JsonPropertyName("finished_at")]
+    public DateTimeOffset? FinishedAt { get; init; }
+
+    [JsonPropertyName("error")]
+    public JsonElement? Error { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+public sealed record LoopIterationRunDto
+{
+    [JsonPropertyName("loop_iteration_id")]
+    public string LoopIterationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("loop_run_id")]
+    public string LoopRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("iteration_index")]
+    public int IterationIndex { get; init; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("state_version")]
+    public int StateVersion { get; init; }
+
+    [JsonPropertyName("input_table_ref_id")]
+    public string? InputTableRefId { get; init; }
+
+    [JsonPropertyName("input_selector")]
+    public JsonElement? InputSelector { get; init; }
+
+    [JsonPropertyName("output_table_ref_id")]
+    public string? OutputTableRefId { get; init; }
+
+    [JsonPropertyName("failed_node_run_id")]
+    public string? FailedNodeRunId { get; init; }
+
+    [JsonPropertyName("started_at")]
+    public DateTimeOffset? StartedAt { get; init; }
+
+    [JsonPropertyName("finished_at")]
+    public DateTimeOffset? FinishedAt { get; init; }
+
+    [JsonPropertyName("error")]
+    public JsonElement? Error { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+public sealed record LoopIterationNodeRunDto
+{
+    [JsonPropertyName("loop_iteration_id")]
+    public string LoopIterationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_run_id")]
+    public string NodeRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_instance_id")]
+    public string NodeInstanceId { get; init; } = string.Empty;
+
+    [JsonPropertyName("role")]
+    public string Role { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_type")]
+    public string NodeType { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("progress")]
+    public double? Progress { get; init; }
+
+    [JsonPropertyName("current_stage")]
+    public string? CurrentStage { get; init; }
+
+    [JsonPropertyName("attempt")]
+    public int Attempt { get; init; }
+
+    [JsonPropertyName("started_at")]
+    public DateTimeOffset? StartedAt { get; init; }
+
+    [JsonPropertyName("finished_at")]
+    public DateTimeOffset? FinishedAt { get; init; }
+
+    [JsonPropertyName("error")]
+    public JsonElement? Error { get; init; }
+}
+
+public sealed record LoopIterationTableRefDto
+{
+    [JsonPropertyName("loop_iteration_id")]
+    public string LoopIterationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("role")]
+    public string Role { get; init; } = string.Empty;
+
+    [JsonPropertyName("logical_table_id")]
+    public string? LogicalTableId { get; init; }
+
+    [JsonPropertyName("storage_kind")]
+    public string? StorageKind { get; init; }
+
+    [JsonPropertyName("table_role")]
+    public string? TableRole { get; init; }
+
+    [JsonPropertyName("version")]
+    public int? Version { get; init; }
+
+    [JsonPropertyName("lifecycle_status")]
+    public string? LifecycleStatus { get; init; }
+
+    [JsonPropertyName("source_node_run_id")]
+    public string? SourceNodeRunId { get; init; }
+
+    [JsonPropertyName("source_node_instance_id")]
+    public string? SourceNodeInstanceId { get; init; }
+
+    [JsonPropertyName("output_slot")]
+    public string? OutputSlot { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
 public sealed record RuntimeEventDto
 {
     [JsonPropertyName("event_id")]
