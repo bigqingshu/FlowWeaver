@@ -7,42 +7,41 @@ public static class RuntimeOptionsDraftReader
 {
     public static RuntimeOptionsDraftReadResult Read(string workflowDefinitionDraftJson)
     {
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(workflowDefinitionDraftJson);
-        }
-        catch (JsonException)
+        return Read(
+            WorkflowDefinitionDraftSnapshot.Parse(workflowDefinitionDraftJson));
+    }
+
+    public static RuntimeOptionsDraftReadResult Read(
+        WorkflowDefinitionDraftSnapshot snapshot)
+    {
+        if (!snapshot.Succeeded)
         {
             return Failed(
                 RuntimeOptionsDraftReadStatus.JsonInvalid,
-                "WORKFLOW_DRAFT_JSON_INVALID");
+                snapshot.Warning ?? "WORKFLOW_DRAFT_JSON_INVALID");
         }
 
-        using (document)
+        var root = snapshot.Root;
+        if (root.ValueKind != JsonValueKind.Object)
         {
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return Failed(
-                    RuntimeOptionsDraftReadStatus.RootNotObject,
-                    "WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
-            }
-
-            if (!root.TryGetProperty("runtime_options", out var runtimeOptions))
-            {
-                return Succeeded(new RuntimeOptionsDraft());
-            }
-
-            if (runtimeOptions.ValueKind != JsonValueKind.Object)
-            {
-                return Failed(
-                    RuntimeOptionsDraftReadStatus.RuntimeOptionsNotObject,
-                    "RUNTIME_OPTIONS_NOT_OBJECT");
-            }
-
-            return Succeeded(ReadRuntimeOptions(runtimeOptions));
+            return Failed(
+                RuntimeOptionsDraftReadStatus.RootNotObject,
+                "WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
         }
+
+        if (!root.TryGetProperty("runtime_options", out var runtimeOptions))
+        {
+            return Succeeded(new RuntimeOptionsDraft());
+        }
+
+        if (runtimeOptions.ValueKind != JsonValueKind.Object)
+        {
+            return Failed(
+                RuntimeOptionsDraftReadStatus.RuntimeOptionsNotObject,
+                "RUNTIME_OPTIONS_NOT_OBJECT");
+        }
+
+        return Succeeded(ReadRuntimeOptions(runtimeOptions));
     }
 
     public static RuntimeOptionsDraftReadResult ReadRuntimeOptionsJson(

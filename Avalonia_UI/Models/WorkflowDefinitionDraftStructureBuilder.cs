@@ -10,58 +10,59 @@ public static class WorkflowDefinitionDraftStructureBuilder
         string workflowDefinitionDraftJson,
         DisplayTextFormatter? displayTextFormatter = null)
     {
+        return Build(
+            WorkflowDefinitionDraftSnapshot.Parse(workflowDefinitionDraftJson),
+            displayTextFormatter);
+    }
+
+    public static WorkflowDefinitionDraftStructure Build(
+        WorkflowDefinitionDraftSnapshot snapshot,
+        DisplayTextFormatter? displayTextFormatter = null)
+    {
         var formatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(workflowDefinitionDraftJson);
-        }
-        catch (JsonException)
+        if (!snapshot.Succeeded)
         {
             return Unsupported(
                 WorkflowDefinitionDraftStructureStatus.JsonInvalid,
-                "WORKFLOW_DRAFT_JSON_INVALID");
+                snapshot.Warning ?? "WORKFLOW_DRAFT_JSON_INVALID");
         }
 
-        using (document)
+        var root = snapshot.Root;
+        if (root.ValueKind != JsonValueKind.Object)
         {
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return Unsupported(
-                    WorkflowDefinitionDraftStructureStatus.RootNotObject,
-                    "WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
-            }
+            return Unsupported(
+                WorkflowDefinitionDraftStructureStatus.RootNotObject,
+                "WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
+        }
 
-            if (!TryGetArray(root, "nodes", out var nodes))
-            {
-                return Unsupported(
-                    WorkflowDefinitionDraftStructureStatus.NodesMissing,
-                    "WORKFLOW_DRAFT_NODES_MISSING");
-            }
+        if (!TryGetArray(root, "nodes", out var nodes))
+        {
+            return Unsupported(
+                WorkflowDefinitionDraftStructureStatus.NodesMissing,
+                "WORKFLOW_DRAFT_NODES_MISSING");
+        }
 
-            var warnings = new List<string>();
-            var draftNodes = ReadNodes(nodes, warnings, formatter);
+        var warnings = new List<string>();
+        var draftNodes = ReadNodes(nodes, warnings, formatter);
 
-            if (!TryGetArray(root, "connections", out var connections))
-            {
-                warnings.Add("WORKFLOW_DRAFT_CONNECTIONS_MISSING");
-                return new WorkflowDefinitionDraftStructure
-                {
-                    Status = WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
-                    Nodes = draftNodes,
-                    Warnings = warnings,
-                };
-            }
-
+        if (!TryGetArray(root, "connections", out var connections))
+        {
+            warnings.Add("WORKFLOW_DRAFT_CONNECTIONS_MISSING");
             return new WorkflowDefinitionDraftStructure
             {
-                Status = WorkflowDefinitionDraftStructureStatus.Supported,
+                Status = WorkflowDefinitionDraftStructureStatus.ConnectionsMissing,
                 Nodes = draftNodes,
-                Connections = ReadConnections(connections, warnings),
                 Warnings = warnings,
             };
         }
+
+        return new WorkflowDefinitionDraftStructure
+        {
+            Status = WorkflowDefinitionDraftStructureStatus.Supported,
+            Nodes = draftNodes,
+            Connections = ReadConnections(connections, warnings),
+            Warnings = warnings,
+        };
     }
 
     private static WorkflowDefinitionDraftStructure Unsupported(

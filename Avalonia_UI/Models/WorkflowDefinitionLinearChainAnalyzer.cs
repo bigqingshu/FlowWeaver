@@ -10,104 +10,104 @@ public static class WorkflowDefinitionLinearChainAnalyzer
     public static WorkflowDefinitionLinearChainAnalysis Analyze(
         string workflowDefinitionDraftJson)
     {
-        JsonDocument document;
-        try
+        return Analyze(
+            WorkflowDefinitionDraftSnapshot.Parse(workflowDefinitionDraftJson));
+    }
+
+    public static WorkflowDefinitionLinearChainAnalysis Analyze(
+        WorkflowDefinitionDraftSnapshot snapshot)
+    {
+        if (!snapshot.Succeeded)
         {
-            document = JsonDocument.Parse(workflowDefinitionDraftJson);
+            return WorkflowDefinitionLinearChainAnalysis.Rejected(
+                snapshot.Warning ?? "WORKFLOW_DRAFT_JSON_INVALID");
         }
-        catch (JsonException)
+
+        var root = snapshot.Root;
+        if (root.ValueKind != JsonValueKind.Object)
         {
-            return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_JSON_INVALID");
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
         }
 
-        using (document)
+        if (!TryGetArray(root, "nodes", out var nodes))
         {
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_ROOT_NOT_OBJECT");
-            }
-
-            if (!TryGetArray(root, "nodes", out var nodes))
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_NODES_MISSING");
-            }
-
-            if (!TryGetArray(root, "connections", out var connections))
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_CONNECTIONS_MISSING");
-            }
-
-            var nodeIds = ReadNodeIds(nodes);
-            if (nodeIds is null)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("NODE_INSTANCE_ID_REQUIRED");
-            }
-
-            if (nodeIds.Count <= 1 && connections.GetArrayLength() == 0)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Linear(nodeIds);
-            }
-
-            var connectionRead = ReadConnections(connections, nodeIds);
-            if (!connectionRead.Succeeded)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected(connectionRead.Warning);
-            }
-
-            if (connectionRead.Connections.Count != nodeIds.Count - 1)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_DISCONNECTED");
-            }
-
-            var incoming = new Dictionary<string, string>(StringComparer.Ordinal);
-            var outgoing = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var connection in connectionRead.Connections)
-            {
-                if (outgoing.ContainsKey(connection.SourceNodeId))
-                {
-                    return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_BRANCHING");
-                }
-
-                if (incoming.ContainsKey(connection.TargetNodeId))
-                {
-                    return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_MERGING");
-                }
-
-                outgoing[connection.SourceNodeId] = connection.TargetNodeId;
-                incoming[connection.TargetNodeId] = connection.SourceNodeId;
-            }
-
-            var sources = nodeIds.Where(nodeId => !incoming.ContainsKey(nodeId)).ToArray();
-            var sinks = nodeIds.Where(nodeId => !outgoing.ContainsKey(nodeId)).ToArray();
-            if (sources.Length != 1 || sinks.Length != 1)
-            {
-                return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_NOT_SINGLE_CHAIN");
-            }
-
-            var orderedNodeIds = new List<string>();
-            var visited = new HashSet<string>(StringComparer.Ordinal);
-            var current = sources[0];
-            while (true)
-            {
-                if (!visited.Add(current))
-                {
-                    return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_CYCLE");
-                }
-
-                orderedNodeIds.Add(current);
-                if (!outgoing.TryGetValue(current, out var next))
-                {
-                    break;
-                }
-
-                current = next;
-            }
-
-            return orderedNodeIds.Count == nodeIds.Count
-                ? WorkflowDefinitionLinearChainAnalysis.Linear(orderedNodeIds)
-                : WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_DISCONNECTED");
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_NODES_MISSING");
         }
+
+        if (!TryGetArray(root, "connections", out var connections))
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("WORKFLOW_DRAFT_CONNECTIONS_MISSING");
+        }
+
+        var nodeIds = ReadNodeIds(nodes);
+        if (nodeIds is null)
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("NODE_INSTANCE_ID_REQUIRED");
+        }
+
+        if (nodeIds.Count <= 1 && connections.GetArrayLength() == 0)
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Linear(nodeIds);
+        }
+
+        var connectionRead = ReadConnections(connections, nodeIds);
+        if (!connectionRead.Succeeded)
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Rejected(connectionRead.Warning);
+        }
+
+        if (connectionRead.Connections.Count != nodeIds.Count - 1)
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_DISCONNECTED");
+        }
+
+        var incoming = new Dictionary<string, string>(StringComparer.Ordinal);
+        var outgoing = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var connection in connectionRead.Connections)
+        {
+            if (outgoing.ContainsKey(connection.SourceNodeId))
+            {
+                return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_BRANCHING");
+            }
+
+            if (incoming.ContainsKey(connection.TargetNodeId))
+            {
+                return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_MERGING");
+            }
+
+            outgoing[connection.SourceNodeId] = connection.TargetNodeId;
+            incoming[connection.TargetNodeId] = connection.SourceNodeId;
+        }
+
+        var sources = nodeIds.Where(nodeId => !incoming.ContainsKey(nodeId)).ToArray();
+        var sinks = nodeIds.Where(nodeId => !outgoing.ContainsKey(nodeId)).ToArray();
+        if (sources.Length != 1 || sinks.Length != 1)
+        {
+            return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_NOT_SINGLE_CHAIN");
+        }
+
+        var orderedNodeIds = new List<string>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var current = sources[0];
+        while (true)
+        {
+            if (!visited.Add(current))
+            {
+                return WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_CYCLE");
+            }
+
+            orderedNodeIds.Add(current);
+            if (!outgoing.TryGetValue(current, out var next))
+            {
+                break;
+            }
+
+            current = next;
+        }
+
+        return orderedNodeIds.Count == nodeIds.Count
+            ? WorkflowDefinitionLinearChainAnalysis.Linear(orderedNodeIds)
+            : WorkflowDefinitionLinearChainAnalysis.Rejected("LINEAR_CHAIN_DISCONNECTED");
     }
 
     private static bool TryGetArray(
