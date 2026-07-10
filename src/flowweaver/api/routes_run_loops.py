@@ -137,9 +137,9 @@ def list_run_loop_iteration_table_refs(
     if rejection is not None:
         return rejection
     links = store.list_loop_iteration_table_refs(loop_iteration_id, role=role)
-    refs_by_id = {
-        table_ref.table_ref_id: table_ref
-        for table_ref in store.list_table_refs_by_ids(
+    entries_by_id = {
+        entry.table_ref.table_ref_id: entry
+        for entry in store.list_table_ref_directory_by_ids(
             [link.table_ref_id for link in links]
         )
     }
@@ -148,7 +148,16 @@ def list_run_loop_iteration_table_refs(
         [
             loop_iteration_table_ref_to_jsonable(
                 link,
-                refs_by_id.get(link.table_ref_id),
+                (
+                    entries_by_id[link.table_ref_id].table_ref
+                    if link.table_ref_id in entries_by_id
+                    else None
+                ),
+                (
+                    entries_by_id[link.table_ref_id].source_node_instance_id
+                    if link.table_ref_id in entries_by_id
+                    else None
+                ),
             )
             for link in links
         ],

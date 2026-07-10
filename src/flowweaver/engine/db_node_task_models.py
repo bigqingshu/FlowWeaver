@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from flowweaver.engine.db_base import Base
@@ -8,6 +8,15 @@ from flowweaver.engine.db_base import Base
 
 class NodeRunRecord(Base):
     __tablename__ = "node_runs"
+    __table_args__ = (
+        Index(
+            "idx_node_runs_run_status_directory",
+            "workflow_run_id",
+            "status",
+            "node_instance_id",
+            "node_run_id",
+        ),
+    )
 
     node_run_id: Mapped[str] = mapped_column(Text, primary_key=True)
     workflow_run_id: Mapped[str] = mapped_column(

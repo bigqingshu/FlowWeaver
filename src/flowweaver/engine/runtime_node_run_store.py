@@ -14,6 +14,9 @@ from flowweaver.engine.db_models import (
 )
 from flowweaver.engine.runtime_models import NodeRun
 from flowweaver.engine.runtime_node_run_queries import (
+    count_node_runs_from_session as _count_node_runs,
+)
+from flowweaver.engine.runtime_node_run_queries import (
     get_node_run_for_instance_from_session as _get_node_run_for_instance,
 )
 from flowweaver.engine.runtime_node_run_queries import (
@@ -107,9 +110,35 @@ class RuntimeNodeRunStoreMixin:
                 node_instance_id=node_instance_id,
             )
 
-    def list_node_runs(self, workflow_run_id: str) -> list[NodeRun]:
+    def list_node_runs(
+        self,
+        workflow_run_id: str,
+        *,
+        statuses: Iterable[NodeRunStatus | str] | None = None,
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> list[NodeRun]:
         with self._session_factory() as session:
-            return _list_node_runs(session, workflow_run_id)
+            return _list_node_runs(
+                session,
+                workflow_run_id,
+                statuses=statuses,
+                offset=offset,
+                limit=limit,
+            )
+
+    def count_node_runs(
+        self,
+        workflow_run_id: str,
+        *,
+        statuses: Iterable[NodeRunStatus | str] | None = None,
+    ) -> int:
+        with self._session_factory() as session:
+            return _count_node_runs(
+                session,
+                workflow_run_id,
+                statuses=statuses,
+            )
 
     def list_node_runs_by_ids(self, node_run_ids: list[str]) -> list[NodeRun]:
         with self._session_factory() as session:

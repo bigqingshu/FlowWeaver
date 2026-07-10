@@ -26,6 +26,7 @@ from flowweaver.protocols.enums import (
     LoopIterationRunStatus,
     LoopIterationTableRefRole,
     LoopRunStatus,
+    NodeRunStatus,
     TableMutability,
     TableRole,
     TableScope,
@@ -136,21 +137,28 @@ def make_api_table_ref(
     node_run_id: str,
     logical_table_id: str = "orders",
     version: int = 1,
+    role: TableRole = TableRole.CURRENT,
+    storage_kind: TableStorageKind = TableStorageKind.RUNTIME_SQL,
+    lifecycle_status: LifecycleStatus = LifecycleStatus.PUBLISHED,
+    output_slot: str | None = None,
 ) -> TableRefModel:
+    opaque_handle = {
+        "database_path": "runtime/run.db",
+        "table_name": f"{logical_table_id}_v{version}",
+    }
+    if output_slot is not None:
+        opaque_handle["output_slot"] = output_slot
     return TableRefModel(
         table_ref_id=table_ref_id,
-        role=TableRole.CURRENT,
-        storage_kind=TableStorageKind.RUNTIME_SQL,
+        role=role,
+        storage_kind=storage_kind,
         scope=TableScope.WORKFLOW_SCOPE,
         mutability=TableMutability.PUBLISHED_IMMUTABLE,
         provider_id="sqlite_runtime",
         resource_profile_id=None,
         mount_id=None,
         logical_table_id=logical_table_id,
-        opaque_handle={
-            "database_path": "runtime/run.db",
-            "table_name": f"{logical_table_id}_v{version}",
-        },
+        opaque_handle=opaque_handle,
         schema=[
             FieldSchemaModel(
                 field_id=f"{logical_table_id}-amount",
@@ -163,7 +171,7 @@ def make_api_table_ref(
         schema_fingerprint=f"{logical_table_id}-fingerprint-{version}",
         version=version,
         capabilities={"READ"},
-        lifecycle_status=LifecycleStatus.PUBLISHED,
+        lifecycle_status=lifecycle_status,
         created_by_workflow_run_id=workflow_run_id,
         created_by_node_run_id=node_run_id,
         created_at=utc_now(),
@@ -1707,6 +1715,7 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
     assert table_refs[0]["logical_table_id"] == "loop_input"
     assert table_refs[0]["storage_kind"] == TableStorageKind.RUNTIME_SQL.value
     assert table_refs[0]["source_node_run_id"] == node.node_run_id
+    assert table_refs[0]["source_node_instance_id"] == "loop-body"
     assert iteration_nodes == [
         {
             "loop_iteration_id": iteration.loop_iteration_id,
@@ -1726,6 +1735,139 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
     assert invalid_pagination.status_code == 422
     assert response_error(invalid_pagination)["error_code"] == "INVALID_PAGINATION"
     assert wrong_loop_iteration.status_code == 404
+
+
+def test_run_metadata_directory_api_pages_and_filters_without_full_schema(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Run directory workflow",
+        definition=valid_definition(),
+        workflow_id="workflow-run-directory",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-directory",
+    )
+    first_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="first-node",
+        node_type="core.source",
+        node_run_id="node-directory-1",
+        status=NodeRunStatus.PENDING,
+    )
+    second_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="second-node",
+        node_type="core.transform",
+        node_run_id="node-directory-2",
+        status=NodeRunStatus.SUCCEEDED,
+    )
+    refs = [
+        make_api_table_ref(
+            table_ref_id="table-directory-current",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=first_node.node_run_id,
+            logical_table_id="orders",
+            output_slot="out",
+        ),
+        make_api_table_ref(
+            table_ref_id="table-directory-memory",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=second_node.node_run_id,
+            logical_table_id="scratch",
+            role=TableRole.AUXILIARY,
+            storage_kind=TableStorageKind.MEMORY,
+            lifecycle_status=LifecycleStatus.ACTIVE,
+            output_slot="memory_copy",
+        ),
+        make_api_table_ref(
+            table_ref_id="table-directory-released",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=second_node.node_run_id,
+            logical_table_id="archive",
+            role=TableRole.AUXILIARY,
+            lifecycle_status=LifecycleStatus.RELEASED,
+        ),
+    ]
+    for table_ref in refs:
+        store.register_table_ref(table_ref)
+
+    node_page_response = client.get(
+        f"/api/v1/runs/{run.workflow_run_id}/nodes",
+        params={
+            "paged": "true",
+            "offset": 0,
+            "limit": 1,
+            "status": NodeRunStatus.PENDING.value,
+        },
+        headers=auth_headers(),
+    )
+    node_page = response_data(node_page_response)
+    table_page_response = client.get(
+        f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+        params={
+            "paged": "true",
+            "offset": 0,
+            "limit": 1,
+            "node_run_id": second_node.node_run_id,
+            "table_type": "memory_table",
+            "lifecycle": LifecycleStatus.ACTIVE.value,
+            "logical_table_id": "scratch",
+        },
+        headers=auth_headers(),
+    )
+    table_page = response_data(table_page_response)
+    legacy_tables = response_data(
+        client.get(
+            f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+    invalid_table_type = client.get(
+        f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+        params={"table_type": "unknown"},
+        headers=auth_headers(),
+    )
+
+    assert node_page == {
+        "items": [
+            {
+                "node_run_id": first_node.node_run_id,
+                "workflow_run_id": run.workflow_run_id,
+                "node_instance_id": "first-node",
+                "node_type": "core.source",
+                "status": NodeRunStatus.PENDING.value,
+                "state_version": 0,
+                "executor_id": None,
+                "progress": None,
+                "current_stage": None,
+                "attempt": 1,
+                "started_at": None,
+                "finished_at": None,
+                "last_heartbeat": None,
+                "error": None,
+            }
+        ],
+        "offset": 0,
+        "limit": 1,
+        "total": 1,
+        "has_more": False,
+    }
+    assert node_page_response.headers["X-Pagination-Total"] == "1"
+    assert table_page["total"] == 1
+    assert table_page["has_more"] is False
+    assert table_page["items"][0]["table_ref_id"] == refs[1].table_ref_id
+    assert table_page["items"][0]["source_node_instance_id"] == "second-node"
+    assert table_page["items"][0]["output_slot"] == "memory_copy"
+    assert "schema" not in table_page["items"][0]
+    assert isinstance(legacy_tables, list)
+    assert len(legacy_tables) == 3
+    assert legacy_tables[1]["source_node_instance_id"] == "second-node"
+    assert "schema" in legacy_tables[1]
+    assert invalid_table_type.status_code == 422
+    assert response_error(invalid_table_type)["error_code"] == "INVALID_TABLE_TYPE"
 
 
 def test_start_empty_workflow_run_completes_in_process(tmp_path: Path) -> None:

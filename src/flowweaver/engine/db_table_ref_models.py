@@ -26,6 +26,17 @@ class DataRefRecord(Base):
             "lifecycle_status",
             "version",
         ),
+        Index(
+            "idx_data_refs_run_directory",
+            "workflow_run_id",
+            "lifecycle_status",
+            "storage_kind",
+            "role",
+            "logical_table_id",
+            "node_run_id",
+            "created_at",
+            "table_ref_id",
+        ),
     )
 
     table_ref_id: Mapped[str] = mapped_column(Text, primary_key=True)

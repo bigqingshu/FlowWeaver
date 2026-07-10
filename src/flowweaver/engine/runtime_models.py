@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from flowweaver.protocols.table_ref import TableRefModel
+
 
 @dataclass(frozen=True)
 class WorkflowDefinition:
@@ -142,6 +144,12 @@ class LoopIterationNodeRun:
     node_instance_id: str
     role: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class RunTableDirectoryEntry:
+    table_ref: TableRefModel
+    source_node_instance_id: str | None
 
 
 @dataclass(frozen=True)

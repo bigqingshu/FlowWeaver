@@ -54,6 +54,7 @@ def loop_iteration_run_to_jsonable(
 def loop_iteration_table_ref_to_jsonable(
     value: LoopIterationTableRef,
     table_ref: TableRefModel | None = None,
+    source_node_instance_id: str | None = None,
 ) -> dict[str, Any]:
     payload = {
         "loop_iteration_id": value.loop_iteration_id,
@@ -73,6 +74,7 @@ def loop_iteration_table_ref_to_jsonable(
                 "version": table_ref.version,
                 "lifecycle_status": table_ref.lifecycle_status.value,
                 "source_node_run_id": table_ref.created_by_node_run_id,
+                "source_node_instance_id": source_node_instance_id,
                 "output_slot": output_slot,
             }
         )

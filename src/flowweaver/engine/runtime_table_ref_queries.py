@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from collections.abc import Iterable
 
-from flowweaver.engine.db_models import DataRefRecord
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
+
+from flowweaver.engine.db_models import DataRefRecord, NodeRunRecord
+from flowweaver.engine.runtime_models import RunTableDirectoryEntry
 from flowweaver.engine.runtime_record_mappers import _table_ref_from_record
 from flowweaver.protocols.enums import (
     LifecycleStatus,
@@ -83,6 +87,144 @@ def list_table_refs_by_ids_from_session(
         .order_by(DataRefRecord.table_ref_id)
     ).all()
     return [_table_ref_from_record(record) for record in records]
+
+
+def list_table_ref_directory_from_session(
+    session: Session,
+    workflow_run_id: str,
+    *,
+    node_run_id: str | None = None,
+    table_type: str | None = None,
+    lifecycle_statuses: Iterable[LifecycleStatus | str] | None = None,
+    logical_table_id: str | None = None,
+    offset: int = 0,
+    limit: int | None = None,
+) -> list[RunTableDirectoryEntry]:
+    statement = (
+        select(DataRefRecord, NodeRunRecord.node_instance_id)
+        .outerjoin(
+            NodeRunRecord,
+            DataRefRecord.node_run_id == NodeRunRecord.node_run_id,
+        )
+        .where(
+            *_table_ref_directory_conditions(
+                workflow_run_id=workflow_run_id,
+                node_run_id=node_run_id,
+                table_type=table_type,
+                lifecycle_statuses=lifecycle_statuses,
+                logical_table_id=logical_table_id,
+            )
+        )
+        .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
+        .offset(offset)
+    )
+    if limit is not None:
+        statement = statement.limit(limit)
+    return [
+        RunTableDirectoryEntry(
+            table_ref=_table_ref_from_record(record),
+            source_node_instance_id=source_node_instance_id,
+        )
+        for record, source_node_instance_id in session.execute(statement).all()
+    ]
+
+
+def list_table_ref_directory_by_ids_from_session(
+    session: Session,
+    table_ref_ids: list[str],
+) -> list[RunTableDirectoryEntry]:
+    if not table_ref_ids:
+        return []
+    rows = session.execute(
+        select(DataRefRecord, NodeRunRecord.node_instance_id)
+        .outerjoin(
+            NodeRunRecord,
+            DataRefRecord.node_run_id == NodeRunRecord.node_run_id,
+        )
+        .where(DataRefRecord.table_ref_id.in_(table_ref_ids))
+        .order_by(DataRefRecord.table_ref_id)
+    ).all()
+    return [
+        RunTableDirectoryEntry(
+            table_ref=_table_ref_from_record(record),
+            source_node_instance_id=source_node_instance_id,
+        )
+        for record, source_node_instance_id in rows
+    ]
+
+
+def count_table_ref_directory_from_session(
+    session: Session,
+    workflow_run_id: str,
+    *,
+    node_run_id: str | None = None,
+    table_type: str | None = None,
+    lifecycle_statuses: Iterable[LifecycleStatus | str] | None = None,
+    logical_table_id: str | None = None,
+) -> int:
+    statement = (
+        select(func.count())
+        .select_from(DataRefRecord)
+        .where(
+            *_table_ref_directory_conditions(
+                workflow_run_id=workflow_run_id,
+                node_run_id=node_run_id,
+                table_type=table_type,
+                lifecycle_statuses=lifecycle_statuses,
+                logical_table_id=logical_table_id,
+            )
+        )
+    )
+    return int(session.scalar(statement) or 0)
+
+
+def _table_ref_directory_conditions(
+    *,
+    workflow_run_id: str,
+    node_run_id: str | None,
+    table_type: str | None,
+    lifecycle_statuses: Iterable[LifecycleStatus | str] | None,
+    logical_table_id: str | None,
+) -> list[ColumnElement[bool]]:
+    conditions: list[ColumnElement[bool]] = [
+        DataRefRecord.workflow_run_id == workflow_run_id
+    ]
+    if node_run_id is not None:
+        conditions.append(DataRefRecord.node_run_id == node_run_id)
+    if logical_table_id is not None:
+        conditions.append(DataRefRecord.logical_table_id == logical_table_id)
+    if lifecycle_statuses is not None:
+        lifecycle_values = [
+            status.value if isinstance(status, LifecycleStatus) else status
+            for status in lifecycle_statuses
+        ]
+        conditions.append(DataRefRecord.lifecycle_status.in_(lifecycle_values))
+    if table_type == "current_table":
+        conditions.append(DataRefRecord.role == TableRole.CURRENT.value)
+    elif table_type == "memory_table":
+        conditions.append(
+            and_(
+                DataRefRecord.storage_kind == TableStorageKind.MEMORY.value,
+                DataRefRecord.role != TableRole.CURRENT.value,
+            )
+        )
+    elif table_type == "runtime_sql_table":
+        conditions.append(
+            and_(
+                DataRefRecord.storage_kind == TableStorageKind.RUNTIME_SQL.value,
+                DataRefRecord.role != TableRole.CURRENT.value,
+            )
+        )
+    elif table_type == "external_sql_table":
+        conditions.append(
+            and_(
+                DataRefRecord.storage_kind == TableStorageKind.EXTERNAL_SQL.value,
+                DataRefRecord.role != TableRole.CURRENT.value,
+            )
+        )
+    elif table_type is not None:
+        raise ValueError(f"Unsupported table type: {table_type}")
+    return conditions
 
 
 def list_table_refs_by_node_run_from_session(

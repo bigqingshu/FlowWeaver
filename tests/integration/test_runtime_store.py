@@ -200,6 +200,26 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "lifecycle_status",
         "version",
     ]
+    assert indexes(database_path, "node_runs")[
+        "idx_node_runs_run_status_directory"
+    ] == [
+        "workflow_run_id",
+        "status",
+        "node_instance_id",
+        "node_run_id",
+    ]
+    assert indexes(database_path, "data_refs")[
+        "idx_data_refs_run_directory"
+    ] == [
+        "workflow_run_id",
+        "lifecycle_status",
+        "storage_kind",
+        "role",
+        "logical_table_id",
+        "node_run_id",
+        "created_at",
+        "table_ref_id",
+    ]
 
 
 def test_table_ref_identity_migration_preserves_existing_refs(
@@ -1447,6 +1467,51 @@ def test_runtime_store_loop_queries_apply_pagination_and_batch_node_lookup(
     assert store.list_node_runs_by_ids(
         [second_node.node_run_id, "missing", first_node.node_run_id]
     ) == [second_node, first_node]
+    refs = [
+        make_table_ref(
+            table_ref_id="directory-current",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=first_node.node_run_id,
+            logical_table_id="orders",
+            version=1,
+        ),
+        make_table_ref(
+            table_ref_id="directory-memory",
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=second_node.node_run_id,
+            logical_table_id="scratch",
+            version=1,
+            role=TableRole.AUXILIARY,
+            storage_kind=TableStorageKind.MEMORY,
+            lifecycle_status=LifecycleStatus.ACTIVE,
+        ),
+    ]
+    for table_ref in refs:
+        store.register_table_ref(table_ref)
+
+    directory = store.list_table_ref_directory(
+        run.workflow_run_id,
+        node_run_id=second_node.node_run_id,
+        table_type="memory_table",
+        lifecycle_statuses=[LifecycleStatus.ACTIVE],
+        logical_table_id="scratch",
+        offset=0,
+        limit=1,
+    )
+
+    assert len(directory) == 1
+    assert directory[0].table_ref == refs[1]
+    assert directory[0].source_node_instance_id == "second-node"
+    assert store.count_table_ref_directory(
+        run.workflow_run_id,
+        table_type="memory_table",
+    ) == 1
+    assert [
+        entry.table_ref
+        for entry in store.list_table_ref_directory_by_ids(
+            [refs[1].table_ref_id, refs[0].table_ref_id]
+        )
+    ] == refs
 
 
 def test_runtime_store_loop_run_round_trip_and_idempotency(
