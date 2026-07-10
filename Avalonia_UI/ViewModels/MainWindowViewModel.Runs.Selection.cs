@@ -15,6 +15,8 @@ public partial class MainWindowViewModel
             StringComparison.Ordinal);
         if (runChanged)
         {
+            CancelTableRefDirectoryRequest();
+            CancelDataPreviewWorkbenchLoadForSelectionChange();
             _ = RunLoopMonitor.SelectRunAsync(
                 BuildSettings(),
                 newValue?.WorkflowRunId);

@@ -19,20 +19,10 @@ public partial class MainWindowViewModel
 
         try
         {
-            var nodeRun = await TryLoadRequestedNodeRunForDataPreviewAsync(
-                requestedRunId,
-                requestedNodeInstanceId,
-                requestVersion,
-                notifyResult);
-            if (nodeRun is null)
-            {
-                return false;
-            }
-
+            runMetadataCache.InvalidateRun(requestedRunId);
             var tableRef = await TryLoadRequestedNodeTableRefForDataPreviewAsync(
                 requestedRunId,
                 requestedNodeInstanceId,
-                nodeRun.NodeRunId,
                 requestVersion,
                 notifyResult);
             if (tableRef is null)

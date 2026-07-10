@@ -16,6 +16,7 @@ public partial class MainWindowViewModel
 
         var requestedTableRefId = requestedTableRef.TableRefId;
         var requestVersion = ++dataPreviewWorkbenchLoadVersion;
+        var requestCancellation = BeginDataPreviewWorkbenchLoad();
         IsLoadingDataPreviewWorkbench = true;
         DataPreviewWorkbenchMessage = F(
             "format.loading_data_preview_table",
@@ -29,7 +30,7 @@ public partial class MainWindowViewModel
                 requestedTableRefId,
                 offset: Math.Max(0, offset),
                 limit: DataPreviewRowLimit,
-                cancellationToken: _shutdown.Token);
+                cancellationToken: requestCancellation.Token);
 
             if (IsStaleDataPreviewWorkbenchRequest(requestVersion))
             {
@@ -47,12 +48,17 @@ public partial class MainWindowViewModel
             LoadedDataPreviewTableRef = requestedTableRef;
             UpdateDataPreviewWorkbenchLoadedMessage();
         }
+        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
+        {
+        }
         finally
         {
             if (requestVersion == dataPreviewWorkbenchLoadVersion)
             {
                 IsLoadingDataPreviewWorkbench = false;
             }
+
+            CompleteDataPreviewWorkbenchLoad(requestCancellation);
         }
     }
 }

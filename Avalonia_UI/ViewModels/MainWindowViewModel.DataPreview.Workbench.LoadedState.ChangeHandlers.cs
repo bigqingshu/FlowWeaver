@@ -7,6 +7,7 @@ public partial class MainWindowViewModel
     partial void OnIsDataPreviewWorkbenchDraftChanged(bool value)
     {
         OnPropertyChanged(nameof(DataPreviewWorkbenchSourceText));
+        OnPropertyChanged(nameof(DataPreviewSourceTableMetadataText));
     }
 
     partial void OnLoadedDataPreviewTableRefChanged(TableRefListItemViewModel? value)

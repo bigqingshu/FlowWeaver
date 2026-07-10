@@ -12,7 +12,7 @@ public partial class MainWindowViewModel
         DataPreviewTableOptions.Clear();
         if (value is not null)
         {
-            foreach (var tableRef in value.TableRefs)
+            foreach (var tableRef in value.TableRefs.Where(tableRef => tableRef.CanReadRows))
             {
                 DataPreviewTableOptions.Add(tableRef);
             }
@@ -26,6 +26,7 @@ public partial class MainWindowViewModel
 
     partial void OnSelectedDataPreviewTableOptionChanged(TableRefListItemViewModel? value)
     {
+        CancelDataPreviewWorkbenchLoadForSelectionChange();
         LoadSelectedDataPreviewTableCommand.NotifyCanExecuteChanged();
     }
 

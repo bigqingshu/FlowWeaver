@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 
@@ -15,16 +16,17 @@ public partial class MainWindowViewModel
 
         var requestedRunId = SelectedRun.WorkflowRunId;
         var requestVersion = ++tableRefsLoadVersion;
+        var requestCancellation = BeginTableRefDirectoryRequest();
         IsLoadingTableRefs = true;
         TableRefMessage = F("format.loading_table_refs_for", requestedRunId);
         TableRefErrorMessage = null;
 
         try
         {
-            var response = await _apiClient.ListTableRefsAsync(
-                BuildSettings(),
+            runMetadataCache.InvalidateRun(requestedRunId);
+            var response = await LoadRunTableDirectoryAsync(
                 requestedRunId,
-                _shutdown.Token);
+                requestCancellation.Token);
 
             if (
                 SelectedRun?.WorkflowRunId != requestedRunId
@@ -43,12 +45,17 @@ public partial class MainWindowViewModel
             TableRefMessage = T("data.table_ref_refresh_failed");
             TableRefErrorMessage = DescribeError(response);
         }
+        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
+        {
+        }
         finally
         {
             if (requestVersion == tableRefsLoadVersion)
             {
                 IsLoadingTableRefs = false;
             }
+
+            CompleteTableRefDirectoryRequest(requestCancellation);
         }
     }
 }

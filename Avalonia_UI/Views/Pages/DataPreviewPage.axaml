@@ -29,7 +29,7 @@
                         <DataTemplate DataType="vm:DataPreviewStateListItemViewModel"
                                       x:DataType="vm:DataPreviewStateListItemViewModel">
                             <Grid ColumnDefinitions="*,Auto"
-                                  RowDefinitions="Auto,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto,Auto"
                                   ColumnSpacing="10"
                                   Margin="8">
                                 <TextBlock Text="{Binding DisplayText}"
@@ -55,6 +55,39 @@
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <ItemsControl Grid.Row="3"
+                                              Grid.ColumnSpan="2"
+                                              ItemsSource="{Binding TableRefs}"
+                                              Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:TableRefListItemViewModel"
+                                                      x:DataType="vm:TableRefListItemViewModel">
+                                            <Grid RowDefinitions="Auto,Auto"
+                                                  Margin="0,2,0,2">
+                                                <Grid ColumnDefinitions="*,Auto,Auto"
+                                                      ColumnSpacing="6">
+                                                    <TextBlock Text="{Binding LogicalTableId}"
+                                                               FontSize="12"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding OutputSlotText}"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding VersionText}"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                                </Grid>
+                                                <TextBlock Grid.Row="1"
+                                                           Text="{Binding DirectorySummaryText}"
+                                                           FontSize="11"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -72,7 +105,7 @@
         </Border>
 
         <Border Grid.Column="1" Classes="Card" Padding="12">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="8">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" RowSpacing="8">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,240,Auto" ColumnSpacing="8">
                     <TextBlock Text="{Binding DataPreviewTabText}"
                                FontSize="16"
@@ -105,7 +138,7 @@
                         <ComboBox.ItemTemplate>
                             <DataTemplate DataType="vm:TableRefListItemViewModel"
                                           x:DataType="vm:TableRefListItemViewModel">
-                                <Grid ColumnDefinitions="*,Auto,Auto"
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto"
                                       ColumnSpacing="6"
                                       Width="220">
                                     <TextBlock Text="{Binding LogicalTableId}"
@@ -113,10 +146,14 @@
                                                TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextPrimaryBrush}"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="{Binding VersionText}"
+                                               Text="{Binding OutputSlotText}"
                                                FontSize="12"
                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                                     <TextBlock Grid.Column="2"
+                                               Text="{Binding VersionText}"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Column="3"
                                                Text="{Binding StorageKind}"
                                                FontSize="12"
                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -194,13 +231,19 @@
                 </Grid>
 
                 <TextBlock Grid.Row="3"
+                           Text="{Binding DataPreviewSourceTableMetadataText}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+                <TextBlock Grid.Row="4"
                            Text="{Binding DataPreviewWorkbenchErrorMessage}"
                            FontSize="12"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource TextErrorBrush}"
                            IsVisible="{Binding HasDataPreviewWorkbenchError}"/>
 
-                <Border Grid.Row="4"
+                <Border Grid.Row="5"
                         BorderBrush="{DynamicResource ControlBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="4"
@@ -264,7 +307,7 @@
                     </ScrollViewer>
                 </Border>
 
-                <TextBox Grid.Row="5"
+                <TextBox Grid.Row="6"
                          Text="{Binding DataPreviewWorkbenchClipboardText}"
                          IsReadOnly="True"
                          AcceptsReturn="True"

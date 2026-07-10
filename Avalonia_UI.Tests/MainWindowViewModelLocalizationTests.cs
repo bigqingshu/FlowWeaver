@@ -55,6 +55,31 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
+    public async Task DataPreviewDirectoryTypesAndPersistenceAreLocalized()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        Assert.AreEqual(
+            "运行内 SQL 表",
+            localizationService.GetString(
+                "data_preview.table_type.runtime_sql_table"));
+        Assert.AreEqual(
+            "临时内存表",
+            localizationService.GetString(
+                "data_preview.persistence.memory_only"));
+
+        await localizationService.SetLanguageAsync("en-US");
+        Assert.AreEqual(
+            "External SQL reference",
+            localizationService.GetString(
+                "data_preview.table_type.external_sql_table"));
+        Assert.AreEqual(
+            "Run-persistent table",
+            localizationService.GetString(
+                "data_preview.persistence.workflow_run_sql"));
+    }
+
+    [TestMethod]
     public async Task LoadUiSettingsAppliesPersistedLanguage()
     {
         var uiSettingsStore = new FakeUiSettingsStore

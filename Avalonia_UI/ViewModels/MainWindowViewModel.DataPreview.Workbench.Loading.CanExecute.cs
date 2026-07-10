@@ -6,6 +6,7 @@ public partial class MainWindowViewModel
     {
         return CanUseEngineActions
             && SelectedDataPreviewTableOption is not null
+            && SelectedDataPreviewTableOption.CanReadRows
             && !IsLoadingDataPreviewWorkbench;
     }
 }

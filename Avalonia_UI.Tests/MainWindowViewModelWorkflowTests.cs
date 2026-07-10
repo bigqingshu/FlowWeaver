@@ -4561,7 +4561,7 @@ public sealed class MainWindowViewModelWorkflowTests
         await viewModel.StartSelectedWorkflowCommand.ExecuteAsync(null);
 
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
-        Assert.AreEqual("run-1", apiClient.LastNodeRunWorkflowRunId);
+        Assert.IsNull(apiClient.LastNodeRunWorkflowRunId);
         Assert.AreEqual("run-1", apiClient.LastTableRefWorkflowRunId);
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.HasCount(1, viewModel.DataPreviewRows);
@@ -4802,7 +4802,7 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("preview_to_node", apiClient.StartedWorkflowRunMode);
         Assert.AreEqual("generate", apiClient.StartedTargetNodeInstanceId);
         Assert.AreEqual("run-preview", viewModel.SelectedRun?.WorkflowRunId);
-        Assert.AreEqual("run-preview", apiClient.LastNodeRunWorkflowRunId);
+        Assert.IsNull(apiClient.LastNodeRunWorkflowRunId);
         Assert.AreEqual("run-preview", apiClient.LastTableRefWorkflowRunId);
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.AreEqual("run-preview", viewModel.LastStartedRunId);
@@ -4868,7 +4868,14 @@ public sealed class MainWindowViewModelWorkflowTests
                     rowCount: 1)),
         };
         var previewTableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
-            new List<TableRefDto> { TableRef("table-1", "run-preview", "node-run-1") });
+            new List<TableRefDto>
+            {
+                TableRef(
+                    "table-1",
+                    "run-preview",
+                    "node-run-1",
+                    sourceNodeInstanceId: "generate"),
+            });
         var previewTableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
             TableRows(
                 "table-1",
@@ -4898,17 +4905,16 @@ public sealed class MainWindowViewModelWorkflowTests
             new[] { "99", "990" },
             viewModel.DataPreviewRows[0].Cells.Select(cell => cell.Text).ToArray());
 
-        apiClient.NodeRunsResponses.Enqueue(
-            ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>()));
-        apiClient.NodeRunsResponses.Enqueue(
-            ApiResponseEnvelope<List<NodeRunDto>>.Success(
-                new List<NodeRunDto> { NodeRun("node-run-1", "run-preview", "generate", "SUCCEEDED", 1, "done") }));
+        apiClient.TableRefsResponses.Enqueue(
+            ApiResponseEnvelope<List<TableRefDto>>.Success(new List<TableRefDto>()));
+        apiClient.TableRefsResponses.Enqueue(previewTableRefsResponse);
         apiClient.TableRefsResponse = previewTableRefsResponse;
         apiClient.TableRowsResponse = previewTableRowsResponse;
 
         await viewModel.PreviewSelectedWorkflowNodeCommand.ExecuteAsync(null);
 
-        Assert.AreEqual(3, apiClient.ListNodeRunsCallCount);
+        Assert.AreEqual(0, apiClient.ListNodeRunsCallCount);
+        Assert.AreEqual(3, apiClient.ListRunTableDirectoryCallCount);
         Assert.AreEqual(1, previewRetryDelayCount);
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.HasCount(1, viewModel.DataPreviewRows);
@@ -5592,19 +5598,27 @@ public sealed class MainWindowViewModelWorkflowTests
     private static TableRefDto TableRef(
         string tableRefId,
         string workflowRunId,
-        string nodeRunId)
+        string nodeRunId,
+        string? sourceNodeInstanceId = null)
     {
         return new TableRefDto
         {
             TableRefId = tableRefId,
             WorkflowRunId = workflowRunId,
             NodeRunId = nodeRunId,
+            SourceNodeRunId = nodeRunId,
+            SourceNodeInstanceId = sourceNodeInstanceId,
             Role = "OUTPUT",
             StorageKind = "RUNTIME_SQL",
             Scope = "WORKFLOW_SCOPE",
             Mutability = "IMMUTABLE",
             ProviderId = "runtime",
             LogicalTableId = "orders",
+            OutputSlot = "out",
+            TableType = "runtime_sql_table",
+            PreviewPersistence = "workflow_run_sql",
+            CanReadRows = true,
+            SupportsPagedRows = true,
             Schema = JsonDocument.Parse("""{"fields":[]}""").RootElement.Clone(),
             SchemaFingerprint = "schema-1",
             Version = 1,
@@ -5719,6 +5733,8 @@ public sealed class MainWindowViewModelWorkflowTests
 
         public Queue<ApiResponseEnvelope<List<NodeRunDto>>> NodeRunsResponses { get; } = new();
 
+        public Queue<ApiResponseEnvelope<List<TableRefDto>>> TableRefsResponses { get; } = new();
+
         public ApiResponseEnvelope<WorkflowProcessDto> CancelRunResponse { get; set; } =
             ApiResponseEnvelope<WorkflowProcessDto>.Failure("NOT_CONFIGURED", "No cancel response configured.");
 
@@ -5778,6 +5794,8 @@ public sealed class MainWindowViewModelWorkflowTests
         public string? LastNodeRunWorkflowRunId { get; private set; }
 
         public int ListNodeRunsCallCount { get; private set; }
+
+        public int ListRunTableDirectoryCallCount { get; private set; }
 
         public string? LastTableRefWorkflowRunId { get; private set; }
 
@@ -5990,10 +6008,45 @@ public sealed class MainWindowViewModelWorkflowTests
             string? logicalTableId = null,
             CancellationToken cancellationToken = default)
         {
+            LastSettings = settings;
+            LastTableRefWorkflowRunId = workflowRunId;
+            ListRunTableDirectoryCallCount++;
+            var tableRefsResponse = offset == 0 && TableRefsResponses.Count > 0
+                ? TableRefsResponses.Dequeue()
+                : TableRefsResponse;
+            if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
+            {
+                return Task.FromResult(new ApiResponseEnvelope<RunTableDirectoryPageDto>
+                {
+                    Ok = false,
+                    Error = tableRefsResponse.Error,
+                    RequestId = tableRefsResponse.RequestId,
+                });
+            }
+
+            var sourceByNodeRun = NodeRunsResponse.Data?
+                .ToDictionary(item => item.NodeRunId, item => item.NodeInstanceId)
+                ?? new Dictionary<string, string>();
+            var filtered = tableRefsResponse.Data
+                .Select(item => item with
+                {
+                    SourceNodeInstanceId = item.SourceNodeInstanceId ??
+                        sourceByNodeRun.GetValueOrDefault(item.NodeRunId),
+                })
+                .Where(item => tableType is null || item.TableType == tableType)
+                .Where(item => logicalTableId is null || item.LogicalTableId == logicalTableId)
+                .ToArray();
+            var items = filtered.Skip(offset).Take(limit).ToArray();
             return Task.FromResult(
-                ApiResponseEnvelope<RunTableDirectoryPageDto>.Failure(
-                    "NOT_CONFIGURED",
-                    "No run table directory response configured."));
+                ApiResponseEnvelope<RunTableDirectoryPageDto>.Success(
+                    new RunTableDirectoryPageDto
+                    {
+                        Items = items,
+                        Offset = offset,
+                        Limit = limit,
+                        Total = filtered.Length,
+                        HasMore = offset + items.Length < filtered.Length,
+                    }));
         }
 
         public Task<ApiResponseEnvelope<List<LoopRunDto>>> ListLoopRunsAsync(

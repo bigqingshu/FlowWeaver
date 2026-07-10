@@ -81,6 +81,21 @@ public sealed class DataPreviewSelectionStateTests
     }
 
     [TestMethod]
+    public void Resolve_SkipsUnreadableGroupWhenNoPreferenceExists()
+    {
+        var state = new DataPreviewSelectionState();
+
+        var resolution = state.Resolve(
+        [
+            Candidate("run:memory-unreadable"),
+            Candidate("run:runtime-readable", "table-readable"),
+        ]);
+
+        Assert.AreEqual("run:runtime-readable", resolution.StateKey);
+        Assert.AreEqual("table-readable", resolution.TableRefId);
+    }
+
+    [TestMethod]
     public void Resolve_UsesOrdinalKeysAndTableIds()
     {
         var state = new DataPreviewSelectionState();

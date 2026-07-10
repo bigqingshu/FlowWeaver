@@ -9,7 +9,7 @@ public partial class MainWindowViewModel
     private void RebuildDataPreviewStates()
     {
         DataPreviewStates.Clear();
-        foreach (var state in DataPreviewStateListItemViewModel.FromTableRefs(TableRefs))
+        foreach (var state in DataPreviewStateListItemViewModel.FromTableRefs(TableRefs, T))
         {
             DataPreviewStates.Add(state);
         }
@@ -19,6 +19,7 @@ public partial class MainWindowViewModel
                 .Select(state => new DataPreviewStateSelectionCandidate(
                     state.StateKey,
                     state.TableRefs
+                        .Where(tableRef => tableRef.CanReadRows)
                         .Select(tableRef => tableRef.TableRefId)
                         .ToArray()))
                 .ToArray());

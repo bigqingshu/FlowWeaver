@@ -17,7 +17,7 @@ public partial class MainWindowViewModel
         TableRefs.Clear();
         foreach (var tableRef in tableRefs)
         {
-            TableRefs.Add(new TableRefListItemViewModel(tableRef));
+            TableRefs.Add(new TableRefListItemViewModel(tableRef, T));
         }
 
         RebuildDataPreviewStates();

@@ -24,9 +24,10 @@ public sealed class DataPreviewPageStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding SummaryText}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding DataPreviewTableOptions}\"");
         StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedDataPreviewTableOption, Mode=TwoWay}\"");
-        Assert.IsFalse(
-            xaml.Contains("ItemsSource=\"{Binding TableRefs}\"", StringComparison.Ordinal),
-            "DataPreviewPage should not bind either selector directly to the raw TableRefs list.");
+        StringAssert.Contains(
+            xaml,
+            "ItemsSource=\"{Binding TableRefs}\"",
+            "The state directory should retain unreadable table metadata.");
         Assert.IsFalse(
             xaml.Contains("SelectedItem=\"{Binding SelectedDataPreviewTableRef", StringComparison.Ordinal),
             "DataPreviewPage should not use the legacy shared table-ref selection for user-facing selectors.");

@@ -8,17 +8,7 @@ public partial class MainWindowViewModel
 {
     private async Task SelectLatestReadableOutputNodeForRunAsync(string workflowRunId)
     {
-        var nodeRunsResponse = await _apiClient.ListNodeRunsAsync(
-            BuildSettings(),
-            workflowRunId,
-            _shutdown.Token);
-        if (!nodeRunsResponse.Ok || nodeRunsResponse.Data is null)
-        {
-            return;
-        }
-
-        var tableRefsResponse = await _apiClient.ListTableRefsAsync(
-            BuildSettings(),
+        var tableRefsResponse = await LoadRunTableDirectoryAsync(
             workflowRunId,
             _shutdown.Token);
         if (!tableRefsResponse.Ok || tableRefsResponse.Data is null)
@@ -27,12 +17,10 @@ public partial class MainWindowViewModel
         }
 
         var nodeInstanceIdsWithReadableOutput = tableRefsResponse.Data
-            .Where(IsReadablePublishedTableRef)
-            .Join(
-                nodeRunsResponse.Data,
-                tableRef => tableRef.NodeRunId,
-                nodeRun => nodeRun.NodeRunId,
-                (_, nodeRun) => nodeRun.NodeInstanceId)
+            .Where(IsReadableTableRef)
+            .Select(tableRef => tableRef.SourceNodeInstanceId)
+            .Where(nodeInstanceId => !string.IsNullOrWhiteSpace(nodeInstanceId))
+            .Cast<string>()
             .ToHashSet(StringComparer.Ordinal);
         var latestOutputNode = WorkflowDefinitionDraftNodes
             .Reverse()

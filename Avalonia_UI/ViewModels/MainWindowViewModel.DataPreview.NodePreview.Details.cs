@@ -22,22 +22,15 @@ public partial class MainWindowViewModel
             tableRef => string.Equals(tableRef.TableRefId, tableRefId, StringComparison.Ordinal));
         if (target is null)
         {
-            var response = await _apiClient.ListTableRefsAsync(
-                BuildSettings(),
+            var response = await LoadRunTableDirectoryAsync(
                 workflowRunId,
                 _shutdown.Token);
             if (response.Ok && response.Data is not null)
             {
-                TableRefs.Clear();
-                foreach (var tableRef in response.Data)
-                {
-                    TableRefs.Add(new TableRefListItemViewModel(tableRef));
-                }
-
                 dataPreviewSelectionState.Capture(
                     stateKey: null,
                     tableRefId);
-                RebuildDataPreviewStates();
+                ApplyRefreshedTableRefs(response.Data);
                 TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
                 TableRefErrorMessage = null;
                 target = TableRefs.FirstOrDefault(

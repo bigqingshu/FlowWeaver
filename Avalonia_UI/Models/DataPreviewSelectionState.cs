@@ -27,6 +27,7 @@ public sealed class DataPreviewSelectionState
     {
         var selectedState = FindByStateKey(candidates)
             ?? FindByTableRefId(candidates)
+            ?? FindFirstReadableState(candidates)
             ?? (candidates.Count > 0 ? candidates[0] : null);
         if (selectedState is null)
         {
@@ -40,6 +41,20 @@ public sealed class DataPreviewSelectionState
         return new DataPreviewSelectionResolution(
             selectedState.StateKey,
             selectedTableRefId);
+    }
+
+    private static DataPreviewStateSelectionCandidate? FindFirstReadableState(
+        IReadOnlyList<DataPreviewStateSelectionCandidate> candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (candidate.TableRefIds.Count > 0)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private DataPreviewStateSelectionCandidate? FindByStateKey(

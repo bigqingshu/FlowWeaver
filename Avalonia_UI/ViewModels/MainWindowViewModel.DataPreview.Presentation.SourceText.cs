@@ -9,6 +9,9 @@ public partial class MainWindowViewModel
             ? FormatDataPreviewSourceText()
             : T("data_preview.source_not_loaded");
 
+    public string DataPreviewSourceTableMetadataText =>
+        LoadedDataPreviewTableRef?.DirectorySummaryText ?? string.Empty;
+
     private string FormatDataPreviewSourceText()
     {
         if (string.Equals(

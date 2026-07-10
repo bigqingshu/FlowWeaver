@@ -57,23 +57,203 @@ public sealed class MainWindowViewModelDataTests
 
         await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
 
-        Assert.HasCount(2, viewModel.DataPreviewStates);
-        Assert.AreEqual("run-1:node-run-1", viewModel.DataPreviewStates[0].StateKey);
-        Assert.AreEqual("run-1:node-run-2", viewModel.DataPreviewStates[1].StateKey);
-        Assert.AreEqual("run-1:node-run-1", viewModel.SelectedDataPreviewState?.StateKey);
-        Assert.HasCount(2, viewModel.DataPreviewTableOptions);
+        Assert.HasCount(3, viewModel.DataPreviewStates);
+        Assert.AreEqual(
+            "run-1:node-run-1:memory_table",
+            viewModel.DataPreviewStates[0].StateKey);
+        Assert.AreEqual(
+            "run-1:node-run-1:runtime_sql_table",
+            viewModel.DataPreviewStates[1].StateKey);
+        Assert.AreEqual(
+            "run-1:node-run-2:runtime_sql_table",
+            viewModel.DataPreviewStates[2].StateKey);
+        Assert.AreEqual(
+            "run-1:node-run-1:memory_table",
+            viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.HasCount(1, viewModel.DataPreviewTableOptions);
         CollectionAssert.AreEqual(
-            new[] { "table-1", "table-2" },
+            new[] { "table-2" },
             viewModel.DataPreviewTableOptions.Select(tableRef => tableRef.TableRefId).ToArray());
-        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-2", viewModel.SelectedDataPreviewTableOption?.TableRefId);
         Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
 
-        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates[1];
+        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates[2];
 
         Assert.HasCount(1, viewModel.DataPreviewTableOptions);
         Assert.AreEqual("table-3", viewModel.SelectedDataPreviewTableOption?.TableRefId);
         Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
         Assert.IsNull(apiClient.LastTableRowsTableRefId);
+    }
+
+    [TestMethod]
+    public async Task TableDirectoryGroupsFourTypesAndKeepsUnreadableMetadataOutOfOptions()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            [
+                TableRef(
+                    "current",
+                    "run-1",
+                    "node-run-1",
+                    sourceNodeInstanceId: "source-current",
+                    tableType: "current_table"),
+                TableRef(
+                    "memory",
+                    "run-1",
+                    "node-run-1",
+                    storageKind: "MEMORY",
+                    capabilities: ["WRITE"],
+                    sourceNodeInstanceId: "source-memory",
+                    canReadRows: false),
+                TableRef(
+                    "runtime-left",
+                    "run-1",
+                    "node-run-1",
+                    sourceNodeInstanceId: "source-left",
+                    outputSlot: "left"),
+                TableRef(
+                    "runtime-right",
+                    "run-1",
+                    "node-run-1",
+                    sourceNodeInstanceId: "source-right",
+                    outputSlot: "right"),
+                TableRef(
+                    "external",
+                    "run-1",
+                    "node-run-1",
+                    storageKind: "EXTERNAL_SQL",
+                    sourceNodeInstanceId: "source-external"),
+            ]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "current_table",
+                "memory_table",
+                "runtime_sql_table",
+                "external_sql_table",
+            },
+            viewModel.DataPreviewStates.Select(state => state.TableType).ToArray());
+        var memoryState = viewModel.DataPreviewStates.Single(state =>
+            state.TableType == "memory_table");
+        Assert.AreEqual("Temporary memory table", memoryState.TableRefs[0].PreviewPersistenceText);
+        Assert.IsFalse(memoryState.TableRefs[0].CanReadRows);
+        StringAssert.Contains(memoryState.TableRefs[0].ReadabilityText, "Unreadable");
+        viewModel.SelectedDataPreviewState = memoryState;
+        Assert.IsEmpty(viewModel.DataPreviewTableOptions);
+        Assert.IsFalse(viewModel.LoadSelectedDataPreviewTableCommand.CanExecute(null));
+
+        var runtimeState = viewModel.DataPreviewStates.Single(state =>
+            state.TableType == "runtime_sql_table");
+        viewModel.SelectedDataPreviewState = runtimeState;
+        Assert.HasCount(2, viewModel.DataPreviewTableOptions);
+        CollectionAssert.AreEqual(
+            new[] { "source-left", "source-right" },
+            viewModel.DataPreviewTableOptions.Select(table => table.SourceNodeText).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "left", "right" },
+            viewModel.DataPreviewTableOptions.Select(table => table.OutputSlotText).ToArray());
+        Assert.AreEqual(0, apiClient.GetTableRowsCallCount);
+    }
+
+    [TestMethod]
+    public async Task RapidRunSwitchCancelsOldDirectoryAndRejectsLateResponse()
+    {
+        var firstStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstCancelled = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiClient = new FakeApiClient
+        {
+            RunTableDirectoryHandler = async (workflowRunId, offset, limit, cancellationToken) =>
+            {
+                if (workflowRunId == "run-1")
+                {
+                    using var registration = cancellationToken.Register(
+                        () => firstCancelled.TrySetResult());
+                    firstStarted.TrySetResult();
+                    await releaseFirst.Task;
+                    return DirectoryPage(
+                        TableRef("old", "run-1", "node-old"),
+                        offset,
+                        limit);
+                }
+
+                return DirectoryPage(
+                    TableRef("new", "run-2", "node-new"),
+                    offset,
+                    limit);
+            },
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        var firstLoad = viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        await firstStarted.Task;
+
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-2", "wf-1"));
+        await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        releaseFirst.TrySetResult();
+        await firstLoad;
+
+        Assert.HasCount(1, viewModel.TableRefs);
+        Assert.AreEqual("new", viewModel.TableRefs[0].TableRefId);
+        Assert.AreEqual("run-2", viewModel.TableRefs[0].WorkflowRunId);
+    }
+
+    [TestMethod]
+    public async Task RapidTableSwitchCancelsOldRowsAndRejectsLateResponse()
+    {
+        var firstStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstCancelled = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            [
+                TableRef("table-1", "run-1", "node-run-1"),
+                TableRef("table-2", "run-1", "node-run-1"),
+            ]),
+            TableRowsHandler = async (tableRefId, cancellationToken) =>
+            {
+                if (tableRefId == "table-1")
+                {
+                    using var registration = cancellationToken.Register(
+                        () => firstCancelled.TrySetResult());
+                    firstStarted.TrySetResult();
+                    await releaseFirst.Task;
+                    return TableRowsResponse("table-1", "old");
+                }
+
+                return TableRowsResponse("table-2", "new");
+            },
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        var firstLoad = viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+        await firstStarted.Task;
+
+        viewModel.SelectedDataPreviewTableOption = viewModel.DataPreviewTableOptions[1];
+        await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        releaseFirst.TrySetResult();
+        await firstLoad;
+        await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("table-2", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual("new", viewModel.DataPreviewWorkbenchRows[0].Cells[0].Text);
     }
 
     [TestMethod]
@@ -181,7 +361,7 @@ public sealed class MainWindowViewModelDataTests
 
         await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
 
-        Assert.AreEqual("run-1", apiClient.LastNodeRunWorkflowRunId);
+        Assert.IsNull(apiClient.LastNodeRunWorkflowRunId);
         Assert.AreEqual("run-1", apiClient.LastTableRefWorkflowRunId);
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
         Assert.AreEqual(0, apiClient.LastTableRowsOffset);
@@ -231,6 +411,8 @@ public sealed class MainWindowViewModelDataTests
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
 
         await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates.Single(state =>
+            state.TableType == "runtime_sql_table");
         await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
 
         Assert.AreEqual("table-1", apiClient.LastTableRowsTableRefId);
@@ -238,6 +420,9 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(50, apiClient.LastTableRowsLimit);
         Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
         Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        StringAssert.Contains(
+            viewModel.DataPreviewSourceTableMetadataText,
+            "Runtime SQL table");
         Assert.HasCount(2, viewModel.DataPreviewWorkbenchColumns);
         Assert.AreEqual("row_id", viewModel.DataPreviewWorkbenchColumns[0].Name);
         Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
@@ -279,6 +464,8 @@ public sealed class MainWindowViewModelDataTests
         viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
 
         await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
+        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates.Single(state =>
+            state.TableType == "runtime_sql_table");
         await viewModel.LoadSelectedDataPreviewTableCommand.ExecuteAsync(null);
 
         Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
@@ -287,7 +474,8 @@ public sealed class MainWindowViewModelDataTests
             new[] { "1", "12.5" },
             viewModel.DataPreviewWorkbenchRows[0].Cells.Select(cell => cell.Text).ToArray());
 
-        viewModel.SelectedDataPreviewTableOption = viewModel.DataPreviewTableOptions[1];
+        viewModel.SelectedDataPreviewState = viewModel.DataPreviewStates.Single(state =>
+            state.TableType == "memory_table");
 
         Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
         Assert.AreEqual("table-2", viewModel.SelectedDataPreviewTableOption?.TableRefId);
@@ -641,7 +829,9 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
         Assert.AreEqual(ShellPageContentKey.DataPreview, viewModel.SelectedShellPageContentKey);
         Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableRef?.TableRefId);
-        Assert.AreEqual("run-1:node-run-1", viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.AreEqual(
+            "run-1:node-run-1:runtime_sql_table",
+            viewModel.SelectedDataPreviewState?.StateKey);
         Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
         Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
         Assert.HasCount(1, viewModel.DataPreviewWorkbenchColumns);
@@ -665,9 +855,22 @@ public sealed class MainWindowViewModelDataTests
             TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
                 new List<TableRefDto>
                 {
-                    TableRef("table-other", "run-1", "node-run-other"),
-                    TableRef("table-target", "run-1", "node-run-target"),
-                    TableRef("table-side", "run-1", "node-run-target", storageKind: "MEMORY"),
+                    TableRef(
+                        "table-other",
+                        "run-1",
+                        "node-run-other",
+                        sourceNodeInstanceId: "other"),
+                    TableRef(
+                        "table-target",
+                        "run-1",
+                        "node-run-target",
+                        sourceNodeInstanceId: "target"),
+                    TableRef(
+                        "table-side",
+                        "run-1",
+                        "node-run-target",
+                        storageKind: "MEMORY",
+                        sourceNodeInstanceId: "target"),
                 }),
             TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
                 TableRows(
@@ -685,16 +888,20 @@ public sealed class MainWindowViewModelDataTests
         viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("target");
 
         await viewModel.RefreshTableRefsCommand.ExecuteAsync(null);
-        Assert.AreEqual("run-1:node-run-other", viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.AreEqual(
+            "run-1:node-run-target:memory_table",
+            viewModel.SelectedDataPreviewState?.StateKey);
 
         await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
         await viewModel.ShowDataPreviewDetailsCommand.ExecuteAsync(null);
 
         Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
-        Assert.AreEqual("run-1:node-run-target", viewModel.SelectedDataPreviewState?.StateKey);
-        Assert.HasCount(2, viewModel.DataPreviewTableOptions);
+        Assert.AreEqual(
+            "run-1:node-run-target:runtime_sql_table",
+            viewModel.SelectedDataPreviewState?.StateKey);
+        Assert.HasCount(1, viewModel.DataPreviewTableOptions);
         CollectionAssert.AreEqual(
-            new[] { "table-target", "table-side" },
+            new[] { "table-target" },
             viewModel.DataPreviewTableOptions.Select(tableRef => tableRef.TableRefId).ToArray());
         Assert.AreEqual("table-target", viewModel.SelectedDataPreviewTableOption?.TableRefId);
         Assert.AreEqual("table-target", viewModel.LoadedDataPreviewTableRef?.TableRefId);
@@ -984,23 +1191,46 @@ public sealed class MainWindowViewModelDataTests
         string workflowRunId,
         string nodeRunId,
         string storageKind = "RUNTIME_SQL",
-        string[]? capabilities = null)
+        string[]? capabilities = null,
+        string sourceNodeInstanceId = "generate",
+        string? tableType = null,
+        bool? canReadRows = null,
+        string outputSlot = "out")
     {
+        var resolvedCapabilities = capabilities ?? ["WRITE", "READ"];
+        var resolvedCanReadRows = canReadRows ?? resolvedCapabilities.Contains("READ");
         return new TableRefDto
         {
             TableRefId = tableRefId,
             WorkflowRunId = workflowRunId,
             NodeRunId = nodeRunId,
+            SourceNodeRunId = nodeRunId,
+            SourceNodeInstanceId = sourceNodeInstanceId,
             Role = "OUTPUT",
             StorageKind = storageKind,
             Scope = "WORKFLOW_SCOPE",
             Mutability = "IMMUTABLE",
             ProviderId = "runtime",
             LogicalTableId = "orders",
+            OutputSlot = outputSlot,
+            TableType = tableType ?? storageKind switch
+            {
+                "MEMORY" => "memory_table",
+                "EXTERNAL_SQL" => "external_sql_table",
+                _ => "runtime_sql_table",
+            },
+            PreviewPersistence = storageKind switch
+            {
+                "MEMORY" => "memory_only",
+                "EXTERNAL_SQL" => "external_source",
+                _ => "workflow_run_sql",
+            },
+            CanReadRows = resolvedCanReadRows,
+            SupportsPagedRows = resolvedCanReadRows,
             Schema = JsonDocument.Parse("""{"fields":[]}""").RootElement.Clone(),
             SchemaFingerprint = "schema-1",
             Version = 2,
-            Capabilities = capabilities ?? ["WRITE", "READ"],
+            Capabilities = resolvedCapabilities,
             LifecycleStatus = "PUBLISHED",
             CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
         };
@@ -1024,6 +1254,34 @@ public sealed class MainWindowViewModelDataTests
             Rows = rows,
             HasMore = hasMore,
         };
+    }
+
+    private static ApiResponseEnvelope<RunTableDirectoryPageDto> DirectoryPage(
+        TableRefDto tableRef,
+        int offset,
+        int limit)
+    {
+        return ApiResponseEnvelope<RunTableDirectoryPageDto>.Success(
+            new RunTableDirectoryPageDto
+            {
+                Items = offset == 0 ? [tableRef] : [],
+                Offset = offset,
+                Limit = limit,
+                Total = 1,
+                HasMore = false,
+            });
+    }
+
+    private static ApiResponseEnvelope<TableDataRowsDto> TableRowsResponse(
+        string tableRefId,
+        string value)
+    {
+        return ApiResponseEnvelope<TableDataRowsDto>.Success(
+            TableRows(
+                tableRefId,
+                ["value"],
+                [JsonDocument.Parse($$"""{"value":"{{value}}"}""").RootElement.Clone()],
+                rowCount: 1));
     }
 
     private static NodeRunDto NodeRun(
@@ -1099,6 +1357,20 @@ public sealed class MainWindowViewModelDataTests
         public ApiResponseEnvelope<TableDataRowsDto> TableRowsResponse { get; set; } =
             ApiResponseEnvelope<TableDataRowsDto>.Success(
                 new TableDataRowsDto());
+
+        public Func<
+            string,
+            int,
+            int,
+            CancellationToken,
+            Task<ApiResponseEnvelope<RunTableDirectoryPageDto>>>?
+            RunTableDirectoryHandler { get; set; }
+
+        public Func<
+            string,
+            CancellationToken,
+            Task<ApiResponseEnvelope<TableDataRowsDto>>>?
+            TableRowsHandler { get; set; }
 
         public string? LastNodeRunWorkflowRunId { get; private set; }
 
@@ -1263,7 +1535,7 @@ public sealed class MainWindowViewModelDataTests
             return Task.FromResult(TableRefsResponse);
         }
 
-        public Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
+        public async Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
             EngineHostConnectionSettings settings,
             string workflowRunId,
             int offset = 0,
@@ -1274,10 +1546,40 @@ public sealed class MainWindowViewModelDataTests
             string? logicalTableId = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(
-                ApiResponseEnvelope<RunTableDirectoryPageDto>.Failure(
-                    "NOT_CONFIGURED",
-                    "No run table directory response configured."));
+            LastTableRefWorkflowRunId = workflowRunId;
+            if (RunTableDirectoryHandler is not null)
+            {
+                return await RunTableDirectoryHandler(
+                    workflowRunId,
+                    offset,
+                    limit,
+                    cancellationToken);
+            }
+
+            if (!TableRefsResponse.Ok || TableRefsResponse.Data is null)
+            {
+                return new ApiResponseEnvelope<RunTableDirectoryPageDto>
+                {
+                    Ok = false,
+                    Error = TableRefsResponse.Error,
+                    RequestId = TableRefsResponse.RequestId,
+                };
+            }
+
+            var filtered = TableRefsResponse.Data
+                .Where(item => tableType is null || item.TableType == tableType)
+                .Where(item => logicalTableId is null || item.LogicalTableId == logicalTableId)
+                .ToArray();
+            var items = filtered.Skip(offset).Take(limit).ToArray();
+            return ApiResponseEnvelope<RunTableDirectoryPageDto>.Success(
+                    new RunTableDirectoryPageDto
+                    {
+                        Items = items,
+                        Offset = offset,
+                        Limit = limit,
+                        Total = filtered.Length,
+                        HasMore = offset + items.Length < filtered.Length,
+                    });
         }
 
         public Task<ApiResponseEnvelope<List<LoopRunDto>>> ListLoopRunsAsync(
@@ -1335,7 +1637,7 @@ public sealed class MainWindowViewModelDataTests
                     "NOT_CONFIGURED",
                     "No loop iteration table response configured."));
         }
-        public Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
+        public async Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
             EngineHostConnectionSettings settings,
             string tableRefId,
             int offset = 0,
@@ -1348,7 +1650,12 @@ public sealed class MainWindowViewModelDataTests
             LastTableRowsTableRefId = tableRefId;
             LastTableRowsOffset = offset;
             LastTableRowsLimit = limit;
-            return Task.FromResult(TableRowsResponse);
+            if (TableRowsHandler is not null)
+            {
+                return await TableRowsHandler(tableRefId, cancellationToken);
+            }
+
+            return TableRowsResponse;
         }
 
         public Task<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> GetNodeDefinitionCatalogStateAsync(

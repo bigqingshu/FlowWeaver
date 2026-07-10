@@ -8,12 +8,10 @@ public partial class MainWindowViewModel
     private async Task<TableRefDto?> TryLoadRequestedNodeTableRefForDataPreviewAsync(
         string requestedRunId,
         string requestedNodeInstanceId,
-        string nodeRunId,
         int requestVersion,
         bool notifyResult)
     {
-        var tableRefsResponse = await _apiClient.ListTableRefsAsync(
-            BuildSettings(),
+        var tableRefsResponse = await LoadRunTableDirectoryAsync(
             requestedRunId,
             _shutdown.Token);
 
@@ -28,9 +26,9 @@ public partial class MainWindowViewModel
             return null;
         }
 
-        var tableRef = FindLatestReadableNodeRunTableRef(
+        var tableRef = FindLatestReadableNodeTableRef(
             tableRefsResponse.Data,
-            nodeRunId);
+            requestedNodeInstanceId);
         if (tableRef is null)
         {
             ApplyMissingNodeDataPreviewOutput(
