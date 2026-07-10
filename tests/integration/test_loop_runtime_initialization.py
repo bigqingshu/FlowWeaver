@@ -384,8 +384,8 @@ def test_enabled_loop_runtime_initialization_is_idempotent(
     links = store.list_loop_iteration_node_runs(iterations[0].loop_iteration_id)
     assert [(link.node_instance_id, link.role) for link in links] == [
         ("body", "BODY"),
-        ("loop_judge", "JUDGE"),
         ("loop_start", "ENTRY"),
+        ("loop_judge", "JUDGE"),
     ]
     node_statuses = {
         node.node_instance_id: node.status
