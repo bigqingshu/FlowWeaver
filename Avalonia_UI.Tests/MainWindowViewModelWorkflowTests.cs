@@ -5741,6 +5741,90 @@ public sealed class MainWindowViewModelWorkflowTests
             return Task.FromResult(TableRowsResponse);
         }
 
+        public Task<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> GetNodeDefinitionCatalogStateAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No catalog state response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> StartBackgroundWorkflowRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowId,
+            string runMode = "full",
+            string? targetNodeInstanceId = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No background run response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsPageAsync(
+            EngineHostConnectionSettings settings,
+            string? workflowId = null,
+            IReadOnlyCollection<string>? statuses = null,
+            string? runMode = null,
+            string? triggerSource = null,
+            int offset = 0,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<List<WorkflowRunDto>>.Failure(
+                    "NOT_CONFIGURED",
+                    "No paged run response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            string? triggerSource = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<WorkflowRunDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No retry response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<RunTableCleanupResultDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No table cleanup response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
+            EngineHostConnectionSettings settings,
+            string tableRefId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<TableDataSchemaDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No table schema response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<TableDataSummaryDto>> GetTableDataSummaryAsync(
+            EngineHostConnectionSettings settings,
+            string tableRefId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<TableDataSummaryDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No table summary response configured."));
+        }
+
         public Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(
             EngineHostConnectionSettings settings,
             long? afterSequenceNumber = null,

@@ -19,10 +19,7 @@ public interface IEngineHostApiClient
 
     Task<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> GetNodeDefinitionCatalogStateAsync(
         EngineHostConnectionSettings settings,
-        CancellationToken cancellationToken = default)
-    {
-        throw new NotSupportedException("Node definition catalog state API is not implemented.");
-    }
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
@@ -55,10 +52,7 @@ public interface IEngineHostApiClient
     Task<ApiResponseEnvelope<WorkflowDeleteResultDto>> DeleteWorkflowAsync(
         EngineHostConnectionSettings settings,
         string workflowId,
-        CancellationToken cancellationToken = default)
-    {
-        throw new NotSupportedException("Workflow delete API is not implemented.");
-    }
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<List<WorkflowRevisionDto>>> ListWorkflowRevisionsAsync(
         EngineHostConnectionSettings settings,
@@ -81,15 +75,29 @@ public interface IEngineHostApiClient
         string workflowId,
         string runMode,
         string? targetNodeInstanceId = null,
-        CancellationToken cancellationToken = default)
-    {
-        return StartWorkflowRunAsync(settings, workflowId, cancellationToken);
-    }
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<WorkflowRunDto>> StartBackgroundWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string runMode = "full",
+        string? targetNodeInstanceId = null,
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsAsync(
         EngineHostConnectionSettings settings,
         string? workflowId = null,
         IReadOnlyCollection<string>? statuses = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsPageAsync(
+        EngineHostConnectionSettings settings,
+        string? workflowId = null,
+        IReadOnlyCollection<string>? statuses = null,
+        string? runMode = null,
+        string? triggerSource = null,
+        int offset = 0,
+        int limit = 100,
         CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<List<NodeRunDto>>> ListNodeRunsAsync(
@@ -158,21 +166,26 @@ public interface IEngineHostApiClient
         string? role = null,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string? triggerSource = null,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
         EngineHostConnectionSettings settings,
         string tableRefId,
-        CancellationToken cancellationToken = default)
-    {
-        throw new NotSupportedException("Table data schema API is not implemented.");
-    }
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<TableDataSummaryDto>> GetTableDataSummaryAsync(
         EngineHostConnectionSettings settings,
         string tableRefId,
-        CancellationToken cancellationToken = default)
-    {
-        throw new NotSupportedException("Table data summary API is not implemented.");
-    }
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<TableDataRowsDto>> GetTableDataRowsAsync(
         EngineHostConnectionSettings settings,
@@ -181,10 +194,7 @@ public interface IEngineHostApiClient
         int limit = 50,
         IReadOnlyCollection<string>? columns = null,
         IReadOnlyCollection<string>? orderBy = null,
-        CancellationToken cancellationToken = default)
-    {
-        throw new NotSupportedException("Table data rows API is not implemented.");
-    }
+        CancellationToken cancellationToken = default);
 
     Task<ApiResponseEnvelope<List<RuntimeEventDto>>> ListEventsAsync(
         EngineHostConnectionSettings settings,

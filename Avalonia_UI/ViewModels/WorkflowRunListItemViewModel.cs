@@ -13,6 +13,7 @@ public sealed class WorkflowRunListItemViewModel
         WorkflowVersion = run.WorkflowVersion;
         Status = run.Status;
         RunMode = run.RunMode;
+        TriggerSource = run.TriggerSource;
         TargetNodeInstanceId = run.TargetNodeInstanceId;
         StartedAt = run.StartedAt;
         FinishedAt = run.FinishedAt;
@@ -30,6 +31,8 @@ public sealed class WorkflowRunListItemViewModel
     public string Status { get; }
 
     public string RunMode { get; }
+
+    public string TriggerSource { get; }
 
     public string? TargetNodeInstanceId { get; }
 

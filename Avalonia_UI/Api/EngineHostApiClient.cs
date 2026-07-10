@@ -186,6 +186,30 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunDto>> StartBackgroundWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowId,
+        string runMode = "full",
+        string? targetNodeInstanceId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var payload = new Dictionary<string, string?>
+        {
+            ["run_mode"] = runMode,
+        };
+        if (!string.IsNullOrWhiteSpace(targetNodeInstanceId))
+        {
+            payload["target_node_instance_id"] = targetNodeInstanceId;
+        }
+
+        return SendAsync<WorkflowRunDto>(
+            settings,
+            HttpMethod.Post,
+            $"api/v1/workflows/{Uri.EscapeDataString(workflowId)}/background-runs",
+            payload: payload,
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowRunDto>> StartWorkflowRunAsync(
         EngineHostConnectionSettings settings,
         string workflowId,
@@ -226,6 +250,48 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
         {
             query.AddRange(statuses.Select(status => new KeyValuePair<string, string?>("status", status)));
         }
+
+        return SendAsync<List<WorkflowRunDto>>(
+            settings,
+            HttpMethod.Get,
+            "api/v1/runs",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<List<WorkflowRunDto>>> ListRunsPageAsync(
+        EngineHostConnectionSettings settings,
+        string? workflowId = null,
+        IReadOnlyCollection<string>? statuses = null,
+        string? runMode = null,
+        string? triggerSource = null,
+        int offset = 0,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>();
+        if (!string.IsNullOrWhiteSpace(workflowId))
+        {
+            query.Add(new KeyValuePair<string, string?>("workflow_id", workflowId));
+        }
+
+        if (statuses is not null)
+        {
+            query.AddRange(statuses.Select(status => new KeyValuePair<string, string?>("status", status)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(runMode))
+        {
+            query.Add(new KeyValuePair<string, string?>("run_mode", runMode));
+        }
+
+        if (!string.IsNullOrWhiteSpace(triggerSource))
+        {
+            query.Add(new KeyValuePair<string, string?>("trigger_source", triggerSource));
+        }
+
+        query.Add(new KeyValuePair<string, string?>("offset", offset.ToString()));
+        query.Add(new KeyValuePair<string, string?>("limit", limit.ToString()));
 
         return SendAsync<List<WorkflowRunDto>>(
             settings,
@@ -410,6 +476,41 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             HttpMethod.Get,
             BuildLoopIterationPath(workflowRunId, loopRunId, loopIterationId, "table-refs"),
             query: query,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryWorkflowRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        string? triggerSource = null,
+        CancellationToken cancellationToken = default)
+    {
+        Dictionary<string, string?>? payload = null;
+        if (!string.IsNullOrWhiteSpace(triggerSource))
+        {
+            payload = new Dictionary<string, string?>
+            {
+                ["trigger_source"] = triggerSource,
+            };
+        }
+
+        return SendAsync<WorkflowRunDto>(
+            settings,
+            HttpMethod.Post,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/retry",
+            payload: payload,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<RunTableCleanupResultDto>(
+            settings,
+            HttpMethod.Delete,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/table-refs",
             cancellationToken: cancellationToken);
     }
 

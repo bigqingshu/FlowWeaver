@@ -262,6 +262,9 @@ public sealed record WorkflowRunDto
     [JsonPropertyName("run_mode")]
     public string RunMode { get; init; } = string.Empty;
 
+    [JsonPropertyName("trigger_source")]
+    public string TriggerSource { get; init; } = string.Empty;
+
     [JsonPropertyName("target_node_instance_id")]
     public string? TargetNodeInstanceId { get; init; }
 
@@ -678,6 +681,39 @@ public sealed record RunTableDirectoryPageDto
 
     [JsonPropertyName("has_more")]
     public bool HasMore { get; init; }
+}
+
+public sealed record RunTableCleanupIssueDto
+{
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string Reason { get; init; } = string.Empty;
+}
+
+public sealed record RunTableCleanupResultDto
+{
+    [JsonPropertyName("workflow_run_id")]
+    public string WorkflowRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("cleaned_count")]
+    public int CleanedCount { get; init; }
+
+    [JsonPropertyName("skipped_count")]
+    public int SkippedCount { get; init; }
+
+    [JsonPropertyName("failed_count")]
+    public int FailedCount { get; init; }
+
+    [JsonPropertyName("cleaned_table_refs")]
+    public TableRefDto[] CleanedTableRefs { get; init; } = [];
+
+    [JsonPropertyName("skipped")]
+    public RunTableCleanupIssueDto[] Skipped { get; init; } = [];
+
+    [JsonPropertyName("failed")]
+    public RunTableCleanupIssueDto[] Failed { get; init; } = [];
 }
 
 public sealed record TableFieldSchemaDto

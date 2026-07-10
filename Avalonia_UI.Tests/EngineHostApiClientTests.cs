@@ -354,6 +354,39 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task StartBackgroundWorkflowRunAsyncUsesBackgroundPathAndPayload()
+    {
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-background","workflow_id":"wf-1","revision_id":"rev-1","workflow_version":2,"definition_hash":"hash","status":"PENDING","run_mode":"preview_to_node","trigger_source":"background_manual","target_node_instance_id":"node-1","state_version":1,"owner_process_id":null,"process_generation":0,"fencing_token":null,"input_snapshot_id":null,"started_at":null,"finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var service = new BackgroundRunService(
+            new EngineHostApiClient(new HttpClient(handler)));
+
+        var result = await service.StartAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "wf 1",
+            "preview_to_node",
+            "node-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/workflows/wf%201/background-runs"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual("preview_to_node", payload.RootElement.GetProperty("run_mode").GetString());
+        Assert.AreEqual("node-1", payload.RootElement.GetProperty("target_node_instance_id").GetString());
+        Assert.AreEqual("background_manual", result.Data?.TriggerSource);
+    }
+
+    [TestMethod]
     public async Task ListWorkflowsAsyncRejectsMissingTokenBeforeRequest()
     {
         var handler = new StubHandler(_ => throw new InvalidOperationException("Should not send."));
@@ -406,6 +439,87 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual(
             new Uri("http://127.0.0.1:8000/api/v1/runs?workflow_id=wf-1"),
             handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task ListRunsPageAsyncBuildsRuntimeFiltersAndPagination()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":[],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListRunsPageAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            workflowId: "wf 1",
+            statuses: ["RUNNING", "SUCCEEDED"],
+            runMode: "preview_to_node",
+            triggerSource: "background_manual",
+            offset: 20,
+            limit: 40);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs?workflow_id=wf%201&status=RUNNING&status=SUCCEEDED&run_mode=preview_to_node&trigger_source=background_manual&offset=20&limit=40"),
+            handler.RequestUri);
+    }
+
+    [TestMethod]
+    public async Task RetryWorkflowRunAsyncPostsTriggerSource()
+    {
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-retry","workflow_id":"wf-1","revision_id":"rev-1","workflow_version":2,"definition_hash":"hash","status":"PENDING","run_mode":"full","trigger_source":"background_manual","target_node_instance_id":null,"state_version":1,"owner_process_id":null,"process_generation":0,"fencing_token":null,"input_snapshot_id":null,"started_at":null,"finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.RetryWorkflowRunAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            "background_manual");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/retry"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual(
+            "background_manual",
+            payload.RootElement.GetProperty("trigger_source").GetString());
+        Assert.AreEqual("run-retry", result.Data?.WorkflowRunId);
+    }
+
+    [TestMethod]
+    public async Task CleanupRunTableRefsAsyncUsesDeleteAndParsesResult()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-1","cleaned_count":1,"skipped_count":1,"failed_count":0,"cleaned_table_refs":[{"table_ref_id":"table-1","can_read_rows":false,"supports_paged_rows":false}],"skipped":[{"table_ref_id":"external-1","reason":"external_or_unsupported_storage"}],"failed":[]},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.CleanupRunTableRefsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Delete, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/table-refs"),
+            handler.RequestUri);
+        Assert.AreEqual(1, result.Data?.CleanedCount);
+        Assert.AreEqual("table-1", result.Data?.CleanedTableRefs[0].TableRefId);
+        Assert.AreEqual("external-1", result.Data?.Skipped[0].TableRefId);
+        Assert.AreEqual("external_or_unsupported_storage", result.Data?.Skipped[0].Reason);
     }
 
     [TestMethod]
@@ -849,7 +963,7 @@ public sealed class EngineHostApiClientTests
     public void WorkflowRunDtoUsesActualJsonNames()
     {
         var envelope = JsonSerializer.Deserialize<ApiResponseEnvelope<WorkflowRunDto>>(
-            """{"ok":true,"data":{"workflow_run_id":"run","workflow_id":"wf","revision_id":"rev","workflow_version":2,"definition_hash":"hash","status":"RUNNING","run_mode":"preview_to_node","target_node_instance_id":"node-1","state_version":3,"owner_process_id":"proc","process_generation":1,"fencing_token":"fence","input_snapshot_id":null,"started_at":"2026-06-29T01:02:03Z","finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}""",
+            """{"ok":true,"data":{"workflow_run_id":"run","workflow_id":"wf","revision_id":"rev","workflow_version":2,"definition_hash":"hash","status":"RUNNING","run_mode":"preview_to_node","trigger_source":"background_manual","target_node_instance_id":"node-1","state_version":3,"owner_process_id":"proc","process_generation":1,"fencing_token":"fence","input_snapshot_id":null,"started_at":"2026-06-29T01:02:03Z","finished_at":null,"completion_reason":null,"error":null},"error":null,"request_id":"req"}""",
             FlowWeaverJson.Options);
 
         Assert.IsNotNull(envelope);
@@ -857,8 +971,12 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual("run", envelope.Data?.WorkflowRunId);
         Assert.AreEqual("RUNNING", envelope.Data?.Status);
         Assert.AreEqual("preview_to_node", envelope.Data?.RunMode);
+        Assert.AreEqual("background_manual", envelope.Data?.TriggerSource);
         Assert.AreEqual("node-1", envelope.Data?.TargetNodeInstanceId);
         Assert.AreEqual(3, envelope.Data?.StateVersion);
+
+        var item = new WorkflowRunListItemViewModel(envelope.Data!);
+        Assert.AreEqual("background_manual", item.TriggerSource);
     }
 
     private sealed class StubHandler : HttpMessageHandler
