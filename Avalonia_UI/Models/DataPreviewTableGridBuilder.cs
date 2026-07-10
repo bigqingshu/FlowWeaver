@@ -29,6 +29,55 @@ public sealed record DataPreviewWorkbenchGridState
     public bool HasMore { get; init; }
 
     public long RowCount { get; init; }
+
+    public bool IsDirty =>
+        EditableCellRows.Length > 0
+        && !DataPreviewTableGridBuilder.CellRowsEqual(
+            OriginalCellRows,
+            EditableCellRows);
+
+    public bool HasPreviousPage => Offset > 0;
+
+    public int FirstVisibleRowNumber => Rows.Length == 0 ? 0 : Offset + 1;
+
+    public int LastVisibleRowNumber => Offset + Rows.Length;
+
+    public bool TryUpdateCell(int rowIndex, int columnIndex, string value)
+    {
+        if (rowIndex < 0
+            || rowIndex >= EditableCellRows.Length
+            || columnIndex < 0
+            || columnIndex >= EditableCellRows[rowIndex].Length
+            || string.Equals(
+                EditableCellRows[rowIndex][columnIndex],
+                value,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        EditableCellRows[rowIndex][columnIndex] = value;
+        return true;
+    }
+
+    public DataPreviewWorkbenchGridState RestoreEditableRows()
+    {
+        return this with
+        {
+            EditableCellRows = DataPreviewTableGridBuilder.CloneCellRows(
+                OriginalCellRows),
+        };
+    }
+
+    public int GetPreviousPageOffset(int pageSize)
+    {
+        return Math.Max(0, Offset - pageSize);
+    }
+
+    public int GetNextPageOffset(int pageSize)
+    {
+        return Offset + pageSize;
+    }
 }
 
 public static class DataPreviewTableGridBuilder
