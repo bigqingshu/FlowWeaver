@@ -51,10 +51,4 @@ public partial class MainWindowViewModel
             IsSavingWorkflowDefinitionDraft = false;
         }
     }
-
-    private async Task<bool> EnsureWorkflowDefinitionDraftSavedForRunAsync()
-    {
-        return !IsWorkflowDefinitionDraftDirty ||
-            await TrySaveWorkflowDefinitionDraftAsync();
-    }
 }
