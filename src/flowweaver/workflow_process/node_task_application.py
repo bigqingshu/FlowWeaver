@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
@@ -10,9 +8,9 @@ from flowweaver.protocols.enums import (
     NodeRunStatus,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.workflow.definition import (
-    FailurePolicyMode,
-    RuntimeOptionsWorkflowModel,
+from flowweaver.workflow.definition import FailurePolicyMode
+from flowweaver.workflow.runtime_feedback_policy import (
+    RuntimeFeedbackPolicyProvider,
 )
 from flowweaver.workflow.runtime_options import (
     sanitize_node_task_result_for_runtime_options,
@@ -46,7 +44,7 @@ def apply_node_task_result_to_runtime(
     event_sink: RuntimeEventSink,
     dag: WorkflowDag,
     failure_policy_mode: FailurePolicyMode,
-    runtime_options_by_node: Mapping[str, RuntimeOptionsWorkflowModel],
+    runtime_feedback_policy_provider: RuntimeFeedbackPolicyProvider | None,
     table_provider_registry: TableProviderRegistry | None,
     result: NodeTaskResultModel,
 ) -> NodeTaskApplyResult:
@@ -91,7 +89,11 @@ def apply_node_task_result_to_runtime(
         )
     result = sanitize_node_task_result_for_runtime_options(
         result,
-        runtime_options_by_node.get(task.node_instance_id),
+        (
+            runtime_feedback_policy_provider.policy_for_node(task.node_instance_id)
+            if runtime_feedback_policy_provider is not None
+            else None
+        ),
     )
     if result.status == NodeResultStatus.SUCCEEDED:
         return _apply_success(

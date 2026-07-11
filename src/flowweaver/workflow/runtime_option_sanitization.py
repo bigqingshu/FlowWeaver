@@ -5,7 +5,7 @@ from typing import Any
 
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
-from flowweaver.workflow.definition import RuntimeOptionsWorkflowModel
+from flowweaver.workflow.runtime_feedback_policy import RuntimeFeedbackPolicyLike
 
 CRITICAL_EVENT_TYPES = frozenset(
     {
@@ -50,7 +50,7 @@ ESSENTIAL_ERROR_KEYS = frozenset(
 
 def runtime_options_should_emit_event(
     event: EventModel,
-    options: RuntimeOptionsWorkflowModel,
+    options: RuntimeFeedbackPolicyLike,
 ) -> bool:
     if event.event_type == EventType.NODE_PROGRESS:
         return options.telemetry.progress_enabled and (
@@ -69,7 +69,7 @@ def runtime_options_should_emit_event(
 
 def sanitize_runtime_event(
     event: EventModel,
-    options: RuntimeOptionsWorkflowModel,
+    options: RuntimeFeedbackPolicyLike,
 ) -> EventModel:
     payload = dict(event.payload)
     payload = sanitize_runtime_diagnostics_payload(payload, options)
@@ -78,7 +78,7 @@ def sanitize_runtime_event(
 
 def sanitize_runtime_diagnostics_payload(
     payload: dict[str, Any],
-    options: RuntimeOptionsWorkflowModel,
+    options: RuntimeFeedbackPolicyLike,
     *,
     essential_keys: frozenset[str] = ESSENTIAL_PAYLOAD_KEYS,
 ) -> dict[str, Any]:
@@ -101,7 +101,7 @@ def sanitize_runtime_diagnostics_payload(
 
 def sanitize_runtime_error_payload(
     payload: dict[str, Any],
-    options: RuntimeOptionsWorkflowModel,
+    options: RuntimeFeedbackPolicyLike,
 ) -> dict[str, Any]:
     if not options.diagnostics.capture_error_context:
         payload = {

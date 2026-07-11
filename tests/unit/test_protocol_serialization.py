@@ -16,6 +16,7 @@ from flowweaver.protocols import (
     NodeTaskCancelRequestPayload,
     NodeTaskModel,
     NodeTaskResultModel,
+    ResolvedRuntimeFeedbackPolicyModel,
     TableMutability,
     TableRefModel,
     TableRole,
@@ -140,6 +141,25 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
             "rules_table": "table-rules",
         },
         config={"rows": 3},
+        runtime_feedback_policy=ResolvedRuntimeFeedbackPolicyModel.model_validate(
+            {
+                "telemetry": {
+                    "log_level": "WARN",
+                    "event_level": "basic",
+                    "event_rate_limit_per_second": 10,
+                    "progress_enabled": False,
+                    "progress_interval_seconds": 5,
+                },
+                "diagnostics": {
+                    "capture_error_context": True,
+                    "include_metrics": False,
+                    "payload_byte_limit": 65536,
+                    "redact_columns": ["password"],
+                    "mask_policy": "partial",
+                },
+            }
+        ),
+        runtime_options_version=2,
         timeout_seconds=60,
     )
     result = NodeTaskResultModel(
@@ -169,6 +189,9 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
         "main_table": "table-main",
         "rules_table": "table-rules",
     }
+    assert restored_task.runtime_feedback_policy is not None
+    assert restored_task.runtime_feedback_policy.telemetry.log_level == "WARN"
+    assert restored_task.runtime_options_version == 2
     assert restored_result == result
     assert restored_result.task_id == task.task_id
     assert restored_result.output_slot_bindings == {

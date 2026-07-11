@@ -17,6 +17,9 @@ from flowweaver.engine.runtime_record_codecs import (
 )
 from flowweaver.protocols.enums import NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 
 
 def _node_run_from_record(record: NodeRunRecord) -> NodeRun:
@@ -62,6 +65,12 @@ def _node_task_to_record(task: NodeTaskModel) -> NodeTaskRecord:
             separators=(",", ":"),
         ),
         config_json=_json_dumps(task.config),
+        runtime_feedback_policy_json=(
+            _json_dumps(task.runtime_feedback_policy.model_dump(mode="json"))
+            if task.runtime_feedback_policy is not None
+            else None
+        ),
+        runtime_options_version=task.runtime_options_version,
         timeout_seconds=task.timeout_seconds,
         created_at=_datetime_to_text(utc_now()),
     )
@@ -81,6 +90,14 @@ def _node_task_from_record(record: NodeTaskRecord) -> NodeTaskModel:
         input_refs=list(json.loads(record.input_refs_json)),
         input_slot_bindings=dict(json.loads(record.input_slot_bindings_json or "{}")),
         config=json.loads(record.config_json),
+        runtime_feedback_policy=(
+            ResolvedRuntimeFeedbackPolicyModel.model_validate(
+                json.loads(record.runtime_feedback_policy_json)
+            )
+            if record.runtime_feedback_policy_json
+            else None
+        ),
+        runtime_options_version=record.runtime_options_version,
         timeout_seconds=record.timeout_seconds,
     )
 

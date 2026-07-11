@@ -9,9 +9,9 @@ from flowweaver.engine.table_provider_registry import (
     TableProviderRegistry,
     create_default_table_provider_registry,
 )
-from flowweaver.workflow.definition import (
-    RuntimeOptionsWorkflowModel,
-    WorkflowDefinitionModel,
+from flowweaver.workflow.definition import WorkflowDefinitionModel
+from flowweaver.workflow.runtime_feedback_policy import (
+    RuntimeFeedbackPolicyProvider,
 )
 from flowweaver.workflow_process.controller import (
     initialize_node_runs,
@@ -43,7 +43,7 @@ def initialize_workflow_process_runtime(
     process_generation: int | None,
     dag: WorkflowDag,
     runtime_dir: Path,
-    runtime_options_by_node: dict[str, RuntimeOptionsWorkflowModel],
+    runtime_feedback_policy_provider: RuntimeFeedbackPolicyProvider,
 ) -> WorkflowProcessRuntimeInitialization:
     initialize_node_runs(
         store,
@@ -79,7 +79,7 @@ def initialize_workflow_process_runtime(
         event_sink=event_sink,
         dag=dag,
         failure_policy_mode=definition.failure_policy.mode,
-        runtime_options_by_node=runtime_options_by_node,
+        runtime_feedback_policy_provider=runtime_feedback_policy_provider,
         table_provider_registry=table_provider_registry,
     )
     return WorkflowProcessRuntimeInitialization(

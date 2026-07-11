@@ -15,6 +15,10 @@ from flowweaver.workflow.definition import (
     TelemetryRuntimeOptionsOverrideModel,
     WorkflowDefinitionModel,
 )
+from flowweaver.workflow.runtime_feedback_policy import (
+    RuntimeFeedbackPolicyLike,
+    StaticRuntimeFeedbackPolicyProvider,
+)
 from flowweaver.workflow.runtime_option_sanitization import (
     sanitize_runtime_diagnostics_payload as _sanitize_runtime_diagnostics_payload,
 )
@@ -134,9 +138,26 @@ def runtime_feedback_policy_from_options(
     )
 
 
+def build_static_runtime_feedback_policy_provider(
+    definition: WorkflowDefinitionModel,
+    *,
+    version: int = 0,
+) -> StaticRuntimeFeedbackPolicyProvider:
+    workflow_options = resolve_workflow_runtime_options(definition)
+    options_by_node = resolve_runtime_options_by_node(definition)
+    return StaticRuntimeFeedbackPolicyProvider(
+        workflow_policy=runtime_feedback_policy_from_options(workflow_options),
+        policies_by_node={
+            node_instance_id: runtime_feedback_policy_from_options(options)
+            for node_instance_id, options in options_by_node.items()
+        },
+        version=version,
+    )
+
+
 def sanitize_node_task_result_for_runtime_options(
     result: NodeTaskResultModel,
-    options: RuntimeOptionsWorkflowModel | None,
+    options: RuntimeFeedbackPolicyLike | None,
 ) -> NodeTaskResultModel:
     if options is None:
         return result

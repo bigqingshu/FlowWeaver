@@ -11,6 +11,7 @@ from flowweaver.protocols.runtime_feedback import (
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow.runtime_options import (
     RuntimeOptionsEventSink,
+    build_static_runtime_feedback_policy_provider,
     resolve_runtime_options_by_node,
     resolve_runtime_options_for_node,
     resolve_workflow_runtime_options,
@@ -268,18 +269,23 @@ def test_resolver_does_not_mutate_node_config_or_task_protocol() -> None:
     )
 
     resolved_by_node = resolve_runtime_options_by_node(definition)
+    provider = build_static_runtime_feedback_policy_provider(definition)
     manager = NodeTaskManager(
         store=object(),
         event_sink=object(),
         dag=build_workflow_dag(definition),
-        runtime_options_by_node=resolved_by_node,
+        runtime_feedback_policy_provider=provider,
     )
 
     assert definition.nodes[0].config == {"rows": 3}
     assert "__runtime" not in definition.nodes[0].config
     assert "runtime_options" not in definition.nodes[0].config
-    assert manager.runtime_options_for_node("source") is resolved_by_node["source"]
-    assert manager.runtime_options_for_node("missing") is None
+    source_policy = manager.runtime_feedback_policy_for_node("source")
+    missing_policy = manager.runtime_feedback_policy_for_node("missing")
+    assert source_policy == runtime_feedback_policy_from_options(
+        resolved_by_node["source"]
+    )
+    assert missing_policy == provider.workflow_policy()
 
 
 def test_runtime_options_event_sink_filters_node_progress_when_disabled() -> None:

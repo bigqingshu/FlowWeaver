@@ -72,6 +72,12 @@ class NodeTaskRecord(Base):
         default="{}",
     )
     config_json: Mapped[str] = mapped_column(Text, nullable=False)
+    runtime_feedback_policy_json: Mapped[str | None] = mapped_column(Text)
+    runtime_options_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
 

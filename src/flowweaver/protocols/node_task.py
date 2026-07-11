@@ -9,6 +9,9 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.base import StrictModel
 from flowweaver.protocols.enums import NodeResultStatus
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 
 
 class NodeTaskModel(StrictModel):
@@ -24,6 +27,8 @@ class NodeTaskModel(StrictModel):
     input_refs: list[str]
     input_slot_bindings: dict[str, str] = Field(default_factory=dict)
     config: dict[str, Any]
+    runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel | None = None
+    runtime_options_version: int = Field(default=0, ge=0)
     timeout_seconds: int
 
 

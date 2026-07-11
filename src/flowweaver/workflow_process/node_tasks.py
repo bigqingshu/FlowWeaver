@@ -8,9 +8,12 @@ from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.workflow.definition import (
-    FailurePolicyMode,
-    RuntimeOptionsWorkflowModel,
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
+from flowweaver.workflow.definition import FailurePolicyMode
+from flowweaver.workflow.runtime_feedback_policy import (
+    RuntimeFeedbackPolicyProvider,
 )
 from flowweaver.workflow_process.dag import WorkflowDag
 from flowweaver.workflow_process.node_task_application import (
@@ -53,7 +56,7 @@ class NodeTaskManager:
         event_sink: RuntimeEventSink,
         dag: WorkflowDag,
         failure_policy_mode: FailurePolicyMode | str | None = None,
-        runtime_options_by_node: dict[str, RuntimeOptionsWorkflowModel] | None = None,
+        runtime_feedback_policy_provider: RuntimeFeedbackPolicyProvider | None = None,
         table_provider_registry: TableProviderRegistry | None = None,
     ) -> None:
         self._store = store
@@ -62,7 +65,7 @@ class NodeTaskManager:
         self._failure_policy_mode = FailurePolicyMode(
             failure_policy_mode or FailurePolicyMode.FAIL_FAST
         )
-        self._runtime_options_by_node = dict(runtime_options_by_node or {})
+        self._runtime_feedback_policy_provider = runtime_feedback_policy_provider
         self._table_provider_registry = table_provider_registry
         self._last_progress_emitted_at: dict[str, datetime] = {}
 
@@ -70,11 +73,12 @@ class NodeTaskManager:
     def failure_policy_mode(self) -> FailurePolicyMode:
         return self._failure_policy_mode
 
-    def runtime_options_for_node(
+    def runtime_feedback_policy_for_node(
         self,
         node_instance_id: str,
-    ) -> RuntimeOptionsWorkflowModel | None:
-        return self._runtime_options_by_node.get(node_instance_id)
+    ) -> ResolvedRuntimeFeedbackPolicyModel | None:
+        provider = self._runtime_feedback_policy_provider
+        return provider.policy_for_node(node_instance_id) if provider else None
 
     def submit_ready_node(
         self,
@@ -101,6 +105,14 @@ class NodeTaskManager:
             config=config,
             input_refs=input_refs or [],
             input_slot_bindings=input_slot_bindings,
+            runtime_feedback_policy=self.runtime_feedback_policy_for_node(
+                node_instance_id
+            ),
+            runtime_options_version=(
+                self._runtime_feedback_policy_provider.version
+                if self._runtime_feedback_policy_provider is not None
+                else 0
+            ),
             timeout_seconds=timeout_seconds,
         )
 
@@ -148,7 +160,9 @@ class NodeTaskManager:
             progress=progress,
             current_stage=current_stage,
             metrics=metrics,
-            runtime_options=self.runtime_options_for_node(task.node_instance_id),
+            runtime_feedback_policy=self.runtime_feedback_policy_for_node(
+                task.node_instance_id
+            ),
             last_progress_emitted_at=self._last_progress_emitted_at,
         )
 
@@ -171,7 +185,7 @@ class NodeTaskManager:
             event_sink=self._event_sink,
             dag=self._dag,
             failure_policy_mode=self._failure_policy_mode,
-            runtime_options_by_node=self._runtime_options_by_node,
+            runtime_feedback_policy_provider=self._runtime_feedback_policy_provider,
             table_provider_registry=self._table_provider_registry,
             result=result,
         )

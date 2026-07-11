@@ -8,7 +8,7 @@ from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.workflow.definition import RuntimeOptionsWorkflowModel
+from flowweaver.workflow.runtime_feedback_policy import RuntimeFeedbackPolicyLike
 
 
 def record_task_heartbeat(
@@ -35,24 +35,31 @@ def record_task_progress(
     progress: float | None,
     current_stage: str | None,
     metrics: dict[str, int | float | str] | None = None,
-    runtime_options: RuntimeOptionsWorkflowModel | None = None,
+    runtime_feedback_policy: RuntimeFeedbackPolicyLike | None = None,
     last_progress_emitted_at: dict[str, datetime],
 ) -> NodeRun | None:
-    if runtime_options is not None and not runtime_options.telemetry.progress_enabled:
+    if (
+        runtime_feedback_policy is not None
+        and not runtime_feedback_policy.telemetry.progress_enabled
+    ):
         return store.update_node_task_runtime_state(
             task,
             executor_id=executor_id,
         )
     now = utc_now()
     if (
-        runtime_options is not None
-        and runtime_options.telemetry.progress_interval_seconds > 0
+        runtime_feedback_policy is not None
+        and runtime_feedback_policy.telemetry.progress_interval_seconds > 0
     ):
         previous_progress_at = last_progress_emitted_at.get(task.task_id)
         if (
             previous_progress_at is not None
             and now - previous_progress_at
-            < timedelta(seconds=runtime_options.telemetry.progress_interval_seconds)
+            < timedelta(
+                seconds=(
+                    runtime_feedback_policy.telemetry.progress_interval_seconds
+                )
+            )
         ):
             return store.update_node_task_runtime_state(
                 task,

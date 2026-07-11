@@ -33,6 +33,9 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -185,6 +188,11 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
     assert "permission_grants" not in table_names(database_path)
     assert "audit_events" not in table_names(database_path)
     assert "input_slot_bindings_json" in column_names(database_path, "node_tasks")
+    assert "runtime_feedback_policy_json" in column_names(
+        database_path,
+        "node_tasks",
+    )
+    assert "runtime_options_version" in column_names(database_path, "node_tasks")
     assert "output_slot_bindings_json" in column_names(
         database_path,
         "node_task_results",
@@ -255,6 +263,50 @@ def test_table_ref_identity_migration_preserves_existing_refs(
     ]
 
 
+def test_node_task_runtime_feedback_migration_preserves_existing_tasks(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(
+        store,
+        workflow_id="workflow-runtime-feedback-migration",
+        workflow_run_id="run-runtime-feedback-migration",
+        node_run_id="node-runtime-feedback-migration",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-runtime-feedback-migration",
+    )
+    task = NodeTaskModel(
+        task_id="task-runtime-feedback-migration",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={"rows": 3},
+        timeout_seconds=60,
+    )
+    store.create_node_task(task)
+    config = alembic_config(database_path)
+
+    command.downgrade(config, "20260710_0020")
+    command.upgrade(config, "head")
+
+    upgraded_store = RuntimeStore.from_sqlite_path(database_path)
+    loaded = upgraded_store.get_node_task(task.task_id)
+    assert loaded is not None
+    assert loaded.config == {"rows": 3}
+    assert loaded.runtime_feedback_policy is None
+    assert loaded.runtime_options_version == 0
+
+
 def test_runtime_store_round_trips_node_task_input_slot_bindings(
     tmp_path: Path,
 ) -> None:
@@ -297,6 +349,25 @@ def test_runtime_store_round_trips_node_task_input_slot_bindings(
             "lookup": "table-lookup",
         },
         config={},
+        runtime_feedback_policy=ResolvedRuntimeFeedbackPolicyModel.model_validate(
+            {
+                "telemetry": {
+                    "log_level": "INFO",
+                    "event_level": "progress",
+                    "event_rate_limit_per_second": 0,
+                    "progress_enabled": True,
+                    "progress_interval_seconds": 0,
+                },
+                "diagnostics": {
+                    "capture_error_context": True,
+                    "include_metrics": True,
+                    "payload_byte_limit": 0,
+                    "redact_columns": [],
+                    "mask_policy": "none",
+                },
+            }
+        ),
+        runtime_options_version=3,
         timeout_seconds=60,
     )
 
@@ -309,6 +380,8 @@ def test_runtime_store_round_trips_node_task_input_slot_bindings(
         "in": "table-main",
         "lookup": "table-lookup",
     }
+    assert loaded.runtime_feedback_policy == task.runtime_feedback_policy
+    assert loaded.runtime_options_version == 3
 
 
 def test_shared_publication_prerequisite_schema_is_available(

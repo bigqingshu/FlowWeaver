@@ -9,6 +9,9 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.protocols.enums import EventType, NodeRunStatus
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 from flowweaver.workflow_process.dag import WorkflowDag
 
 
@@ -25,6 +28,8 @@ def submit_ready_node(
     config: dict[str, Any] | None = None,
     input_refs: list[str] | None = None,
     input_slot_bindings: Mapping[str, str] | None = None,
+    runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel | None = None,
+    runtime_options_version: int = 0,
     timeout_seconds: int = 60,
 ) -> NodeTaskModel | None:
     node = _dag_node(dag, node_instance_id)
@@ -66,6 +71,8 @@ def submit_ready_node(
         input_refs=input_refs or [],
         input_slot_bindings=dict(input_slot_bindings or {}),
         config=node.config if config is None else config,
+        runtime_feedback_policy=runtime_feedback_policy,
+        runtime_options_version=runtime_options_version,
         timeout_seconds=timeout_seconds,
     )
     store.create_node_task(task)

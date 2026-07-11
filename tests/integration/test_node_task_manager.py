@@ -21,7 +21,9 @@ from flowweaver.workflow.definition import (
     FailurePolicyMode,
     WorkflowDefinitionModel,
 )
-from flowweaver.workflow.runtime_options import resolve_runtime_options_by_node
+from flowweaver.workflow.runtime_options import (
+    build_static_runtime_feedback_policy_provider,
+)
 from flowweaver.workflow_process import main as workflow_process_main
 from flowweaver.workflow_process.controller import initialize_node_runs
 from flowweaver.workflow_process.dag import build_workflow_dag
@@ -240,7 +242,9 @@ def create_running_process(store: RuntimeStore, definition: dict):
         event_sink=DatabaseEventSink(store),
         dag=dag,
         failure_policy_mode=definition_model.failure_policy.mode,
-        runtime_options_by_node=resolve_runtime_options_by_node(definition_model),
+        runtime_feedback_policy_provider=(
+            build_static_runtime_feedback_policy_provider(definition_model)
+        ),
     )
     return run, process, manager
 
@@ -323,6 +327,16 @@ def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
     assert task.process_generation == 1
     assert task.input_refs == []
     assert task.config == {"rows": 3}
+    assert task.runtime_feedback_policy is not None
+    assert task.runtime_feedback_policy.telemetry.log_level == "INFO"
+    assert task.runtime_feedback_policy.diagnostics.model_dump(mode="json") == {
+        "capture_error_context": True,
+        "include_metrics": True,
+        "payload_byte_limit": 0,
+        "redact_columns": [],
+        "mask_policy": "none",
+    }
+    assert task.runtime_options_version == 0
     assert [event.event_type for event in store.list_runtime_events()] == [
         "NODE_QUEUED",
         "NODE_STARTED",

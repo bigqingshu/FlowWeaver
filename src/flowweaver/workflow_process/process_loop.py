@@ -67,7 +67,7 @@ def run_workflow_process_loop(
     run = loaded_definition.run
     definition = loaded_definition.definition
 
-    runtime_options_by_node, event_sink = (
+    runtime_feedback_policy_provider, event_sink = (
         process_runtime_options.configure_runtime_options_event_sink(
             definition=definition,
             event_sink=event_sink,
@@ -114,7 +114,7 @@ def run_workflow_process_loop(
             process_generation=process_generation,
             dag=dag,
             runtime_dir=runtime_dir,
-            runtime_options_by_node=runtime_options_by_node,
+            runtime_feedback_policy_provider=runtime_feedback_policy_provider,
         )
     )
     task_manager = runtime_initialization.task_manager
