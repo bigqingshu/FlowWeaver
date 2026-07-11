@@ -10,6 +10,9 @@ from flowweaver.common.time import utc_now
 from flowweaver.protocols.base import StrictModel
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 from flowweaver.protocols.runtime_logs import RuntimeLogPayloadModel
 
 
@@ -48,6 +51,17 @@ class NodeTaskProgressPayload(StrictModel):
 class NodeTaskLogPayload(RuntimeLogPayloadModel):
     node_instance_id: str = Field(min_length=1)
     task_id: str = Field(min_length=1)
+
+
+class NodeTaskRuntimeOptionsUpdatePayload(StrictModel):
+    task_id: str = Field(min_length=1)
+    runtime_options_version: int = Field(ge=0)
+    runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel
+
+
+class NodeTaskRuntimeOptionsAppliedPayload(StrictModel):
+    task_id: str = Field(min_length=1)
+    runtime_options_version: int = Field(ge=0)
 
 
 class NodeTaskCancelRequestPayload(StrictModel):

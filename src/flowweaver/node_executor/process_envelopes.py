@@ -11,6 +11,7 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskHeartbeatPayload,
     NodeTaskLogPayload,
     NodeTaskProgressPayload,
+    NodeTaskRuntimeOptionsAppliedPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.runtime_feedback import RuntimeFeedbackLogLevel
@@ -98,6 +99,26 @@ def task_log_envelope(
             node_instance_id=task.node_instance_id,
             task_id=task.task_id,
             context=context,
+        ).model_dump(mode="json"),
+    )
+
+
+def task_runtime_options_applied_envelope(
+    *,
+    workflow_run_id: str | None,
+    node_run_id: str | None,
+    task_id: str,
+    runtime_options_version: int,
+    correlation_id: str,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED,
+        workflow_run_id=workflow_run_id,
+        node_run_id=node_run_id,
+        correlation_id=correlation_id,
+        payload=NodeTaskRuntimeOptionsAppliedPayload(
+            task_id=task_id,
+            runtime_options_version=runtime_options_version,
         ).model_dump(mode="json"),
     )
 

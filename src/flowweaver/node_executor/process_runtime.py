@@ -34,6 +34,9 @@ from flowweaver.node_executor.process_envelopes import (
 from flowweaver.node_executor.process_envelopes import (
     task_progress_envelope as _task_progress_envelope,
 )
+from flowweaver.node_executor.process_envelopes import (
+    task_runtime_options_applied_envelope as _task_runtime_options_applied_envelope,
+)
 from flowweaver.node_executor.process_helpers import (
     failed_task_result as _failed_task_result,
 )
@@ -46,6 +49,7 @@ from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
     NodeTaskCancelRequestPayload,
+    NodeTaskRuntimeOptionsUpdatePayload,
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
@@ -202,6 +206,8 @@ class NodeExecutorProcess:
         )
 
     def handle_envelope(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
+        if envelope.message_type == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_UPDATE:
+            return self._handle_runtime_options_update(envelope)
         if envelope.message_type == IPCMessageType.NODE_TASK_CANCEL_REQUEST:
             return self._handle_cancel_request(envelope)
         if envelope.message_type != IPCMessageType.NODE_TASK_SUBMIT:
@@ -253,6 +259,31 @@ class NodeExecutorProcess:
 
     def task_context(self, task: NodeTaskModel) -> NodeExecutionContext | None:
         return self._state.task_context(task.task_id)
+
+    def mark_runtime_options_response_written(self, task_id: str) -> None:
+        self._state.mark_runtime_options_response_written(task_id)
+
+    def _handle_runtime_options_update(
+        self,
+        envelope: IPCEnvelope,
+    ) -> tuple[IPCEnvelope, ...]:
+        payload = NodeTaskRuntimeOptionsUpdatePayload.model_validate(envelope.payload)
+        applied_version = self._state.apply_task_runtime_feedback_policy(
+            payload.task_id,
+            runtime_options_version=payload.runtime_options_version,
+            runtime_feedback_policy=payload.runtime_feedback_policy,
+        )
+        if applied_version is None:
+            return ()
+        return (
+            _task_runtime_options_applied_envelope(
+                workflow_run_id=envelope.workflow_run_id,
+                node_run_id=envelope.node_run_id,
+                task_id=payload.task_id,
+                runtime_options_version=applied_version,
+                correlation_id=envelope.message_id,
+            ),
+        )
 
     def _handle_cancel_request(
         self,

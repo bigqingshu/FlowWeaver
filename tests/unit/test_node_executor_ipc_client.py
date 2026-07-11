@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from textwrap import dedent
 from threading import Event, Thread
 
@@ -37,6 +38,27 @@ def background_fast_feedback_policy() -> ResolvedRuntimeFeedbackPolicyModel:
                 "payload_byte_limit": 65536,
                 "redact_columns": [],
                 "mask_policy": "partial",
+            },
+        }
+    )
+
+
+def diagnostic_feedback_policy() -> ResolvedRuntimeFeedbackPolicyModel:
+    return ResolvedRuntimeFeedbackPolicyModel.model_validate(
+        {
+            "telemetry": {
+                "log_level": "DEBUG",
+                "event_level": "verbose",
+                "event_rate_limit_per_second": 0,
+                "progress_enabled": True,
+                "progress_interval_seconds": 0,
+            },
+            "diagnostics": {
+                "capture_error_context": True,
+                "include_metrics": True,
+                "payload_byte_limit": 0,
+                "redact_columns": [],
+                "mask_policy": "none",
             },
         }
     )
@@ -260,6 +282,117 @@ def test_subprocess_node_executor_filters_background_fast_progress() -> None:
     }
 
 
+def test_local_node_executor_updates_active_task_runtime_options() -> None:
+    task = _runtime_options_update_task()
+    events: list[IPCEnvelope] = []
+    progress_seen = Event()
+    applied_seen = Event()
+
+    def handle_event(_task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        events.append(envelope)
+        if envelope.message_type == IPCMessageType.NODE_TASK_PROGRESS:
+            progress_seen.set()
+        if envelope.message_type == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED:
+            applied_seen.set()
+
+    executor = LocalNodeExecutorIpcClient(
+        executor_id="local-runtime-options-executor",
+        event_handler=handle_event,
+    )
+    results: list[NodeTaskResultModel] = []
+    worker = Thread(target=lambda: results.append(executor.execute(task)))
+    worker.start()
+    assert progress_seen.wait(timeout=5)
+
+    assert executor.request_runtime_options_update(
+        task,
+        runtime_options_version=1,
+        runtime_feedback_policy=background_fast_feedback_policy(),
+    )
+    assert applied_seen.wait(timeout=5)
+    progress_count = sum(
+        event.message_type == IPCMessageType.NODE_TASK_PROGRESS for event in events
+    )
+    time.sleep(0.04)
+    assert sum(
+        event.message_type == IPCMessageType.NODE_TASK_PROGRESS for event in events
+    ) == progress_count
+    assert executor.request_runtime_options_update(
+        task,
+        runtime_options_version=0,
+        runtime_feedback_policy=diagnostic_feedback_policy(),
+    )
+    worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert len(results) == 1
+    assert results[0].status == NodeResultStatus.SUCCEEDED
+    applied_versions = [
+        event.payload["runtime_options_version"]
+        for event in events
+        if event.message_type == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED
+    ]
+    assert applied_versions == [1, 1]
+    assert executor.request_runtime_options_update(
+        task,
+        runtime_options_version=2,
+        runtime_feedback_policy=diagnostic_feedback_policy(),
+    ) is False
+
+
+def test_subprocess_node_executor_updates_active_task_runtime_options() -> None:
+    task = _runtime_options_update_task()
+    events: list[IPCEnvelope] = []
+    progress_seen = Event()
+    applied_seen = Event()
+
+    def handle_event(_task: NodeTaskModel, envelope: IPCEnvelope) -> None:
+        events.append(envelope)
+        if envelope.message_type == IPCMessageType.NODE_TASK_PROGRESS:
+            progress_seen.set()
+        if envelope.message_type == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED:
+            applied_seen.set()
+
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="subprocess-runtime-options-executor",
+        python_executable=sys.executable,
+        event_handler=handle_event,
+    )
+    results: list[NodeTaskResultModel] = []
+    worker = Thread(target=lambda: results.append(executor.execute(task)))
+    worker.start()
+    try:
+        assert progress_seen.wait(timeout=5)
+        assert executor.request_runtime_options_update(
+            task,
+            runtime_options_version=1,
+            runtime_feedback_policy=background_fast_feedback_policy(),
+        )
+        assert applied_seen.wait(timeout=5)
+        progress_count = sum(
+            event.message_type == IPCMessageType.NODE_TASK_PROGRESS
+            for event in events
+        )
+        time.sleep(0.04)
+        assert sum(
+            event.message_type == IPCMessageType.NODE_TASK_PROGRESS
+            for event in events
+        ) == progress_count
+        worker.join(timeout=5)
+    finally:
+        executor.close()
+
+    assert not worker.is_alive()
+    assert len(results) == 1
+    assert results[0].status == NodeResultStatus.SUCCEEDED
+    applied_versions = [
+        event.payload["runtime_options_version"]
+        for event in events
+        if event.message_type == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED
+    ]
+    assert applied_versions == [1]
+
+
 def test_subprocess_node_executor_ipc_client_cancels_delay_test_node() -> None:
     task = make_task().model_copy(
         update={
@@ -391,6 +524,21 @@ def test_subprocess_node_executor_ipc_client_returns_failed_result_on_eof() -> N
     )
     assert result.error["exit_code"] == 7
     assert "forced executor exit" in result.error["stderr"]
+
+
+def _runtime_options_update_task() -> NodeTaskModel:
+    return make_task().model_copy(
+        update={
+            "node_type": DELAY_TEST_NODE_TYPE,
+            "config": {
+                "duration_seconds": 0.2,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+            "runtime_feedback_policy": diagnostic_feedback_policy(),
+            "runtime_options_version": 0,
+        }
+    )
 
 
 def _reporting_executor_command(*, executor_id: str) -> list[str]:

@@ -4,6 +4,7 @@ from flowweaver.node_executor.base import (
     CancellableNodeExecutor,
     NodeExecutor,
     NodeExecutorFactory,
+    RuntimeOptionsUpdatableNodeExecutor,
 )
 from flowweaver.node_executor.builtin import BuiltinTableNodeExecutor
 from flowweaver.node_executor.builtin_fault import (
@@ -44,6 +45,7 @@ __all__ = [
     "CancellableNodeExecutor",
     "NodeExecutor",
     "NodeExecutorFactory",
+    "RuntimeOptionsUpdatableNodeExecutor",
     "NodeExecutorProcess",
     "NodeTaskLogger",
     "run_node_executor_process",

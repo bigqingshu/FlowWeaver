@@ -188,6 +188,28 @@ class NodeTaskManager:
             payload=payload,
         )
 
+    def record_task_runtime_options_applied(
+        self,
+        task: NodeTaskModel,
+        *,
+        runtime_options_version: int,
+    ) -> bool:
+        current_version, current_policy = (
+            self.runtime_feedback_policy_snapshot_for_node(
+                task.node_instance_id
+            )
+        )
+        if (
+            current_policy is None
+            or runtime_options_version != current_version
+        ):
+            return False
+        return self._store.update_node_task_runtime_feedback_policy(
+            task.task_id,
+            runtime_options_version=runtime_options_version,
+            runtime_feedback_policy=current_policy,
+        )
+
     def mark_timed_out_task(
         self,
         task: NodeTaskModel,

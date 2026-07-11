@@ -20,12 +20,36 @@ class NodeTaskRuntimeFeedbackGate:
         self,
         policy: ResolvedRuntimeFeedbackPolicyModel | None,
         *,
+        version: int = 0,
         monotonic_time: Callable[[], float] | None = None,
     ) -> None:
+        if version < 0:
+            raise ValueError("runtime feedback gate version must be non-negative")
         self._policy = policy
+        self._version = version
         self._monotonic_time = monotonic_time or time.monotonic
         self._last_progress_emitted_at: float | None = None
         self._lock = Lock()
+
+    @property
+    def version(self) -> int:
+        with self._lock:
+            return self._version
+
+    def apply_policy(
+        self,
+        policy: ResolvedRuntimeFeedbackPolicyModel,
+        *,
+        version: int,
+    ) -> int:
+        if version < 0:
+            raise ValueError("runtime feedback gate version must be non-negative")
+        with self._lock:
+            if version <= self._version:
+                return self._version
+            self._policy = policy
+            self._version = version
+            return self._version
 
     def prepare_progress_metrics(
         self,

@@ -4,6 +4,7 @@ import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from flowweaver.common.subprocess_command import python_module_command
@@ -12,6 +13,7 @@ from flowweaver.node_executor.ipc_client_messages import (
     cancel_request_envelope,
     ipc_failure_result,
     node_task_result_from_response,
+    runtime_options_update_envelope,
     submit_task_envelope,
 )
 from flowweaver.node_executor.ipc_client_subprocess_helpers import (
@@ -33,6 +35,9 @@ from flowweaver.node_executor.ipc_client_types import NodeTaskIpcEventHandler
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 
 
 class SubprocessNodeExecutorIpcClient:
@@ -49,6 +54,7 @@ class SubprocessNodeExecutorIpcClient:
         self.executor_id = executor_id
         self._event_handler = event_handler
         self._closed = False
+        self._write_lock = Lock()
         self._child = subprocess.Popen(
             command
             or [
@@ -101,16 +107,32 @@ class SubprocessNodeExecutorIpcClient:
     ) -> bool:
         return self._write_envelope(cancel_request_envelope(task, reason=reason))
 
+    def request_runtime_options_update(
+        self,
+        task: NodeTaskModel,
+        *,
+        runtime_options_version: int,
+        runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel,
+    ) -> bool:
+        return self._write_envelope(
+            runtime_options_update_envelope(
+                task,
+                runtime_options_version=runtime_options_version,
+                runtime_feedback_policy=runtime_feedback_policy,
+            )
+        )
+
     def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        stdin = self._child.stdin
-        if stdin is not None and not stdin.closed:
-            try:
-                stdin.close()
-            except OSError:
-                pass
+        with self._write_lock:
+            if self._closed:
+                return
+            self._closed = True
+            stdin = self._child.stdin
+            if stdin is not None and not stdin.closed:
+                try:
+                    stdin.close()
+                except OSError:
+                    pass
         try:
             self._child.wait(timeout=2)
         except subprocess.TimeoutExpired:
@@ -136,11 +158,12 @@ class SubprocessNodeExecutorIpcClient:
         raise RuntimeError("Node executor subprocess did not become ready")
 
     def _write_envelope(self, envelope: IPCEnvelope) -> bool:
-        return _write_envelope_to_child(
-            self._child,
-            closed=self._closed,
-            envelope=envelope,
-        )
+        with self._write_lock:
+            return _write_envelope_to_child(
+                self._child,
+                closed=self._closed,
+                envelope=envelope,
+            )
 
     def _read_response(self) -> IPCEnvelope | None:
         return _read_response_from_child(self._child)

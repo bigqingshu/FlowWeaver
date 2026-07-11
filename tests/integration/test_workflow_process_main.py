@@ -28,6 +28,7 @@ from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
     BuiltinTableNodeExecutor,
     FakeNodeExecutor,
+    LocalNodeExecutorIpcClient,
     SubprocessNodeExecutorIpcClient,
 )
 from flowweaver.nodes.builtin_shared_table import (
@@ -3855,6 +3856,134 @@ def test_workflow_process_dynamically_applies_run_runtime_options(
     assert transform_task.runtime_feedback_policy.telemetry.progress_enabled is False
     assert finished_run is not None
     assert finished_run.status == "SUCCEEDED"
+
+
+def test_workflow_process_updates_active_local_node_runtime_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "flowweaver.workflow_process.runtime_options_controller."
+        "RUNTIME_OPTIONS_POLL_INTERVAL_SECONDS",
+        0.01,
+    )
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Active local node runtime options",
+        definition=single_test_node_definition(
+            node_type=DELAY_TEST_NODE_TYPE,
+            config={
+                "duration_seconds": 0.4,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+        ),
+        workflow_id="workflow-active-local-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-active-local-runtime-options",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-active-local-runtime-options",
+    )
+    assert process is not None
+    local_executor = LocalNodeExecutorIpcClient(
+        executor_id="local-active-runtime-options-executor"
+    )
+    exit_codes: list[int] = []
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0.01,
+                executor_factory=lambda _task: local_executor,
+                execution_mode="threaded",
+            )
+        )
+    )
+    worker.start()
+    try:
+        deadline = time.monotonic() + 5
+        queued_event = None
+        while time.monotonic() < deadline:
+            events = store.list_runtime_events()
+            queued_event = next(
+                (event for event in events if event.event_type == "NODE_QUEUED"),
+                None,
+            )
+            if queued_event is not None and any(
+                event.event_type == "NODE_PROGRESS" for event in events
+            ):
+                break
+            time.sleep(0.01)
+        assert queued_event is not None
+        assert any(
+            event.event_type == "NODE_PROGRESS"
+            for event in store.list_runtime_events()
+        )
+
+        requested = store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=0,
+            overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+                {
+                    "workflow": {
+                        "telemetry": {
+                            "log_level": "WARN",
+                            "event_level": "basic",
+                            "progress_enabled": False,
+                        }
+                    }
+                }
+            ),
+        )
+        task_id = queued_event.payload["task_id"]
+        applied_task = store.get_node_task(task_id)
+        state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+        deadline = time.monotonic() + 5
+        while (
+            (
+                state is None
+                or state.applied_version < requested.requested_version
+                or applied_task is None
+                or applied_task.runtime_options_version < requested.requested_version
+            )
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+            state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+            applied_task = store.get_node_task(task_id)
+        assert state is not None
+        assert state.applied_version == 1
+        assert applied_task is not None
+        assert applied_task.runtime_options_version == 1
+        assert applied_task.runtime_feedback_policy is not None
+        assert applied_task.runtime_feedback_policy.telemetry.progress_enabled is False
+
+        progress_count_after_ack = sum(
+            event.event_type == "NODE_PROGRESS"
+            for event in store.list_runtime_events()
+        )
+        time.sleep(0.05)
+        assert sum(
+            event.event_type == "NODE_PROGRESS"
+            for event in store.list_runtime_events()
+        ) == progress_count_after_ack
+    finally:
+        worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert exit_codes == [0]
+    finished_run = store.get_workflow_run(run.workflow_run_id)
+    node_run = store.list_node_runs(run.workflow_run_id)[0]
+    assert finished_run is not None
+    assert finished_run.status == "SUCCEEDED"
+    assert node_run.status == "SUCCEEDED"
 
 
 def test_workflow_process_records_task_events_while_executor_is_still_running(

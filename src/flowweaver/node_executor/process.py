@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from threading import Lock
 from typing import TextIO
 
 from flowweaver.node_executor.base import NodeExecutorFactory
@@ -17,6 +18,7 @@ from flowweaver.node_executor.process_loop import (
 from flowweaver.node_executor.process_runtime import (
     NodeExecutorProcess as NodeExecutorProcess,
 )
+from flowweaver.protocols.ipc_messages import IPCEnvelope
 
 
 def run_node_executor_process(
@@ -30,16 +32,23 @@ def run_node_executor_process(
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
     stderr = stderr or sys.stderr
+    output_lock = Lock()
+
+    def write_output(envelope: IPCEnvelope) -> None:
+        with output_lock:
+            _write_envelope(stdout, envelope)
+
     process = NodeExecutorProcess(
         executor_id=executor_id,
         executor_factory=executor_factory,
-        event_writer=lambda envelope: _write_envelope(stdout, envelope),
+        event_writer=write_output,
     )
     return run_node_executor_ipc_loop(
         process,
         stdin=stdin,
         stdout=stdout,
         stderr=stderr,
+        response_writer=write_output,
     )
 
 

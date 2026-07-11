@@ -8,6 +8,7 @@ from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutorFactory
 from flowweaver.workflow_process import (
+    ipc_events,
     process_cancellation,
     process_dag,
     process_definition,
@@ -172,7 +173,11 @@ def run_workflow_process_loop(
             return 0
         if finalization.finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
-        runtime_options_poller.poll_if_due()
+        if runtime_options_poller.poll_if_due():
+            ipc_events.push_runtime_options_to_in_flight_tasks(
+                execution_pool=execution_pool,
+                task_manager=task_manager,
+            )
         completed_count = task_dispatch.drain_executor_task_completions(
             store=store,
             workflow_run_id=workflow_run_id,

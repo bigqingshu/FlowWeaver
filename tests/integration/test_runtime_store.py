@@ -402,6 +402,102 @@ def test_runtime_store_round_trips_node_task_input_slot_bindings(
     assert loaded.runtime_options_version == 3
 
 
+def test_runtime_store_updates_active_node_task_runtime_feedback_policy(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    workflow = store.create_workflow_definition(
+        name="Active node task runtime feedback update",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-runtime-feedback-update",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-runtime-feedback-update",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-runtime-feedback-update",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-runtime-feedback-update",
+        status=NodeRunStatus.RUNNING,
+    )
+    task = NodeTaskModel(
+        task_id="task-runtime-feedback-update",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    policy = ResolvedRuntimeFeedbackPolicyModel.model_validate(
+        {
+            "telemetry": {
+                "log_level": "WARN",
+                "event_level": "basic",
+                "event_rate_limit_per_second": 10,
+                "progress_enabled": False,
+                "progress_interval_seconds": 5,
+            },
+            "diagnostics": {
+                "capture_error_context": True,
+                "include_metrics": False,
+                "payload_byte_limit": 65536,
+                "redact_columns": [],
+                "mask_policy": "partial",
+            },
+        }
+    )
+    store.create_node_task(task)
+
+    assert store.update_node_task_runtime_feedback_policy(
+        task.task_id,
+        runtime_options_version=2,
+        runtime_feedback_policy=policy,
+    )
+    assert store.update_node_task_runtime_feedback_policy(
+        task.task_id,
+        runtime_options_version=2,
+        runtime_feedback_policy=policy,
+    )
+    assert not store.update_node_task_runtime_feedback_policy(
+        task.task_id,
+        runtime_options_version=1,
+        runtime_feedback_policy=policy,
+    )
+    loaded = store.get_node_task(task.task_id)
+    assert loaded is not None
+    assert loaded.runtime_options_version == 2
+    assert loaded.runtime_feedback_policy == policy
+
+    terminal = store.update_node_run_status(
+        node.node_run_id,
+        NodeRunStatus.SUCCEEDED,
+    )
+    assert terminal is not None
+    assert not store.update_node_task_runtime_feedback_policy(
+        task.task_id,
+        runtime_options_version=3,
+        runtime_feedback_policy=policy,
+    )
+    terminal_task = store.get_node_task(task.task_id)
+    assert terminal_task is not None
+    assert terminal_task.runtime_options_version == 2
+    assert terminal_task.runtime_feedback_policy == policy
+
+
 def test_shared_publication_prerequisite_schema_is_available(
     tmp_path: Path,
 ) -> None:

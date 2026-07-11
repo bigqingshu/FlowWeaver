@@ -191,7 +191,7 @@ class WorkflowRunRuntimeOptionsPoller:
             if state is None:
                 raise ValueError("Workflow run runtime options state not found")
             previous_version = self._controller.version
-            changed = self._controller.replace_overlay(
+            self._controller.replace_overlay(
                 overlay=state.overlay,
                 version=state.requested_version,
             )
@@ -200,7 +200,7 @@ class WorkflowRunRuntimeOptionsPoller:
             )
             if acknowledged:
                 self._last_failure_key = None
-            return changed or acknowledged
+            return acknowledged
         except Exception as exc:
             self._emit_apply_failed(requested_version, exc)
             return False

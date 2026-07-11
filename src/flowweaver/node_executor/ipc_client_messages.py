@@ -9,8 +9,12 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskCancelRequestPayload,
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
+    NodeTaskRuntimeOptionsUpdatePayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 
 INTERMEDIATE_NODE_TASK_MESSAGES = frozenset(
     {
@@ -18,6 +22,7 @@ INTERMEDIATE_NODE_TASK_MESSAGES = frozenset(
         IPCMessageType.NODE_TASK_HEARTBEAT,
         IPCMessageType.NODE_TASK_PROGRESS,
         IPCMessageType.NODE_TASK_LOG,
+        IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED,
     }
 )
 
@@ -55,6 +60,24 @@ def cancel_request_envelope(
         payload=NodeTaskCancelRequestPayload(
             task_id=task.task_id,
             reason=reason,
+        ).model_dump(mode="json"),
+    )
+
+
+def runtime_options_update_envelope(
+    task: NodeTaskModel,
+    *,
+    runtime_options_version: int,
+    runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_UPDATE,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=NodeTaskRuntimeOptionsUpdatePayload(
+            task_id=task.task_id,
+            runtime_options_version=runtime_options_version,
+            runtime_feedback_policy=runtime_feedback_policy,
         ).model_dump(mode="json"),
     )
 

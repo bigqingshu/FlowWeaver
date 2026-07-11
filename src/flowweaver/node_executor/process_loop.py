@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from threading import Thread
 from typing import TYPE_CHECKING, TextIO
 
@@ -20,8 +21,12 @@ def run_node_executor_ipc_loop(
     stdin: TextIO,
     stdout: TextIO,
     stderr: TextIO,
+    response_writer: Callable[[IPCEnvelope], None] | None = None,
 ) -> int:
-    write_envelope(stdout, process.ready_envelope())
+    response_writer = response_writer or (
+        lambda envelope: write_envelope(stdout, envelope)
+    )
+    response_writer(process.ready_envelope())
     task_workers: list[Thread] = []
 
     def handle_task(envelope: IPCEnvelope) -> None:
@@ -31,7 +36,7 @@ def run_node_executor_ipc_loop(
             code = exc.code if isinstance(exc.code, int) else 1
             os._exit(code)
         for response in responses:
-            write_envelope(stdout, response)
+            response_writer(response)
 
     for line in stdin:
         if not line.strip():
@@ -53,7 +58,19 @@ def run_node_executor_ipc_loop(
             continue
         responses = process.handle_envelope(envelope)
         for response in responses:
-            write_envelope(stdout, response)
+            is_runtime_options_applied = (
+                response.message_type
+                == IPCMessageType.NODE_TASK_RUNTIME_OPTIONS_APPLIED
+            )
+            if not is_runtime_options_applied:
+                response_writer(response)
+                continue
+            try:
+                response_writer(response)
+            finally:
+                task_id = response.payload.get("task_id")
+                if isinstance(task_id, str):
+                    process.mark_runtime_options_response_written(task_id)
     for worker in task_workers:
         worker.join()
     return 0

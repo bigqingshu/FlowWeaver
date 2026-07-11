@@ -4,6 +4,9 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
 
 
 class NodeExecutor(Protocol):
@@ -22,6 +25,20 @@ class CancellableNodeExecutor(Protocol):
         task: NodeTaskModel,
         *,
         reason: str = "WORKFLOW_CANCEL_REQUESTED",
+    ) -> bool:
+        ...
+
+
+@runtime_checkable
+class RuntimeOptionsUpdatableNodeExecutor(Protocol):
+    executor_id: str
+
+    def request_runtime_options_update(
+        self,
+        task: NodeTaskModel,
+        *,
+        runtime_options_version: int,
+        runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel,
     ) -> bool:
         ...
 
