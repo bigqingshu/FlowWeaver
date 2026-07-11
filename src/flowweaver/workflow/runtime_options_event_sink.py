@@ -6,6 +6,10 @@ from collections.abc import Callable, Mapping
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.protocols.events import EventModel
 from flowweaver.workflow.definition import RuntimeOptionsWorkflowModel
+from flowweaver.workflow.runtime_feedback_policy import (
+    RuntimeFeedbackPolicyLike,
+    RuntimeFeedbackPolicyProvider,
+)
 from flowweaver.workflow.runtime_option_sanitization import (
     CRITICAL_EVENT_TYPES as _CRITICAL_EVENT_TYPES,
 )
@@ -28,13 +32,20 @@ class RuntimeOptionsEventSink:
         self,
         inner: RuntimeEventSink,
         *,
-        workflow_options: RuntimeOptionsWorkflowModel,
-        runtime_options_by_node: Mapping[str, RuntimeOptionsWorkflowModel],
+        workflow_options: RuntimeOptionsWorkflowModel | None = None,
+        runtime_options_by_node: Mapping[str, RuntimeOptionsWorkflowModel]
+        | None = None,
+        policy_provider: RuntimeFeedbackPolicyProvider | None = None,
         monotonic_time: Callable[[], float] | None = None,
     ) -> None:
+        if policy_provider is None and workflow_options is None:
+            raise ValueError(
+                "workflow_options or policy_provider must be provided"
+            )
         self._inner = inner
         self._workflow_options = workflow_options
-        self._runtime_options_by_node = dict(runtime_options_by_node)
+        self._runtime_options_by_node = dict(runtime_options_by_node or {})
+        self._policy_provider = policy_provider
         self._monotonic_time = monotonic_time or time.monotonic
         self._rate_windows: dict[tuple[str, str, str, int], int] = {}
 
@@ -46,8 +57,14 @@ class RuntimeOptionsEventSink:
             return
         self._inner.emit(_sanitize_runtime_event(event, options))
 
-    def _options_for_event(self, event: EventModel) -> RuntimeOptionsWorkflowModel:
+    def _options_for_event(self, event: EventModel) -> RuntimeFeedbackPolicyLike:
         node_instance_id = _event_node_instance_id(event)
+        if self._policy_provider is not None:
+            if node_instance_id is None:
+                return self._policy_provider.workflow_policy()
+            return self._policy_provider.policy_for_node(node_instance_id)
+        if self._workflow_options is None:
+            raise RuntimeError("Runtime options event sink is not configured")
         if node_instance_id is None:
             return self._workflow_options
         return self._runtime_options_by_node.get(
@@ -58,7 +75,7 @@ class RuntimeOptionsEventSink:
     def _allow_rate_limited_event(
         self,
         event: EventModel,
-        options: RuntimeOptionsWorkflowModel,
+        options: RuntimeFeedbackPolicyLike,
     ) -> bool:
         limit = options.telemetry.event_rate_limit_per_second
         if (

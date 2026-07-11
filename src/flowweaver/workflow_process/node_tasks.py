@@ -84,6 +84,15 @@ class NodeTaskManager:
         provider = self._runtime_feedback_policy_provider
         return provider.policy_for_node(node_instance_id) if provider else None
 
+    def runtime_feedback_policy_snapshot_for_node(
+        self,
+        node_instance_id: str,
+    ) -> tuple[int, ResolvedRuntimeFeedbackPolicyModel | None]:
+        provider = self._runtime_feedback_policy_provider
+        if provider is None:
+            return 0, None
+        return provider.policy_snapshot_for_node(node_instance_id)
+
     def submit_ready_node(
         self,
         *,
@@ -97,6 +106,9 @@ class NodeTaskManager:
         input_slot_bindings: Mapping[str, str] | None = None,
         timeout_seconds: int = 60,
     ) -> NodeTaskModel | None:
+        runtime_options_version, runtime_feedback_policy = (
+            self.runtime_feedback_policy_snapshot_for_node(node_instance_id)
+        )
         return _submit_ready_node(
             store=self._store,
             event_sink=self._event_sink,
@@ -109,14 +121,8 @@ class NodeTaskManager:
             config=config,
             input_refs=input_refs or [],
             input_slot_bindings=input_slot_bindings,
-            runtime_feedback_policy=self.runtime_feedback_policy_for_node(
-                node_instance_id
-            ),
-            runtime_options_version=(
-                self._runtime_feedback_policy_provider.version
-                if self._runtime_feedback_policy_provider is not None
-                else 0
-            ),
+            runtime_feedback_policy=runtime_feedback_policy,
+            runtime_options_version=runtime_options_version,
             timeout_seconds=timeout_seconds,
         )
 

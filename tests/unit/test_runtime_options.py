@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from pydantic import ValidationError
 
+from flowweaver.engine.runtime_models import WorkflowRunRuntimeOptions
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.runtime_feedback import (
@@ -22,6 +25,10 @@ from flowweaver.workflow.runtime_options import (
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
 from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
+from flowweaver.workflow_process.runtime_options_controller import (
+    ResolvedRuntimeOptionsController,
+    WorkflowRunRuntimeOptionsPoller,
+)
 
 
 class CollectingEventSink:
@@ -273,6 +280,185 @@ def test_run_overlay_applies_workflow_then_node_feedback_override() -> None:
     assert provider.workflow_policy().telemetry.log_level == "WARN"
     assert provider.policy_for_node("source").telemetry.log_level == "DEBUG"
     assert provider.policy_for_node("other").telemetry.log_level == "WARN"
+
+
+def test_runtime_options_controller_updates_event_sink_and_logger_atomically() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "other",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "telemetry": {"log_level": "WARN", "event_level": "none"}
+                }
+            },
+        }
+    )
+    controller = ResolvedRuntimeOptionsController(definition=definition)
+    collector = CollectingEventSink()
+    sink = RuntimeOptionsEventSink(collector, policy_provider=controller)
+    logger = WorkflowRuntimeLogger(
+        workflow_run_id="run-controller",
+        process_id="process-controller",
+        logger_name="flowweaver.workflow_process.test",
+        policy_provider=controller,
+        event_sink=sink,
+    )
+    source_debug = _node_log_event(
+        node_instance_id="source",
+        level="DEBUG",
+        message="source debug",
+    )
+
+    sink.emit(source_debug)
+    assert logger.debug("hidden workflow debug") is False
+    assert collector.events == []
+
+    assert controller.replace_overlay(
+        overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {
+                "node_overrides": {
+                    "source": {"telemetry": {"log_level": "DEBUG"}}
+                }
+            }
+        ),
+        version=1,
+    )
+    sink.emit(source_debug)
+    sink.emit(
+        _node_log_event(
+            node_instance_id="other",
+            level="INFO",
+            message="hidden other info",
+        )
+    )
+    assert controller.version == 1
+    assert [event.payload["message"] for event in collector.events] == [
+        "source debug"
+    ]
+
+    assert controller.replace_overlay(
+        overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {"workflow": {"telemetry": {"log_level": "DEBUG"}}}
+        ),
+        version=2,
+    )
+    assert logger.debug("visible workflow debug") is True
+    assert controller.replace_overlay(
+        overlay=RuntimeFeedbackPolicyOverlayModel(),
+        version=1,
+    ) is False
+    assert controller.version == 2
+
+
+def test_runtime_options_poller_only_loads_changed_versions_and_keeps_last_valid(
+) -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {"nodes": [], "connections": []}
+    )
+    controller = ResolvedRuntimeOptionsController(definition=definition)
+    collector = CollectingEventSink()
+    sink = RuntimeOptionsEventSink(collector, policy_provider=controller)
+    now = [0.0]
+
+    class FakeRuntimeOptionsStore:
+        def __init__(self) -> None:
+            self.state = WorkflowRunRuntimeOptions(
+                workflow_run_id="run-poller",
+                requested_version=0,
+                applied_version=0,
+                overlay=RuntimeFeedbackPolicyOverlayModel(),
+                requested_at=None,
+                applied_at=None,
+            )
+            self.version_reads = 0
+            self.full_reads = 0
+            self.raise_on_full_read = False
+
+        def get_workflow_run_runtime_options_versions(
+            self,
+            _workflow_run_id: str,
+        ) -> tuple[int, int]:
+            self.version_reads += 1
+            return self.state.requested_version, self.state.applied_version
+
+        def get_workflow_run_runtime_options(
+            self,
+            _workflow_run_id: str,
+        ) -> WorkflowRunRuntimeOptions:
+            self.full_reads += 1
+            if self.raise_on_full_read:
+                raise ValueError("corrupt overlay")
+            return self.state
+
+        def mark_workflow_run_runtime_options_applied(
+            self,
+            _workflow_run_id: str,
+            *,
+            version: int,
+        ) -> WorkflowRunRuntimeOptions:
+            self.state = replace(self.state, applied_version=version)
+            return self.state
+
+    store = FakeRuntimeOptionsStore()
+    poller = WorkflowRunRuntimeOptionsPoller(
+        store=store,
+        workflow_run_id="run-poller",
+        process_id="process-poller",
+        controller=controller,
+        event_sink=sink,
+        interval_seconds=2,
+        monotonic_time=lambda: now[0],
+    )
+
+    now[0] = 1
+    assert poller.poll_if_due() is False
+    assert store.version_reads == 0
+    now[0] = 2
+    assert poller.poll_if_due() is False
+    assert store.version_reads == 1
+    assert store.full_reads == 0
+
+    store.state = replace(
+        store.state,
+        requested_version=1,
+        overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {"workflow": {"telemetry": {"log_level": "WARN"}}}
+        ),
+    )
+    now[0] = 4
+    assert poller.poll_if_due() is True
+    assert controller.version == 1
+    assert controller.acknowledged_version == 1
+    assert store.full_reads == 1
+    assert [event.event_type for event in collector.events] == [
+        EventType.RUNTIME_OPTIONS_APPLIED
+    ]
+
+    now[0] = 6
+    assert poller.poll_if_due() is False
+    assert store.full_reads == 1
+    store.state = replace(store.state, requested_version=2)
+    store.raise_on_full_read = True
+    now[0] = 8
+    assert poller.poll_if_due() is False
+    assert controller.version == 1
+    assert collector.events[-1].event_type == EventType.RUNTIME_OPTIONS_APPLY_FAILED
+    event_count = len(collector.events)
+    now[0] = 10
+    assert poller.poll_if_due() is False
+    assert len(collector.events) == event_count
 
 
 @pytest.mark.parametrize(

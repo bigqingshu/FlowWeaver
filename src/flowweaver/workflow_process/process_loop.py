@@ -68,10 +68,17 @@ def run_workflow_process_loop(
     run = loaded_definition.run
     definition = loaded_definition.definition
 
-    runtime_feedback_policy_provider, event_sink = (
+    (
+        runtime_feedback_policy_provider,
+        event_sink,
+        runtime_options_poller,
+    ) = (
         process_runtime_options.configure_runtime_options_event_sink(
             definition=definition,
             event_sink=event_sink,
+            store=store,
+            workflow_run_id=workflow_run_id,
+            process_id=process_id,
         )
     )
 
@@ -94,6 +101,7 @@ def run_workflow_process_loop(
         "workflow runtime feedback configured",
         context={"runtime_options_version": runtime_feedback_policy_provider.version},
     )
+    runtime_options_poller.acknowledge_loaded_version()
 
     try:
         dag = process_dag.prepare_workflow_process_dag(
@@ -164,6 +172,7 @@ def run_workflow_process_loop(
             return 0
         if finalization.finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
+        runtime_options_poller.poll_if_due()
         completed_count = task_dispatch.drain_executor_task_completions(
             store=store,
             workflow_run_id=workflow_run_id,

@@ -26,6 +26,8 @@ CRITICAL_EVENT_TYPES = frozenset(
         EventType.WORKFLOW_FINISHED,
         EventType.WORKFLOW_FAILED,
         EventType.WORKFLOW_CANCELLED,
+        EventType.RUNTIME_OPTIONS_APPLIED,
+        EventType.RUNTIME_OPTIONS_APPLY_FAILED,
         EventType.NODE_STARTED,
         EventType.NODE_FINISHED,
         EventType.NODE_FAILED,
@@ -47,6 +49,11 @@ ESSENTIAL_PAYLOAD_KEYS = frozenset(
         "completion_reason",
         "run_mode",
         "target_node_instance_id",
+        "runtime_options_version",
+        "requested_version",
+        "applied_version",
+        "previous_version",
+        "error",
     }
 )
 ESSENTIAL_ERROR_KEYS = frozenset(

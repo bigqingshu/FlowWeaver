@@ -96,6 +96,31 @@ class RuntimeWorkflowRunOptionsStoreMixin:
                 else _default_workflow_run_runtime_options(workflow_run_id)
             )
 
+    def get_workflow_run_runtime_options_versions(
+        self,
+        workflow_run_id: str,
+    ) -> tuple[int, int] | None:
+        with self._session_factory() as session:
+            row = session.execute(
+                select(
+                    WorkflowRunRuntimeOptionsRecord.requested_version,
+                    WorkflowRunRuntimeOptionsRecord.applied_version,
+                )
+                .select_from(WorkflowRunRecord)
+                .outerjoin(
+                    WorkflowRunRuntimeOptionsRecord,
+                    WorkflowRunRuntimeOptionsRecord.workflow_run_id
+                    == WorkflowRunRecord.workflow_run_id,
+                )
+                .where(WorkflowRunRecord.workflow_run_id == workflow_run_id)
+            ).one_or_none()
+            if row is None:
+                return None
+            requested_version, applied_version = row
+            if requested_version is None or applied_version is None:
+                return 0, 0
+            return requested_version, applied_version
+
     def replace_workflow_run_runtime_options(
         self,
         workflow_run_id: str,

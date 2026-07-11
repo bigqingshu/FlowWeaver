@@ -27,6 +27,12 @@ class RuntimeFeedbackPolicyProvider(Protocol):
     ) -> ResolvedRuntimeFeedbackPolicyModel:
         ...
 
+    def policy_snapshot_for_node(
+        self,
+        node_instance_id: str,
+    ) -> tuple[int, ResolvedRuntimeFeedbackPolicyModel]:
+        ...
+
 
 class StaticRuntimeFeedbackPolicyProvider:
     def __init__(
@@ -57,3 +63,9 @@ class StaticRuntimeFeedbackPolicyProvider:
             node_instance_id,
             self._workflow_policy,
         )
+
+    def policy_snapshot_for_node(
+        self,
+        node_instance_id: str,
+    ) -> tuple[int, ResolvedRuntimeFeedbackPolicyModel]:
+        return self._version, self.policy_for_node(node_instance_id)

@@ -52,6 +52,7 @@ from flowweaver.protocols.enums import (
 )
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskLogPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import RuntimeFeedbackPolicyOverlayModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow_process.controller import initialize_node_runs
@@ -228,6 +229,63 @@ class InjectedLoggingExecutor:
             started_at=now,
             finished_at=now,
         )
+
+
+class ControllableReportingExecutor:
+    executor_id = "controllable-reporting-executor"
+
+    def __init__(self) -> None:
+        self.started = Event()
+        self.released = Event()
+        self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
+        self._task: NodeTaskModel | None = None
+
+    def set_event_handler(
+        self,
+        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
+    ) -> None:
+        self._event_handler = handler
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        self._task = task
+        self.emit_progress("before-update")
+        self.started.set()
+        released = self.released.wait(timeout=5)
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=(
+                NodeResultStatus.SUCCEEDED if released else NodeResultStatus.FAILED
+            ),
+            output_refs=["source-output"] if released else [],
+            error=None if released else {"message": "test did not release task"},
+            started_at=now,
+            finished_at=now,
+        )
+
+    def emit_progress(self, stage: str) -> None:
+        assert self._task is not None
+        assert self._event_handler is not None
+        self._event_handler(
+            self._task,
+            IPCEnvelope(
+                message_type=IPCMessageType.NODE_TASK_PROGRESS,
+                workflow_run_id=self._task.workflow_run_id,
+                node_run_id=self._task.node_run_id,
+                payload={
+                    "progress": 0.5,
+                    "current_stage": stage,
+                    "metrics": {"ticks": 1},
+                },
+            ),
+        )
+
+    def close(self) -> None:
+        self.released.set()
 
 
 class BlockingReportingExecutor:
@@ -3549,6 +3607,254 @@ def test_workflow_process_records_node_logs_with_node_level_override(
     assert node_logs[0].payload["context"] == {"password": "***"}
     assert node_logs[2].payload["message"] == "source error"
     assert "WORKFLOW_LOG" not in [event.event_type for event in events]
+
+
+def test_workflow_process_loads_pending_run_runtime_options_on_start(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Pending run runtime options",
+        definition=single_node_definition(),
+        workflow_id="workflow-pending-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-pending-runtime-options",
+    )
+    requested = store.replace_workflow_run_runtime_options(
+        run.workflow_run_id,
+        expected_version=0,
+        overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {
+                "workflow": {
+                    "telemetry": {
+                        "log_level": "WARN",
+                        "event_level": "basic",
+                        "progress_enabled": False,
+                    }
+                }
+            }
+        ),
+    )
+    assert requested.applied_version == 0
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-pending-runtime-options",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedReportingExecutor(),
+    )
+
+    state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+    events = store.list_runtime_events()
+    queued_event = next(event for event in events if event.event_type == "NODE_QUEUED")
+    task = store.get_node_task(queued_event.payload["task_id"])
+    assert exit_code == 0
+    assert state is not None
+    assert state.requested_version == 1
+    assert state.applied_version == 1
+    assert state.applied_at is not None
+    assert task is not None
+    assert task.runtime_options_version == 1
+    assert task.runtime_feedback_policy is not None
+    assert task.runtime_feedback_policy.telemetry.log_level == "WARN"
+    assert task.runtime_feedback_policy.telemetry.progress_enabled is False
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "RUNTIME_OPTIONS_APPLIED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
+
+
+def test_workflow_process_keeps_revision_options_when_run_overlay_is_corrupt(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Corrupt run runtime options",
+        definition=single_node_definition(),
+        workflow_id="workflow-corrupt-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-corrupt-runtime-options",
+    )
+    store.replace_workflow_run_runtime_options(
+        run.workflow_run_id,
+        expected_version=0,
+        overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {"workflow": {"telemetry": {"progress_enabled": False}}}
+        ),
+    )
+    with store.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE workflow_run_runtime_options "
+            "SET requested_version = 2, overlay_json = '{broken-json' "
+            "WHERE workflow_run_id = ?",
+            (run.workflow_run_id,),
+        )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-corrupt-runtime-options",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedReportingExecutor(),
+    )
+
+    events = store.list_runtime_events()
+    queued_event = next(event for event in events if event.event_type == "NODE_QUEUED")
+    task = store.get_node_task(queued_event.payload["task_id"])
+    with store.engine.connect() as connection:
+        applied_version = connection.exec_driver_sql(
+            "SELECT applied_version FROM workflow_run_runtime_options "
+            "WHERE workflow_run_id = ?",
+            (run.workflow_run_id,),
+        ).scalar_one()
+    assert exit_code == 0
+    assert task is not None
+    assert task.runtime_options_version == 0
+    assert task.runtime_feedback_policy is not None
+    assert task.runtime_feedback_policy.telemetry.progress_enabled is True
+    assert applied_version == 0
+    assert [event.event_type for event in events] == [
+        "WORKFLOW_STARTED",
+        "RUNTIME_OPTIONS_APPLY_FAILED",
+        "NODE_QUEUED",
+        "NODE_STARTED",
+        "NODE_PROGRESS",
+        "NODE_FINISHED",
+        "WORKFLOW_FINISHED",
+    ]
+    failure = events[1]
+    assert failure.payload["runtime_options_version"] == 0
+    assert failure.payload["requested_version"] == 2
+
+
+def test_workflow_process_dynamically_applies_run_runtime_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "flowweaver.workflow_process.runtime_options_controller."
+        "RUNTIME_OPTIONS_POLL_INTERVAL_SECONDS",
+        0.01,
+    )
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Dynamic run runtime options",
+        definition=definition(),
+        workflow_id="workflow-dynamic-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-dynamic-runtime-options",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-dynamic-runtime-options",
+    )
+    assert process is not None
+    source_executor = ControllableReportingExecutor()
+    dispatched_tasks: dict[str, NodeTaskModel] = {}
+
+    def executor_factory(task: NodeTaskModel):
+        dispatched_tasks[task.node_instance_id] = task
+        if task.node_instance_id == "source":
+            return source_executor
+        return NodeOutcomeExecutor()
+
+    exit_codes: list[int] = []
+    worker = Thread(
+        target=lambda: exit_codes.append(
+            run_workflow_process(
+                store=store,
+                workflow_run_id=run.workflow_run_id,
+                process_id=process.process_id,
+                process_generation=process.process_generation,
+                heartbeat_interval_seconds=0.01,
+                executor_factory=executor_factory,
+                execution_mode="threaded",
+            )
+        )
+    )
+    worker.start()
+    try:
+        assert source_executor.started.wait(timeout=5)
+        requested = store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=0,
+            overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+                {
+                    "workflow": {
+                        "telemetry": {
+                            "log_level": "WARN",
+                            "event_level": "none",
+                            "progress_enabled": False,
+                        }
+                    }
+                }
+            ),
+        )
+        assert requested.applied_version == 0
+        deadline = time.monotonic() + 5
+        state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+        while (
+            state is not None
+            and state.applied_version < requested.requested_version
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+            state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+        assert state is not None
+        assert state.applied_version == 1
+        source_executor.emit_progress("after-update")
+    finally:
+        source_executor.released.set()
+        worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert exit_codes == [0]
+    events = store.list_runtime_events()
+    progress_stages = [
+        event.payload["current_stage"]
+        for event in events
+        if event.event_type == "NODE_PROGRESS"
+    ]
+    source_task = dispatched_tasks.get("source")
+    transform_task = dispatched_tasks.get("transform")
+    finished_run = store.get_workflow_run(run.workflow_run_id)
+    assert progress_stages == ["before-update"]
+    assert [
+        event.event_type
+        for event in events
+        if event.event_type == "RUNTIME_OPTIONS_APPLIED"
+    ] == ["RUNTIME_OPTIONS_APPLIED"]
+    assert source_task is not None
+    assert source_task.runtime_options_version == 0
+    assert transform_task is not None
+    assert transform_task.runtime_options_version == 1
+    assert transform_task.runtime_feedback_policy is not None
+    assert transform_task.runtime_feedback_policy.telemetry.progress_enabled is False
+    assert finished_run is not None
+    assert finished_run.status == "SUCCEEDED"
 
 
 def test_workflow_process_records_task_events_while_executor_is_still_running(
