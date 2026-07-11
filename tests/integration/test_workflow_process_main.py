@@ -3873,13 +3873,15 @@ def test_workflow_process_updates_active_local_node_runtime_options(
         definition=single_test_node_definition(
             node_type=DELAY_TEST_NODE_TYPE,
             config={
-                "duration_seconds": 0.4,
+                "duration_seconds": 0.6,
                 "heartbeat_interval_seconds": 0.005,
                 "progress_interval_seconds": 0.005,
             },
         ),
         workflow_id="workflow-active-local-runtime-options",
     )
+    revision_before = store.get_workflow_revision(workflow.revision_id)
+    assert revision_before is not None
     run = store.create_workflow_run(
         workflow_id=workflow.workflow_id,
         workflow_run_id="run-active-local-runtime-options",
@@ -3974,6 +3976,51 @@ def test_workflow_process_updates_active_local_node_runtime_options(
             event.event_type == "NODE_PROGRESS"
             for event in store.list_runtime_events()
         ) == progress_count_after_ack
+
+        cleared = store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=requested.requested_version,
+            overlay=RuntimeFeedbackPolicyOverlayModel(),
+        )
+        restored_task = store.get_node_task(task_id)
+        restored_state = store.get_workflow_run_runtime_options(run.workflow_run_id)
+        deadline = time.monotonic() + 5
+        while (
+            (
+                restored_state is None
+                or restored_state.applied_version < cleared.requested_version
+                or restored_task is None
+                or restored_task.runtime_options_version < cleared.requested_version
+            )
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+            restored_state = store.get_workflow_run_runtime_options(
+                run.workflow_run_id
+            )
+            restored_task = store.get_node_task(task_id)
+        assert restored_state is not None
+        assert restored_state.applied_version == 2
+        assert restored_state.overlay == RuntimeFeedbackPolicyOverlayModel()
+        assert restored_task is not None
+        assert restored_task.runtime_options_version == 2
+        assert restored_task.runtime_feedback_policy is not None
+        assert restored_task.runtime_feedback_policy.telemetry.progress_enabled is True
+
+        deadline = time.monotonic() + 5
+        while (
+            sum(
+                event.event_type == "NODE_PROGRESS"
+                for event in store.list_runtime_events()
+            )
+            == progress_count_after_ack
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+        assert sum(
+            event.event_type == "NODE_PROGRESS"
+            for event in store.list_runtime_events()
+        ) > progress_count_after_ack
     finally:
         worker.join(timeout=5)
 
@@ -3984,6 +4031,7 @@ def test_workflow_process_updates_active_local_node_runtime_options(
     assert finished_run is not None
     assert finished_run.status == "SUCCEEDED"
     assert node_run.status == "SUCCEEDED"
+    assert store.get_workflow_revision(workflow.revision_id) == revision_before
 
 
 def test_workflow_process_records_task_events_while_executor_is_still_running(

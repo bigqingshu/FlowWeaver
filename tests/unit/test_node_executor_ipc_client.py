@@ -393,6 +393,80 @@ def test_subprocess_node_executor_updates_active_task_runtime_options() -> None:
     assert applied_versions == [1]
 
 
+def test_local_node_executor_updates_active_task_log_level() -> None:
+    executor_id = "local-runtime-log-update-executor"
+
+    class ControlledLoggingExecutor:
+        def __init__(self) -> None:
+            self.executor_id = executor_id
+            self.runtime_logger: NodeTaskLogger | None = None
+            self.started = Event()
+            self.first_emit = Event()
+            self.first_emitted = Event()
+            self.second_emit = Event()
+            self.second_emitted = Event()
+            self.finish = Event()
+
+        def set_runtime_logger(self, logger: NodeTaskLogger | None) -> None:
+            self.runtime_logger = logger
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            assert self.runtime_logger is not None
+            self.started.set()
+            assert self.first_emit.wait(timeout=5)
+            self._emit_log_batch()
+            self.first_emitted.set()
+            assert self.second_emit.wait(timeout=5)
+            self._emit_log_batch()
+            self.second_emitted.set()
+            assert self.finish.wait(timeout=5)
+            return FakeNodeExecutor(executor_id=self.executor_id).execute(task)
+
+        def _emit_log_batch(self) -> None:
+            assert self.runtime_logger is not None
+            self.runtime_logger.debug("dynamic debug")
+            self.runtime_logger.info("dynamic info")
+            self.runtime_logger.warn("dynamic warning")
+
+    controlled = ControlledLoggingExecutor()
+    task = make_task().model_copy(
+        update={
+            "runtime_feedback_policy": background_fast_feedback_policy(),
+            "runtime_options_version": 0,
+        }
+    )
+    events: list[IPCEnvelope] = []
+    executor = LocalNodeExecutorIpcClient(
+        executor_id=executor_id,
+        executor_factory=lambda _task: controlled,
+        event_handler=lambda _task, envelope: events.append(envelope),
+    )
+    results: list[NodeTaskResultModel] = []
+    worker = Thread(target=lambda: results.append(executor.execute(task)))
+    worker.start()
+    try:
+        assert controlled.started.wait(timeout=5)
+        controlled.first_emit.set()
+        assert controlled.first_emitted.wait(timeout=5)
+        assert node_log_levels(events) == ["WARN"]
+
+        assert executor.request_runtime_options_update(
+            task,
+            runtime_options_version=1,
+            runtime_feedback_policy=diagnostic_feedback_policy(),
+        )
+        controlled.second_emit.set()
+        assert controlled.second_emitted.wait(timeout=5)
+        assert node_log_levels(events) == ["WARN", "DEBUG", "INFO", "WARN"]
+    finally:
+        controlled.finish.set()
+        worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert len(results) == 1
+    assert results[0].status == NodeResultStatus.SUCCEEDED
+
+
 def test_subprocess_node_executor_ipc_client_cancels_delay_test_node() -> None:
     task = make_task().model_copy(
         update={
@@ -539,6 +613,14 @@ def _runtime_options_update_task() -> NodeTaskModel:
             "runtime_options_version": 0,
         }
     )
+
+
+def node_log_levels(events: list[IPCEnvelope]) -> list[str]:
+    return [
+        str(event.payload["level"])
+        for event in events
+        if event.message_type == IPCMessageType.NODE_TASK_LOG
+    ]
 
 
 def _reporting_executor_command(*, executor_id: str) -> list[str]:

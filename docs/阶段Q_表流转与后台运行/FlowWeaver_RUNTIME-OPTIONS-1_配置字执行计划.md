@@ -1,9 +1,22 @@
 # FlowWeaver RUNTIME-OPTIONS-1：配置字执行计划
 
-> 文档状态：执行计划
+> 文档状态：第一阶段执行计划，已完成并由 RUNTIME-OPTIONS-2 扩展收口
 > 前置依据：`FlowWeaver_RUNTIME-OPTIONS-0_配置字与运行反馈开关边界方案.md`
 > 当前边界：只限制、降低、过滤已有日志、事件、进度、诊断上下文、限流、metrics、payload 和脱敏；不进入节点业务 `config`；节点已有反馈输出必须通过统一通道让配置字真实生效
 > 不适用范围：权限审计、数据产物保存、节点业务参数、插件私有配置、完整动态 schema 编辑器
+
+## 0. 当前实施状态（2026-07-11）
+
+RUNTIME-OPTIONS-1A 至 1F 已完成静态配置模型、Avalonia 修订配置窗口、resolver、主程序反馈过滤和运行详情摘要。RUNTIME-OPTIONS-2 在不改变本文原始职责边界的前提下，继续完成：
+
+- 独立的 `ResolvedRuntimeFeedbackPolicyModel` 和 NodeTask 策略快照持久化。
+- 节点发送前 progress、metrics 和 node log 过滤。
+- 主程序与节点真实 run-scoped 日志等级控制。
+- 固定字段的 current run overlay、乐观版本 API 和动态 controller。
+- local / subprocess 活动节点更新 IPC、ACK 和终态竞态保护。
+- Avalonia current run 独立编辑窗口，不复用 workflow draft patcher。
+
+因此，本文中“节点协议第一版不动”“运行请求临时覆盖延后”属于第一阶段当时的范围控制，不再代表当前代码缺口。当前最终状态和验证结果见 `FlowWeaver_RUNTIME-OPTIONS-2_节点反馈日志与动态切换执行计划.md`。
 
 ## 1. 执行目标
 
@@ -257,17 +270,17 @@ Avalonia_UI.Tests/MainWindowViewModelWorkflowTests.cs
 * 不在运行记录里塞完整大 JSON。
 * 不制造第二套编辑入口。
 
-## 5. 延后项
+## 5. 延后项及当前状态
 
 以下能力明确延后：
 
-| 项目 | 延后原因 |
+| 项目 | 当前状态 |
 | --- | --- |
-| `NodeTaskModel.runtime_options` | 会扩大任务协议和持久化面，第一版主程序内部使用即可 |
-| 运行请求临时覆盖 `run_override` | 需要 API 请求模型和 UI 运行弹窗配合 |
-| 动态配置字 schema | 第一版固定字段更稳定 |
-| 插件私有运行时配置 | 需要命名空间规则和插件协议 |
-| 诊断保留清理任务 | 先只记录 `ttl_seconds` 建议；业务输出表清理当前由用户手动处理 |
+| `NodeTaskModel.runtime_options` | 未增加通用完整配置字；已增加固定的 resolved feedback policy 和版本字段，避免把 profile、TTL 或业务设置带入任务协议 |
+| 运行请求临时覆盖 `run_override` | 已以 current run 版本化 overlay 落实，只允许固定反馈字段，不修改 revision |
+| 动态配置字 schema | 继续延后；当前明确不预留动态字段或 `extra` 字典 |
+| 插件私有运行时配置 | 继续延后；节点特有设置归节点 `config_schema` 和业务 `config` |
+| 诊断保留清理任务 | 继续延后；`ttl_seconds` 只保持旧修订 JSON 兼容，不进入 current run overlay，也未实现自动清理 |
 
 ## 6. 验证清单
 

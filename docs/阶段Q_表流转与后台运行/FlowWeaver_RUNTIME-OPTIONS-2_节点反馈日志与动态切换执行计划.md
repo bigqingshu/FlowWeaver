@@ -1,15 +1,16 @@
 # FlowWeaver RUNTIME-OPTIONS-2：节点反馈、真实日志与动态切换执行计划
 
-> 文档状态：可执行实施计划
+> 文档状态：已执行完成
 > 编写时间：2026-07-11 18:21 +08:00
 > 对账基线：`main` / `origin/main`，提交 `87bdbdf62933b1a63397ac623555aaeb7c3e7bca`
 > 前置依据：`FlowWeaver_RUNTIME-OPTIONS-0_配置字与调试开关边界方案.md`
 > 前置实现：`FlowWeaver_RUNTIME-OPTIONS-1_配置字执行计划.md`
 > 本阶段目标：完成节点发送前过滤、主程序与节点真实日志等级、当前 run 动态配置字覆盖
+> 完成日期：2026-07-11
 
-## 1. 执行结论
+## 1. 立项时执行结论（历史基线）
 
-当前配置字已经可以在 workflow process 内限制 runtime event、progress、metrics、summary、error 和诊断 payload，但仍有三个明确缺口：
+本计划启动时，配置字已经可以在 workflow process 内限制 runtime event、progress、metrics、summary、error 和诊断 payload，并识别出三个需要在 2A 至 2I 闭环的明确缺口：
 
 1. 节点执行器仍可能先生成并发送反馈，主程序收到后才丢弃。
 2. `telemetry.log_level` 已有模型、预设和 UI，但尚无真实的 workflow 日志通道。
@@ -889,7 +890,7 @@ Avalonia_UI.Tests/*RuntimeOptions*.cs                        修改或新增
 ```powershell
 .\python312\python.exe -m pytest tests\unit\test_runtime_options.py tests\unit\test_protocol_serialization.py tests\unit\test_node_executor_ipc_client.py -q
 .\python312\python.exe -m pytest tests\integration\test_runtime_store.py tests\integration\test_node_task_manager.py -q
-.\python312\python.exe -m pytest tests\integration\test_workflow_process_main.py tests\integration\test_api.py -q
+.\python312\python.exe -m pytest tests\integration\test_workflow_process_main.py tests\integration\test_api.py tests\integration\test_runtime_options_end_to_end.py -q
 ```
 
 ### 12.2 后端静态检查
@@ -1114,3 +1115,95 @@ M2 稳定性闸门：
 8. 不得以“后续扩展”为理由增加本计划未列出的配置字字段。
 
 不得把 2A 至 2D 与动态切换批次合并成一个大提交。M1、M2、M3 都必须可以独立停止、验证和回滚。
+
+## 19. 完成记录（2026-07-11）
+
+### 19.1 批次提交
+
+| 批次 | 提交 | 结果 |
+| --- | --- | --- |
+| 计划文档 | `5c71c69d` | 执行边界和顺序固定 |
+| 2A | `50b1b594` | 固定运行反馈协议边界 |
+| 2B | `98f21f19` | NodeTask 策略快照持久化 |
+| 2C | `297f106a` | 节点发送前过滤 |
+| 2D | `e5ff58e6` | 主程序与节点真实日志等级 |
+| 2E | `efc78922` | current run overlay 存储与 API |
+| 2F | `a817c1ff` | 主程序动态 controller |
+| 2G | `8fbe2d96` | local / subprocess 活动节点更新与 ACK |
+| 2H | `a242672b` | Avalonia current run 独立编辑入口 |
+| 2I | 本次文档收口提交 | 端到端验收、状态文档和完成记录 |
+
+所有批次均按 2A 至 2I 顺序执行，完成测试后使用独立中文提交并推送。
+
+### 19.2 三个缺口的最终状态
+
+| 原缺口 | 最终状态 | 主要证据 |
+| --- | --- | --- |
+| 节点侧发送前过滤 | 已落实 | `NodeTaskRuntimeFeedbackGate` 在 progress/log envelope 创建前过滤；normal/background_fast IPC 对比通过 |
+| 主程序及节点真实日志等级 | 已落实 | workflow/node run-scoped logger、节点发送 gate 和主程序最终 event sink 均按等级过滤；动态 WARN -> diagnostic 测试通过 |
+| 运行中的配置字动态切换 | 已落实 | current run overlay、requested/applied version、controller、活动节点 update/applied IPC、ACK 持久化和 Avalonia 入口全部贯通 |
+
+配置字只影响反馈、日志和诊断数据，不改变节点业务 `config`、工作流 DAG、output refs、表数据或节点终态。
+
+### 19.3 自动化验证结果
+
+| 验证组 | 结果 |
+| --- | --- |
+| runtime options / protocol / node executor 单元测试 | 40 通过 |
+| runtime store / node task manager 集成测试 | 81 通过 |
+| workflow process / API / runtime options 端到端测试 | 90 通过 |
+| 后端本阶段验证矩阵合计 | 211 通过 |
+| Ruff | `src tests migrations` 通过 |
+| mypy | 483 个源码文件通过 |
+| Avalonia 文档过滤集 | 177 通过 |
+| Avalonia 全量 | 545 通过 |
+| `git diff --check` | 通过 |
+
+全解决方案 `dotnet format --verify-no-changes` 仍会报告本阶段未修改文件中的既有空白问题；2H 新增和核心修改文件的定向 format 验证通过，本阶段没有顺带改动这些无关文件。
+
+### 19.4 降噪实测
+
+使用同一单节点 `DelayTestNode`、持续 0.04 秒、heartbeat/progress 间隔 0.005 秒，在本地真实 `RuntimeStore + LocalNodeExecutorIpcClient` 路径各运行一次：
+
+| 指标 | normal | background_fast | 变化 |
+| --- | ---: | ---: | ---: |
+| 节点 IPC 总数 | 11 | 6 | 减少 45.5% |
+| progress IPC | 5 | 0 | 减少 100% |
+| runtime event 行数 | 10 | 5 | 减少 50% |
+| runtime event payload 字节 | 1694 | 549 | 减少 67.6% |
+
+两次运行的关键事件均保留 `WORKFLOW_STARTED`、`NODE_QUEUED`、`NODE_STARTED`、`NODE_FINISHED`、`WORKFLOW_FINISHED`，workflow/node 最终状态均为 `SUCCEEDED`，output refs 一致。该数字是短任务样本，用于证明过滤方向和相对收益，不作为跨机器固定性能承诺。
+
+### 19.5 十步验收记录
+
+本轮使用可重复的本地工程路径逐项核对：运行链路使用真实 RuntimeStore、workflow process 和 local node executor；窗口操作路径使用已编译的 Avalonia API/service/ViewModel/command。对应证据如下：
+
+| 步骤 | 验收结果 | 自动化或工程证据 |
+| --- | --- | --- |
+| 1. 创建长运行 normal 工作流 | 通过 | `test_normal_and_background_fast_reduce_feedback_for_all_run_entries` |
+| 2. 普通运行可见 progress 和低等级日志 | 通过 | normal 产生 progress；日志端到端和既有 node log 集成测试保留 DEBUG/INFO |
+| 3. 在运行详情提交 current run 覆盖 | 通过 | Avalonia bridge/save command 测试；PUT 不修改 workflow draft |
+| 4. requested 先变化、applied 随后追平 | 通过 | 动态 controller 和活动节点集成测试 |
+| 5. 节点 ACK 后停止 progress/INFO | 通过 | 活动 Local 节点关闭 progress；动态日志 WARN gate 测试 |
+| 6. 单节点切到 diagnostic | 通过 | 动态 WARN -> diagnostic 恢复 DEBUG/INFO；节点覆盖不影响其他策略测试 |
+| 7. 结果、输出和终态不变 | 通过 | normal/background_fast 与 WARN/DEBUG 两组端到端输出一致 |
+| 8. 手动后台 run 使用相同语义 | 通过 | `background_manual` 参数化端到端场景 |
+| 9. 清空 overlay 恢复修订配置 | 通过 | 活动节点 ACK 版本 2 后 progress 恢复；Avalonia clear command 测试 |
+| 10. workflow revision 保持不变 | 通过 | API、活动节点动态清空和 Avalonia 主窗口 bridge 均验证 revision/draft 不变 |
+
+### 19.6 兼容和恢复
+
+- 旧工作流缺失 `runtime_options` 时继续使用 current-compatible 默认策略。
+- 旧 NodeTask 记录缺失新字段时迁移后读取为 `runtime_feedback_policy=None`、版本 0。
+- workflow process 启动或恢复时加载持久化的最新有效 overlay；损坏 overlay 保留上一有效版本并记录不可过滤失败事件。
+- 重复、乱序和迟到 update/applied 消息幂等；节点终态后不再改写任务反馈版本。
+- 不支持活动更新能力的 executor 不使工作流失败，继续由主程序最终过滤。
+
+### 19.7 仍明确延后的范围
+
+- 动态配置字 schema、插件私有命名空间和任意扩展字段。
+- TTL 自动清理、权限审计和业务输出自动删除。
+- 外部程序本体的私有日志控制协议。
+- 通过配置字改变节点计算、表输出、外部写入或其他业务行为。
+
+本阶段未修改或纳入并行未提交的 `2026-07-11_当前阶段程序判断.md`；本节作为 RUNTIME-OPTIONS-2 的完成版本与验证记录。
