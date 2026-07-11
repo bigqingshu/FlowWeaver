@@ -16,7 +16,7 @@ from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import (
     SharedPublication,
     SharedPublicationCatalogEntry,
-    SharedPublicationMember,
+    SharedPublicationMemberSummary,
     SharedPublicationSummary,
 )
 from flowweaver.engine.runtime_record_mappers import (
@@ -226,7 +226,7 @@ class RuntimeSharedPublicationStoreMixin:
         publication_id: str,
         offset: int = 0,
         limit: int = 100,
-    ) -> list[SharedPublicationMember]:
+    ) -> list[SharedPublicationMemberSummary]:
         with self._session_factory() as session:
             return _list_publication_members(
                 session,

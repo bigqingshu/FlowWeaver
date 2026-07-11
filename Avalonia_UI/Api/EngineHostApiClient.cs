@@ -407,6 +407,18 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<TableRefDto>> GetTableRefAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<TableRefDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/data/{Uri.EscapeDataString(tableRefId)}",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

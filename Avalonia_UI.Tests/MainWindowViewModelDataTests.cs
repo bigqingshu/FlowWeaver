@@ -334,6 +334,10 @@ public sealed class MainWindowViewModelDataTests
                                 ExportName = "orders",
                                 TableRefId = "table-pub-2",
                                 ExactTableVersion = 2,
+                                TableRefLifecycleStatus = "PUBLISHED",
+                                TableRefStorageKind = "RUNTIME_SQL",
+                                LogicalTableId = "orders",
+                                CanReadRows = true,
                             },
                         ],
                         Limit = 100,
@@ -354,8 +358,198 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual("pub-2", apiClient.LastSharedPublicationMembersPublicationId);
         Assert.HasCount(1, viewModel.SelectedSharedPublicationVersionMembers);
         Assert.AreEqual("orders", viewModel.SelectedSharedPublicationVersionMembers[0].ExportName);
+        Assert.AreEqual(
+            "PUBLISHED",
+            viewModel.SelectedSharedPublicationVersionMembers[0].LifecycleStatusText);
+        Assert.IsTrue(
+            viewModel.SelectedSharedPublicationVersionMembers[0]
+                .PreviewCommand
+                .CanExecute(null));
         Assert.AreEqual("Loaded 2 version(s) for daily_report.", viewModel.SharedPublicationVersionMessage);
         Assert.IsFalse(viewModel.HasSharedPublicationVersionError);
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationMemberPreviewLoadsExistingDataWorkbench()
+    {
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [SharedPublicationSummary("pub-2", "daily_report", 2)],
+                        Total = 1,
+                    }),
+            SharedPublicationMembersResponse =
+                ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                    new SharedPublicationMemberPageDto
+                    {
+                        Items = [SharedMember("pub-2", "orders", "table-pub-2")],
+                        Total = 1,
+                    }),
+            TableRefDetailResponse = ApiResponseEnvelope<TableRefDto>.Success(
+                TableRef("table-pub-2", "run-1", "node-run-1")),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-pub-2",
+                    ["row_id", "amount"],
+                    [JsonDocument.Parse("""{"row_id":1,"amount":12.5}""")
+                        .RootElement.Clone()],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        var member = viewModel.SelectedSharedPublicationVersionMembers.Single();
+        await member.PreviewCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("table-pub-2", apiClient.LastTableRefDetailId);
+        Assert.AreEqual("table-pub-2", apiClient.LastTableRowsTableRefId);
+        Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
+        Assert.AreEqual("table-pub-2", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual("12.5", viewModel.DataPreviewWorkbenchRows[0].Cells[1].Text);
+    }
+
+    [TestMethod]
+    public async Task ReleasedSharedPublicationMemberKeepsMetadataWithoutPreviewRequest()
+    {
+        var releasedMember = SharedMember("pub-1", "orders", "table-released") with
+        {
+            TableRefLifecycleStatus = "RELEASED",
+            CanReadRows = false,
+        };
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [SharedPublicationSummary("pub-1", "daily_report", 1)],
+                        Total = 1,
+                    }),
+            SharedPublicationMembersResponse =
+                ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                    new SharedPublicationMemberPageDto
+                    {
+                        Items = [releasedMember],
+                        Total = 1,
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        var member = viewModel.SelectedSharedPublicationVersionMembers.Single();
+
+        Assert.AreEqual("RELEASED", member.LifecycleStatusText);
+        Assert.AreEqual("Table data was released", member.AvailabilityText);
+        Assert.IsFalse(member.PreviewCommand.CanExecute(null));
+        await member.PreviewCommand.ExecuteAsync(null);
+        Assert.IsNull(apiClient.LastTableRefDetailId);
+        Assert.IsNull(apiClient.LastTableRowsTableRefId);
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationMembersLoadAdditionalPagesOnDemand()
+    {
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [SharedPublicationSummary("pub-2", "daily_report", 2)],
+                        Total = 1,
+                    }),
+            SharedPublicationMembersHandler = (publicationId, offset, limit, _) =>
+                Task.FromResult(
+                    ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                        new SharedPublicationMemberPageDto
+                        {
+                            Items = offset == 0
+                                ? [SharedMember(publicationId, "customers", "table-customers")]
+                                : [SharedMember(publicationId, "orders", "table-orders")],
+                            Offset = offset,
+                            Limit = limit,
+                            Total = 2,
+                            HasMore = offset == 0,
+                        })),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        Assert.IsTrue(viewModel.HasMoreSharedPublicationVersionMembers);
+        await viewModel.LoadMoreSharedPublicationVersionMembersCommand.ExecuteAsync(null);
+
+        CollectionAssert.AreEqual(
+            new[] { "customers", "orders" },
+            viewModel.SelectedSharedPublicationVersionMembers
+                .Select(member => member.ExportName)
+                .ToArray());
+        CollectionAssert.AreEqual(
+            new[] { 0, 1 },
+            apiClient.SharedPublicationMemberOffsets.ToArray());
+        Assert.IsFalse(viewModel.HasMoreSharedPublicationVersionMembers);
+    }
+
+    [TestMethod]
+    public async Task ChangingSharedPublicationVersionCancelsAndClearsMemberPreview()
+    {
+        var rowsCompletion = new TaskCompletionSource<ApiResponseEnvelope<TableDataRowsDto>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken rowsCancellationToken = default;
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [SharedPublicationSummary("pub-2", "daily_report", 2)],
+                        Total = 1,
+                    }),
+            SharedPublicationMembersResponse =
+                ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                    new SharedPublicationMemberPageDto
+                    {
+                        Items = [SharedMember("pub-2", "orders", "table-pub-2")],
+                        Total = 1,
+                    }),
+            TableRefDetailResponse = ApiResponseEnvelope<TableRefDto>.Success(
+                TableRef("table-pub-2", "run-1", "node-run-1")),
+            TableRowsHandler = (_, cancellationToken) =>
+            {
+                rowsCancellationToken = cancellationToken;
+                return rowsCompletion.Task;
+            },
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+
+        var previewTask = viewModel.SelectedSharedPublicationVersionMembers
+            .Single()
+            .PreviewCommand
+            .ExecuteAsync(null);
+        await WaitUntilAsync(() => apiClient.LastTableRowsTableRefId == "table-pub-2");
+        viewModel.SelectedSharedPublicationVersion = null;
+
+        Assert.IsTrue(rowsCancellationToken.IsCancellationRequested);
+        rowsCompletion.SetResult(
+            ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-pub-2",
+                    ["value"],
+                    [JsonDocument.Parse("""{"value":"late"}""").RootElement.Clone()],
+                    rowCount: 1)));
+        await previewTask;
+
+        Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
+        Assert.IsEmpty(viewModel.DataPreviewWorkbenchRows);
+        Assert.IsNull(viewModel.SelectedSharedPublicationVersionMember);
     }
 
     [TestMethod]
@@ -1388,6 +1582,24 @@ public sealed class MainWindowViewModelDataTests
         };
     }
 
+    private static SharedPublicationMemberDto SharedMember(
+        string publicationId,
+        string exportName,
+        string tableRefId)
+    {
+        return new SharedPublicationMemberDto
+        {
+            PublicationId = publicationId,
+            ExportName = exportName,
+            TableRefId = tableRefId,
+            ExactTableVersion = 2,
+            TableRefLifecycleStatus = "PUBLISHED",
+            TableRefStorageKind = "RUNTIME_SQL",
+            LogicalTableId = exportName,
+            CanReadRows = true,
+        };
+    }
+
     private static SharedPublicationCatalogEntryDto SharedPublicationCatalogEntry(
         string shareName,
         int latestPublishedVersion)
@@ -1402,10 +1614,30 @@ public sealed class MainWindowViewModelDataTests
         };
     }
 
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.Fail("Timed out waiting for asynchronous data state.");
+    }
+
     private sealed class FakeApiClient : IEngineHostApiClient
     {
         public ApiResponseEnvelope<List<TableRefDto>> TableRefsResponse { get; set; } =
             ApiResponseEnvelope<List<TableRefDto>>.Success(new List<TableRefDto>());
+
+        public ApiResponseEnvelope<TableRefDto> TableRefDetailResponse { get; set; } =
+            ApiResponseEnvelope<TableRefDto>.Failure(
+                "NOT_CONFIGURED",
+                "No table ref detail response configured.");
 
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; set; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
@@ -1438,19 +1670,39 @@ public sealed class MainWindowViewModelDataTests
             int,
             CancellationToken,
             Task<ApiResponseEnvelope<RunTableDirectoryPageDto>>>?
-            RunTableDirectoryHandler { get; set; }
+            RunTableDirectoryHandler
+        { get; set; }
 
         public Func<
             string,
             CancellationToken,
             Task<ApiResponseEnvelope<TableDataRowsDto>>>?
-            TableRowsHandler { get; set; }
+            TableRowsHandler
+        { get; set; }
+
+        public Func<
+            string,
+            CancellationToken,
+            Task<ApiResponseEnvelope<TableRefDto>>>?
+            TableRefDetailHandler
+        { get; set; }
+
+        public Func<
+            string,
+            int,
+            int,
+            CancellationToken,
+            Task<ApiResponseEnvelope<SharedPublicationMemberPageDto>>>?
+            SharedPublicationMembersHandler
+        { get; set; }
 
         public string? LastNodeRunWorkflowRunId { get; private set; }
 
         public string? LastTableRefWorkflowRunId { get; private set; }
 
         public string? LastTableRowsTableRefId { get; private set; }
+
+        public string? LastTableRefDetailId { get; private set; }
 
         public int GetTableRowsCallCount { get; private set; }
 
@@ -1473,6 +1725,8 @@ public sealed class MainWindowViewModelDataTests
         public int LastSharedPublicationVersionsLimit { get; private set; }
 
         public string? LastSharedPublicationMembersPublicationId { get; private set; }
+
+        public List<int> SharedPublicationMemberOffsets { get; } = [];
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -1613,6 +1867,16 @@ public sealed class MainWindowViewModelDataTests
         {
             LastTableRefWorkflowRunId = workflowRunId;
             return Task.FromResult(TableRefsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<TableRefDto>> GetTableRefAsync(
+            EngineHostConnectionSettings settings,
+            string tableRefId,
+            CancellationToken cancellationToken = default)
+        {
+            LastTableRefDetailId = tableRefId;
+            return TableRefDetailHandler?.Invoke(tableRefId, cancellationToken)
+                ?? Task.FromResult(TableRefDetailResponse);
         }
 
         public async Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
@@ -1945,7 +2209,13 @@ public sealed class MainWindowViewModelDataTests
             CancellationToken cancellationToken = default)
         {
             LastSharedPublicationMembersPublicationId = publicationId;
-            return Task.FromResult(SharedPublicationMembersResponse);
+            SharedPublicationMemberOffsets.Add(offset);
+            return SharedPublicationMembersHandler?.Invoke(
+                publicationId,
+                offset,
+                limit,
+                cancellationToken)
+                ?? Task.FromResult(SharedPublicationMembersResponse);
         }
     }
 }

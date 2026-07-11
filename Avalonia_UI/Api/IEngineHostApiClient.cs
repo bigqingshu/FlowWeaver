@@ -140,6 +140,11 @@ public interface IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<TableRefDto>> GetTableRefAsync(
+        EngineHostConnectionSettings settings,
+        string tableRefId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

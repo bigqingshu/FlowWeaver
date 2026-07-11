@@ -7,4 +7,6 @@ public partial class MainWindowViewModel
     public string ShareNameWatermarkText => T("data.share_name_watermark");
 
     public string VersionsText => T("data.versions");
+
+    public string SharedMemberLoadMoreText => T("data.shared_member.load_more");
 }

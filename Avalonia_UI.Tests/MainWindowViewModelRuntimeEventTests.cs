@@ -523,6 +523,14 @@ public sealed class MainWindowViewModelRuntimeEventTests
             throw new NotSupportedException();
         }
 
+        public Task<ApiResponseEnvelope<TableRefDto>> GetTableRefAsync(
+            EngineHostConnectionSettings settings,
+            string tableRefId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ApiResponseEnvelope<RunTableDirectoryPageDto>> ListRunTableDirectoryAsync(
             EngineHostConnectionSettings settings,
             string workflowRunId,

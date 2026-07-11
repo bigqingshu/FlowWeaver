@@ -168,6 +168,27 @@ def test_shared_publication_directory_indexes_are_migrated(tmp_path: Path) -> No
     assert "idx_shared_publication_members_table_ref" in member_indexes
 
 
+def test_shared_publication_member_summary_reports_released_table_ref(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    seed_publications(store)
+
+    released = store.mark_table_ref_released("table-directory")
+    members = store.list_shared_publication_members(
+        publication_id="publication-0-0",
+        offset=0,
+        limit=10,
+    )
+
+    assert released.lifecycle_status == LifecycleStatus.RELEASED
+    assert len(members) == 1
+    assert members[0].table_ref_lifecycle_status == "RELEASED"
+    assert members[0].table_ref_storage_kind == "RUNTIME_SQL"
+    assert members[0].logical_table_id == "orders"
+    assert members[0].can_read_rows is False
+
+
 def test_large_shared_publication_directory_stays_indexed_and_bounded(
     tmp_path: Path,
 ) -> None:

@@ -33,6 +33,31 @@ public sealed class DataPreviewPageStructureTests
             "DataPreviewPage should not use the legacy shared table-ref selection for user-facing selectors.");
     }
 
+    [TestMethod]
+    public void SharedPublicationMembersExposeStatusPagedLoadingAndPreviewCommand()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Data",
+            "SharedPublicationListView.axaml");
+
+        StringAssert.Contains(
+            xaml,
+            "ItemsSource=\"{Binding SelectedSharedPublicationVersionMembers}\"");
+        StringAssert.Contains(
+            xaml,
+            "SelectedItem=\"{Binding SelectedSharedPublicationVersionMember}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding LifecycleStatusText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding LogicalTableId}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding PreviewCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding LoadMoreSharedPublicationVersionMembersCommand}\"");
+        Assert.IsFalse(xaml.Contains("Rows", StringComparison.Ordinal));
+    }
+
     private static string ReadSourceFile(params string[] pathParts)
     {
         var repoRoot = GetRepoRoot();

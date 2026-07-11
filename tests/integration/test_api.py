@@ -2698,6 +2698,10 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
             "export_name": "orders",
             "table_ref_id": table_ref.table_ref_id,
             "exact_table_version": table_ref.version,
+            "table_ref_lifecycle_status": "PUBLISHED",
+            "table_ref_storage_kind": "RUNTIME_SQL",
+            "logical_table_id": "orders",
+            "can_read_rows": True,
         }
     ]
     assert members["total"] == 1

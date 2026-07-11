@@ -6,6 +6,7 @@ from flowweaver.engine.runtime_models import (
     SharedPublication,
     SharedPublicationCatalogEntry,
     SharedPublicationMember,
+    SharedPublicationMemberSummary,
     SharedPublicationSummary,
 )
 
@@ -64,11 +65,21 @@ def shared_publication_summary_to_jsonable(
 
 
 def shared_publication_member_to_jsonable(
-    value: SharedPublicationMember,
+    value: SharedPublicationMember | SharedPublicationMemberSummary,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "publication_id": value.publication_id,
         "export_name": value.export_name,
         "table_ref_id": value.table_ref_id,
         "exact_table_version": value.exact_table_version,
     }
+    if isinstance(value, SharedPublicationMemberSummary):
+        payload.update(
+            {
+                "table_ref_lifecycle_status": value.table_ref_lifecycle_status,
+                "table_ref_storage_kind": value.table_ref_storage_kind,
+                "logical_table_id": value.logical_table_id,
+                "can_read_rows": value.can_read_rows,
+            }
+        )
+    return payload

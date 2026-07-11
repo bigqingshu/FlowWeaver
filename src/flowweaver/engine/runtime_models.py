@@ -193,6 +193,18 @@ class SharedPublicationMember:
 
 
 @dataclass(frozen=True)
+class SharedPublicationMemberSummary:
+    publication_id: str
+    export_name: str
+    table_ref_id: str
+    exact_table_version: int
+    table_ref_lifecycle_status: str
+    table_ref_storage_kind: str
+    logical_table_id: str
+    can_read_rows: bool
+
+
+@dataclass(frozen=True)
 class SharedPublication:
     publication_id: str
     share_name: str

@@ -721,6 +721,28 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetTableRefAsyncUsesDataDetailPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"table_ref_id":"table 1","workflow_run_id":"run-1","node_run_id":"node-run-1","role":"AUXILIARY","storage_kind":"RUNTIME_SQL","scope":"WORKFLOW_RUN","mutability":"PUBLISHED_IMMUTABLE","provider_id":"sqlite_runtime","logical_table_id":"orders","table_type":"runtime_sql_table","preview_persistence":"workflow_run_sql","can_read_rows":true,"supports_paged_rows":true,"schema":[],"schema_fingerprint":"fp","version":2,"capabilities":["READ"],"lifecycle_status":"PUBLISHED","created_at":"2026-07-11T01:02:03Z"},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetTableRefAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "table 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/data/table%201"),
+            handler.RequestUri);
+        Assert.AreEqual("orders", result.Data?.LogicalTableId);
+        Assert.IsTrue(result.Data?.CanReadRows);
+        Assert.AreEqual("PUBLISHED", result.Data?.LifecycleStatus);
+    }
+
+    [TestMethod]
     public async Task ListRunTableDirectoryAsyncBuildsPagedFilterQuery()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
@@ -1056,7 +1078,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub 3","export_name":"orders","table_ref_id":"table-1","exact_table_version":2}],"offset":2,"limit":5,"total":7,"has_more":false},"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub 3","export_name":"orders","table_ref_id":"table-1","exact_table_version":2,"table_ref_lifecycle_status":"PUBLISHED","table_ref_storage_kind":"RUNTIME_SQL","logical_table_id":"orders","can_read_rows":true}],"offset":2,"limit":5,"total":7,"has_more":false},"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
@@ -1072,6 +1094,9 @@ public sealed class EngineHostApiClientTests
             handler.RequestUri);
         Assert.AreEqual("orders", result.Data?.Items[0].ExportName);
         Assert.AreEqual("table-1", result.Data?.Items[0].TableRefId);
+        Assert.AreEqual("PUBLISHED", result.Data?.Items[0].TableRefLifecycleStatus);
+        Assert.AreEqual("RUNTIME_SQL", result.Data?.Items[0].TableRefStorageKind);
+        Assert.IsTrue(result.Data?.Items[0].CanReadRows);
         Assert.AreEqual(7, result.Data?.Total);
     }
 

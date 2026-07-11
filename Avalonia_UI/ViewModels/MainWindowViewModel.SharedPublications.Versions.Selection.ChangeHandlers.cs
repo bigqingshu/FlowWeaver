@@ -8,11 +8,14 @@ public partial class MainWindowViewModel
         SharedPublicationCatalogEntryListItemViewModel? value)
     {
         sharedPublicationVersionsLoadVersion++;
-        sharedPublicationMembersLoadVersion++;
+        CancelSharedPublicationMembersLoad();
+        ResetSharedPublicationMemberPreviewState();
         IsLoadingSharedPublicationVersions = false;
         SharedPublicationVersions.Clear();
         SelectedSharedPublicationVersion = null;
         SelectedSharedPublicationVersionMembers.Clear();
+        SelectedSharedPublicationVersionMember = null;
+        HasMoreSharedPublicationVersionMembers = false;
         SharedPublicationVersionMessage = string.Empty;
         SharedPublicationVersionErrorMessage = null;
 
@@ -27,8 +30,11 @@ public partial class MainWindowViewModel
     partial void OnSelectedSharedPublicationVersionChanged(
         SharedPublicationListItemViewModel? value)
     {
-        sharedPublicationMembersLoadVersion++;
+        CancelSharedPublicationMembersLoad();
+        ResetSharedPublicationMemberPreviewState();
         SelectedSharedPublicationVersionMembers.Clear();
+        SelectedSharedPublicationVersionMember = null;
+        HasMoreSharedPublicationVersionMembers = false;
         if (value is not null)
         {
             _ = RefreshSelectedSharedPublicationVersionMembersAsync(value);

@@ -1027,6 +1027,18 @@ public sealed record SharedPublicationMemberDto
 
     [JsonPropertyName("exact_table_version")]
     public int ExactTableVersion { get; init; }
+
+    [JsonPropertyName("table_ref_lifecycle_status")]
+    public string TableRefLifecycleStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("table_ref_storage_kind")]
+    public string TableRefStorageKind { get; init; } = string.Empty;
+
+    [JsonPropertyName("logical_table_id")]
+    public string LogicalTableId { get; init; } = string.Empty;
+
+    [JsonPropertyName("can_read_rows")]
+    public bool CanReadRows { get; init; }
 }
 
 public sealed record SharedPublicationCatalogEntryDto

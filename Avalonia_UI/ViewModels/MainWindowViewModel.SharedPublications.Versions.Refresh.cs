@@ -89,34 +89,4 @@ public partial class MainWindowViewModel
         }
     }
 
-    private async Task RefreshSelectedSharedPublicationVersionMembersAsync(
-        SharedPublicationListItemViewModel publication)
-    {
-        var requestVersion = ++sharedPublicationMembersLoadVersion;
-        SelectedSharedPublicationVersionMembers.Clear();
-        var response = await _apiClient.ListSharedPublicationMembersAsync(
-            BuildSettings(),
-            publication.PublicationId,
-            offset: 0,
-            limit: 100,
-            cancellationToken: _shutdown.Token);
-        if (requestVersion != sharedPublicationMembersLoadVersion
-            || SelectedSharedPublicationVersion?.PublicationId != publication.PublicationId)
-        {
-            return;
-        }
-
-        if (response.Ok && response.Data is not null)
-        {
-            foreach (var member in response.Data.Items)
-            {
-                SelectedSharedPublicationVersionMembers.Add(
-                    new SharedPublicationMemberListItemViewModel(member));
-            }
-
-            return;
-        }
-
-        SharedPublicationVersionErrorMessage = DescribeError(response);
-    }
 }

@@ -7,13 +7,14 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from flowweaver.engine.db_models import (
+    DataRefRecord,
     SharedPublicationMemberRecord,
     SharedPublicationRecord,
 )
 from flowweaver.engine.runtime_models import (
     SharedPublication,
     SharedPublicationCatalogEntry,
-    SharedPublicationMember,
+    SharedPublicationMemberSummary,
     SharedPublicationSummary,
 )
 from flowweaver.engine.runtime_record_mappers import _datetime_from_text
@@ -275,23 +276,41 @@ def list_shared_publication_members_from_session(
     publication_id: str,
     offset: int,
     limit: int,
-) -> list[SharedPublicationMember]:
-    records = session.scalars(
-        select(SharedPublicationMemberRecord)
+) -> list[SharedPublicationMemberSummary]:
+    rows = session.execute(
+        select(SharedPublicationMemberRecord, DataRefRecord)
+        .join(
+            DataRefRecord,
+            DataRefRecord.table_ref_id == SharedPublicationMemberRecord.table_ref_id,
+        )
         .where(SharedPublicationMemberRecord.publication_id == publication_id)
         .order_by(SharedPublicationMemberRecord.export_name)
         .offset(max(0, offset))
         .limit(max(1, min(limit, 1000)))
     ).all()
     return [
-        SharedPublicationMember(
-            publication_id=record.publication_id,
-            export_name=record.export_name,
-            table_ref_id=record.table_ref_id,
-            exact_table_version=record.exact_table_version,
+        SharedPublicationMemberSummary(
+            publication_id=member_record.publication_id,
+            export_name=member_record.export_name,
+            table_ref_id=member_record.table_ref_id,
+            exact_table_version=member_record.exact_table_version,
+            table_ref_lifecycle_status=table_ref_record.lifecycle_status,
+            table_ref_storage_kind=table_ref_record.storage_kind,
+            logical_table_id=table_ref_record.logical_table_id,
+            can_read_rows=_data_ref_record_can_read_rows(table_ref_record),
         )
-        for record in records
+        for member_record, table_ref_record in rows
     ]
+
+
+def _data_ref_record_can_read_rows(record: DataRefRecord) -> bool:
+    capabilities = json.loads(record.capabilities_json)
+    return "READ" in capabilities and record.lifecycle_status not in {
+        "RELEASABLE",
+        "RELEASED",
+        "RETIRED",
+        "ORPHANED",
+    }
 
 
 def count_shared_publication_members_from_session(
