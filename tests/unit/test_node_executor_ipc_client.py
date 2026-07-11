@@ -14,6 +14,30 @@ from flowweaver.node_executor import (
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
+
+
+def background_fast_feedback_policy() -> ResolvedRuntimeFeedbackPolicyModel:
+    return ResolvedRuntimeFeedbackPolicyModel.model_validate(
+        {
+            "telemetry": {
+                "log_level": "WARN",
+                "event_level": "basic",
+                "event_rate_limit_per_second": 10,
+                "progress_enabled": False,
+                "progress_interval_seconds": 5,
+            },
+            "diagnostics": {
+                "capture_error_context": True,
+                "include_metrics": False,
+                "payload_byte_limit": 65536,
+                "redact_columns": [],
+                "mask_policy": "partial",
+            },
+        }
+    )
 
 
 def make_task() -> NodeTaskModel:
@@ -149,6 +173,38 @@ def test_subprocess_node_executor_ipc_client_streams_delay_test_node_events() ->
     }
     assert events[-1].message_type == IPCMessageType.NODE_TASK_PROGRESS
     assert events[-1].payload["progress"] == 1.0
+
+
+def test_subprocess_node_executor_filters_background_fast_progress() -> None:
+    task = make_task().model_copy(
+        update={
+            "node_type": DELAY_TEST_NODE_TYPE,
+            "config": {
+                "duration_seconds": 0.02,
+                "heartbeat_interval_seconds": 0.005,
+                "progress_interval_seconds": 0.005,
+            },
+            "runtime_feedback_policy": background_fast_feedback_policy(),
+        }
+    )
+    events: list[IPCEnvelope] = []
+    executor = SubprocessNodeExecutorIpcClient(
+        executor_id="background-fast-executor-1",
+        python_executable=sys.executable,
+        event_handler=lambda _task, envelope: events.append(envelope),
+    )
+    try:
+        result = executor.execute(task)
+    finally:
+        executor.close()
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert IPCMessageType.NODE_TASK_HEARTBEAT in {
+        event.message_type for event in events
+    }
+    assert IPCMessageType.NODE_TASK_PROGRESS not in {
+        event.message_type for event in events
+    }
 
 
 def test_subprocess_node_executor_ipc_client_cancels_delay_test_node() -> None:

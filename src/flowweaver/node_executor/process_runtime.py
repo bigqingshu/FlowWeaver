@@ -50,11 +50,12 @@ class NodeExecutorProcess:
         executor_id: str,
         executor_factory: NodeExecutorFactory | None = None,
         event_writer: Callable[[IPCEnvelope], None] | None = None,
+        monotonic_time: Callable[[], float] | None = None,
     ) -> None:
         self.executor_id = executor_id
         self._executor_factory = executor_factory
         self._event_writer = event_writer
-        self._state = NodeExecutorProcessState()
+        self._state = NodeExecutorProcessState(monotonic_time=monotonic_time)
         self._pending_task_events: list[IPCEnvelope] = []
 
     def ready_envelope(self) -> IPCEnvelope:
@@ -87,12 +88,18 @@ class NodeExecutorProcess:
         current_stage: str | None = None,
         metrics: dict[str, int | float | str] | None = None,
         correlation_id: str | None = None,
-    ) -> IPCEnvelope:
+    ) -> IPCEnvelope | None:
+        filtered_metrics = self._state.prepare_task_progress_metrics(
+            task.task_id,
+            metrics,
+        )
+        if filtered_metrics is None:
+            return None
         return _task_progress_envelope(
             task,
             progress=progress,
             current_stage=current_stage,
-            metrics=metrics or {},
+            metrics=filtered_metrics,
             correlation_id=correlation_id
             or self._state.task_correlation_id(task.task_id),
         )
@@ -116,15 +123,15 @@ class NodeExecutorProcess:
         metrics: dict[str, int | float | str] | None = None,
         correlation_id: str | None = None,
     ) -> None:
-        self._emit_or_queue_task_event(
-            self.task_progress_envelope(
-                task,
-                progress=progress,
-                current_stage=current_stage,
-                metrics=metrics,
-                correlation_id=correlation_id,
-            )
+        envelope = self.task_progress_envelope(
+            task,
+            progress=progress,
+            current_stage=current_stage,
+            metrics=metrics,
+            correlation_id=correlation_id,
         )
+        if envelope is not None:
+            self._emit_or_queue_task_event(envelope)
 
     def handle_envelope(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
         if envelope.message_type == IPCMessageType.NODE_TASK_CANCEL_REQUEST:
@@ -134,7 +141,7 @@ class NodeExecutorProcess:
         task = NodeTaskSubmitPayload.model_validate(envelope.payload)
         executor = self._executor_for_task(task)
         self._state.begin_task(
-            task_id=task.task_id,
+            task=task,
             correlation_id=envelope.message_id,
         )
         self._pending_task_events = []

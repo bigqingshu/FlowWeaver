@@ -23,6 +23,36 @@ from flowweaver.node_executor.process import (
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskSubmitPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+)
+
+
+def feedback_policy(
+    *,
+    event_level: str = "verbose",
+    progress_enabled: bool = True,
+    progress_interval_seconds: float = 0,
+    include_metrics: bool = True,
+) -> ResolvedRuntimeFeedbackPolicyModel:
+    return ResolvedRuntimeFeedbackPolicyModel.model_validate(
+        {
+            "telemetry": {
+                "log_level": "INFO",
+                "event_level": event_level,
+                "event_rate_limit_per_second": 0,
+                "progress_enabled": progress_enabled,
+                "progress_interval_seconds": progress_interval_seconds,
+            },
+            "diagnostics": {
+                "capture_error_context": True,
+                "include_metrics": include_metrics,
+                "payload_byte_limit": 0,
+                "redact_columns": [],
+                "mask_policy": "none",
+            },
+        }
+    )
 
 
 def make_task() -> NodeTaskSubmitPayload:
@@ -250,6 +280,158 @@ def test_node_executor_process_emits_task_heartbeat_and_progress() -> None:
         "current_stage": "halfway",
         "metrics": {"rows": 10},
     }
+
+
+def test_node_executor_process_filters_progress_before_ipc() -> None:
+    task = make_task().model_copy(
+        update={
+            "runtime_feedback_policy": feedback_policy(
+                event_level="basic",
+                progress_enabled=True,
+            )
+        }
+    )
+    process_ref: list[NodeExecutorProcess] = []
+
+    class ReportingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            process_ref[0].emit_task_heartbeat(task)
+            process_ref[0].emit_task_progress(
+                task,
+                progress=0.5,
+                current_stage="halfway",
+                metrics={"rows": 10},
+            )
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: ReportingExecutor(),
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, heartbeat, completed = process.handle_envelope(envelope)
+
+    assert [accepted.message_type, heartbeat.message_type, completed.message_type] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_HEARTBEAT,
+        IPCMessageType.NODE_TASK_COMPLETED,
+    ]
+
+
+def test_node_executor_process_filters_metrics_before_ipc() -> None:
+    task = make_task().model_copy(
+        update={"runtime_feedback_policy": feedback_policy(include_metrics=False)}
+    )
+    process_ref: list[NodeExecutorProcess] = []
+
+    class ReportingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            process_ref[0].emit_task_progress(
+                task,
+                progress=0.5,
+                current_stage="halfway",
+                metrics={"rows": 10},
+            )
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: ReportingExecutor(),
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, progress, completed = process.handle_envelope(envelope)
+
+    assert accepted.message_type == IPCMessageType.NODE_TASK_ACCEPTED
+    assert progress.message_type == IPCMessageType.NODE_TASK_PROGRESS
+    assert progress.payload["metrics"] == {}
+    assert completed.message_type == IPCMessageType.NODE_TASK_COMPLETED
+
+
+def test_node_executor_process_throttles_progress_before_ipc() -> None:
+    task = make_task().model_copy(
+        update={
+            "runtime_feedback_policy": feedback_policy(
+                progress_interval_seconds=1,
+            )
+        }
+    )
+    monotonic_values = iter((10.0, 10.5, 11.1))
+    process_ref: list[NodeExecutorProcess] = []
+
+    class ReportingExecutor:
+        executor_id = "executor-1"
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            for progress in (0.1, 0.2, 0.3):
+                process_ref[0].emit_task_progress(task, progress=progress)
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: ReportingExecutor(),
+        monotonic_time=lambda: next(monotonic_values),
+    )
+    process_ref.append(process)
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    accepted, first, third, completed = process.handle_envelope(envelope)
+
+    assert accepted.message_type == IPCMessageType.NODE_TASK_ACCEPTED
+    assert [first.payload["progress"], third.payload["progress"]] == [0.1, 0.3]
+    assert completed.message_type == IPCMessageType.NODE_TASK_COMPLETED
 
 
 def test_node_executor_process_realtime_writer_streams_before_completion() -> None:
