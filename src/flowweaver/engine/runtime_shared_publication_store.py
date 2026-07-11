@@ -13,10 +13,24 @@ from flowweaver.engine.db_models import (
     SharedPublicationRecord,
 )
 from flowweaver.engine.immediate_session import immediate_session
-from flowweaver.engine.runtime_models import SharedPublication
+from flowweaver.engine.runtime_models import (
+    SharedPublication,
+    SharedPublicationCatalogEntry,
+    SharedPublicationMember,
+    SharedPublicationSummary,
+)
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _json_dumps,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    count_shared_publication_catalog_from_session as _count_publication_catalog,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    count_shared_publication_members_from_session as _count_publication_members,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    count_shared_publication_versions_from_session as _count_publication_versions,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
     get_latest_shared_publication_from_session as _get_latest_publication,
@@ -28,7 +42,19 @@ from flowweaver.engine.runtime_shared_publication_queries import (
     get_shared_publication_version_from_session as _get_publication_version,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
+    list_shared_publication_catalog_from_session as _list_publication_catalog,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    list_shared_publication_members_from_session as _list_publication_members,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    list_shared_publication_summaries_from_session as _list_publication_summaries,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
     list_shared_publications_from_session as _list_publications,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
+    shared_publication_exists_from_session as _publication_exists,
 )
 from flowweaver.engine.runtime_shared_table_record_mappers import (
     _shared_publication_from_records,
@@ -115,6 +141,10 @@ class RuntimeSharedPublicationStoreMixin:
         with self._session_factory() as session:
             return _get_publication(session, publication_id)
 
+    def shared_publication_exists(self, publication_id: str) -> bool:
+        with self._session_factory() as session:
+            return _publication_exists(session, publication_id)
+
     def get_shared_publication_version(
         self,
         *,
@@ -146,4 +176,68 @@ class RuntimeSharedPublicationStoreMixin:
                 session,
                 share_name=share_name,
                 limit=limit,
+            )
+
+    def list_shared_publication_catalog(
+        self,
+        *,
+        query: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[SharedPublicationCatalogEntry]:
+        with self._session_factory() as session:
+            return _list_publication_catalog(
+                session,
+                query=query,
+                offset=offset,
+                limit=limit,
+            )
+
+    def count_shared_publication_catalog(
+        self,
+        *,
+        query: str | None = None,
+    ) -> int:
+        with self._session_factory() as session:
+            return _count_publication_catalog(session, query=query)
+
+    def list_shared_publication_summaries(
+        self,
+        *,
+        share_name: str,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> list[SharedPublicationSummary]:
+        with self._session_factory() as session:
+            return _list_publication_summaries(
+                session,
+                share_name=share_name,
+                offset=offset,
+                limit=limit,
+            )
+
+    def count_shared_publication_versions(self, *, share_name: str) -> int:
+        with self._session_factory() as session:
+            return _count_publication_versions(session, share_name=share_name)
+
+    def list_shared_publication_members(
+        self,
+        *,
+        publication_id: str,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> list[SharedPublicationMember]:
+        with self._session_factory() as session:
+            return _list_publication_members(
+                session,
+                publication_id=publication_id,
+                offset=offset,
+                limit=limit,
+            )
+
+    def count_shared_publication_members(self, *, publication_id: str) -> int:
+        with self._session_factory() as session:
+            return _count_publication_members(
+                session,
+                publication_id=publication_id,
             )

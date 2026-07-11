@@ -1150,6 +1150,7 @@
   "format.list_connection_count": "{0} 条连接",
   "format.list_attempt": "第 {0} 次尝试",
   "format.list_member_count": "{0} 个成员",
+  "format.list_version_count": "{0} 个版本",
   "format.config_fields": "{0} 个配置字段：{1}",
   "format.node_config_draft_ready": "{0}：{1} 个可编辑配置字段，{2} 个 JSON 回退字段",
   "workflow.loop_regions.section": "循环区域",

@@ -1004,6 +1004,78 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListSharedPublicationCatalogAsyncBuildsPagedSearchQuery()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"share_name":"daily report","latest_published_version":3,"published_version_count":2,"latest_member_count":4,"latest_created_at":"2026-07-11T01:02:03Z"}],"offset":5,"limit":10,"total":12,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSharedPublicationCatalogAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            query: "daily report",
+            offset: 5,
+            limit: 10);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/catalog?query=daily%20report&offset=5&limit=10"),
+            handler.RequestUri);
+        Assert.AreEqual("daily report", result.Data?.Items[0].ShareName);
+        Assert.AreEqual(3, result.Data?.Items[0].LatestPublishedVersion);
+        Assert.AreEqual(12, result.Data?.Total);
+    }
+
+    [TestMethod]
+    public async Task ListSharedPublicationVersionSummariesAsyncUsesPagedVersionPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub-3","share_name":"daily report","publication_version":3,"producer_workflow_id":"wf-1","producer_run_id":"run-1","status":"PUBLISHED","input_snapshot_id":null,"retention_policy":null,"created_at":"2026-07-11T01:02:03Z","member_count":4,"is_latest_published":true}],"offset":10,"limit":20,"total":30,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSharedPublicationVersionSummariesAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "daily report",
+            offset: 10,
+            limit: 20);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/daily%20report/versions?paged=true&offset=10&limit=20"),
+            handler.RequestUri);
+        Assert.AreEqual("pub-3", result.Data?.Items[0].PublicationId);
+        Assert.AreEqual(4, result.Data?.Items[0].MemberCount);
+        Assert.IsTrue(result.Data?.Items[0].IsLatestPublished);
+    }
+
+    [TestMethod]
+    public async Task ListSharedPublicationMembersAsyncUsesPublicationPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub 3","export_name":"orders","table_ref_id":"table-1","exact_table_version":2}],"offset":2,"limit":5,"total":7,"has_more":false},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSharedPublicationMembersAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "pub 3",
+            offset: 2,
+            limit: 5);
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/pub%203/members?offset=2&limit=5"),
+            handler.RequestUri);
+        Assert.AreEqual("orders", result.Data?.Items[0].ExportName);
+        Assert.AreEqual("table-1", result.Data?.Items[0].TableRefId);
+        Assert.AreEqual(7, result.Data?.Total);
+    }
+
+    [TestMethod]
     public async Task ErrorEnvelopeIsReturned()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)

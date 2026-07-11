@@ -631,9 +631,13 @@ public sealed class MainWindowViewModelLocalizationTests
                             .Clone(),
                     },
                 }),
-            SharedPublicationsResponse =
-                ApiResponseEnvelope<List<SharedPublicationDto>>.Success(
-                    new List<SharedPublicationDto> { SharedPublication("pub-1", "daily_report") }),
+            SharedPublicationCatalogResponse =
+                ApiResponseEnvelope<SharedPublicationCatalogPageDto>.Success(
+                    new SharedPublicationCatalogPageDto
+                    {
+                        Items = [SharedPublicationCatalogEntry("daily_report")],
+                        Total = 1,
+                    }),
         };
         var viewModel = CreateViewModel(uiSettingsStore, apiClient);
 
@@ -655,7 +659,8 @@ public sealed class MainWindowViewModelLocalizationTests
             viewModel.WorkflowDefinitionDetail?.Nodes[0].NodeSummaryText);
         Assert.AreEqual("已禁用", viewModel.WorkflowDefinitionDetail?.Nodes[1].EnabledText);
         Assert.AreEqual("第 1 次尝试", viewModel.NodeRuns[0].AttemptText);
-        Assert.AreEqual("1 个成员", viewModel.SharedPublications[0].MemberCountText);
+        Assert.AreEqual("1 个成员", viewModel.SharedPublications[0].LatestMemberCountText);
+        Assert.AreEqual("1 个版本", viewModel.SharedPublications[0].PublishedVersionCountText);
     }
 
     [TestMethod]
@@ -916,6 +921,19 @@ public sealed class MainWindowViewModelLocalizationTests
         };
     }
 
+    private static SharedPublicationCatalogEntryDto SharedPublicationCatalogEntry(
+        string shareName)
+    {
+        return new SharedPublicationCatalogEntryDto
+        {
+            ShareName = shareName,
+            LatestPublishedVersion = 1,
+            PublishedVersionCount = 1,
+            LatestMemberCount = 1,
+            LatestCreatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+        };
+    }
+
     private sealed class FakeUiSettingsStore : IUiSettingsStore
     {
         public PersistedUiSettings SettingsToLoad { get; set; } =
@@ -989,6 +1007,10 @@ public sealed class MainWindowViewModelLocalizationTests
 
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; init; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
+
+        public ApiResponseEnvelope<SharedPublicationCatalogPageDto> SharedPublicationCatalogResponse { get; init; } =
+            ApiResponseEnvelope<SharedPublicationCatalogPageDto>.Success(
+                new SharedPublicationCatalogPageDto());
 
         public string? CreatedWorkflowName { get; private set; }
 
@@ -1379,6 +1401,36 @@ public sealed class MainWindowViewModelLocalizationTests
         public Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationVersionsAsync(
             EngineHostConnectionSettings settings,
             string shareName,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCatalogPageDto>> ListSharedPublicationCatalogAsync(
+            EngineHostConnectionSettings settings,
+            string? query = null,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(SharedPublicationCatalogResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationSummaryPageDto>> ListSharedPublicationVersionSummariesAsync(
+            EngineHostConnectionSettings settings,
+            string shareName,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationMemberPageDto>> ListSharedPublicationMembersAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            int offset = 0,
             int limit = 100,
             CancellationToken cancellationToken = default)
         {

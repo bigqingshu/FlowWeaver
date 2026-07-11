@@ -7,4 +7,7 @@ public partial class MainWindowViewModel
 {
     public ObservableCollection<SharedPublicationListItemViewModel> SharedPublicationVersions { get; } =
         new();
+
+    public ObservableCollection<SharedPublicationMemberListItemViewModel>
+        SelectedSharedPublicationVersionMembers { get; } = new();
 }

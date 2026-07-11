@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.Input;
@@ -45,11 +46,12 @@ public partial class MainWindowViewModel
 
         try
         {
-            var response = await _apiClient.ListSharedPublicationVersionsAsync(
+            var response = await _apiClient.ListSharedPublicationVersionSummariesAsync(
                 BuildSettings(),
                 shareName,
+                offset: 0,
                 limit,
-                _shutdown.Token);
+                cancellationToken: _shutdown.Token);
 
             if (requestVersion != sharedPublicationVersionsLoadVersion)
             {
@@ -59,11 +61,13 @@ public partial class MainWindowViewModel
             if (response.Ok && response.Data is not null)
             {
                 SharedPublicationVersions.Clear();
-                foreach (var publication in response.Data)
+                foreach (var publication in response.Data.Items)
                 {
                     SharedPublicationVersions.Add(
                         new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
                 }
+
+                SelectedSharedPublicationVersion = SharedPublicationVersions.FirstOrDefault();
 
                 SharedPublicationVersionMessage =
                     F(
@@ -83,5 +87,36 @@ public partial class MainWindowViewModel
                 IsLoadingSharedPublicationVersions = false;
             }
         }
+    }
+
+    private async Task RefreshSelectedSharedPublicationVersionMembersAsync(
+        SharedPublicationListItemViewModel publication)
+    {
+        var requestVersion = ++sharedPublicationMembersLoadVersion;
+        SelectedSharedPublicationVersionMembers.Clear();
+        var response = await _apiClient.ListSharedPublicationMembersAsync(
+            BuildSettings(),
+            publication.PublicationId,
+            offset: 0,
+            limit: 100,
+            cancellationToken: _shutdown.Token);
+        if (requestVersion != sharedPublicationMembersLoadVersion
+            || SelectedSharedPublicationVersion?.PublicationId != publication.PublicationId)
+        {
+            return;
+        }
+
+        if (response.Ok && response.Data is not null)
+        {
+            foreach (var member in response.Data.Items)
+            {
+                SelectedSharedPublicationVersionMembers.Add(
+                    new SharedPublicationMemberListItemViewModel(member));
+            }
+
+            return;
+        }
+
+        SharedPublicationVersionErrorMessage = DescribeError(response);
     }
 }

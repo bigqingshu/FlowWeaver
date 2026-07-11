@@ -261,11 +261,16 @@ public sealed class MainWindowViewModelDataTests
     {
         var apiClient = new FakeApiClient
         {
-            SharedPublicationsResponse =
-                ApiResponseEnvelope<List<SharedPublicationDto>>.Success(
-                    new List<SharedPublicationDto>
+            SharedPublicationCatalogResponse =
+                ApiResponseEnvelope<SharedPublicationCatalogPageDto>.Success(
+                    new SharedPublicationCatalogPageDto
                     {
-                        SharedPublication("pub-1", "daily_report", 2),
+                        Items =
+                        [
+                            SharedPublicationCatalogEntry("daily_report", 2),
+                        ],
+                        Limit = 25,
+                        Total = 1,
                     }),
         };
         var viewModel = CreateViewModel(apiClient);
@@ -274,7 +279,7 @@ public sealed class MainWindowViewModelDataTests
 
         await viewModel.RefreshSharedPublicationsCommand.ExecuteAsync(null);
 
-        Assert.AreEqual("daily_report", apiClient.LastSharedPublicationShareName);
+        Assert.AreEqual("daily_report", apiClient.LastSharedPublicationCatalogQuery);
         Assert.AreEqual(25, apiClient.LastSharedPublicationLimit);
         Assert.HasCount(1, viewModel.SharedPublications);
         Assert.AreEqual("daily_report", viewModel.SelectedSharedPublication?.ShareName);
@@ -292,7 +297,7 @@ public sealed class MainWindowViewModelDataTests
 
         await viewModel.RefreshSharedPublicationsCommand.ExecuteAsync(null);
 
-        Assert.AreEqual(0, apiClient.ListSharedPublicationsCallCount);
+        Assert.AreEqual(0, apiClient.ListSharedPublicationCatalogCallCount);
         Assert.AreEqual("Shared publication refresh rejected.", viewModel.SharedPublicationMessage);
         Assert.AreEqual(
             "Shared publication limit must be between 1 and 1000.",
@@ -305,12 +310,34 @@ public sealed class MainWindowViewModelDataTests
     {
         var apiClient = new FakeApiClient
         {
-            SharedPublicationVersionsResponse =
-                ApiResponseEnvelope<List<SharedPublicationDto>>.Success(
-                    new List<SharedPublicationDto>
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
                     {
-                        SharedPublication("pub-2", "daily_report", 2),
-                        SharedPublication("pub-1", "daily_report", 1),
+                        Items =
+                        [
+                            SharedPublicationSummary("pub-2", "daily_report", 2),
+                            SharedPublicationSummary("pub-1", "daily_report", 1),
+                        ],
+                        Limit = 10,
+                        Total = 2,
+                    }),
+            SharedPublicationMembersResponse =
+                ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                    new SharedPublicationMemberPageDto
+                    {
+                        Items =
+                        [
+                            new SharedPublicationMemberDto
+                            {
+                                PublicationId = "pub-2",
+                                ExportName = "orders",
+                                TableRefId = "table-pub-2",
+                                ExactTableVersion = 2,
+                            },
+                        ],
+                        Limit = 100,
+                        Total = 1,
                     }),
         };
         var viewModel = CreateViewModel(apiClient);
@@ -323,8 +350,10 @@ public sealed class MainWindowViewModelDataTests
         Assert.AreEqual(10, apiClient.LastSharedPublicationVersionsLimit);
         Assert.HasCount(2, viewModel.SharedPublicationVersions);
         Assert.AreEqual("v2", viewModel.SharedPublicationVersions[0].VersionText);
-        Assert.HasCount(1, viewModel.SharedPublicationVersions[0].Members);
-        Assert.AreEqual("orders", viewModel.SharedPublicationVersions[0].Members[0].ExportName);
+        Assert.AreEqual("1 member(s)", viewModel.SharedPublicationVersions[0].MemberCountText);
+        Assert.AreEqual("pub-2", apiClient.LastSharedPublicationMembersPublicationId);
+        Assert.HasCount(1, viewModel.SelectedSharedPublicationVersionMembers);
+        Assert.AreEqual("orders", viewModel.SelectedSharedPublicationVersionMembers[0].ExportName);
         Assert.AreEqual("Loaded 2 version(s) for daily_report.", viewModel.SharedPublicationVersionMessage);
         Assert.IsFalse(viewModel.HasSharedPublicationVersionError);
     }
@@ -1340,6 +1369,39 @@ public sealed class MainWindowViewModelDataTests
         };
     }
 
+    private static SharedPublicationSummaryDto SharedPublicationSummary(
+        string publicationId,
+        string shareName,
+        int publicationVersion)
+    {
+        return new SharedPublicationSummaryDto
+        {
+            PublicationId = publicationId,
+            ShareName = shareName,
+            PublicationVersion = publicationVersion,
+            ProducerWorkflowId = "wf-1",
+            ProducerRunId = "run-1",
+            Status = "PUBLISHED",
+            CreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+            MemberCount = 1,
+            IsLatestPublished = publicationVersion == 2,
+        };
+    }
+
+    private static SharedPublicationCatalogEntryDto SharedPublicationCatalogEntry(
+        string shareName,
+        int latestPublishedVersion)
+    {
+        return new SharedPublicationCatalogEntryDto
+        {
+            ShareName = shareName,
+            LatestPublishedVersion = latestPublishedVersion,
+            PublishedVersionCount = latestPublishedVersion,
+            LatestMemberCount = 1,
+            LatestCreatedAt = DateTimeOffset.Parse("2026-06-29T01:02:03Z"),
+        };
+    }
+
     private sealed class FakeApiClient : IEngineHostApiClient
     {
         public ApiResponseEnvelope<List<TableRefDto>> TableRefsResponse { get; set; } =
@@ -1348,8 +1410,20 @@ public sealed class MainWindowViewModelDataTests
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationsResponse { get; set; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
 
+        public ApiResponseEnvelope<SharedPublicationCatalogPageDto> SharedPublicationCatalogResponse { get; set; } =
+            ApiResponseEnvelope<SharedPublicationCatalogPageDto>.Success(
+                new SharedPublicationCatalogPageDto());
+
         public ApiResponseEnvelope<List<SharedPublicationDto>> SharedPublicationVersionsResponse { get; set; } =
             ApiResponseEnvelope<List<SharedPublicationDto>>.Success(new List<SharedPublicationDto>());
+
+        public ApiResponseEnvelope<SharedPublicationSummaryPageDto> SharedPublicationVersionSummariesResponse { get; set; } =
+            ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                new SharedPublicationSummaryPageDto());
+
+        public ApiResponseEnvelope<SharedPublicationMemberPageDto> SharedPublicationMembersResponse { get; set; } =
+            ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
+                new SharedPublicationMemberPageDto());
 
         public ApiResponseEnvelope<List<NodeRunDto>> NodeRunsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>());
@@ -1386,13 +1460,19 @@ public sealed class MainWindowViewModelDataTests
 
         public int ListSharedPublicationsCallCount { get; private set; }
 
+        public int ListSharedPublicationCatalogCallCount { get; private set; }
+
         public string? LastSharedPublicationShareName { get; private set; }
+
+        public string? LastSharedPublicationCatalogQuery { get; private set; }
 
         public int LastSharedPublicationLimit { get; private set; }
 
         public string? LastSharedPublicationVersionsShareName { get; private set; }
 
         public int LastSharedPublicationVersionsLimit { get; private set; }
+
+        public string? LastSharedPublicationMembersPublicationId { get; private set; }
 
         public Task<ApiResponseEnvelope<HealthStatusDto>> GetHealthAsync(
             EngineHostConnectionSettings settings,
@@ -1830,6 +1910,42 @@ public sealed class MainWindowViewModelDataTests
             LastSharedPublicationVersionsShareName = shareName;
             LastSharedPublicationVersionsLimit = limit;
             return Task.FromResult(SharedPublicationVersionsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCatalogPageDto>> ListSharedPublicationCatalogAsync(
+            EngineHostConnectionSettings settings,
+            string? query = null,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            ListSharedPublicationCatalogCallCount++;
+            LastSharedPublicationCatalogQuery = query;
+            LastSharedPublicationLimit = limit;
+            return Task.FromResult(SharedPublicationCatalogResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationSummaryPageDto>> ListSharedPublicationVersionSummariesAsync(
+            EngineHostConnectionSettings settings,
+            string shareName,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            LastSharedPublicationVersionsShareName = shareName;
+            LastSharedPublicationVersionsLimit = limit;
+            return Task.FromResult(SharedPublicationVersionSummariesResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationMemberPageDto>> ListSharedPublicationMembersAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            int offset = 0,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            LastSharedPublicationMembersPublicationId = publicationId;
+            return Task.FromResult(SharedPublicationMembersResponse);
         }
     }
 }

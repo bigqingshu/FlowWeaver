@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from flowweaver.engine.db_base import Base
@@ -8,7 +8,15 @@ from flowweaver.engine.db_base import Base
 
 class SharedPublicationRecord(Base):
     __tablename__ = "shared_publications"
-    __table_args__ = (UniqueConstraint("share_name", "publication_version"),)
+    __table_args__ = (
+        UniqueConstraint("share_name", "publication_version"),
+        Index(
+            "idx_shared_publications_catalog",
+            "share_name",
+            "status",
+            "publication_version",
+        ),
+    )
 
     publication_id: Mapped[str] = mapped_column(Text, primary_key=True)
     share_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -23,6 +31,17 @@ class SharedPublicationRecord(Base):
 
 class SharedPublicationMemberRecord(Base):
     __tablename__ = "shared_publication_members"
+    __table_args__ = (
+        Index(
+            "idx_shared_publication_members_publication_export",
+            "publication_id",
+            "export_name",
+        ),
+        Index(
+            "idx_shared_publication_members_table_ref",
+            "table_ref_id",
+        ),
+    )
 
     publication_id: Mapped[str] = mapped_column(
         Text,

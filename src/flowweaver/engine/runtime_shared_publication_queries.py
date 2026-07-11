@@ -1,10 +1,22 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+import json
+from collections import defaultdict
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from flowweaver.engine.db_models import SharedPublicationRecord
-from flowweaver.engine.runtime_models import SharedPublication
+from flowweaver.engine.db_models import (
+    SharedPublicationMemberRecord,
+    SharedPublicationRecord,
+)
+from flowweaver.engine.runtime_models import (
+    SharedPublication,
+    SharedPublicationCatalogEntry,
+    SharedPublicationMember,
+    SharedPublicationSummary,
+)
+from flowweaver.engine.runtime_record_mappers import _datetime_from_text
 from flowweaver.engine.runtime_shared_table_record_mappers import (
     _shared_publication_from_records,
 )
@@ -23,6 +35,20 @@ def get_shared_publication_from_session(
     return _shared_publication_from_records(
         record,
         _get_shared_publication_member_records(session, publication_id),
+    )
+
+
+def shared_publication_exists_from_session(
+    session: Session,
+    publication_id: str,
+) -> bool:
+    return (
+        session.scalar(
+            select(SharedPublicationRecord.publication_id)
+            .where(SharedPublicationRecord.publication_id == publication_id)
+            .limit(1)
+        )
+        is not None
     )
 
 
@@ -77,10 +103,244 @@ def list_shared_publications_from_session(
     if share_name is not None:
         statement = statement.where(SharedPublicationRecord.share_name == share_name)
     records = session.scalars(statement.limit(max(1, min(limit, 1000)))).all()
+    member_records_by_publication = _member_records_by_publication(
+        session,
+        [record.publication_id for record in records],
+    )
     return [
         _shared_publication_from_records(
             record,
-            _get_shared_publication_member_records(session, record.publication_id),
+            member_records_by_publication.get(record.publication_id, []),
         )
         for record in records
     ]
+
+
+def list_shared_publication_catalog_from_session(
+    session: Session,
+    *,
+    query: str | None,
+    offset: int,
+    limit: int,
+) -> list[SharedPublicationCatalogEntry]:
+    share_names_statement = (
+        select(SharedPublicationRecord.share_name)
+        .where(SharedPublicationRecord.status == "PUBLISHED")
+        .distinct()
+        .order_by(SharedPublicationRecord.share_name)
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 1000)))
+    )
+    if query is not None:
+        share_names_statement = share_names_statement.where(
+            SharedPublicationRecord.share_name.contains(query)
+        )
+    share_names = list(session.scalars(share_names_statement))
+    if not share_names:
+        return []
+
+    aggregation = (
+        select(
+            SharedPublicationRecord.share_name.label("share_name"),
+            func.max(SharedPublicationRecord.publication_version).label(
+                "latest_version"
+            ),
+            func.count(SharedPublicationRecord.publication_id).label(
+                "version_count"
+            ),
+        )
+        .where(SharedPublicationRecord.status == "PUBLISHED")
+        .where(SharedPublicationRecord.share_name.in_(share_names))
+        .group_by(SharedPublicationRecord.share_name)
+        .subquery()
+    )
+    rows = session.execute(
+        select(
+            SharedPublicationRecord,
+            aggregation.c.version_count,
+        )
+        .join(
+            aggregation,
+            and_(
+                SharedPublicationRecord.share_name == aggregation.c.share_name,
+                SharedPublicationRecord.publication_version
+                == aggregation.c.latest_version,
+            ),
+        )
+        .where(SharedPublicationRecord.status == "PUBLISHED")
+        .order_by(SharedPublicationRecord.share_name)
+    ).all()
+    member_counts = _member_counts_by_publication(
+        session,
+        [row.SharedPublicationRecord.publication_id for row in rows],
+    )
+    return [
+        SharedPublicationCatalogEntry(
+            share_name=row.SharedPublicationRecord.share_name,
+            latest_published_version=row.SharedPublicationRecord.publication_version,
+            published_version_count=int(row.version_count),
+            latest_member_count=member_counts.get(
+                row.SharedPublicationRecord.publication_id,
+                0,
+            ),
+            latest_created_at=_datetime_from_text(
+                row.SharedPublicationRecord.created_at
+            ),
+        )
+        for row in rows
+    ]
+
+
+def count_shared_publication_catalog_from_session(
+    session: Session,
+    *,
+    query: str | None,
+) -> int:
+    statement = select(
+        func.count(func.distinct(SharedPublicationRecord.share_name))
+    ).where(
+        SharedPublicationRecord.status == "PUBLISHED",
+    )
+    if query is not None:
+        statement = statement.where(
+            SharedPublicationRecord.share_name.contains(query)
+        )
+    return int(session.scalar(statement) or 0)
+
+
+def list_shared_publication_summaries_from_session(
+    session: Session,
+    *,
+    share_name: str,
+    offset: int,
+    limit: int,
+) -> list[SharedPublicationSummary]:
+    records = session.scalars(
+        select(SharedPublicationRecord)
+        .where(SharedPublicationRecord.share_name == share_name)
+        .order_by(SharedPublicationRecord.publication_version.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 1000)))
+    ).all()
+    if not records:
+        return []
+    latest_version = session.scalar(
+        select(func.max(SharedPublicationRecord.publication_version))
+        .where(SharedPublicationRecord.share_name == share_name)
+        .where(SharedPublicationRecord.status == "PUBLISHED")
+    )
+    member_counts = _member_counts_by_publication(
+        session,
+        [record.publication_id for record in records],
+    )
+    return [
+        SharedPublicationSummary(
+            publication_id=record.publication_id,
+            share_name=record.share_name,
+            publication_version=record.publication_version,
+            producer_workflow_id=record.producer_workflow_id,
+            producer_run_id=record.producer_run_id,
+            status=record.status,
+            input_snapshot_id=record.input_snapshot_id,
+            retention_policy=json.loads(record.retention_policy_json),
+            created_at=_datetime_from_text(record.created_at),
+            member_count=member_counts.get(record.publication_id, 0),
+            is_latest_published=(
+                record.status == "PUBLISHED"
+                and record.publication_version == latest_version
+            ),
+        )
+        for record in records
+    ]
+
+
+def count_shared_publication_versions_from_session(
+    session: Session,
+    *,
+    share_name: str,
+) -> int:
+    return int(
+        session.scalar(
+            select(func.count(SharedPublicationRecord.publication_id)).where(
+                SharedPublicationRecord.share_name == share_name
+            )
+        )
+        or 0
+    )
+
+
+def list_shared_publication_members_from_session(
+    session: Session,
+    *,
+    publication_id: str,
+    offset: int,
+    limit: int,
+) -> list[SharedPublicationMember]:
+    records = session.scalars(
+        select(SharedPublicationMemberRecord)
+        .where(SharedPublicationMemberRecord.publication_id == publication_id)
+        .order_by(SharedPublicationMemberRecord.export_name)
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 1000)))
+    ).all()
+    return [
+        SharedPublicationMember(
+            publication_id=record.publication_id,
+            export_name=record.export_name,
+            table_ref_id=record.table_ref_id,
+            exact_table_version=record.exact_table_version,
+        )
+        for record in records
+    ]
+
+
+def count_shared_publication_members_from_session(
+    session: Session,
+    *,
+    publication_id: str,
+) -> int:
+    return int(
+        session.scalar(
+            select(func.count(SharedPublicationMemberRecord.export_name)).where(
+                SharedPublicationMemberRecord.publication_id == publication_id
+            )
+        )
+        or 0
+    )
+
+
+def _member_records_by_publication(
+    session: Session,
+    publication_ids: list[str],
+) -> dict[str, list[SharedPublicationMemberRecord]]:
+    if not publication_ids:
+        return {}
+    grouped: defaultdict[str, list[SharedPublicationMemberRecord]] = defaultdict(list)
+    records = session.scalars(
+        select(SharedPublicationMemberRecord)
+        .where(SharedPublicationMemberRecord.publication_id.in_(publication_ids))
+        .order_by(
+            SharedPublicationMemberRecord.publication_id,
+            SharedPublicationMemberRecord.export_name,
+        )
+    ).all()
+    for record in records:
+        grouped[record.publication_id].append(record)
+    return dict(grouped)
+
+
+def _member_counts_by_publication(
+    session: Session,
+    publication_ids: list[str],
+) -> dict[str, int]:
+    if not publication_ids:
+        return {}
+    rows = session.execute(
+        select(
+            SharedPublicationMemberRecord.publication_id,
+            func.count(SharedPublicationMemberRecord.export_name),
+        )
+        .where(SharedPublicationMemberRecord.publication_id.in_(publication_ids))
+        .group_by(SharedPublicationMemberRecord.publication_id)
+    ).all()
+    return {publication_id: int(count) for publication_id, count in rows}

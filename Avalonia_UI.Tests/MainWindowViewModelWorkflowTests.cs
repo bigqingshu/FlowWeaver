@@ -6376,6 +6376,36 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCatalogPageDto>> ListSharedPublicationCatalogAsync(
+            EngineHostConnectionSettings settings,
+            string? query = null,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationSummaryPageDto>> ListSharedPublicationVersionSummariesAsync(
+            EngineHostConnectionSettings settings,
+            string shareName,
+            int offset = 0,
+            int limit = 50,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationMemberPageDto>> ListSharedPublicationMembersAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            int offset = 0,
+            int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class FakeWorkflowImportFileService : IWorkflowImportFileService

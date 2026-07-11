@@ -5,6 +5,6 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    public ObservableCollection<SharedPublicationListItemViewModel> SharedPublications { get; } =
+    public ObservableCollection<SharedPublicationCatalogEntryListItemViewModel> SharedPublications { get; } =
         new();
 }

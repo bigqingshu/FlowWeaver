@@ -42,6 +42,11 @@ public sealed class DisplayTextFormatter
         return Format("format.list_member_count", count);
     }
 
+    public string FormatVersionCount(int count)
+    {
+        return Format("format.list_version_count", count);
+    }
+
     public string FormatNodeEditorStatus(string statusKey)
     {
         return Text(string.IsNullOrWhiteSpace(statusKey)
@@ -194,6 +199,7 @@ public sealed class DisplayTextFormatter
             "list.disabled" => "disabled",
             "format.list_attempt" => "attempt {0}",
             "format.list_member_count" => "{0} member(s)",
+            "format.list_version_count" => "{0} version(s)",
             "node_editor.status.builtin" => "Built-in editor",
             "node_editor.status.json_fallback" => "JSON fallback",
             "node_editor.status.unregistered_json_fallback" => "Not registered, JSON fallback",

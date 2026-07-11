@@ -1150,6 +1150,7 @@
   "format.list_connection_count": "{0} connection(s)",
   "format.list_attempt": "attempt {0}",
   "format.list_member_count": "{0} member(s)",
+  "format.list_version_count": "{0} version(s)",
   "format.config_fields": "{0} config field(s): {1}",
   "format.node_config_draft_ready": "{0}: {1} editable config field(s), {2} JSON fallback field(s)",
   "workflow.loop_regions.section": "Loop regions",

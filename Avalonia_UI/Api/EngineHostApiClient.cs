@@ -678,6 +678,71 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<SharedPublicationCatalogPageDto>> ListSharedPublicationCatalogAsync(
+        EngineHostConnectionSettings settings,
+        string? query = null,
+        int offset = 0,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var queryValues = new List<KeyValuePair<string, string?>>
+        {
+            new("query", query),
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+
+        return SendAsync<SharedPublicationCatalogPageDto>(
+            settings,
+            HttpMethod.Get,
+            "api/v1/shared-publications/catalog",
+            query: queryValues,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<SharedPublicationSummaryPageDto>> ListSharedPublicationVersionSummariesAsync(
+        EngineHostConnectionSettings settings,
+        string shareName,
+        int offset = 0,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("paged", "true"),
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+
+        return SendAsync<SharedPublicationSummaryPageDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/shared-publications/{Uri.EscapeDataString(shareName)}/versions",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<SharedPublicationMemberPageDto>> ListSharedPublicationMembersAsync(
+        EngineHostConnectionSettings settings,
+        string publicationId,
+        int offset = 0,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("offset", offset.ToString()),
+            new("limit", limit.ToString()),
+        };
+
+        return SendAsync<SharedPublicationMemberPageDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/shared-publications/{Uri.EscapeDataString(publicationId)}/members",
+            query: query,
+            cancellationToken: cancellationToken);
+    }
+
     public async Task<ApiResponseEnvelope<TData>> SendAsync<TData>(
         EngineHostConnectionSettings settings,
         HttpMethod method,

@@ -2632,6 +2632,27 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
             headers=auth_headers(),
         )
     )
+    catalog = response_data(
+        client.get(
+            "/api/v1/shared-publications/catalog",
+            params={"query": "daily", "offset": 0, "limit": 10},
+            headers=auth_headers(),
+        )
+    )
+    version_summaries = response_data(
+        client.get(
+            "/api/v1/shared-publications/daily_report/versions",
+            params={"paged": "true", "offset": 0, "limit": 10},
+            headers=auth_headers(),
+        )
+    )
+    members = response_data(
+        client.get(
+            f"/api/v1/shared-publications/{publication.publication_id}/members",
+            params={"offset": 0, "limit": 10},
+            headers=auth_headers(),
+        )
+    )
 
     assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
     assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
@@ -2655,6 +2676,31 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     assert versions[0]["share_name"] == "daily_report"
     assert versions[0]["publication_version"] == 1
     assert versions[0]["members"][0]["table_ref_id"] == table_ref.table_ref_id
+    assert catalog["items"] == [
+        {
+            "share_name": "daily_report",
+            "latest_published_version": 1,
+            "published_version_count": 1,
+            "latest_member_count": 1,
+            "latest_created_at": publication.created_at.isoformat(),
+        }
+    ]
+    assert catalog["total"] == 1
+    assert version_summaries["items"][0]["publication_id"] == (
+        publication.publication_id
+    )
+    assert version_summaries["items"][0]["member_count"] == 1
+    assert version_summaries["items"][0]["is_latest_published"] is True
+    assert "members" not in version_summaries["items"][0]
+    assert members["items"] == [
+        {
+            "publication_id": publication.publication_id,
+            "export_name": "orders",
+            "table_ref_id": table_ref.table_ref_id,
+            "exact_table_version": table_ref.version,
+        }
+    ]
+    assert members["total"] == 1
 
 
 def test_data_api_reads_table_ref_schema_summary_and_limited_rows(

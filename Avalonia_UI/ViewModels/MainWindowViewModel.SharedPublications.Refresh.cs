@@ -33,11 +33,12 @@ public partial class MainWindowViewModel
 
         try
         {
-            var response = await _apiClient.ListSharedPublicationsAsync(
+            var response = await _apiClient.ListSharedPublicationCatalogAsync(
                 BuildSettings(),
-                NormalizeFilter(SharedPublicationShareNameFilter),
+                query: NormalizeFilter(SharedPublicationShareNameFilter),
+                offset: 0,
                 limit,
-                _shutdown.Token);
+                cancellationToken: _shutdown.Token);
 
             if (requestVersion != sharedPublicationsLoadVersion)
             {
@@ -46,16 +47,18 @@ public partial class MainWindowViewModel
 
             if (response.Ok && response.Data is not null)
             {
-                var previousPublicationId = SelectedSharedPublication?.PublicationId;
+                var previousShareName = SelectedSharedPublication?.ShareName;
                 SharedPublications.Clear();
-                foreach (var publication in response.Data)
+                foreach (var entry in response.Data.Items)
                 {
                     SharedPublications.Add(
-                        new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
+                        new SharedPublicationCatalogEntryListItemViewModel(
+                            entry,
+                            DisplayTextFormatter));
                 }
 
                 SelectedSharedPublication = SharedPublications.FirstOrDefault(
-                    publication => publication.PublicationId == previousPublicationId)
+                    publication => publication.ShareName == previousShareName)
                     ?? SharedPublications.FirstOrDefault();
                 SharedPublicationMessage =
                     F("format.loaded_shared_publications", SharedPublications.Count);

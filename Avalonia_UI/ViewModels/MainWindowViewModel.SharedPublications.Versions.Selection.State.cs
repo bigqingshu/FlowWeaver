@@ -6,5 +6,5 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     [ObservableProperty]
-    private SharedPublicationCatalogEntryListItemViewModel? selectedSharedPublication;
+    private SharedPublicationListItemViewModel? selectedSharedPublicationVersion;
 }

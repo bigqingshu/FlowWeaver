@@ -1028,3 +1028,111 @@ public sealed record SharedPublicationMemberDto
     [JsonPropertyName("exact_table_version")]
     public int ExactTableVersion { get; init; }
 }
+
+public sealed record SharedPublicationCatalogEntryDto
+{
+    [JsonPropertyName("share_name")]
+    public string ShareName { get; init; } = string.Empty;
+
+    [JsonPropertyName("latest_published_version")]
+    public int LatestPublishedVersion { get; init; }
+
+    [JsonPropertyName("published_version_count")]
+    public int PublishedVersionCount { get; init; }
+
+    [JsonPropertyName("latest_member_count")]
+    public int LatestMemberCount { get; init; }
+
+    [JsonPropertyName("latest_created_at")]
+    public DateTimeOffset LatestCreatedAt { get; init; }
+}
+
+public sealed record SharedPublicationCatalogPageDto
+{
+    [JsonPropertyName("items")]
+    public SharedPublicationCatalogEntryDto[] Items { get; init; } = [];
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
+}
+
+public sealed record SharedPublicationSummaryDto
+{
+    [JsonPropertyName("publication_id")]
+    public string PublicationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("share_name")]
+    public string ShareName { get; init; } = string.Empty;
+
+    [JsonPropertyName("publication_version")]
+    public int PublicationVersion { get; init; }
+
+    [JsonPropertyName("producer_workflow_id")]
+    public string ProducerWorkflowId { get; init; } = string.Empty;
+
+    [JsonPropertyName("producer_run_id")]
+    public string ProducerRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("input_snapshot_id")]
+    public string? InputSnapshotId { get; init; }
+
+    [JsonPropertyName("retention_policy")]
+    public JsonElement? RetentionPolicy { get; init; }
+
+    [JsonPropertyName("created_at")]
+    public DateTimeOffset CreatedAt { get; init; }
+
+    [JsonPropertyName("member_count")]
+    public int MemberCount { get; init; }
+
+    [JsonPropertyName("is_latest_published")]
+    public bool IsLatestPublished { get; init; }
+}
+
+public sealed record SharedPublicationSummaryPageDto
+{
+    [JsonPropertyName("items")]
+    public SharedPublicationSummaryDto[] Items { get; init; } = [];
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
+}
+
+public sealed record SharedPublicationMemberPageDto
+{
+    [JsonPropertyName("items")]
+    public SharedPublicationMemberDto[] Items { get; init; } = [];
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; init; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; init; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; init; }
+}

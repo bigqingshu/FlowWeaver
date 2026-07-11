@@ -207,6 +207,30 @@ class SharedPublication:
 
 
 @dataclass(frozen=True)
+class SharedPublicationCatalogEntry:
+    share_name: str
+    latest_published_version: int
+    published_version_count: int
+    latest_member_count: int
+    latest_created_at: datetime
+
+
+@dataclass(frozen=True)
+class SharedPublicationSummary:
+    publication_id: str
+    share_name: str
+    publication_version: int
+    producer_workflow_id: str
+    producer_run_id: str
+    status: str
+    input_snapshot_id: str | None
+    retention_policy: dict[str, Any]
+    created_at: datetime
+    member_count: int
+    is_latest_published: bool
+
+
+@dataclass(frozen=True)
 class InputSnapshotEntry:
     source_name: str
     publication_id: str

@@ -4,11 +4,15 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    partial void OnSelectedSharedPublicationChanged(SharedPublicationListItemViewModel? value)
+    partial void OnSelectedSharedPublicationChanged(
+        SharedPublicationCatalogEntryListItemViewModel? value)
     {
         sharedPublicationVersionsLoadVersion++;
+        sharedPublicationMembersLoadVersion++;
         IsLoadingSharedPublicationVersions = false;
         SharedPublicationVersions.Clear();
+        SelectedSharedPublicationVersion = null;
+        SelectedSharedPublicationVersionMembers.Clear();
         SharedPublicationVersionMessage = string.Empty;
         SharedPublicationVersionErrorMessage = null;
 
@@ -18,5 +22,16 @@ public partial class MainWindowViewModel
         }
 
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnSelectedSharedPublicationVersionChanged(
+        SharedPublicationListItemViewModel? value)
+    {
+        sharedPublicationMembersLoadVersion++;
+        SelectedSharedPublicationVersionMembers.Clear();
+        if (value is not null)
+        {
+            _ = RefreshSelectedSharedPublicationVersionMembersAsync(value);
+        }
     }
 }
