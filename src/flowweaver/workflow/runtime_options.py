@@ -3,6 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from flowweaver.protocols.node_task import NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedDiagnosticsFeedbackPolicyModel,
+    ResolvedRuntimeFeedbackPolicyModel,
+    ResolvedTelemetryFeedbackPolicyModel,
+)
 from flowweaver.workflow.definition import (
     DiagnosticsRuntimeOptionsOverrideModel,
     RuntimeOptionsOverrideModel,
@@ -102,6 +107,31 @@ def resolve_runtime_options_by_node(
         )
         for node in definition.nodes
     }
+
+
+def runtime_feedback_policy_from_options(
+    options: RuntimeOptionsWorkflowModel,
+) -> ResolvedRuntimeFeedbackPolicyModel:
+    return ResolvedRuntimeFeedbackPolicyModel(
+        telemetry=ResolvedTelemetryFeedbackPolicyModel(
+            log_level=options.telemetry.log_level.value,
+            event_level=options.telemetry.event_level.value,
+            event_rate_limit_per_second=(
+                options.telemetry.event_rate_limit_per_second
+            ),
+            progress_enabled=options.telemetry.progress_enabled,
+            progress_interval_seconds=(
+                options.telemetry.progress_interval_seconds
+            ),
+        ),
+        diagnostics=ResolvedDiagnosticsFeedbackPolicyModel(
+            capture_error_context=options.diagnostics.capture_error_context,
+            include_metrics=options.diagnostics.include_metrics,
+            payload_byte_limit=options.diagnostics.payload_byte_limit,
+            redact_columns=list(options.diagnostics.redact_columns),
+            mask_policy=options.diagnostics.mask_policy.value,
+        ),
+    )
 
 
 def sanitize_node_task_result_for_runtime_options(

@@ -30,6 +30,14 @@ from flowweaver.protocols.ipc_messages import (
 )
 from flowweaver.protocols.node_result import ErrorModel, NodeResultModel
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import (
+    DiagnosticsFeedbackPolicyOverrideModel,
+    ResolvedDiagnosticsFeedbackPolicyModel,
+    ResolvedRuntimeFeedbackPolicyModel,
+    ResolvedTelemetryFeedbackPolicyModel,
+    RuntimeFeedbackPolicyOverrideModel,
+    TelemetryFeedbackPolicyOverrideModel,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 __all__ = [
@@ -56,11 +64,17 @@ __all__ = [
     "NodeTaskProgressPayload",
     "NodeTaskResultModel",
     "NodeTaskSubmitPayload",
+    "DiagnosticsFeedbackPolicyOverrideModel",
+    "ResolvedDiagnosticsFeedbackPolicyModel",
+    "ResolvedRuntimeFeedbackPolicyModel",
+    "ResolvedTelemetryFeedbackPolicyModel",
+    "RuntimeFeedbackPolicyOverrideModel",
     "StrictModel",
     "TableMutability",
     "TableRefModel",
     "TableRole",
     "TableScope",
     "TableStorageKind",
+    "TelemetryFeedbackPolicyOverrideModel",
     "WorkflowRunStatus",
 ]

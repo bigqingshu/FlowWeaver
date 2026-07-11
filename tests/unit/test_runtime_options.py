@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.runtime_feedback import (
+    RuntimeFeedbackPolicyOverrideModel,
+)
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow.runtime_options import (
     RuntimeOptionsEventSink,
     resolve_runtime_options_by_node,
     resolve_runtime_options_for_node,
     resolve_workflow_runtime_options,
+    runtime_feedback_policy_from_options,
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
@@ -166,6 +173,73 @@ def test_resolve_runtime_options_merges_workflow_and_node_override() -> None:
     assert filter_node.telemetry.progress_enabled is False
     assert filter_node.diagnostics.include_metrics is True
     assert filter_node.diagnostics.redact_columns == ["password"]
+
+
+def test_runtime_feedback_policy_maps_only_closed_feedback_fields() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "profile": "custom",
+                    "strict_validation": False,
+                    "telemetry": {
+                        "log_level": "WARN",
+                        "event_level": "basic",
+                        "event_rate_limit_per_second": 3,
+                        "progress_enabled": False,
+                        "progress_interval_seconds": 2.5,
+                    },
+                    "diagnostics": {
+                        "capture_error_context": False,
+                        "include_metrics": False,
+                        "payload_byte_limit": 512,
+                        "ttl_seconds": 120,
+                        "redact_columns": ["password"],
+                        "mask_policy": "full",
+                    },
+                }
+            },
+        }
+    )
+
+    policy = runtime_feedback_policy_from_options(
+        resolve_workflow_runtime_options(definition)
+    )
+
+    assert policy.model_dump(mode="json") == {
+        "telemetry": {
+            "log_level": "WARN",
+            "event_level": "basic",
+            "event_rate_limit_per_second": 3,
+            "progress_enabled": False,
+            "progress_interval_seconds": 2.5,
+        },
+        "diagnostics": {
+            "capture_error_context": False,
+            "include_metrics": False,
+            "payload_byte_limit": 512,
+            "redact_columns": ["password"],
+            "mask_policy": "full",
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"profile": "diagnostic"},
+        {"strict_validation": False},
+        {"diagnostics": {"ttl_seconds": 30}},
+        {"extra": {"plugin": True}},
+    ],
+)
+def test_runtime_feedback_policy_override_rejects_unmanaged_fields(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        RuntimeFeedbackPolicyOverrideModel.model_validate(payload)
 
 
 def test_resolver_does_not_mutate_node_config_or_task_protocol() -> None:
