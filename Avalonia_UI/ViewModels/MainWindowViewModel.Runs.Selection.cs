@@ -45,6 +45,7 @@ public partial class MainWindowViewModel
         }
 
         NotifyEngineActionStateChanged();
+        OnPropertyChanged(nameof(CanOpenSelectedRunRuntimeOptions));
         OnPropertyChanged(nameof(HasSelectedRunRuntimeOptionsSummary));
         OnPropertyChanged(nameof(SelectedRunRuntimeOptionsSummaryText));
         RefreshNodeRunsCommand.NotifyCanExecuteChanged();

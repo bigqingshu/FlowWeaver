@@ -313,6 +313,37 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> GetRunRuntimeOptionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowRunRuntimeOptionsDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/runtime-options",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> ReplaceRunRuntimeOptionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int expectedVersion,
+        WorkflowRunRuntimeOptionsOverlayDto overlay,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowRunRuntimeOptionsDto>(
+            settings,
+            HttpMethod.Put,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/runtime-options",
+            payload: new WorkflowRunRuntimeOptionsUpdateRequestDto
+            {
+                ExpectedVersion = expectedVersion,
+                Overlay = overlay,
+            },
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<NodeRunDto>>> ListNodeRunsAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

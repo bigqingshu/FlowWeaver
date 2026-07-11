@@ -105,6 +105,18 @@ public interface IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> GetRunRuntimeOptionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> ReplaceRunRuntimeOptionsAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int expectedVersion,
+        WorkflowRunRuntimeOptionsOverlayDto overlay,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<List<NodeRunDto>>> ListNodeRunsAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

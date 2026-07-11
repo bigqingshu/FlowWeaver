@@ -1,0 +1,296 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Avalonia_UI.ViewModels"
+        x:Class="Avalonia_UI.Views.Windows.WorkflowRunRuntimeOptionsWindow"
+        x:DataType="vm:WorkflowRunRuntimeOptionsViewModel"
+        Width="900"
+        Height="760"
+        MinWidth="760"
+        MinHeight="620"
+        Background="{DynamicResource PageBackgroundBrush}"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding WindowTitleText}">
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:RuntimeFeedbackPolicyOverrideEditorViewModel"
+                      x:DataType="vm:RuntimeFeedbackPolicyOverrideEditorViewModel">
+            <StackPanel Spacing="12">
+                <Button Content="{Binding ResetText}"
+                        Command="{Binding ResetCommand}"
+                        HorizontalAlignment="Right"/>
+                <Grid ColumnDefinitions="190,*"
+                      RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                      ColumnSpacing="14"
+                      RowSpacing="9">
+                    <TextBlock Text="{Binding LogLevelText}" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding LogLevelOptions}"
+                              SelectedItem="{Binding SelectedLogLevel, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:RuntimeOptionsChoiceViewModel"
+                                          x:DataType="vm:RuntimeOptionsChoiceViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="1" Text="{Binding EventLevelText}" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="1" Grid.Column="1"
+                              ItemsSource="{Binding EventLevelOptions}"
+                              SelectedItem="{Binding SelectedEventLevel, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:RuntimeOptionsChoiceViewModel"
+                                          x:DataType="vm:RuntimeOptionsChoiceViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Grid.Row="2" Text="{Binding EventRateLimitText}" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="2" Grid.Column="1"
+                             Text="{Binding EventRateLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding InheritText}"/>
+
+                    <TextBlock Grid.Row="3" Text="{Binding ProgressEnabledText}" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Row="3" Grid.Column="1"
+                              IsThreeState="True"
+                              IsChecked="{Binding ProgressEnabled, Mode=TwoWay}"
+                              Content="{Binding ProgressEnabledOverrideText}"/>
+
+                    <TextBlock Grid.Row="4" Text="{Binding ProgressIntervalText}" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="4" Grid.Column="1"
+                             Text="{Binding ProgressIntervalDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding InheritText}"/>
+
+                    <TextBlock Grid.Row="5" Text="{Binding CaptureErrorContextText}" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Row="5" Grid.Column="1"
+                              IsThreeState="True"
+                              IsChecked="{Binding CaptureErrorContext, Mode=TwoWay}"
+                              Content="{Binding CaptureErrorContextOverrideText}"/>
+
+                    <TextBlock Grid.Row="6" Text="{Binding IncludeMetricsText}" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Row="6" Grid.Column="1"
+                              IsThreeState="True"
+                              IsChecked="{Binding IncludeMetrics, Mode=TwoWay}"
+                              Content="{Binding IncludeMetricsOverrideText}"/>
+
+                    <TextBlock Grid.Row="7" Text="{Binding PayloadByteLimitText}" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="7" Grid.Column="1"
+                             Text="{Binding PayloadByteLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Watermark="{Binding InheritText}"/>
+
+                    <TextBlock Grid.Row="8" Text="{Binding RedactColumnsText}" VerticalAlignment="Center"/>
+                    <Grid Grid.Row="8" Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <CheckBox IsChecked="{Binding OverrideRedactColumns, Mode=TwoWay}"/>
+                        <TextBox Grid.Column="1"
+                                 IsEnabled="{Binding OverrideRedactColumns}"
+                                 Text="{Binding RedactColumnsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    </Grid>
+
+                    <TextBlock Grid.Row="9" Text="{Binding MaskPolicyText}" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="9" Grid.Column="1"
+                              ItemsSource="{Binding MaskPolicyOptions}"
+                              SelectedItem="{Binding SelectedMaskPolicy, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vm:RuntimeOptionsChoiceViewModel"
+                                          x:DataType="vm:RuntimeOptionsChoiceViewModel">
+                                <TextBlock Text="{Binding DisplayText}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid Margin="18" RowDefinitions="Auto,*,Auto" RowSpacing="14">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding WindowTitleText}"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="{Binding RunIdentityText}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding VersionsText}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ApplicationTimesText}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <Border Grid.Column="1"
+                    Padding="12,8"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Background="{DynamicResource ControlBackgroundBrush}"
+                    VerticalAlignment="Center">
+                <TextBlock Text="{Binding ApplicationStatusText}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+            </Border>
+        </Grid>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="{Binding OverlayTabText}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="6,14" Spacing="20">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding WorkflowOverrideText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"/>
+                            <ContentControl Content="{Binding WorkflowEditor}"
+                                            IsEnabled="{Binding CanEdit}"/>
+                        </StackPanel>
+                        <Border Height="1" Background="{DynamicResource ControlBorderBrush}"/>
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding NodeOverrideText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"/>
+                            <ComboBox ItemsSource="{Binding Nodes}"
+                                      SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                                      PlaceholderText="{Binding SelectNodeText}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:WorkflowRunRuntimeOptionsNodeViewModel"
+                                                  x:DataType="vm:WorkflowRunRuntimeOptionsNodeViewModel">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <TextBlock Text="{Binding NodeInstanceId}"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding ApplicationStatusText}"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ContentControl Content="{Binding SelectedNode.Editor}"
+                                            IsEnabled="{Binding CanEdit}"
+                                            IsVisible="{Binding HasSelectedNode}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{Binding EffectiveTabText}">
+                <Grid Margin="6,14" ColumnDefinitions="*,*" RowDefinitions="Auto,*" ColumnSpacing="14" RowSpacing="14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding RevisionOptionsText}" FontWeight="SemiBold"/>
+                        <TextBox Text="{Binding SavedRuntimeOptionsJson}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 FontFamily="Consolas"
+                                 MinHeight="190"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock Text="{Binding CurrentOverlayText}" FontWeight="SemiBold"/>
+                        <TextBox Text="{Binding OverlayJson}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 FontFamily="Consolas"
+                                 MinHeight="190"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="10">
+                        <TextBlock Text="{Binding EffectiveWorkflowText}" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding EffectiveWorkflowSummaryText}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="{Binding EffectiveNodeText}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <ComboBox ItemsSource="{Binding Nodes}"
+                                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkflowRunRuntimeOptionsNodeViewModel"
+                                              x:DataType="vm:WorkflowRunRuntimeOptionsNodeViewModel">
+                                    <TextBlock Text="{Binding NodeInstanceId}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="{Binding SelectedNode.EffectiveSummaryText}"
+                                   IsVisible="{Binding HasSelectedNode}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="{Binding ActiveTasksTabText}">
+                <ScrollViewer Margin="6,14" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding NoActiveTasksText}"
+                                   IsVisible="{Binding !HasActiveTasks}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <ItemsControl ItemsSource="{Binding ActiveTasks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:WorkflowRunRuntimeOptionsTaskViewModel"
+                                              x:DataType="vm:WorkflowRunRuntimeOptionsTaskViewModel">
+                                    <Border Margin="0,0,0,8"
+                                            Padding="12"
+                                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6">
+                                        <Grid ColumnDefinitions="1.2*,1.5*,Auto,Auto" ColumnSpacing="14">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding NodeInstanceId}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding NodeRunId}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding TaskId}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding NodeRunStatus}"
+                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="3" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding RuntimeOptionsVersion}" HorizontalAlignment="Right"/>
+                                                <TextBlock Text="{Binding ApplicationStatusText}"
+                                                           FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="{Binding RefreshText}" Command="{Binding RefreshCommand}"/>
+                <ProgressBar IsIndeterminate="True"
+                             Width="90"
+                             IsVisible="{Binding IsBusy}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="{Binding StatusMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+                <TextBlock Text="{Binding ReadOnlyText}"
+                           IsVisible="{Binding IsReadOnly}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Content="{Binding ClearText}"
+                        Command="{Binding ClearCommand}"
+                        IsVisible="{Binding ShowEditActions}"/>
+                <Button Content="{Binding SaveText}"
+                        Command="{Binding SaveCommand}"
+                        Classes="Primary"
+                        IsVisible="{Binding ShowEditActions}"/>
+                <Button Content="{Binding CloseText}" Click="CloseWindow"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -441,6 +441,30 @@ public sealed class MainWindowViewModelLogTests
                     "No run response configured."));
         }
 
+        public Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> GetRunRuntimeOptionsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No run runtime options response configured."));
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> ReplaceRunRuntimeOptionsAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            int expectedVersion,
+            WorkflowRunRuntimeOptionsOverlayDto overlay,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>.Failure(
+                    "NOT_CONFIGURED",
+                    "No run runtime options response configured."));
+        }
+
         public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsAsync(
             EngineHostConnectionSettings settings,
             string workflowRunId,

@@ -5,10 +5,16 @@
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
-            <TextBlock Text="{Binding RunsSectionText}"
-                       FontSize="16"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding RunsSectionText}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="{Binding CurrentRunRuntimeOptionsOpenText}"
+                        IsEnabled="{Binding CanOpenSelectedRunRuntimeOptions}"
+                        Click="OpenRunRuntimeOptionsWindow"/>
+            </Grid>
             <TextBlock Grid.Row="1" Text="{Binding RunMessage}" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
             <Border Grid.Row="2"
                     Padding="8"

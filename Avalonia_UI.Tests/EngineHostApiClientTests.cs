@@ -489,6 +489,93 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetRunRuntimeOptionsAsyncParsesVersionsAndActiveTasks()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"ok":true,"data":{"workflow_run_id":"run-1","saved_runtime_options":{"workflow":{"telemetry":{"log_level":"INFO"}}},"overlay":{"workflow":{"telemetry":{"log_level":"WARN"}},"node_overrides":{}},"effective_summary":{"workflow":{"telemetry":{"log_level":"WARN","event_level":"basic","event_rate_limit_per_second":10,"progress_enabled":false,"progress_interval_seconds":5},"diagnostics":{"capture_error_context":true,"include_metrics":false,"payload_byte_limit":65536,"redact_columns":[],"mask_policy":"partial"}},"nodes":{"source":{"telemetry":{"log_level":"WARN","event_level":"basic","event_rate_limit_per_second":10,"progress_enabled":false,"progress_interval_seconds":5},"diagnostics":{"capture_error_context":true,"include_metrics":false,"payload_byte_limit":65536,"redact_columns":[],"mask_policy":"partial"}}}},"requested_version":2,"applied_version":1,"requested_at":"2026-07-11T01:02:03Z","applied_at":"2026-07-11T01:02:02Z","active_task_versions":[{"task_id":"task-1","node_run_id":"node-run-1","node_instance_id":"source","node_run_status":"RUNNING","runtime_options_version":1}]},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetRunRuntimeOptionsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/runtime-options"),
+            handler.RequestUri);
+        Assert.AreEqual(2, result.Data?.RequestedVersion);
+        Assert.AreEqual(1, result.Data?.AppliedVersion);
+        Assert.AreEqual("WARN", result.Data?.EffectiveSummary.Workflow.Telemetry.LogLevel);
+        Assert.AreEqual("source", result.Data?.ActiveTaskVersions[0].NodeInstanceId);
+        Assert.AreEqual(1, result.Data?.ActiveTaskVersions[0].RuntimeOptionsVersion);
+    }
+
+    [TestMethod]
+    public async Task ReplaceRunRuntimeOptionsAsyncPutsExpectedVersionAndOverlay()
+    {
+        string? body = null;
+        var handler = new StubHandler(request =>
+        {
+            body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"ok":true,"data":{"workflow_run_id":"run-1","saved_runtime_options":{},"overlay":{"workflow":{"telemetry":{"log_level":"WARN","progress_enabled":false}},"node_overrides":{"source":{"telemetry":{"log_level":"DEBUG"}}}},"effective_summary":{"workflow":{"telemetry":{"log_level":"WARN","event_level":"basic","event_rate_limit_per_second":10,"progress_enabled":false,"progress_interval_seconds":5},"diagnostics":{"capture_error_context":true,"include_metrics":false,"payload_byte_limit":65536,"redact_columns":[],"mask_policy":"partial"}},"nodes":{}},"requested_version":3,"applied_version":2,"requested_at":null,"applied_at":null,"active_task_versions":[]},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ReplaceRunRuntimeOptionsAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1",
+            2,
+            new WorkflowRunRuntimeOptionsOverlayDto
+            {
+                Workflow = new RuntimeFeedbackPolicyOverrideDto
+                {
+                    Telemetry = new RuntimeFeedbackTelemetryOverrideDto
+                    {
+                        LogLevel = "WARN",
+                        ProgressEnabled = false,
+                    },
+                },
+                NodeOverrides = new()
+                {
+                    ["source"] = new RuntimeFeedbackPolicyOverrideDto
+                    {
+                        Telemetry = new RuntimeFeedbackTelemetryOverrideDto
+                        {
+                            LogLevel = "DEBUG",
+                        },
+                    },
+                },
+            });
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Put, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/runtime-options"),
+            handler.RequestUri);
+        Assert.IsNotNull(body);
+        using var payload = JsonDocument.Parse(body!);
+        Assert.AreEqual(2, payload.RootElement.GetProperty("expected_version").GetInt32());
+        var overlay = payload.RootElement.GetProperty("overlay");
+        Assert.AreEqual(
+            "WARN",
+            overlay.GetProperty("workflow").GetProperty("telemetry").GetProperty("log_level").GetString());
+        Assert.IsFalse(
+            overlay.GetProperty("workflow").GetProperty("telemetry").GetProperty("progress_enabled").GetBoolean());
+        Assert.AreEqual(
+            "DEBUG",
+            overlay.GetProperty("node_overrides").GetProperty("source").GetProperty("telemetry").GetProperty("log_level").GetString());
+        Assert.AreEqual(3, result.Data?.RequestedVersion);
+    }
+
+    [TestMethod]
     public async Task RetryWorkflowRunAsyncPostsTriggerSource()
     {
         string? body = null;

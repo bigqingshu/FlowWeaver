@@ -32,6 +32,7 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(RuntimeOptionsSelectNodeText));
         OnPropertyChanged(nameof(RuntimeOptionsApplyText));
         OnPropertyChanged(nameof(RuntimeOptionsResetNodeOverrideText));
+        OnPropertyChanged(nameof(CurrentRunRuntimeOptionsOpenText));
         NotifyRuntimeOptionsSummaryChanged();
         OnPropertyChanged(nameof(SelectedRunRuntimeOptionsSummaryText));
     }

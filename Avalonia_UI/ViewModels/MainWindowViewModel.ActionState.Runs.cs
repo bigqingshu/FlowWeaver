@@ -6,6 +6,7 @@ public partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(CanUseCancelSelectedRunAction));
         OnPropertyChanged(nameof(CancelSelectedRunDisabledReasonText));
+        OnPropertyChanged(nameof(CanOpenSelectedRunRuntimeOptions));
     }
 
     private void NotifyRunMonitorActionStateChanged()

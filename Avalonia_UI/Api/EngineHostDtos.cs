@@ -296,6 +296,184 @@ public sealed record WorkflowRunDto
     public JsonElement? Error { get; init; }
 }
 
+public sealed record RuntimeFeedbackTelemetryOverrideDto
+{
+    [JsonPropertyName("log_level")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LogLevel { get; init; }
+
+    [JsonPropertyName("event_level")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EventLevel { get; init; }
+
+    [JsonPropertyName("event_rate_limit_per_second")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? EventRateLimitPerSecond { get; init; }
+
+    [JsonPropertyName("progress_enabled")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ProgressEnabled { get; init; }
+
+    [JsonPropertyName("progress_interval_seconds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ProgressIntervalSeconds { get; init; }
+}
+
+public sealed record RuntimeFeedbackDiagnosticsOverrideDto
+{
+    [JsonPropertyName("capture_error_context")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CaptureErrorContext { get; init; }
+
+    [JsonPropertyName("include_metrics")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IncludeMetrics { get; init; }
+
+    [JsonPropertyName("payload_byte_limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PayloadByteLimit { get; init; }
+
+    [JsonPropertyName("redact_columns")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? RedactColumns { get; init; }
+
+    [JsonPropertyName("mask_policy")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MaskPolicy { get; init; }
+}
+
+public sealed record RuntimeFeedbackPolicyOverrideDto
+{
+    [JsonPropertyName("telemetry")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeFeedbackTelemetryOverrideDto? Telemetry { get; init; }
+
+    [JsonPropertyName("diagnostics")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeFeedbackDiagnosticsOverrideDto? Diagnostics { get; init; }
+}
+
+public sealed record WorkflowRunRuntimeOptionsOverlayDto
+{
+    [JsonPropertyName("workflow")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeFeedbackPolicyOverrideDto? Workflow { get; init; }
+
+    [JsonPropertyName("node_overrides")]
+    public Dictionary<string, RuntimeFeedbackPolicyOverrideDto> NodeOverrides { get; init; } = new();
+}
+
+public sealed record ResolvedRuntimeFeedbackTelemetryDto
+{
+    [JsonPropertyName("log_level")]
+    public string LogLevel { get; init; } = string.Empty;
+
+    [JsonPropertyName("event_level")]
+    public string EventLevel { get; init; } = string.Empty;
+
+    [JsonPropertyName("event_rate_limit_per_second")]
+    public int EventRateLimitPerSecond { get; init; }
+
+    [JsonPropertyName("progress_enabled")]
+    public bool ProgressEnabled { get; init; }
+
+    [JsonPropertyName("progress_interval_seconds")]
+    public double ProgressIntervalSeconds { get; init; }
+}
+
+public sealed record ResolvedRuntimeFeedbackDiagnosticsDto
+{
+    [JsonPropertyName("capture_error_context")]
+    public bool CaptureErrorContext { get; init; }
+
+    [JsonPropertyName("include_metrics")]
+    public bool IncludeMetrics { get; init; }
+
+    [JsonPropertyName("payload_byte_limit")]
+    public int PayloadByteLimit { get; init; }
+
+    [JsonPropertyName("redact_columns")]
+    public List<string> RedactColumns { get; init; } = new();
+
+    [JsonPropertyName("mask_policy")]
+    public string MaskPolicy { get; init; } = string.Empty;
+}
+
+public sealed record ResolvedRuntimeFeedbackPolicyDto
+{
+    [JsonPropertyName("telemetry")]
+    public ResolvedRuntimeFeedbackTelemetryDto Telemetry { get; init; } = new();
+
+    [JsonPropertyName("diagnostics")]
+    public ResolvedRuntimeFeedbackDiagnosticsDto Diagnostics { get; init; } = new();
+}
+
+public sealed record WorkflowRunRuntimeOptionsEffectiveSummaryDto
+{
+    [JsonPropertyName("workflow")]
+    public ResolvedRuntimeFeedbackPolicyDto Workflow { get; init; } = new();
+
+    [JsonPropertyName("nodes")]
+    public Dictionary<string, ResolvedRuntimeFeedbackPolicyDto> Nodes { get; init; } = new();
+}
+
+public sealed record ActiveNodeTaskRuntimeOptionsVersionDto
+{
+    [JsonPropertyName("task_id")]
+    public string TaskId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_run_id")]
+    public string NodeRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_instance_id")]
+    public string NodeInstanceId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_run_status")]
+    public string NodeRunStatus { get; init; } = string.Empty;
+
+    [JsonPropertyName("runtime_options_version")]
+    public int RuntimeOptionsVersion { get; init; }
+}
+
+public sealed record WorkflowRunRuntimeOptionsDto
+{
+    [JsonPropertyName("workflow_run_id")]
+    public string WorkflowRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("saved_runtime_options")]
+    public JsonElement SavedRuntimeOptions { get; init; }
+
+    [JsonPropertyName("overlay")]
+    public WorkflowRunRuntimeOptionsOverlayDto Overlay { get; init; } = new();
+
+    [JsonPropertyName("effective_summary")]
+    public WorkflowRunRuntimeOptionsEffectiveSummaryDto EffectiveSummary { get; init; } = new();
+
+    [JsonPropertyName("requested_version")]
+    public int RequestedVersion { get; init; }
+
+    [JsonPropertyName("applied_version")]
+    public int AppliedVersion { get; init; }
+
+    [JsonPropertyName("requested_at")]
+    public DateTimeOffset? RequestedAt { get; init; }
+
+    [JsonPropertyName("applied_at")]
+    public DateTimeOffset? AppliedAt { get; init; }
+
+    [JsonPropertyName("active_task_versions")]
+    public List<ActiveNodeTaskRuntimeOptionsVersionDto> ActiveTaskVersions { get; init; } = new();
+}
+
+public sealed record WorkflowRunRuntimeOptionsUpdateRequestDto
+{
+    [JsonPropertyName("expected_version")]
+    public int ExpectedVersion { get; init; }
+
+    [JsonPropertyName("overlay")]
+    public WorkflowRunRuntimeOptionsOverlayDto Overlay { get; init; } = new();
+}
+
 public sealed record WorkflowProcessDto
 {
     [JsonPropertyName("process_id")]
