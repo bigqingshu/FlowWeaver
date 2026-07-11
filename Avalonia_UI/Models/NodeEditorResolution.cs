@@ -6,7 +6,8 @@ public sealed record NodeEditorResolution(
     string DisplayName,
     bool HasRegisteredEditor,
     bool UsesJsonFallback,
-    string StatusKey)
+    string StatusKey,
+    NodeEditorKey EditorKey)
 {
     public const string BuiltInStatusKey = "node_editor.status.builtin";
 
@@ -28,7 +29,8 @@ public sealed record NodeEditorResolution(
             true,
             hasRegisteredEditor
                 ? JsonFallbackStatusKey
-                : UnregisteredJsonFallbackStatusKey);
+                : UnregisteredJsonFallbackStatusKey,
+            NodeEditorKey.None);
     }
 
     public static NodeEditorResolution BuiltIn(NodeEditorDescriptor descriptor)
@@ -39,6 +41,7 @@ public sealed record NodeEditorResolution(
             descriptor.DisplayName,
             true,
             false,
-            BuiltInStatusKey);
+            BuiltInStatusKey,
+            descriptor.EditorKey);
     }
 }

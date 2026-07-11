@@ -3970,7 +3970,22 @@ public sealed class MainWindowViewModelWorkflowTests
                   }
                 }
               ],
-              "connections": []
+              "connections": [
+                {
+                  "connection_id": "publish-input-1",
+                  "source_node_id": "source-a",
+                  "source_port": "out",
+                  "target_node_id": "publish",
+                  "target_port": "in-a"
+                },
+                {
+                  "connection_id": "publish-input-2",
+                  "source_node_id": "source-b",
+                  "source_port": "out",
+                  "target_node_id": "publish",
+                  "target_port": "in-b"
+                }
+              ]
             }
             """;
         var apiClient = new FakeApiClient
@@ -4015,6 +4030,7 @@ public sealed class MainWindowViewModelWorkflowTests
                                   "required": true,
                                   "enum": ["LATEST", "EXACT_VERSION"]
                                 },
+                                "exact_version": {"type": "integer"},
                                 "selected_members": {
                                   "type": "array",
                                   "items": {"type": "string"}
@@ -4032,26 +4048,26 @@ public sealed class MainWindowViewModelWorkflowTests
 
         viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
             .Single(node => node.NodeInstanceId == "publish");
-        var exportNames = viewModel.SelectedNodeConfigEditableInputFields
-            .Single(field => field.Name == "export_names");
-        exportNames.StringArrayItems[0].MoveDownCommand.Execute(null);
-        exportNames.AddStringArrayItemCommand.Execute(null);
-        exportNames.StringArrayItems[2].Value = "invoices";
+        var publishEditor = viewModel.SelectedNodeSpecializedEditor
+            as PublishSharedTablesNodeEditorViewModel;
+        Assert.IsNotNull(publishEditor);
+        publishEditor.InputMappings[0].ExportName = "customers";
+        publishEditor.InputMappings[1].ExportName = "orders";
         viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
 
         viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
             .Single(node => node.NodeInstanceId == "read");
-        var selectedMembers = viewModel.SelectedNodeConfigEditableInputFields
-            .Single(field => field.Name == "selected_members");
-        selectedMembers.StringArrayItems[0].RemoveCommand.Execute(null);
-        selectedMembers.StringArrayItems[0].RemoveCommand.Execute(null);
+        var readEditor = viewModel.SelectedNodeSpecializedEditor
+            as ReadSharedTablesNodeEditorViewModel;
+        Assert.IsNotNull(readEditor);
+        readEditor.ClearSelectedMembersCommand.Execute(null);
         viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
 
         using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
         var nodes = document.RootElement.GetProperty("nodes");
         var publishConfig = nodes[0].GetProperty("config");
         CollectionAssert.AreEqual(
-            new[] { "customers", "orders", "invoices" },
+            new[] { "customers", "orders" },
             publishConfig
                 .GetProperty("export_names")
                 .EnumerateArray()
@@ -4062,17 +4078,15 @@ public sealed class MainWindowViewModelWorkflowTests
                 .GetProperty("plugin_extension")
                 .GetProperty("preserve")
                 .GetBoolean());
-        Assert.AreEqual(
-            0,
+        Assert.IsFalse(
             nodes[1]
                 .GetProperty("config")
-                .GetProperty("selected_members")
-                .GetArrayLength());
+                .TryGetProperty("selected_members", out _));
 
         viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
             .Single(node => node.NodeInstanceId == "publish");
         CollectionAssert.AreEqual(
-            new[] { "customers", "orders", "invoices" },
+            new[] { "customers", "orders" },
             viewModel.SelectedNodeConfigEditableInputFields
                 .Single(field => field.Name == "export_names")
                 .StringArrayItems

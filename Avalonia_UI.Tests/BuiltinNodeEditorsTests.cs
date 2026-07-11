@@ -8,9 +8,22 @@ namespace Avalonia_UI.Tests;
 public sealed class BuiltinNodeEditorsTests
 {
     [TestMethod]
-    public void AllIsEmptyUntilDedicatedEditorsExist()
+    public void AllRegistersSharedTableDedicatedEditors()
     {
-        Assert.IsEmpty(BuiltinNodeEditors.All);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "PublishSharedTablesNode",
+                "ReadSharedTablesNode",
+            },
+            BuiltinNodeEditors.All.Select(editor => editor.NodeType).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                NodeEditorKey.PublishSharedTables,
+                NodeEditorKey.ReadSharedTables,
+            },
+            BuiltinNodeEditors.All.Select(editor => editor.EditorKey).ToArray());
     }
 
     [TestMethod]
@@ -30,6 +43,6 @@ public sealed class BuiltinNodeEditorsTests
             Assert.AreEqual(editor, registry.Find(editor.NodeType));
         }
 
-        Assert.IsEmpty(registry.ListEditors());
+        Assert.HasCount(2, registry.ListEditors());
     }
 }

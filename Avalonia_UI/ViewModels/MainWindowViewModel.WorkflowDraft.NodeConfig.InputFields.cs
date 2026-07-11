@@ -22,6 +22,7 @@ public partial class MainWindowViewModel
         }
 
         OnPropertyChanged(nameof(HasSelectedNodeConfigEditableInputFields));
+        OnPropertyChanged(nameof(ShowsGenericSelectedNodeConfigEditor));
         ApplySelectedNodeConfigDraftCommand.NotifyCanExecuteChanged();
     }
 }

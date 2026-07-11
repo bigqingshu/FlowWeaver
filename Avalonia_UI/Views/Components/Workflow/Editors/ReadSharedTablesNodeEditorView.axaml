@@ -1,0 +1,161 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.Editors.ReadSharedTablesNodeEditorView"
+             x:DataType="vm:ReadSharedTablesNodeEditorViewModel">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="140,*,Auto" ColumnSpacing="8">
+            <TextBlock Text="{Binding ShareSearchTextLabel}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding ShareSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Grid.Column="2"
+                    Content="{Binding SearchText}"
+                    Command="{Binding RefreshSharesCommand}"
+                    MinWidth="72"/>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="140,*,Auto" ColumnSpacing="8">
+            <TextBlock Text="{Binding ShareNameText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <StackPanel Grid.Column="1" Spacing="6">
+                <TextBox Text="{Binding ShareName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                <ComboBox ItemsSource="{Binding ShareOptions}"
+                          SelectedItem="{Binding SelectedShareOption}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="vm:SharedPublicationShareOptionViewModel"
+                                      x:DataType="vm:SharedPublicationShareOptionViewModel">
+                            <TextBlock Text="{Binding DisplayText}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding DisplayText}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            <Button Grid.Column="2"
+                    Content="&#x2026;"
+                    Command="{Binding LoadMoreSharesCommand}"
+                    ToolTip.Tip="{Binding LoadMoreText}"
+                    VerticalAlignment="Bottom"
+                    Width="32"
+                    Height="32"
+                    Padding="0"/>
+        </Grid>
+
+        <Grid Grid.Row="2" RowDefinitions="Auto,Auto" RowSpacing="6">
+            <Grid ColumnDefinitions="140,Auto,Auto,*" ColumnSpacing="6">
+                <TextBlock Text="{Binding VersionPolicyText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <ToggleButton Grid.Column="1"
+                              Content="{Binding LatestText}"
+                              IsChecked="{Binding IsLatestVersionPolicy}"
+                              Command="{Binding UseLatestVersionCommand}"
+                              MinWidth="96"/>
+                <ToggleButton Grid.Column="2"
+                              Content="{Binding ExactVersionTextLabel}"
+                              IsChecked="{Binding IsExactVersionPolicy}"
+                              Command="{Binding UseExactVersionCommand}"
+                              MinWidth="96"/>
+                <Button Grid.Column="3"
+                        Content="{Binding RefreshText}"
+                        Command="{Binding RefreshVersionsCommand}"
+                        HorizontalAlignment="Right"
+                        MinWidth="72"/>
+            </Grid>
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="140,100,*,Auto"
+                  ColumnSpacing="8"
+                  IsVisible="{Binding IsExactVersionPolicy}">
+                <TextBlock Text="{Binding ExactVersionTextLabel}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding ExactVersionText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                <ComboBox Grid.Column="2"
+                          ItemsSource="{Binding VersionOptions}"
+                          SelectedItem="{Binding SelectedVersionOption}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="vm:SharedPublicationVersionOptionViewModel"
+                                      x:DataType="vm:SharedPublicationVersionOptionViewModel">
+                            <TextBlock Text="{Binding DisplayText}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="3"
+                        Content="&#x2026;"
+                        Command="{Binding LoadMoreVersionsCommand}"
+                        ToolTip.Tip="{Binding LoadMoreText}"
+                        Width="32"
+                        Padding="0"/>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="3" RowDefinitions="Auto,Auto" RowSpacing="6">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                <TextBlock Text="{Binding MembersText}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <Button Grid.Column="1"
+                        Content="&#x2715;"
+                        Command="{Binding ClearSelectedMembersCommand}"
+                        ToolTip.Tip="{Binding ClearMembersText}"
+                        Width="28"
+                        Height="28"
+                        Padding="0"/>
+                <Button Grid.Column="2"
+                        Content="&#x2026;"
+                        Command="{Binding LoadMoreMembersCommand}"
+                        ToolTip.Tip="{Binding LoadMoreText}"
+                        Width="28"
+                        Height="28"
+                        Padding="0"/>
+            </Grid>
+            <Border Grid.Row="1"
+                    MinHeight="90"
+                    MaxHeight="210"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding MemberOptions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:SharedPublicationMemberOptionViewModel"
+                                          x:DataType="vm:SharedPublicationMemberOptionViewModel">
+                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                      ColumnSpacing="8"
+                                      Margin="8,4">
+                                    <CheckBox IsChecked="{Binding IsSelected}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ExportName}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding ExportName}"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding VersionText}"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="4" Spacing="4">
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsLoadingShares}"/>
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsLoadingVersions}"/>
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsLoadingMembers}"/>
+            <TextBlock Text="{Binding ErrorMessage}"
+                       IsVisible="{Binding HasError}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextErrorBrush}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

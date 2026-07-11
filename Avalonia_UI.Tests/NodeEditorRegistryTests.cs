@@ -9,7 +9,7 @@ namespace Avalonia_UI.Tests;
 public sealed class NodeEditorRegistryTests
 {
     [TestMethod]
-    public void DescriptorAllowsJsonFallbackWithoutViewType()
+    public void DescriptorAllowsJsonFallbackWithoutEditorKey()
     {
         var descriptor = new NodeEditorDescriptor(
             "GenerateTestTableNode",
@@ -19,12 +19,12 @@ public sealed class NodeEditorRegistryTests
         Assert.AreEqual("GenerateTestTableNode", descriptor.NodeType);
         Assert.AreEqual("Generate Test Table", descriptor.DisplayName);
         Assert.AreEqual(NodeEditorKind.JsonFallback, descriptor.Kind);
-        Assert.IsNull(descriptor.ViewTypeName);
+        Assert.AreEqual(NodeEditorKey.None, descriptor.EditorKey);
         Assert.IsTrue(descriptor.SupportsFallbackToJson);
     }
 
     [TestMethod]
-    public void DescriptorRequiresBuiltInViewType()
+    public void DescriptorRequiresBuiltInEditorKey()
     {
         var exception = Assert.ThrowsExactly<ArgumentException>(
             () => new NodeEditorDescriptor(
@@ -32,7 +32,20 @@ public sealed class NodeEditorRegistryTests
                 "Filter Rows",
                 NodeEditorKind.BuiltIn));
 
-        Assert.AreEqual("viewTypeName", exception.ParamName);
+        Assert.AreEqual("editorKey", exception.ParamName);
+    }
+
+    [TestMethod]
+    public void DescriptorRejectsBuiltInKeyForJsonFallback()
+    {
+        var exception = Assert.ThrowsExactly<ArgumentException>(
+            () => new NodeEditorDescriptor(
+                "ReadSharedTablesNode",
+                "Read Shared Tables",
+                NodeEditorKind.JsonFallback,
+                NodeEditorKey.ReadSharedTables));
+
+        Assert.AreEqual("editorKey", exception.ParamName);
     }
 
     [TestMethod]

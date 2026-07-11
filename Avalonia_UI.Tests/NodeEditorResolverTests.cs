@@ -23,6 +23,7 @@ public sealed class NodeEditorResolverTests
         Assert.AreEqual(
             NodeEditorResolution.JsonFallbackStatusKey,
             resolution.StatusKey);
+        Assert.AreEqual(NodeEditorKey.None, resolution.EditorKey);
     }
 
     [TestMethod]
@@ -74,21 +75,22 @@ public sealed class NodeEditorResolverTests
     {
         var registry = new NodeEditorRegistry();
         registry.Register(new NodeEditorDescriptor(
-            "SpecialNode",
-            "Special Node",
+            "PublishSharedTablesNode",
+            "Publish Shared Tables",
             NodeEditorKind.BuiltIn,
-            viewTypeName: "Avalonia_UI.Views.Components.Workflow.SpecialNodeEditorView"));
+            NodeEditorKey.PublishSharedTables));
         var resolver = new NodeEditorResolver(registry);
 
-        var resolution = resolver.Resolve("SpecialNode");
+        var resolution = resolver.Resolve("PublishSharedTablesNode");
 
-        Assert.AreEqual("SpecialNode", resolution.NodeType);
-        Assert.AreEqual("Special Node", resolution.DisplayName);
+        Assert.AreEqual("PublishSharedTablesNode", resolution.NodeType);
+        Assert.AreEqual("Publish Shared Tables", resolution.DisplayName);
         Assert.AreEqual(NodeEditorKind.BuiltIn, resolution.Kind);
         Assert.IsTrue(resolution.HasRegisteredEditor);
         Assert.IsFalse(resolution.UsesJsonFallback);
         Assert.AreEqual(
             NodeEditorResolution.BuiltInStatusKey,
             resolution.StatusKey);
+        Assert.AreEqual(NodeEditorKey.PublishSharedTables, resolution.EditorKey);
     }
 }

@@ -7,6 +7,7 @@ public partial class MainWindowViewModel
 {
     private void ApplySelectedNodeConfigDraftMissingSelectionState()
     {
+        ReplaceSelectedNodeSpecializedEditor(null);
         SelectedNodeConfigDraft = null;
         SelectedNodeConfigEditableDraft = null;
         RebuildSelectedNodeConfigEditableInputFields(null);
@@ -17,6 +18,7 @@ public partial class MainWindowViewModel
 
     private void ApplySelectedNodeConfigDraftSchemaUnavailableState()
     {
+        ReplaceSelectedNodeSpecializedEditor(null);
         SelectedNodeConfigEditableDraft = null;
         RebuildSelectedNodeConfigEditableInputFields(null);
         SelectedNodeConfigEditableDraftMessage =
@@ -30,6 +32,7 @@ public partial class MainWindowViewModel
     {
         SelectedNodeConfigEditableDraft = editableDraft;
         RebuildSelectedNodeConfigEditableInputFields(editableDraft);
+        RebuildSelectedNodeSpecializedEditor();
         SelectedNodeConfigEditableDraftMessage =
             DisplayTextFormatter.FormatSelectedNodeConfigDraftReady(
                 SelectedWorkflowDefinitionNode!.NodeInstanceId,

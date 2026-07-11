@@ -199,7 +199,16 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(
             xaml,
-            "IsVisible=\"{Binding HasSelectedNodeConfigEditableInputFields}\"");
+            "IsVisible=\"{Binding ShowsGenericSelectedNodeConfigEditor}\"");
+        StringAssert.Contains(
+            xaml,
+            "Content=\"{Binding SelectedNodeSpecializedEditor}\"");
+        StringAssert.Contains(
+            xaml,
+            "x:DataType=\"vm:PublishSharedTablesNodeEditorViewModel\"");
+        StringAssert.Contains(
+            xaml,
+            "x:DataType=\"vm:ReadSharedTablesNodeEditorViewModel\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DisplayLabel}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding TypeText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding RequiredText}\"");
@@ -217,6 +226,46 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "Text=\"{Binding DisplayText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WarningText}\"");
         Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void SharedTableNodeEditorsUseTypedTemplatesAndPagedControls()
+    {
+        var hostXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowSelectedNodeConfigView.axaml");
+        var publishXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "Editors",
+            "PublishSharedTablesNodeEditorView.axaml");
+        var readXaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "Editors",
+            "ReadSharedTablesNodeEditorView.axaml");
+
+        StringAssert.Contains(
+            hostXaml,
+            "DataType=\"vm:PublishSharedTablesNodeEditorViewModel\"");
+        StringAssert.Contains(
+            hostXaml,
+            "DataType=\"vm:ReadSharedTablesNodeEditorViewModel\"");
+        Assert.IsFalse(hostXaml.Contains("ViewTypeName", StringComparison.Ordinal));
+        StringAssert.Contains(publishXaml, "ItemsSource=\"{Binding InputMappings}\"");
+        StringAssert.Contains(readXaml, "Command=\"{Binding RefreshSharesCommand}\"");
+        StringAssert.Contains(readXaml, "Command=\"{Binding LoadMoreSharesCommand}\"");
+        StringAssert.Contains(readXaml, "Command=\"{Binding LoadMoreVersionsCommand}\"");
+        StringAssert.Contains(readXaml, "Command=\"{Binding LoadMoreMembersCommand}\"");
+        StringAssert.Contains(readXaml, "ItemsSource=\"{Binding MemberOptions}\"");
+        StringAssert.Contains(readXaml, "MaxHeight=\"210\"");
     }
 
     [TestMethod]

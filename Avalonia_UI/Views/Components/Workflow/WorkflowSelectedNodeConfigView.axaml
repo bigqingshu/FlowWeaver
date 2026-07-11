@@ -1,10 +1,21 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:editors="using:Avalonia_UI.Views.Components.Workflow.Editors"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSelectedNodeConfigView"
              x:DataType="vm:MainWindowViewModel">
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:PublishSharedTablesNodeEditorViewModel"
+                      x:DataType="vm:PublishSharedTablesNodeEditorViewModel">
+            <editors:PublishSharedTablesNodeEditorView/>
+        </DataTemplate>
+        <DataTemplate DataType="vm:ReadSharedTablesNodeEditorViewModel"
+                      x:DataType="vm:ReadSharedTablesNodeEditorViewModel">
+            <editors:ReadSharedTablesNodeEditorView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
     <Border Classes="Card" Padding="14">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding NodeConfigSectionText}"
                            FontSize="16"
@@ -78,9 +89,13 @@
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextSecondaryBrush}"/>
 
-            <ItemsControl Grid.Row="3"
+            <ContentControl Grid.Row="3"
+                            Content="{Binding SelectedNodeSpecializedEditor}"
+                            IsVisible="{Binding HasSelectedNodeSpecializedEditor}"/>
+
+            <ItemsControl Grid.Row="4"
                           ItemsSource="{Binding SelectedNodeConfigEditableInputFields}"
-                          IsVisible="{Binding HasSelectedNodeConfigEditableInputFields}">
+                          IsVisible="{Binding ShowsGenericSelectedNodeConfigEditor}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vm:NodeConfigEditableFieldInputViewModel"
                                   x:DataType="vm:NodeConfigEditableFieldInputViewModel">

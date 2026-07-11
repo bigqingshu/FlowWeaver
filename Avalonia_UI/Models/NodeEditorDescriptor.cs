@@ -8,7 +8,7 @@ public sealed record NodeEditorDescriptor
         string nodeType,
         string displayName,
         NodeEditorKind kind,
-        string? viewTypeName = null,
+        NodeEditorKey editorKey = NodeEditorKey.None,
         bool supportsFallbackToJson = true)
     {
         if (string.IsNullOrWhiteSpace(nodeType))
@@ -21,15 +21,24 @@ public sealed record NodeEditorDescriptor
             throw new ArgumentException("Display name must not be empty.", nameof(displayName));
         }
 
-        if (kind == NodeEditorKind.BuiltIn && string.IsNullOrWhiteSpace(viewTypeName))
+        if (kind == NodeEditorKind.BuiltIn && editorKey == NodeEditorKey.None)
         {
-            throw new ArgumentException("Built-in node editors must declare a view type.", nameof(viewTypeName));
+            throw new ArgumentException(
+                "Built-in node editors must declare an editor key.",
+                nameof(editorKey));
+        }
+
+        if (kind == NodeEditorKind.JsonFallback && editorKey != NodeEditorKey.None)
+        {
+            throw new ArgumentException(
+                "JSON fallback editors cannot declare a built-in editor key.",
+                nameof(editorKey));
         }
 
         NodeType = nodeType;
         DisplayName = displayName;
         Kind = kind;
-        ViewTypeName = viewTypeName;
+        EditorKey = editorKey;
         SupportsFallbackToJson = supportsFallbackToJson;
     }
 
@@ -39,7 +48,7 @@ public sealed record NodeEditorDescriptor
 
     public NodeEditorKind Kind { get; }
 
-    public string? ViewTypeName { get; }
+    public NodeEditorKey EditorKey { get; }
 
     public bool SupportsFallbackToJson { get; }
 }

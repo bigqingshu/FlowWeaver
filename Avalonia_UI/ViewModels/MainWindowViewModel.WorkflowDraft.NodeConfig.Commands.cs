@@ -16,6 +16,15 @@ public partial class MainWindowViewModel
             return;
         }
 
+        if (SelectedNodeSpecializedEditor is not null
+            && !SelectedNodeSpecializedEditor.TryPrepareApply(
+                out var specializedErrorMessage))
+        {
+            ApplySelectedNodeConfigDraftSpecializedValidationFailure(
+                specializedErrorMessage);
+            return;
+        }
+
         var configResult = NodeConfigEditableFieldInputConfigBuilder.Build(
             SelectedWorkflowDefinitionNode.NodeInstanceId,
             SelectedNodeConfigEditableInputFields);

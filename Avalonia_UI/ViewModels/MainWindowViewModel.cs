@@ -15,6 +15,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IWorkflowImportFileService _workflowImportFileService;
     private readonly IWorkflowExportFileService _workflowExportFileService;
     private readonly ILocalizationService _localizationService;
+    private readonly ISharedPublicationCatalogService _sharedPublicationCatalogService;
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
     private readonly CancellationTokenSource _shutdown = new();
@@ -73,6 +74,9 @@ public partial class MainWindowViewModel : ViewModelBase
         _workflowExportFileService =
             workflowExportFileService ?? new AvaloniaWorkflowExportFileService();
         _localizationService = localizationService ?? new JsonLocalizationService();
+        _sharedPublicationCatalogService = new SharedPublicationCatalogService(
+            apiClient,
+            BuildSettings);
 
         InitializeWorkflowLoopRegions();
         InitializeWorkflowNodeTableBindings();

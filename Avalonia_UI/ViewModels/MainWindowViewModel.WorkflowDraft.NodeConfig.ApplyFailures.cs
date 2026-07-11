@@ -25,6 +25,16 @@ public partial class MainWindowViewModel
             UiNotificationKind.Error);
     }
 
+    private void ApplySelectedNodeConfigDraftSpecializedValidationFailure(
+        string errorMessage)
+    {
+        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
+        WorkflowDefinitionValidationErrorMessage = errorMessage;
+        ShowWorkflowDefinitionNotification(
+            "workflow.definition.node_config",
+            UiNotificationKind.Error);
+    }
+
     private void ApplySelectedNodeConfigDraftPatchFailure(
         NodeConfigDraftApplyResult patchResult)
     {

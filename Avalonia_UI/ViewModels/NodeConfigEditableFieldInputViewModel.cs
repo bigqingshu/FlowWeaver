@@ -147,6 +147,21 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
         };
     }
 
+    public void ReplaceStringArrayValues(
+        IEnumerable<string> values,
+        bool hasInputValue)
+    {
+        StringArrayItems.Clear();
+        foreach (var value in values)
+        {
+            AddStringArrayItemCore(value, markInputPresent: false);
+        }
+
+        HasInputValue = hasInputValue;
+        UpdateStringArrayMoveAvailability();
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
     [RelayCommand]
     private void AddStringArrayItem()
     {
