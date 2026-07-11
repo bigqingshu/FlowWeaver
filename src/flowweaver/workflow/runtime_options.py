@@ -7,6 +7,8 @@ from flowweaver.protocols.runtime_feedback import (
     ResolvedDiagnosticsFeedbackPolicyModel,
     ResolvedRuntimeFeedbackPolicyModel,
     ResolvedTelemetryFeedbackPolicyModel,
+    RuntimeFeedbackPolicyOverlayModel,
+    RuntimeFeedbackPolicyOverrideModel,
 )
 from flowweaver.workflow.definition import (
     DiagnosticsRuntimeOptionsOverrideModel,
@@ -143,15 +145,52 @@ def build_static_runtime_feedback_policy_provider(
     *,
     version: int = 0,
 ) -> StaticRuntimeFeedbackPolicyProvider:
+    return build_runtime_feedback_policy_provider(
+        definition,
+        version=version,
+    )
+
+
+def build_runtime_feedback_policy_provider(
+    definition: WorkflowDefinitionModel,
+    *,
+    overlay: RuntimeFeedbackPolicyOverlayModel | None = None,
+    version: int = 0,
+) -> StaticRuntimeFeedbackPolicyProvider:
+    overlay = overlay or RuntimeFeedbackPolicyOverlayModel()
     workflow_options = resolve_workflow_runtime_options(definition)
     options_by_node = resolve_runtime_options_by_node(definition)
+    workflow_policy = _apply_runtime_feedback_policy_override(
+        runtime_feedback_policy_from_options(workflow_options),
+        overlay.workflow,
+    )
     return StaticRuntimeFeedbackPolicyProvider(
-        workflow_policy=runtime_feedback_policy_from_options(workflow_options),
+        workflow_policy=workflow_policy,
         policies_by_node={
-            node_instance_id: runtime_feedback_policy_from_options(options)
+            node_instance_id: _apply_runtime_feedback_policy_override(
+                _apply_runtime_feedback_policy_override(
+                    runtime_feedback_policy_from_options(options),
+                    overlay.workflow,
+                ),
+                overlay.node_overrides.get(node_instance_id),
+            )
             for node_instance_id, options in options_by_node.items()
         },
         version=version,
+    )
+
+
+def _apply_runtime_feedback_policy_override(
+    policy: ResolvedRuntimeFeedbackPolicyModel,
+    override: RuntimeFeedbackPolicyOverrideModel | None,
+) -> ResolvedRuntimeFeedbackPolicyModel:
+    if override is None:
+        return policy
+    return ResolvedRuntimeFeedbackPolicyModel.model_validate(
+        _merge_dicts(
+            policy.model_dump(mode="json"),
+            override.model_dump(mode="json", exclude_none=True),
+        )
     )
 
 

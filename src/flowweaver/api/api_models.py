@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from pydantic import Field
+
 from flowweaver.protocols.base import StrictModel
+from flowweaver.protocols.runtime_feedback import (
+    ResolvedRuntimeFeedbackPolicyModel,
+    RuntimeFeedbackPolicyOverlayModel,
+)
 
 
 class APIErrorModel(StrictModel):
@@ -48,6 +54,36 @@ class WorkflowRunBackgroundStartRequest(StrictModel):
 
 class WorkflowRunRetryRequest(StrictModel):
     trigger_source: str | None = None
+
+
+class WorkflowRunRuntimeOptionsUpdateRequest(StrictModel):
+    expected_version: int = Field(ge=0)
+    overlay: RuntimeFeedbackPolicyOverlayModel
+
+
+class ActiveNodeTaskRuntimeOptionsVersionView(StrictModel):
+    task_id: str
+    node_run_id: str
+    node_instance_id: str
+    node_run_status: str
+    runtime_options_version: int
+
+
+class WorkflowRunRuntimeOptionsEffectiveSummaryView(StrictModel):
+    workflow: ResolvedRuntimeFeedbackPolicyModel
+    nodes: dict[str, ResolvedRuntimeFeedbackPolicyModel]
+
+
+class WorkflowRunRuntimeOptionsView(StrictModel):
+    workflow_run_id: str
+    saved_runtime_options: dict[str, Any]
+    overlay: dict[str, Any]
+    effective_summary: WorkflowRunRuntimeOptionsEffectiveSummaryView
+    requested_version: int
+    applied_version: int
+    requested_at: datetime | None
+    applied_at: datetime | None
+    active_task_versions: list[ActiveNodeTaskRuntimeOptionsVersionView]
 
 
 class WorkflowDefinitionData(StrictModel):

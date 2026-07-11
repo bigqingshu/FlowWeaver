@@ -44,6 +44,9 @@ from flowweaver.engine.db_workflow_definition_models import (
 from flowweaver.engine.db_workflow_definition_models import (
     WorkflowRevisionRecord as WorkflowRevisionRecord,
 )
+from flowweaver.engine.db_workflow_run_runtime_options import (
+    WorkflowRunRuntimeOptionsRecord as WorkflowRunRuntimeOptionsRecord,
+)
 from flowweaver.engine.db_workflow_runtime_models import (
     WorkflowProcessRecord as WorkflowProcessRecord,
 )

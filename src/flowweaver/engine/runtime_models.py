@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from flowweaver.protocols.runtime_feedback import RuntimeFeedbackPolicyOverlayModel
 from flowweaver.protocols.table_ref import TableRefModel
 
 
@@ -58,6 +59,25 @@ class WorkflowRun:
     finished_at: datetime | None
     completion_reason: str | None
     error: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class WorkflowRunRuntimeOptions:
+    workflow_run_id: str
+    requested_version: int
+    applied_version: int
+    overlay: RuntimeFeedbackPolicyOverlayModel
+    requested_at: datetime | None
+    applied_at: datetime | None
+
+
+@dataclass(frozen=True)
+class ActiveNodeTaskRuntimeOptionsVersion:
+    task_id: str
+    node_run_id: str
+    node_instance_id: str
+    node_run_status: str
+    runtime_options_version: int
 
 
 @dataclass(frozen=True)

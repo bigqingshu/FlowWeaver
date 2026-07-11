@@ -1387,6 +1387,179 @@ def test_run_query_api(tmp_path: Path) -> None:
     assert filtered[0]["status"] == "PENDING"
 
 
+def test_run_runtime_options_api_replaces_overlay_without_revision_change(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Run runtime options",
+        definition={
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "transform",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {"telemetry": {"log_level": "INFO"}},
+                "node_overrides": {
+                    "source": {"telemetry": {"log_level": "ERROR"}}
+                },
+            },
+        },
+        workflow_id="workflow-run-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-runtime-options",
+    )
+    revision_before = store.get_workflow_revision(workflow.revision_id)
+    endpoint = f"/api/v1/runs/{run.workflow_run_id}/runtime-options"
+
+    initial = response_data(client.get(endpoint, headers=auth_headers()))
+    assert initial["overlay"] == {}
+    assert initial["requested_version"] == 0
+    assert initial["applied_version"] == 0
+    assert initial["requested_at"] is None
+    assert initial["applied_at"] is None
+    assert initial["active_task_versions"] == []
+    assert initial["saved_runtime_options"]["workflow"]["telemetry"][
+        "log_level"
+    ] == "INFO"
+
+    updated = response_data(
+        client.put(
+            endpoint,
+            headers=auth_headers(),
+            json={
+                "expected_version": 0,
+                "overlay": {
+                    "workflow": {"telemetry": {"log_level": "WARN"}},
+                    "node_overrides": {
+                        "source": {"telemetry": {"log_level": "DEBUG"}}
+                    },
+                },
+            },
+        )
+    )
+    assert updated["requested_version"] == 1
+    assert updated["applied_version"] == 0
+    assert updated["overlay"]["workflow"]["telemetry"]["log_level"] == "WARN"
+    assert updated["effective_summary"]["workflow"]["telemetry"][
+        "log_level"
+    ] == "WARN"
+    assert updated["effective_summary"]["nodes"]["source"]["telemetry"][
+        "log_level"
+    ] == "DEBUG"
+    assert updated["effective_summary"]["nodes"]["transform"]["telemetry"][
+        "log_level"
+    ] == "WARN"
+
+    stale = client.put(
+        endpoint,
+        headers=auth_headers(),
+        json={"expected_version": 0, "overlay": {}},
+    )
+    assert stale.status_code == 409
+    stale_error = response_error(stale)
+    assert stale_error["error_code"] == "RUNTIME_OPTIONS_VERSION_CONFLICT"
+    assert stale_error["details"]["current_version"] == 1
+
+    invalid = client.put(
+        endpoint,
+        headers=auth_headers(),
+        json={
+            "expected_version": 1,
+            "overlay": {
+                "node_overrides": {
+                    "missing": {"telemetry": {"log_level": "DEBUG"}}
+                }
+            },
+        },
+    )
+    assert invalid.status_code == 422
+    invalid_error = response_error(invalid)
+    assert invalid_error["error_code"] == "RUNTIME_OPTIONS_INVALID_NODE"
+    assert invalid_error["details"]["node_instance_ids"] == ["missing"]
+
+    cleared = response_data(
+        client.put(
+            endpoint,
+            headers=auth_headers(),
+            json={"expected_version": 1, "overlay": {}},
+        )
+    )
+    assert cleared["requested_version"] == 2
+    assert cleared["overlay"] == {}
+    assert cleared["effective_summary"]["workflow"]["telemetry"][
+        "log_level"
+    ] == "INFO"
+    assert cleared["effective_summary"]["nodes"]["source"]["telemetry"][
+        "log_level"
+    ] == "ERROR"
+    assert store.get_workflow_revision(workflow.revision_id) == revision_before
+
+    running = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+    )
+    assert running is not None
+    terminal = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.SUCCEEDED,
+        expected_state_version=running.state_version,
+    )
+    assert terminal is not None
+    read_only = client.put(
+        endpoint,
+        headers=auth_headers(),
+        json={"expected_version": 2, "overlay": {}},
+    )
+    assert read_only.status_code == 409
+    assert response_error(read_only)["details"]["status"] == "SUCCEEDED"
+
+
+def test_run_runtime_options_api_rejects_cancel_requested_run(
+    tmp_path: Path,
+) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cancelling run runtime options",
+        definition=valid_definition(),
+        workflow_id="workflow-cancelling-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cancelling-runtime-options",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-cancelling-runtime-options",
+    )
+    assert process is not None
+    cancelled = store.request_workflow_process_cancel(run.workflow_run_id)
+    assert cancelled is not None
+
+    response = client.put(
+        f"/api/v1/runs/{run.workflow_run_id}/runtime-options",
+        headers=auth_headers(),
+        json={"expected_version": 0, "overlay": {}},
+    )
+
+    assert response.status_code == 409
+    error = response_error(response)
+    assert error["error_code"] == "RUNTIME_OPTIONS_RUN_NOT_ACTIVE"
+    assert error["details"]["status"] == "CANCEL_REQUESTED"
+
+
 def test_run_query_api_filters_background_runs_and_pages(
     tmp_path: Path,
 ) -> None:

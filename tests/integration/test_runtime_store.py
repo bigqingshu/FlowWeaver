@@ -18,6 +18,11 @@ from flowweaver.engine.runtime_store import (
     WorkflowRun,
     sqlite_url,
 )
+from flowweaver.engine.runtime_workflow_run_options_store import (
+    WorkflowRunRuntimeOptionsInactiveError,
+    WorkflowRunRuntimeOptionsInvalidNodesError,
+    WorkflowRunRuntimeOptionsVersionConflictError,
+)
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     LoopIterationRunStatus,
@@ -35,6 +40,7 @@ from flowweaver.protocols.enums import (
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.runtime_feedback import (
     ResolvedRuntimeFeedbackPolicyModel,
+    RuntimeFeedbackPolicyOverlayModel,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
@@ -169,6 +175,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "workflows",
         "workflow_revisions",
         "workflow_runs",
+        "workflow_run_runtime_options",
         "node_runs",
         "node_tasks",
         "node_task_results",
@@ -198,6 +205,17 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "node_task_results",
     )
     assert "trigger_source" in column_names(database_path, "workflow_runs")
+    assert column_names(database_path, "workflow_run_runtime_options") == {
+        "workflow_run_id",
+        "requested_version",
+        "applied_version",
+        "overlay_json",
+        "requested_at",
+        "applied_at",
+    }
+    assert foreign_keys(database_path, "workflow_run_runtime_options") == {
+        ("workflow_run_id", "workflow_runs", "workflow_run_id")
+    }
     assert indexes(database_path, "data_refs")[
         "idx_data_refs_logical_identity_latest"
     ] == [
@@ -640,6 +658,226 @@ def test_runtime_store_workflow_run_crud(tmp_path: Path) -> None:
         ].workflow_run_id
         == "run-1"
     )
+
+
+def test_runtime_store_replaces_versioned_run_runtime_options(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    definition = store.create_workflow_definition(
+        name="Runtime options workflow",
+        definition={
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                }
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {"telemetry": {"log_level": "INFO"}}
+            },
+        },
+        workflow_id="workflow-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=definition.workflow_id,
+        workflow_run_id="run-runtime-options",
+    )
+    revision_before = store.get_workflow_revision(definition.revision_id)
+
+    initial = store.get_workflow_run_runtime_options(run.workflow_run_id)
+    assert initial is not None
+    assert initial.requested_version == 0
+    assert initial.applied_version == 0
+    assert initial.overlay == RuntimeFeedbackPolicyOverlayModel()
+    assert initial.requested_at is None
+    assert initial.applied_at is None
+
+    overlay = RuntimeFeedbackPolicyOverlayModel.model_validate(
+        {
+            "workflow": {"telemetry": {"log_level": "WARN"}},
+            "node_overrides": {
+                "source": {"telemetry": {"log_level": "DEBUG"}}
+            },
+        }
+    )
+    updated = store.replace_workflow_run_runtime_options(
+        run.workflow_run_id,
+        expected_version=0,
+        overlay=overlay,
+    )
+    assert updated.requested_version == 1
+    assert updated.applied_version == 0
+    assert updated.overlay == overlay
+    assert updated.requested_at is not None
+    assert updated.applied_at is None
+
+    with pytest.raises(WorkflowRunRuntimeOptionsVersionConflictError) as conflict:
+        store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=0,
+            overlay=overlay,
+        )
+    assert conflict.value.current_version == 1
+
+    with pytest.raises(WorkflowRunRuntimeOptionsInvalidNodesError) as invalid:
+        store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=1,
+            overlay=RuntimeFeedbackPolicyOverlayModel.model_validate(
+                {
+                    "node_overrides": {
+                        "missing": {"telemetry": {"log_level": "DEBUG"}}
+                    }
+                }
+            ),
+        )
+    assert invalid.value.node_instance_ids == ("missing",)
+
+    applied = store.mark_workflow_run_runtime_options_applied(
+        run.workflow_run_id,
+        version=1,
+    )
+    assert applied is not None
+    assert applied.applied_version == 1
+    assert applied.applied_at is not None
+
+    cleared = store.replace_workflow_run_runtime_options(
+        run.workflow_run_id,
+        expected_version=1,
+        overlay=RuntimeFeedbackPolicyOverlayModel(),
+    )
+    assert cleared.requested_version == 2
+    assert cleared.applied_version == 1
+    assert cleared.overlay == RuntimeFeedbackPolicyOverlayModel()
+    assert store.get_workflow_revision(definition.revision_id) == revision_before
+
+    running = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.RUNNING,
+        expected_state_version=run.state_version,
+    )
+    assert running is not None
+    terminal = store.update_workflow_run_status(
+        run.workflow_run_id,
+        WorkflowRunStatus.SUCCEEDED,
+        expected_state_version=running.state_version,
+    )
+    assert terminal is not None
+    with pytest.raises(WorkflowRunRuntimeOptionsInactiveError) as inactive:
+        store.replace_workflow_run_runtime_options(
+            run.workflow_run_id,
+            expected_version=2,
+            overlay=overlay,
+        )
+    assert inactive.value.status == WorkflowRunStatus.SUCCEEDED.value
+
+
+def test_runtime_store_lists_active_task_runtime_options_versions(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    definition = store.create_workflow_definition(
+        name="Active task runtime options",
+        definition={
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                }
+            ],
+            "connections": [],
+        },
+        workflow_id="workflow-active-task-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=definition.workflow_id,
+        workflow_run_id="run-active-task-options",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-active-task-options",
+    )
+    assert process is not None
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-active-task-options",
+        status=NodeRunStatus.RUNNING,
+    )
+    store.create_node_task(
+        NodeTaskModel(
+            task_id="task-active-options",
+            workflow_run_id=run.workflow_run_id,
+            workflow_process_id=process.process_id,
+            process_generation=process.process_generation,
+            node_run_id=node.node_run_id,
+            node_instance_id="source",
+            node_type="core.source",
+            node_version="1.0",
+            attempt=1,
+            input_refs=[],
+            config={},
+            runtime_options_version=3,
+            timeout_seconds=60,
+        )
+    )
+
+    versions = store.list_active_node_task_runtime_options_versions(
+        run.workflow_run_id
+    )
+
+    assert len(versions) == 1
+    assert versions[0].task_id == "task-active-options"
+    assert versions[0].node_run_status == NodeRunStatus.RUNNING.value
+    assert versions[0].runtime_options_version == 3
+
+
+def test_runtime_store_run_runtime_options_expected_version_is_atomic(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    definition = store.create_workflow_definition(
+        name="Concurrent runtime options",
+        definition={"nodes": [], "connections": []},
+        workflow_id="workflow-concurrent-runtime-options",
+    )
+    run = store.create_workflow_run(
+        workflow_id=definition.workflow_id,
+        workflow_run_id="run-concurrent-runtime-options",
+    )
+
+    def replace(level: str) -> tuple[str, int]:
+        overlay = RuntimeFeedbackPolicyOverlayModel.model_validate(
+            {"workflow": {"telemetry": {"log_level": level}}}
+        )
+        try:
+            updated = store.replace_workflow_run_runtime_options(
+                run.workflow_run_id,
+                expected_version=0,
+                overlay=overlay,
+            )
+            return "updated", updated.requested_version
+        except WorkflowRunRuntimeOptionsVersionConflictError as exc:
+            return "conflict", exc.current_version
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(replace, ["WARN", "ERROR"]))
+
+    assert sorted(results) == [("conflict", 1), ("updated", 1)]
+    stored = store.get_workflow_run_runtime_options(run.workflow_run_id)
+    assert stored is not None
+    assert stored.requested_version == 1
 
 
 def test_runtime_store_filters_workflow_runs_by_mode_source_and_page(

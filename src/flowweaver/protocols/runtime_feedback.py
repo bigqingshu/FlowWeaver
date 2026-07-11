@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from flowweaver.protocols.base import StrictModel
 
@@ -51,3 +51,20 @@ class DiagnosticsFeedbackPolicyOverrideModel(StrictModel):
 class RuntimeFeedbackPolicyOverrideModel(StrictModel):
     telemetry: TelemetryFeedbackPolicyOverrideModel | None = None
     diagnostics: DiagnosticsFeedbackPolicyOverrideModel | None = None
+
+
+class RuntimeFeedbackPolicyOverlayModel(StrictModel):
+    workflow: RuntimeFeedbackPolicyOverrideModel | None = None
+    node_overrides: dict[str, RuntimeFeedbackPolicyOverrideModel] = Field(
+        default_factory=dict
+    )
+
+    @field_validator("node_overrides")
+    @classmethod
+    def validate_node_override_keys(
+        cls,
+        value: dict[str, RuntimeFeedbackPolicyOverrideModel],
+    ) -> dict[str, RuntimeFeedbackPolicyOverrideModel]:
+        if any(not key.strip() for key in value):
+            raise ValueError("node_overrides keys must be non-empty node instance IDs")
+        return value

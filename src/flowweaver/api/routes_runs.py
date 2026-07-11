@@ -14,6 +14,9 @@ from flowweaver.api.responses import ok_response
 from flowweaver.api.routes_run_actions import router as run_actions_router
 from flowweaver.api.routes_run_loops import router as run_loops_router
 from flowweaver.api.routes_run_queries import router as run_queries_router
+from flowweaver.api.routes_run_runtime_options import (
+    router as run_runtime_options_router,
+)
 from flowweaver.api.routes_run_tables import router as run_tables_router
 from flowweaver.api.run_pagination import pagination_rejection
 from flowweaver.engine.runtime_store import RuntimeStore
@@ -27,6 +30,7 @@ router.include_router(run_loops_router)
 router.include_router(run_actions_router)
 router.include_router(run_tables_router)
 router.include_router(run_queries_router)
+router.include_router(run_runtime_options_router)
 
 
 @router.get("", response_model=APIResponseModel)

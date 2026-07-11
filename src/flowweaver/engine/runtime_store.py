@@ -13,6 +13,9 @@ from flowweaver.engine.runtime_input_snapshot_store import (
 from flowweaver.engine.runtime_loop_store import (
     RuntimeLoopStoreMixin,
 )
+from flowweaver.engine.runtime_models import (
+    ActiveNodeTaskRuntimeOptionsVersion as ActiveNodeTaskRuntimeOptionsVersion,
+)
 from flowweaver.engine.runtime_models import InputSnapshot as InputSnapshot
 from flowweaver.engine.runtime_models import InputSnapshotEntry as InputSnapshotEntry
 from flowweaver.engine.runtime_models import (
@@ -39,6 +42,9 @@ from flowweaver.engine.runtime_models import (
 from flowweaver.engine.runtime_models import (
     WorkflowRun as WorkflowRun,
 )
+from flowweaver.engine.runtime_models import (
+    WorkflowRunRuntimeOptions as WorkflowRunRuntimeOptions,
+)
 from flowweaver.engine.runtime_node_run_store import (
     RuntimeNodeRunStoreMixin,
 )
@@ -64,6 +70,9 @@ from flowweaver.engine.runtime_workflow_definition_store import (
 from flowweaver.engine.runtime_workflow_process_store import (
     RuntimeWorkflowProcessStoreMixin,
 )
+from flowweaver.engine.runtime_workflow_run_options_store import (
+    RuntimeWorkflowRunOptionsStoreMixin,
+)
 from flowweaver.engine.runtime_workflow_run_store import (
     RuntimeWorkflowRunStoreMixin,
 )
@@ -72,6 +81,7 @@ from flowweaver.engine.runtime_workflow_run_store import (
 class RuntimeStore(
     RuntimeWorkflowDefinitionStoreMixin,
     RuntimeWorkflowRunStoreMixin,
+    RuntimeWorkflowRunOptionsStoreMixin,
     RuntimeWorkflowProcessStoreMixin,
     RuntimeNodeRunStoreMixin,
     RuntimeNodeTaskStoreMixin,

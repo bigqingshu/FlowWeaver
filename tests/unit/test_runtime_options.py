@@ -6,11 +6,13 @@ from pydantic import ValidationError
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
 from flowweaver.protocols.runtime_feedback import (
+    RuntimeFeedbackPolicyOverlayModel,
     RuntimeFeedbackPolicyOverrideModel,
 )
 from flowweaver.workflow.definition import WorkflowDefinitionModel
 from flowweaver.workflow.runtime_options import (
     RuntimeOptionsEventSink,
+    build_runtime_feedback_policy_provider,
     build_static_runtime_feedback_policy_provider,
     resolve_runtime_options_by_node,
     resolve_runtime_options_for_node,
@@ -226,6 +228,51 @@ def test_runtime_feedback_policy_maps_only_closed_feedback_fields() -> None:
             "mask_policy": "full",
         },
     }
+
+
+def test_run_overlay_applies_workflow_then_node_feedback_override() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "other",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {"telemetry": {"log_level": "INFO"}},
+                "node_overrides": {
+                    "source": {"telemetry": {"log_level": "ERROR"}}
+                },
+            },
+        }
+    )
+    overlay = RuntimeFeedbackPolicyOverlayModel.model_validate(
+        {
+            "workflow": {"telemetry": {"log_level": "WARN"}},
+            "node_overrides": {
+                "source": {"telemetry": {"log_level": "DEBUG"}}
+            },
+        }
+    )
+
+    provider = build_runtime_feedback_policy_provider(
+        definition,
+        overlay=overlay,
+        version=4,
+    )
+
+    assert provider.version == 4
+    assert provider.workflow_policy().telemetry.log_level == "WARN"
+    assert provider.policy_for_node("source").telemetry.log_level == "DEBUG"
+    assert provider.policy_for_node("other").telemetry.log_level == "WARN"
 
 
 @pytest.mark.parametrize(
