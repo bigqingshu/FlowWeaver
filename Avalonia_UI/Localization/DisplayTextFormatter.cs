@@ -112,6 +112,26 @@ public sealed class DisplayTextFormatter
             typeName);
     }
 
+    public string FormatNodeConfigArrayAddItem()
+    {
+        return Text("node_config.array.add_item");
+    }
+
+    public string FormatNodeConfigArrayRemoveItem()
+    {
+        return Text("node_config.array.remove_item");
+    }
+
+    public string FormatNodeConfigArrayMoveUp()
+    {
+        return Text("node_config.array.move_up");
+    }
+
+    public string FormatNodeConfigArrayMoveDown()
+    {
+        return Text("node_config.array.move_down");
+    }
+
     public string FormatNodeConfigOptionValue(
         string nodeType,
         string fieldName,
@@ -211,8 +231,13 @@ public sealed class DisplayTextFormatter
             "node_config.type.boolean" => "Boolean",
             "node_config.type.enum" => "Enum",
             "node_config.type.array" => "Array",
+            "node_config.type.string_array" => "String array",
             "node_config.type.object" => "Object",
             "node_config.type.unsupported" => "Unsupported",
+            "node_config.array.add_item" => "Add item",
+            "node_config.array.remove_item" => "Remove item",
+            "node_config.array.move_up" => "Move up",
+            "node_config.array.move_down" => "Move down",
             "format.config_fields" => "{0} config field(s): {1}",
             "node_config_draft.no_node_selected" => "Select a node to inspect config draft.",
             "node_config_draft.schema_unavailable" => "Selected node config schema unavailable.",

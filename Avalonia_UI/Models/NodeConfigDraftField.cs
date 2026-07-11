@@ -19,6 +19,8 @@ public sealed record NodeConfigDraftField
 
     public IReadOnlyList<string> EnumValues { get; init; } = [];
 
+    public string? ItemType { get; init; }
+
     public bool HasCurrentValue => CurrentValue.HasValue;
 
     public bool IsEditable { get; init; }

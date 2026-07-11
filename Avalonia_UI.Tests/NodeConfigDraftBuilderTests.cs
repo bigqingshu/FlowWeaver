@@ -69,9 +69,54 @@ public sealed class NodeConfigDraftBuilderTests
         Assert.IsTrue(limit.IsEditable);
 
         var columns = draft.Fields.Single(item => item.Name == "columns");
-        Assert.IsFalse(columns.IsEditable);
-        CollectionAssert.Contains(
+        Assert.IsTrue(columns.IsEditable);
+        Assert.AreEqual("string", columns.ItemType);
+        CollectionAssert.DoesNotContain(
             columns.Warnings.ToArray(),
+            "CONFIG_DRAFT_FIELD_JSON_FALLBACK");
+    }
+
+    [TestMethod]
+    public void BuildOnlyEnablesValidStringArrayFields()
+    {
+        var schema = ParseSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "names": {"type": "array", "items": {"type": "string"}},
+                "objects": {"type": "array", "items": {"type": "object"}},
+                "unknown": {"type": "array"},
+                "malformed": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+            """);
+
+        var draft = NodeConfigDraftBuilder.Build(
+            """
+            {
+              "nodes": [
+                {
+                  "node_instance_id": "node",
+                  "config": {
+                    "names": ["first", "second"],
+                    "objects": [{"name": "first"}],
+                    "unknown": [1],
+                    "malformed": ["first", 2]
+                  }
+                }
+              ]
+            }
+            """,
+            "node",
+            schema);
+
+        Assert.IsTrue(draft.Fields.Single(field => field.Name == "names").IsEditable);
+        Assert.IsFalse(draft.Fields.Single(field => field.Name == "objects").IsEditable);
+        Assert.IsFalse(draft.Fields.Single(field => field.Name == "unknown").IsEditable);
+        Assert.IsFalse(draft.Fields.Single(field => field.Name == "malformed").IsEditable);
+        CollectionAssert.Contains(
+            draft.Fields.Single(field => field.Name == "malformed").Warnings.ToArray(),
             "CONFIG_DRAFT_FIELD_JSON_FALLBACK");
     }
 

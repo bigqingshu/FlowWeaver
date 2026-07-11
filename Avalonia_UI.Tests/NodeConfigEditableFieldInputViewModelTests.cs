@@ -105,6 +105,71 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
     }
 
     [TestMethod]
+    public void StringArrayInputSupportsAddRemoveAndStableReordering()
+    {
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "export_names",
+                Type = NodeConfigFieldType.Array,
+                ItemType = "string",
+                InputValue = "[\"orders\",\"customers\"]",
+                StringArrayValues = ["orders", "customers"],
+                HasInputValue = true,
+            });
+
+        Assert.IsTrue(input.IsStringArrayInput);
+        Assert.IsFalse(input.IsTextInput);
+        Assert.AreEqual("String array", input.TypeText);
+        Assert.IsFalse(input.IsDirty);
+        CollectionAssert.AreEqual(
+            new[] { "orders", "customers" },
+            input.StringArrayItems.Select(item => item.Value).ToArray());
+        Assert.IsFalse(input.StringArrayItems[0].MoveUpCommand.CanExecute(null));
+        Assert.IsTrue(input.StringArrayItems[0].MoveDownCommand.CanExecute(null));
+
+        input.StringArrayItems[0].MoveDownCommand.Execute(null);
+
+        CollectionAssert.AreEqual(
+            new[] { "customers", "orders" },
+            input.StringArrayItems.Select(item => item.Value).ToArray());
+        Assert.IsTrue(input.IsDirty);
+
+        input.StringArrayItems[0].RemoveCommand.Execute(null);
+        input.AddStringArrayItemCommand.Execute(null);
+        input.StringArrayItems[1].Value = "invoices";
+
+        var updated = input.ToEditableDraftField();
+        CollectionAssert.AreEqual(
+            new[] { "orders", "invoices" },
+            updated.StringArrayValues.ToArray());
+        Assert.AreEqual("string", updated.ItemType);
+        Assert.IsTrue(updated.HasInputValue);
+    }
+
+    [TestMethod]
+    public void StringArrayInputCanExplicitlyClearOptionalArray()
+    {
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "selected_members",
+                Type = NodeConfigFieldType.Array,
+                ItemType = "string",
+                InputValue = "[\"orders\"]",
+                StringArrayValues = ["orders"],
+                HasInputValue = true,
+            });
+
+        input.StringArrayItems[0].RemoveCommand.Execute(null);
+
+        Assert.IsEmpty(input.StringArrayItems);
+        Assert.IsTrue(input.HasInputValue);
+        Assert.IsTrue(input.IsDirty);
+        Assert.IsEmpty(input.ToEditableDraftField().StringArrayValues);
+    }
+
+    [TestMethod]
     public async Task LocalizesBuiltInFieldTitleAndTypeText()
     {
         var localizationService = new JsonLocalizationService();
@@ -129,6 +194,31 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
         var draftField = input.ToEditableDraftField();
         Assert.AreEqual("Rows", draftField.Title);
         Assert.AreEqual("rows", draftField.Name);
+    }
+
+    [TestMethod]
+    public async Task LocalizesStringArrayTypeAndItemCommands()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "export_names",
+                Type = NodeConfigFieldType.Array,
+                ItemType = "string",
+                InputValue = "[\"orders\"]",
+                StringArrayValues = ["orders"],
+                HasInputValue = true,
+            },
+            "PublishSharedTablesNode",
+            new DisplayTextFormatter(localizationService));
+
+        Assert.AreEqual("字符串数组", input.TypeText);
+        Assert.AreEqual("增加一项", input.AddStringArrayItemText);
+        Assert.AreEqual("删除此项", input.StringArrayItems[0].RemoveText);
+        Assert.AreEqual("上移", input.StringArrayItems[0].MoveUpText);
+        Assert.AreEqual("下移", input.StringArrayItems[0].MoveDownText);
     }
 
     [TestMethod]

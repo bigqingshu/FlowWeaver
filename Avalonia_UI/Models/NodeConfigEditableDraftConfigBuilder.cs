@@ -67,7 +67,15 @@ public static class NodeConfigEditableDraftConfigBuilder
         value = null;
         var input = field.InputValue;
 
-        if (field.Required && string.IsNullOrWhiteSpace(input))
+        if (field.Required && !field.HasInputValue)
+        {
+            errors.Add(Error(field.Name, "EDITABLE_CONFIG_FIELD_REQUIRED_EMPTY"));
+            return false;
+        }
+
+        if (field.Required
+            && field.Type != NodeConfigFieldType.Array
+            && string.IsNullOrWhiteSpace(input))
         {
             errors.Add(Error(field.Name, "EDITABLE_CONFIG_FIELD_REQUIRED_EMPTY"));
             return false;
@@ -86,10 +94,38 @@ public static class NodeConfigEditableDraftConfigBuilder
                 return TryBuildBoolean(field, input, errors, out value);
             case NodeConfigFieldType.Enum:
                 return TryBuildEnum(field, input, errors, out value);
+            case NodeConfigFieldType.Array
+                when string.Equals(
+                    field.ItemType,
+                    "string",
+                    System.StringComparison.Ordinal):
+                return TryBuildStringArray(field, errors, out value);
             default:
                 errors.Add(Error(field.Name, "EDITABLE_CONFIG_FIELD_TYPE_UNSUPPORTED"));
                 return false;
         }
+    }
+
+    private static bool TryBuildStringArray(
+        NodeConfigEditableDraftField field,
+        ICollection<NodeConfigEditableDraftConfigFieldError> errors,
+        out JsonNode? value)
+    {
+        value = null;
+        if (field.StringArrayValues.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add(
+                Error(
+                    field.Name,
+                    "EDITABLE_CONFIG_FIELD_STRING_ARRAY_ITEM_EMPTY"));
+            return false;
+        }
+
+        value = new JsonArray(
+            field.StringArrayValues
+                .Select(item => (JsonNode?)JsonValue.Create(item))
+                .ToArray());
+        return true;
     }
 
     private static bool TryBuildInteger(

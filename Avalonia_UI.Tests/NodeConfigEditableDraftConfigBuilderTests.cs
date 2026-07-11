@@ -173,6 +173,74 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
     }
 
     [TestMethod]
+    public void BuildPreservesStringArrayOrderAndExplicitEmptyArray()
+    {
+        var draft = new NodeConfigEditableDraft
+        {
+            NodeInstanceId = "shared",
+            Fields =
+            [
+                Field(
+                    "export_names",
+                    NodeConfigFieldType.Array,
+                    "[\"orders\",\"customers\"]",
+                    required: true,
+                    itemType: "string",
+                    stringArrayValues: ["orders", "customers"]),
+                Field(
+                    "selected_members",
+                    NodeConfigFieldType.Array,
+                    "[]",
+                    itemType: "string",
+                    stringArrayValues: []),
+            ],
+        };
+
+        var result = NodeConfigEditableDraftConfigBuilder.Build(draft);
+
+        Assert.IsTrue(result.Succeeded);
+        using var document = JsonDocument.Parse(result.ConfigJson);
+        CollectionAssert.AreEqual(
+            new[] { "orders", "customers" },
+            document.RootElement
+                .GetProperty("export_names")
+                .EnumerateArray()
+                .Select(item => item.GetString())
+                .ToArray());
+        Assert.AreEqual(
+            0,
+            document.RootElement.GetProperty("selected_members").GetArrayLength());
+    }
+
+    [TestMethod]
+    public void BuildRejectsEmptyStringArrayItemWithoutDroppingIt()
+    {
+        var draft = new NodeConfigEditableDraft
+        {
+            NodeInstanceId = "shared",
+            Fields =
+            [
+                Field(
+                    "export_names",
+                    NodeConfigFieldType.Array,
+                    "[\"orders\",\"\"]",
+                    required: true,
+                    itemType: "string",
+                    stringArrayValues: ["orders", ""]),
+            ],
+        };
+
+        var result = NodeConfigEditableDraftConfigBuilder.Build(draft);
+
+        Assert.IsFalse(result.Succeeded);
+        var error = result.FieldErrors.Single();
+        Assert.AreEqual("export_names", error.FieldName);
+        Assert.AreEqual(
+            "EDITABLE_CONFIG_FIELD_STRING_ARRAY_ITEM_EMPTY",
+            error.Warning);
+    }
+
+    [TestMethod]
     public void BuildRejectsUnsupportedEditableFieldType()
     {
         var draft = new NodeConfigEditableDraft
@@ -224,7 +292,9 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
         string inputValue,
         bool required = false,
         bool hasInputValue = true,
-        string[]? enumValues = null)
+        string[]? enumValues = null,
+        string? itemType = null,
+        string[]? stringArrayValues = null)
     {
         return new NodeConfigEditableDraftField
         {
@@ -234,6 +304,8 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
             Required = required,
             HasInputValue = hasInputValue,
             EnumValues = enumValues ?? [],
+            ItemType = itemType,
+            StringArrayValues = stringArrayValues ?? [],
         };
     }
 }

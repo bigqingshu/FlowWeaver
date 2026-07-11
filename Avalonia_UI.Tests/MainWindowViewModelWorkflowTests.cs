@@ -3264,14 +3264,14 @@ public sealed class MainWindowViewModelWorkflowTests
         await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
 
         Assert.AreEqual(
-            "filter: 2 editable config field(s), 1 JSON fallback field(s)",
+            "filter: 3 editable config field(s), 0 JSON fallback field(s)",
             viewModel.SelectedNodeConfigDraftSummaryText);
         Assert.IsNotNull(viewModel.SelectedNodeConfigDraft);
         Assert.IsTrue(viewModel.SelectedNodeConfigDraft.IsSupported);
         Assert.IsNotNull(viewModel.SelectedNodeConfigEditableDraft);
-        Assert.HasCount(2, viewModel.SelectedNodeConfigEditableDraft.Fields);
+        Assert.HasCount(3, viewModel.SelectedNodeConfigEditableDraft.Fields);
         Assert.IsTrue(viewModel.HasSelectedNodeConfigEditableInputFields);
-        Assert.HasCount(2, viewModel.SelectedNodeConfigEditableInputFields);
+        Assert.HasCount(3, viewModel.SelectedNodeConfigEditableInputFields);
         Assert.IsTrue(viewModel.ApplySelectedNodeConfigDraftCommand.CanExecute(null));
         Assert.IsNotNull(viewModel.SelectedWorkflowDefinitionNode);
         Assert.IsTrue(viewModel.SelectedWorkflowDefinitionNode.HasRegisteredNodeEditor);
@@ -3939,6 +3939,145 @@ public sealed class MainWindowViewModelWorkflowTests
             "Node config applied to draft. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.HasWorkflowDefinitionValidationError);
+    }
+
+    [TestMethod]
+    public async Task ApplySelectedNodeConfigDraftRoundTripsSharedTableStringArrays()
+    {
+        var definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "publish",
+                  "node_type": "PublishSharedTablesNode",
+                  "node_version": "1.0",
+                  "config": {
+                    "share_name": "daily_report",
+                    "export_names": ["orders", "customers"],
+                    "plugin_extension": {"preserve": true}
+                  }
+                },
+                {
+                  "node_instance_id": "read",
+                  "node_type": "ReadSharedTablesNode",
+                  "node_version": "1.0",
+                  "config": {
+                    "share_name": "daily_report",
+                    "version_policy": "LATEST",
+                    "selected_members": ["orders", "customers"]
+                  }
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Daily Load", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "PublishSharedTablesNode",
+                        "Publish Shared Tables",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "share_name": {"type": "string", "required": true},
+                                "export_names": {
+                                  "type": "array",
+                                  "required": true,
+                                  "items": {"type": "string"}
+                                }
+                              }
+                            }
+                            """),
+                    NodeDefinition(
+                        "ReadSharedTablesNode",
+                        "Read Shared Tables",
+                        schemaJson:
+                            """
+                            {
+                              "type": "object",
+                              "properties": {
+                                "share_name": {"type": "string", "required": true},
+                                "version_policy": {
+                                  "type": "enum",
+                                  "required": true,
+                                  "enum": ["LATEST", "EXACT_VERSION"]
+                                },
+                                "selected_members": {
+                                  "type": "array",
+                                  "items": {"type": "string"}
+                                }
+                              }
+                            }
+                            """),
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
+            .Single(node => node.NodeInstanceId == "publish");
+        var exportNames = viewModel.SelectedNodeConfigEditableInputFields
+            .Single(field => field.Name == "export_names");
+        exportNames.StringArrayItems[0].MoveDownCommand.Execute(null);
+        exportNames.AddStringArrayItemCommand.Execute(null);
+        exportNames.StringArrayItems[2].Value = "invoices";
+        viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
+
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
+            .Single(node => node.NodeInstanceId == "read");
+        var selectedMembers = viewModel.SelectedNodeConfigEditableInputFields
+            .Single(field => field.Name == "selected_members");
+        selectedMembers.StringArrayItems[0].RemoveCommand.Execute(null);
+        selectedMembers.StringArrayItems[0].RemoveCommand.Execute(null);
+        viewModel.ApplySelectedNodeConfigDraftCommand.Execute(null);
+
+        using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        var nodes = document.RootElement.GetProperty("nodes");
+        var publishConfig = nodes[0].GetProperty("config");
+        CollectionAssert.AreEqual(
+            new[] { "customers", "orders", "invoices" },
+            publishConfig
+                .GetProperty("export_names")
+                .EnumerateArray()
+                .Select(item => item.GetString())
+                .ToArray());
+        Assert.IsTrue(
+            publishConfig
+                .GetProperty("plugin_extension")
+                .GetProperty("preserve")
+                .GetBoolean());
+        Assert.AreEqual(
+            0,
+            nodes[1]
+                .GetProperty("config")
+                .GetProperty("selected_members")
+                .GetArrayLength());
+
+        viewModel.SelectedWorkflowDefinitionNode = viewModel.WorkflowDefinitionDetail?.Nodes
+            .Single(node => node.NodeInstanceId == "publish");
+        CollectionAssert.AreEqual(
+            new[] { "customers", "orders", "invoices" },
+            viewModel.SelectedNodeConfigEditableInputFields
+                .Single(field => field.Name == "export_names")
+                .StringArrayItems
+                .Select(item => item.Value)
+                .ToArray());
     }
 
     [TestMethod]

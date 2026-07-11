@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
@@ -28,7 +30,13 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
         OriginalHasInputValue = field.HasInputValue;
         HasInputValue = field.HasInputValue;
         EnumValues = field.EnumValues;
+        ItemType = field.ItemType;
+        OriginalStringArrayValues = field.StringArrayValues.ToArray();
         Warnings = field.Warnings;
+        foreach (var value in field.StringArrayValues)
+        {
+            AddStringArrayItemCore(value, markInputPresent: false);
+        }
     }
 
     public DisplayTextFormatter DisplayTextFormatter { get; }
@@ -49,15 +57,26 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
 
     public IReadOnlyList<string> EnumValues { get; }
 
+    public string? ItemType { get; }
+
+    public IReadOnlyList<string> OriginalStringArrayValues { get; }
+
+    public ObservableCollection<NodeConfigStringArrayItemViewModel> StringArrayItems { get; } =
+        new();
+
     public IReadOnlyList<string> Warnings { get; }
 
     public string DisplayLabel =>
         DisplayTextFormatter.FormatNodeConfigFieldTitle(NodeType, Name, Title);
 
     public string TypeText =>
-        DisplayTextFormatter.FormatNodeConfigFieldType(Type.ToString());
+        DisplayTextFormatter.FormatNodeConfigFieldType(
+            IsStringArrayInput ? "string_array" : Type.ToString());
 
     public string RequiredText => Required ? "*" : string.Empty;
+
+    public string AddStringArrayItemText =>
+        DisplayTextFormatter.FormatNodeConfigArrayAddItem();
 
     public bool IsTextInput =>
         Type is NodeConfigFieldType.String
@@ -67,6 +86,10 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     public bool IsEnumInput => Type == NodeConfigFieldType.Enum;
 
     public bool IsBooleanInput => Type == NodeConfigFieldType.Boolean;
+
+    public bool IsStringArrayInput =>
+        Type == NodeConfigFieldType.Array
+        && string.Equals(ItemType, "string", StringComparison.Ordinal);
 
     public IReadOnlyList<string> BooleanValues => BooleanInputValues;
 
@@ -89,8 +112,15 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
     public string WarningText => string.Join(", ", Warnings);
 
     public bool IsDirty =>
-        !string.Equals(InputValue, OriginalInputValue, StringComparison.Ordinal)
-        || HasInputValue != OriginalHasInputValue;
+        HasInputValue != OriginalHasInputValue
+        || (IsStringArrayInput
+            ? !OriginalStringArrayValues.SequenceEqual(
+                StringArrayItems.Select(item => item.Value),
+                StringComparer.Ordinal)
+            : !string.Equals(
+                InputValue,
+                OriginalInputValue,
+                StringComparison.Ordinal));
 
     [ObservableProperty]
     private string inputValue = string.Empty;
@@ -109,8 +139,95 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
             InputValue = InputValue,
             HasInputValue = HasInputValue,
             EnumValues = EnumValues,
+            ItemType = ItemType,
+            StringArrayValues = StringArrayItems
+                .Select(item => item.Value)
+                .ToArray(),
             Warnings = Warnings,
         };
+    }
+
+    [RelayCommand]
+    private void AddStringArrayItem()
+    {
+        AddStringArrayItemCore(string.Empty, markInputPresent: true);
+    }
+
+    private void AddStringArrayItemCore(string value, bool markInputPresent)
+    {
+        StringArrayItems.Add(
+            new NodeConfigStringArrayItemViewModel(
+                value,
+                DisplayTextFormatter,
+                HandleStringArrayItemValueChanged,
+                RemoveStringArrayItem,
+                MoveStringArrayItemUp,
+                MoveStringArrayItemDown));
+        if (markInputPresent)
+        {
+            HasInputValue = true;
+        }
+
+        UpdateStringArrayMoveAvailability();
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
+    private void HandleStringArrayItemValueChanged(
+        NodeConfigStringArrayItemViewModel item)
+    {
+        HasInputValue = true;
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
+    private void RemoveStringArrayItem(NodeConfigStringArrayItemViewModel item)
+    {
+        if (!StringArrayItems.Remove(item))
+        {
+            return;
+        }
+
+        HasInputValue = true;
+        UpdateStringArrayMoveAvailability();
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
+    private void MoveStringArrayItemUp(NodeConfigStringArrayItemViewModel item)
+    {
+        MoveStringArrayItem(item, -1);
+    }
+
+    private void MoveStringArrayItemDown(NodeConfigStringArrayItemViewModel item)
+    {
+        MoveStringArrayItem(item, 1);
+    }
+
+    private void MoveStringArrayItem(
+        NodeConfigStringArrayItemViewModel item,
+        int offset)
+    {
+        var currentIndex = StringArrayItems.IndexOf(item);
+        var targetIndex = currentIndex + offset;
+        if (currentIndex < 0
+            || targetIndex < 0
+            || targetIndex >= StringArrayItems.Count)
+        {
+            return;
+        }
+
+        StringArrayItems.Move(currentIndex, targetIndex);
+        HasInputValue = true;
+        UpdateStringArrayMoveAvailability();
+        OnPropertyChanged(nameof(IsDirty));
+    }
+
+    private void UpdateStringArrayMoveAvailability()
+    {
+        for (var index = 0; index < StringArrayItems.Count; index++)
+        {
+            StringArrayItems[index].SetMoveAvailability(
+                moveUpAvailable: index > 0,
+                moveDownAvailable: index < StringArrayItems.Count - 1);
+        }
     }
 
     partial void OnInputValueChanged(string value)
@@ -130,5 +247,10 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
         OnPropertyChanged(nameof(TypeText));
         OnPropertyChanged(nameof(EnumOptions));
         OnPropertyChanged(nameof(BooleanOptions));
+        OnPropertyChanged(nameof(AddStringArrayItemText));
+        foreach (var item in StringArrayItems)
+        {
+            item.RefreshLocalizedText();
+        }
     }
 }

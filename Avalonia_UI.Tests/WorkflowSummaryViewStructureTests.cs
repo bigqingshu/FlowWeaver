@@ -208,6 +208,12 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(xaml, "IsVisible=\"{Binding IsBooleanInput}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding EnumOptions}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding BooleanOptions}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding IsStringArrayInput}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding StringArrayItems}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding AddStringArrayItemCommand}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding MoveUpCommand}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding MoveDownCommand}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding RemoveCommand}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding DisplayText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding WarningText}\"");
         Assert.IsFalse(xaml.Contains("Converter=", StringComparison.Ordinal));

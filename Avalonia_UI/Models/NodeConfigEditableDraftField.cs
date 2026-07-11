@@ -18,5 +18,9 @@ public sealed record NodeConfigEditableDraftField
 
     public IReadOnlyList<string> EnumValues { get; init; } = [];
 
+    public string? ItemType { get; init; }
+
+    public IReadOnlyList<string> StringArrayValues { get; init; } = [];
+
     public IReadOnlyList<string> Warnings { get; init; } = [];
 }

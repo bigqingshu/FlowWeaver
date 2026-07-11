@@ -44,6 +44,8 @@ public static class NodeConfigEditableDraftBuilder
             EnumValues = field.Type == NodeConfigFieldType.Enum
                 ? field.EnumValues
                 : [],
+            ItemType = field.ItemType,
+            StringArrayValues = FormatStringArrayValues(field),
             Warnings = field.Warnings,
         };
     }
@@ -72,6 +74,27 @@ public static class NodeConfigEditableDraftBuilder
         }
 
         return FormatJsonValue(value.Value);
+    }
+
+    private static IReadOnlyList<string> FormatStringArrayValues(
+        NodeConfigDraftField field)
+    {
+        if (field.Type != NodeConfigFieldType.Array
+            || !string.Equals(field.ItemType, "string", StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        var value = field.CurrentValue ?? field.DefaultValue;
+        if (!value.HasValue || value.Value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return value.Value
+            .EnumerateArray()
+            .Select(item => item.GetString() ?? string.Empty)
+            .ToArray();
     }
 
     private static string FormatJsonValue(JsonElement value)

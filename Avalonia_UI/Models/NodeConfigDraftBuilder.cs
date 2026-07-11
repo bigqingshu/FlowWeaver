@@ -89,7 +89,8 @@ public static class NodeConfigDraftBuilder
             CurrentValue = currentValue,
             DefaultValue = field.DefaultValue?.Clone(),
             EnumValues = field.EnumValues,
-            IsEditable = IsEditable(field.Type),
+            ItemType = field.ItemType,
+            IsEditable = IsEditable(field, currentValue),
             Warnings = BuildFieldWarnings(field, currentValue).ToArray(),
         };
     }
@@ -98,7 +99,7 @@ public static class NodeConfigDraftBuilder
         NodeConfigFieldDescriptor field,
         JsonElement? currentValue)
     {
-        if (!IsEditable(field.Type))
+        if (!IsEditable(field, currentValue))
         {
             yield return "CONFIG_DRAFT_FIELD_JSON_FALLBACK";
         }
@@ -109,13 +110,34 @@ public static class NodeConfigDraftBuilder
         }
     }
 
-    private static bool IsEditable(NodeConfigFieldType type)
+    private static bool IsEditable(
+        NodeConfigFieldDescriptor field,
+        JsonElement? currentValue)
     {
-        return type is NodeConfigFieldType.String
+        if (field.Type is NodeConfigFieldType.String
             or NodeConfigFieldType.Integer
             or NodeConfigFieldType.Number
             or NodeConfigFieldType.Boolean
-            or NodeConfigFieldType.Enum;
+            or NodeConfigFieldType.Enum)
+        {
+            return true;
+        }
+
+        return field.Type == NodeConfigFieldType.Array
+            && string.Equals(field.ItemType, "string", StringComparison.Ordinal)
+            && IsStringArrayValue(currentValue ?? field.DefaultValue);
+    }
+
+    private static bool IsStringArrayValue(JsonElement? value)
+    {
+        if (!value.HasValue)
+        {
+            return true;
+        }
+
+        return value.Value.ValueKind == JsonValueKind.Array
+            && value.Value.EnumerateArray().All(
+                item => item.ValueKind == JsonValueKind.String);
     }
 
     private static bool TryFindNode(

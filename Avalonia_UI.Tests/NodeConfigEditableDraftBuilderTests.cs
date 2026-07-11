@@ -52,7 +52,7 @@ public sealed class NodeConfigEditableDraftBuilderTests
 
         Assert.AreEqual("filter", editableDraft.NodeInstanceId);
         Assert.IsTrue(editableDraft.HasFields);
-        Assert.HasCount(5, editableDraft.Fields);
+        Assert.HasCount(6, editableDraft.Fields);
         Assert.IsEmpty(editableDraft.Warnings);
 
         Assert.AreEqual(
@@ -76,7 +76,12 @@ public sealed class NodeConfigEditableDraftBuilderTests
             new[] { "GT", "LT" },
             enumField.EnumValues.ToArray());
 
-        Assert.IsFalse(editableDraft.Fields.Any(field => field.Name == "columns"));
+        var columnsField = editableDraft.Fields.Single(field => field.Name == "columns");
+        Assert.AreEqual(NodeConfigFieldType.Array, columnsField.Type);
+        Assert.AreEqual("string", columnsField.ItemType);
+        CollectionAssert.AreEqual(
+            new[] { "amount" },
+            columnsField.StringArrayValues.ToArray());
         Assert.IsFalse(editableDraft.Fields.Any(field => field.Name == "metadata"));
     }
 
@@ -145,7 +150,7 @@ public sealed class NodeConfigEditableDraftBuilderTests
             {
               "type": "object",
               "properties": {
-                "columns": {"type": "array", "items": {"type": "string"}},
+                "columns": {"type": "array", "items": {"type": "object"}},
                 "metadata": {"type": "object"}
               }
             }
