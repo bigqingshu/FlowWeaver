@@ -50,7 +50,7 @@ from flowweaver.protocols.enums import (
     TableScope,
     TableStorageKind,
 )
-from flowweaver.protocols.ipc_messages import IPCEnvelope
+from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskLogPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow.definition import WorkflowDefinitionModel
@@ -170,6 +170,61 @@ class InjectedReportingExecutor:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=list(self._output_refs),
+            started_at=now,
+            finished_at=now,
+        )
+
+
+class InjectedLoggingExecutor:
+    executor_id = "injected-logging-executor"
+
+    def __init__(self) -> None:
+        self._event_handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None = None
+
+    def set_event_handler(
+        self,
+        handler: Callable[[NodeTaskModel, IPCEnvelope], None] | None,
+    ) -> None:
+        self._event_handler = handler
+
+    def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+        assert self._event_handler is not None
+        for level, message, context in (
+            (
+                "DEBUG",
+                "source debug",
+                {"password": "secret", "rows": [{"value": 1}]},
+            ),
+            ("INFO", "source info", {"row_count": 1}),
+            ("ERROR", "source error", {"error_code": "E_SOURCE"}),
+        ):
+            payload = NodeTaskLogPayload.model_validate(
+                {
+                    "level": level,
+                    "message": message,
+                    "logger_name": "flowweaver.nodes.injected",
+                    "node_instance_id": task.node_instance_id,
+                    "task_id": task.task_id,
+                    "context": context,
+                }
+            )
+            self._event_handler(
+                task,
+                IPCEnvelope(
+                    message_type=IPCMessageType.NODE_TASK_LOG,
+                    workflow_run_id=task.workflow_run_id,
+                    node_run_id=task.node_run_id,
+                    payload=payload.model_dump(mode="json"),
+                ),
+            )
+        now = utc_now()
+        return NodeTaskResultModel(
+            task_id=task.task_id,
+            node_run_id=task.node_run_id,
+            attempt=task.attempt,
+            executor_id=self.executor_id,
+            process_generation=task.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
             started_at=now,
             finished_at=now,
         )
@@ -3439,6 +3494,61 @@ def test_workflow_process_background_fast_filters_progress_feedback(
         "NODE_FINISHED",
         "WORKFLOW_FINISHED",
     ]
+
+
+def test_workflow_process_records_node_logs_with_node_level_override(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    definition_data = single_node_definition() | {
+        "runtime_options": {
+            "workflow": {
+                "telemetry": {"log_level": "WARN", "event_level": "none"},
+                "diagnostics": {
+                    "redact_columns": ["password"],
+                    "mask_policy": "full",
+                },
+            },
+            "node_overrides": {
+                "source": {"telemetry": {"log_level": "DEBUG"}}
+            },
+        }
+    }
+    workflow = store.create_workflow_definition(
+        name="Node runtime log workflow",
+        definition=definition_data,
+        workflow_id="workflow-node-runtime-log",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-node-runtime-log",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-node-runtime-log",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        executor_factory=lambda _task: InjectedLoggingExecutor(),
+    )
+
+    events = store.list_runtime_events()
+    node_logs = [event for event in events if event.event_type == "NODE_LOG"]
+    assert exit_code == 0
+    assert [event.payload["level"] for event in node_logs] == [
+        "DEBUG",
+        "INFO",
+        "ERROR",
+    ]
+    assert node_logs[0].payload["context"] == {"password": "***"}
+    assert node_logs[2].payload["message"] == "source error"
+    assert "WORKFLOW_LOG" not in [event.event_type for event in events]
 
 
 def test_workflow_process_records_task_events_while_executor_is_still_running(

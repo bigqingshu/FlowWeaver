@@ -19,6 +19,7 @@ from flowweaver.workflow_process import (
 from flowweaver.workflow_process import process_execution_helpers as execution_helpers
 from flowweaver.workflow_process import process_finalization as finalization
 from flowweaver.workflow_process.executor_pool import NodeTaskExecutionPool
+from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
 
 CleanupStagingForNode = execution_helpers.CleanupStagingForNode
 
@@ -81,6 +82,17 @@ def run_workflow_process_loop(
         process_generation=process_generation,
         run=run,
         event_sink=event_sink,
+    )
+    runtime_logger = WorkflowRuntimeLogger(
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        logger_name="flowweaver.workflow_process",
+        policy_provider=runtime_feedback_policy_provider,
+        event_sink=event_sink,
+    )
+    runtime_logger.debug(
+        "workflow runtime feedback configured",
+        context={"runtime_options_version": runtime_feedback_policy_provider.version},
     )
 
     try:

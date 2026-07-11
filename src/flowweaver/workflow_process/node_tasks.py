@@ -7,6 +7,7 @@ from typing import Any
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
+from flowweaver.protocols.ipc_messages import NodeTaskLogPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.runtime_feedback import (
     ResolvedRuntimeFeedbackPolicyModel,
@@ -39,6 +40,9 @@ from flowweaver.workflow_process.node_task_results import (
 )
 from flowweaver.workflow_process.node_task_telemetry import (
     record_task_heartbeat as _record_task_heartbeat,
+)
+from flowweaver.workflow_process.node_task_telemetry import (
+    record_task_log as _record_task_log,
 )
 from flowweaver.workflow_process.node_task_telemetry import (
     record_task_progress as _record_task_progress,
@@ -164,6 +168,18 @@ class NodeTaskManager:
                 task.node_instance_id
             ),
             last_progress_emitted_at=self._last_progress_emitted_at,
+        )
+
+    def record_task_log(
+        self,
+        task: NodeTaskModel,
+        *,
+        payload: NodeTaskLogPayload,
+    ) -> None:
+        _record_task_log(
+            event_sink=self._event_sink,
+            task=task,
+            payload=payload,
         )
 
     def mark_timed_out_task(

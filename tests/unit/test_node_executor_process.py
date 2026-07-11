@@ -20,6 +20,7 @@ from flowweaver.node_executor.process import (
     EXECUTOR_PROCESS_IPC_ERROR_EXIT_CODE,
     run_node_executor_process,
 )
+from flowweaver.node_executor.runtime_logger import NodeTaskLogger
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskSubmitPayload
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -30,15 +31,19 @@ from flowweaver.protocols.runtime_feedback import (
 
 def feedback_policy(
     *,
+    log_level: str = "INFO",
     event_level: str = "verbose",
     progress_enabled: bool = True,
     progress_interval_seconds: float = 0,
     include_metrics: bool = True,
+    payload_byte_limit: int = 0,
+    redact_columns: list[str] | None = None,
+    mask_policy: str = "none",
 ) -> ResolvedRuntimeFeedbackPolicyModel:
     return ResolvedRuntimeFeedbackPolicyModel.model_validate(
         {
             "telemetry": {
-                "log_level": "INFO",
+                "log_level": log_level,
                 "event_level": event_level,
                 "event_rate_limit_per_second": 0,
                 "progress_enabled": progress_enabled,
@@ -47,9 +52,9 @@ def feedback_policy(
             "diagnostics": {
                 "capture_error_context": True,
                 "include_metrics": include_metrics,
-                "payload_byte_limit": 0,
-                "redact_columns": [],
-                "mask_policy": "none",
+                "payload_byte_limit": payload_byte_limit,
+                "redact_columns": redact_columns or [],
+                "mask_policy": mask_policy,
             },
         }
     )
@@ -598,6 +603,96 @@ def test_node_executor_process_runs_delay_test_node_with_realtime_events() -> No
     assert emitted[-1].message_type == IPCMessageType.NODE_TASK_PROGRESS
     assert emitted[-1].payload["progress"] == 1.0
     assert emitted[-1].payload["current_stage"] == "completed"
+
+
+def test_node_executor_process_filters_task_logs_before_creating_ipc() -> None:
+    task = make_task().model_copy(
+        update={
+            "runtime_feedback_policy": feedback_policy(
+                log_level="WARN",
+                include_metrics=False,
+                payload_byte_limit=120,
+                redact_columns=["password"],
+                mask_policy="full",
+            )
+        }
+    )
+
+    class LoggingExecutor:
+        executor_id = "logging-executor"
+
+        def __init__(self) -> None:
+            self.runtime_logger: NodeTaskLogger | None = None
+            self.emit_results: list[bool] = []
+
+        def set_runtime_logger(self, logger: NodeTaskLogger | None) -> None:
+            self.runtime_logger = logger
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            assert self.runtime_logger is not None
+            self.emit_results = [
+                self.runtime_logger.debug("hidden debug"),
+                self.runtime_logger.info("hidden info"),
+                self.runtime_logger.warn(
+                    "visible warning",
+                    context={
+                        "rows": [{"password": "secret"}] * 20,
+                        "binary": b"raw-data",
+                        "metrics": {"row_count": 20},
+                        "password": "secret",
+                        "details": "x" * 500,
+                    },
+                ),
+                self.runtime_logger.error(
+                    "visible error",
+                    context={"error_code": "E_NODE"},
+                ),
+            ]
+            now = utc_now()
+            return NodeTaskResultModel(
+                task_id=task.task_id,
+                node_run_id=task.node_run_id,
+                attempt=task.attempt,
+                executor_id=self.executor_id,
+                process_generation=task.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                started_at=now,
+                finished_at=now,
+            )
+
+    executor = LoggingExecutor()
+    process = NodeExecutorProcess(
+        executor_id="executor-1",
+        executor_factory=lambda _task: executor,
+    )
+    envelope = IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_SUBMIT,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        payload=task.model_dump(mode="json"),
+    )
+
+    responses = process.handle_envelope(envelope)
+
+    assert executor.emit_results == [False, False, True, True]
+    assert executor.runtime_logger is None
+    assert [response.message_type for response in responses] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_LOG,
+        IPCMessageType.NODE_TASK_LOG,
+        IPCMessageType.NODE_TASK_COMPLETED,
+    ]
+    assert [response.payload["level"] for response in responses[1:3]] == [
+        "WARN",
+        "ERROR",
+    ]
+    assert responses[1].payload["node_instance_id"] == task.node_instance_id
+    assert responses[1].payload["task_id"] == task.task_id
+    warning_context = responses[1].payload["context"]
+    assert warning_context["_runtime_options_payload_truncated"] is True
+    assert "rows" not in warning_context
+    assert "binary" not in warning_context
+    assert "metrics" not in warning_context
 
 
 def test_node_executor_process_returns_failed_raise_exception_fault() -> None:

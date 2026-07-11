@@ -5,7 +5,20 @@ from typing import Any
 
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.runtime_logs import (
+    MAX_RUNTIME_LOG_MESSAGE_LENGTH,
+    MAX_RUNTIME_LOGGER_NAME_LENGTH,
+    runtime_log_level_is_enabled,
+    sanitize_runtime_log_context,
+)
 from flowweaver.workflow.runtime_feedback_policy import RuntimeFeedbackPolicyLike
+
+RUNTIME_LOG_EVENT_TYPES = frozenset(
+    {
+        EventType.WORKFLOW_LOG,
+        EventType.NODE_LOG,
+    }
+)
 
 CRITICAL_EVENT_TYPES = frozenset(
     {
@@ -52,6 +65,17 @@ def runtime_options_should_emit_event(
     event: EventModel,
     options: RuntimeFeedbackPolicyLike,
 ) -> bool:
+    if event.event_type in RUNTIME_LOG_EVENT_TYPES:
+        level = event.payload.get("level")
+        configured_level = options.telemetry.log_level
+        return isinstance(level, str) and runtime_log_level_is_enabled(
+            configured_level=getattr(
+                configured_level,
+                "value",
+                configured_level,
+            ),
+            message_level=level,
+        )
     if event.event_type == EventType.NODE_PROGRESS:
         return options.telemetry.progress_enabled and (
             options.telemetry.event_level in {"progress", "verbose"}
@@ -71,6 +95,8 @@ def sanitize_runtime_event(
     event: EventModel,
     options: RuntimeFeedbackPolicyLike,
 ) -> EventModel:
+    if event.event_type in RUNTIME_LOG_EVENT_TYPES:
+        return _sanitize_runtime_log_event(event, options)
     payload = dict(event.payload)
     payload = sanitize_runtime_diagnostics_payload(payload, options)
     return event.model_copy(update={"payload": payload})
@@ -119,6 +145,51 @@ def sanitize_runtime_error_payload(
 def event_node_instance_id(event: EventModel) -> str | None:
     value = event.payload.get("node_instance_id")
     return value if isinstance(value, str) and value else None
+
+
+def runtime_log_event_is_error(event: EventModel) -> bool:
+    return (
+        event.event_type in RUNTIME_LOG_EVENT_TYPES
+        and event.payload.get("level") == "ERROR"
+    )
+
+
+def _sanitize_runtime_log_event(
+    event: EventModel,
+    options: RuntimeFeedbackPolicyLike,
+) -> EventModel:
+    source = event.payload
+    context = source.get("context")
+    cleaned_context = sanitize_runtime_log_context(
+        context if isinstance(context, dict) else {},
+        include_metrics=options.diagnostics.include_metrics,
+        payload_byte_limit=options.diagnostics.payload_byte_limit,
+        redact_columns=options.diagnostics.redact_columns,
+        mask_policy=options.diagnostics.mask_policy,
+        capture_error_context=options.diagnostics.capture_error_context,
+        is_error=source.get("level") == "ERROR",
+    )
+    payload: dict[str, Any] = {
+        "level": source.get("level"),
+        "message": _truncate_runtime_log_text(
+            source.get("message"),
+            MAX_RUNTIME_LOG_MESSAGE_LENGTH,
+        ),
+        "logger_name": _truncate_runtime_log_text(
+            source.get("logger_name"),
+            MAX_RUNTIME_LOGGER_NAME_LENGTH,
+        ),
+        "context": cleaned_context,
+    }
+    for key in ("process_id", "node_instance_id", "task_id"):
+        value = source.get(key)
+        if isinstance(value, str) and value:
+            payload[key] = value
+    return event.model_copy(update={"payload": payload})
+
+
+def _truncate_runtime_log_text(value: Any, limit: int) -> str:
+    return str(value or "")[:limit]
 
 
 def _remove_payload_key(value: Any, key: str) -> Any:

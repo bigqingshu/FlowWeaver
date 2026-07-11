@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     ExecutorHeartbeatPayload,
@@ -7,9 +9,11 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskCompletedPayload,
     NodeTaskFailedPayload,
     NodeTaskHeartbeatPayload,
+    NodeTaskLogPayload,
     NodeTaskProgressPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_feedback import RuntimeFeedbackLogLevel
 
 
 def ready_envelope(executor_id: str) -> IPCEnvelope:
@@ -69,6 +73,31 @@ def task_progress_envelope(
             progress=progress,
             current_stage=current_stage,
             metrics=metrics,
+        ).model_dump(mode="json"),
+    )
+
+
+def task_log_envelope(
+    task: NodeTaskModel,
+    *,
+    level: RuntimeFeedbackLogLevel,
+    message: str,
+    logger_name: str,
+    context: dict[str, Any],
+    correlation_id: str | None,
+) -> IPCEnvelope:
+    return IPCEnvelope(
+        message_type=IPCMessageType.NODE_TASK_LOG,
+        workflow_run_id=task.workflow_run_id,
+        node_run_id=task.node_run_id,
+        correlation_id=correlation_id,
+        payload=NodeTaskLogPayload(
+            level=level,
+            message=message,
+            logger_name=logger_name,
+            node_instance_id=task.node_instance_id,
+            task_id=task.task_id,
+            context=context,
         ).model_dump(mode="json"),
     )
 

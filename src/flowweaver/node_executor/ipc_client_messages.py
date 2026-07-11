@@ -17,6 +17,7 @@ INTERMEDIATE_NODE_TASK_MESSAGES = frozenset(
         IPCMessageType.NODE_TASK_ACCEPTED,
         IPCMessageType.NODE_TASK_HEARTBEAT,
         IPCMessageType.NODE_TASK_PROGRESS,
+        IPCMessageType.NODE_TASK_LOG,
     }
 )
 

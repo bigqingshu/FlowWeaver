@@ -13,6 +13,9 @@ from flowweaver.workflow.runtime_option_sanitization import (
     event_node_instance_id as _event_node_instance_id,
 )
 from flowweaver.workflow.runtime_option_sanitization import (
+    runtime_log_event_is_error as _runtime_log_event_is_error,
+)
+from flowweaver.workflow.runtime_option_sanitization import (
     runtime_options_should_emit_event as _runtime_options_should_emit_event,
 )
 from flowweaver.workflow.runtime_option_sanitization import (
@@ -58,7 +61,11 @@ class RuntimeOptionsEventSink:
         options: RuntimeOptionsWorkflowModel,
     ) -> bool:
         limit = options.telemetry.event_rate_limit_per_second
-        if limit <= 0 or event.event_type in _CRITICAL_EVENT_TYPES:
+        if (
+            limit <= 0
+            or event.event_type in _CRITICAL_EVENT_TYPES
+            or _runtime_log_event_is_error(event)
+        ):
             return True
         window = int(self._monotonic_time())
         key = (

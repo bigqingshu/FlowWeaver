@@ -8,9 +8,11 @@ from flowweaver.node_executor import (
     DELAY_TEST_NODE_TYPE,
     FAULT_MODE_PROCESS_EXIT,
     FAULT_TEST_NODE_TYPE,
+    FakeNodeExecutor,
     LocalNodeExecutorIpcClient,
     SubprocessNodeExecutorIpcClient,
 )
+from flowweaver.node_executor.runtime_logger import NodeTaskLogger
 from flowweaver.protocols.enums import IPCMessageType, NodeResultStatus
 from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
@@ -89,6 +91,57 @@ def test_local_node_executor_ipc_client_returns_failed_result() -> None:
     assert result.executor_id == "executor-1"
     assert result.status == NodeResultStatus.FAILED
     assert result.error == {"message": "boom", "error_type": "RuntimeError"}
+
+
+def test_local_node_executor_ipc_client_forwards_filtered_task_log() -> None:
+    class LoggingExecutor:
+        executor_id = "logging-executor"
+
+        def __init__(self) -> None:
+            self.runtime_logger: NodeTaskLogger | None = None
+            self.emit_results: list[bool] = []
+
+        def set_runtime_logger(self, logger: NodeTaskLogger | None) -> None:
+            self.runtime_logger = logger
+
+        def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
+            assert self.runtime_logger is not None
+            self.emit_results = [
+                self.runtime_logger.info("hidden info"),
+                self.runtime_logger.warn(
+                    "visible warning",
+                    context={"row_count": 3},
+                ),
+            ]
+            return FakeNodeExecutor(executor_id=self.executor_id).execute(task)
+
+    task = make_task().model_copy(
+        update={"runtime_feedback_policy": background_fast_feedback_policy()}
+    )
+    emitted: list[IPCEnvelope] = []
+    logging_executor = LoggingExecutor()
+    executor = LocalNodeExecutorIpcClient(
+        executor_id="executor-1",
+        executor_factory=lambda _task: logging_executor,
+        event_handler=lambda _task, envelope: emitted.append(envelope),
+    )
+
+    result = executor.execute(task)
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert logging_executor.emit_results == [False, True]
+    assert [event.message_type for event in emitted] == [
+        IPCMessageType.NODE_TASK_ACCEPTED,
+        IPCMessageType.NODE_TASK_LOG,
+    ]
+    assert emitted[1].payload == {
+        "level": "WARN",
+        "message": "visible warning",
+        "logger_name": "flowweaver.nodes.core.source",
+        "context": {"row_count": 3},
+        "node_instance_id": task.node_instance_id,
+        "task_id": task.task_id,
+    }
 
 
 def test_subprocess_node_executor_ipc_client_returns_completed_result() -> None:

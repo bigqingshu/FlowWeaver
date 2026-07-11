@@ -7,6 +7,7 @@ from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.protocols.enums import EventType
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.ipc_messages import NodeTaskLogPayload
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.workflow.runtime_feedback_policy import RuntimeFeedbackPolicyLike
 
@@ -93,3 +94,19 @@ def record_task_progress(
         )
     )
     return updated
+
+
+def record_task_log(
+    *,
+    event_sink: RuntimeEventSink,
+    task: NodeTaskModel,
+    payload: NodeTaskLogPayload,
+) -> None:
+    event_sink.emit(
+        EventModel(
+            event_type=EventType.NODE_LOG,
+            workflow_run_id=task.workflow_run_id,
+            node_run_id=task.node_run_id,
+            payload=payload.model_dump(mode="json"),
+        )
+    )

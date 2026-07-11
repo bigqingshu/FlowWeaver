@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from threading import Lock
+from typing import Any
 
 from flowweaver.node_executor.cancel_token import CancelToken, NodeExecutionContext
 from flowweaver.node_executor.runtime_feedback_gate import (
     NodeTaskRuntimeFeedbackGate,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.runtime_feedback import RuntimeFeedbackLogLevel
+from flowweaver.protocols.runtime_logs import sanitize_runtime_log_context
 
 
 class NodeExecutorProcessState:
@@ -67,6 +70,26 @@ class NodeExecutorProcessState:
         if gate is None:
             return dict(metrics or {})
         return gate.prepare_progress_metrics(metrics)
+
+    def prepare_task_log_context(
+        self,
+        task_id: str,
+        level: RuntimeFeedbackLogLevel,
+        context: Mapping[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            gate = self._runtime_feedback_gates.get(task_id)
+        if gate is None:
+            return sanitize_runtime_log_context(
+                context,
+                include_metrics=True,
+                payload_byte_limit=0,
+                redact_columns=[],
+                mask_policy="none",
+                capture_error_context=True,
+                is_error=level == "ERROR",
+            )
+        return gate.prepare_log_context(level, context)
 
     def request_cancel(self, *, task_id: str, reason: str) -> None:
         with self._lock:

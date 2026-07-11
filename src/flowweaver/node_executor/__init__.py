@@ -26,6 +26,7 @@ from flowweaver.node_executor.process import (
     NodeExecutorProcess,
     run_node_executor_process,
 )
+from flowweaver.node_executor.runtime_logger import NodeTaskLogger
 
 __all__ = [
     "BUILTIN_FAULT_NODE_TYPES",
@@ -44,6 +45,7 @@ __all__ = [
     "NodeExecutor",
     "NodeExecutorFactory",
     "NodeExecutorProcess",
+    "NodeTaskLogger",
     "run_node_executor_process",
     "SubprocessNodeExecutorIpcClient",
 ]

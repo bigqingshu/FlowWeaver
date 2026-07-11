@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from flowweaver.node_executor.base import NodeExecutorFactory
 from flowweaver.node_executor.builtin_fault import (
@@ -28,12 +29,19 @@ from flowweaver.node_executor.process_envelopes import (
     task_heartbeat_envelope as _task_heartbeat_envelope,
 )
 from flowweaver.node_executor.process_envelopes import (
+    task_log_envelope as _task_log_envelope,
+)
+from flowweaver.node_executor.process_envelopes import (
     task_progress_envelope as _task_progress_envelope,
 )
 from flowweaver.node_executor.process_helpers import (
     failed_task_result as _failed_task_result,
 )
 from flowweaver.node_executor.process_state import NodeExecutorProcessState
+from flowweaver.node_executor.runtime_logger import (
+    NodeTaskLogger,
+    NodeTaskRuntimeLoggerAware,
+)
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
@@ -41,6 +49,7 @@ from flowweaver.protocols.ipc_messages import (
     NodeTaskSubmitPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
+from flowweaver.protocols.runtime_feedback import RuntimeFeedbackLogLevel
 
 
 class NodeExecutorProcess:
@@ -104,6 +113,33 @@ class NodeExecutorProcess:
             or self._state.task_correlation_id(task.task_id),
         )
 
+    def task_log_envelope(
+        self,
+        task: NodeTaskModel,
+        *,
+        level: RuntimeFeedbackLogLevel,
+        message: str,
+        logger_name: str,
+        context: dict[str, Any] | None = None,
+        correlation_id: str | None = None,
+    ) -> IPCEnvelope | None:
+        filtered_context = self._state.prepare_task_log_context(
+            task.task_id,
+            level,
+            context,
+        )
+        if filtered_context is None:
+            return None
+        return _task_log_envelope(
+            task,
+            level=level,
+            message=message,
+            logger_name=logger_name,
+            context=filtered_context,
+            correlation_id=correlation_id
+            or self._state.task_correlation_id(task.task_id),
+        )
+
     def emit_task_heartbeat(
         self,
         task: NodeTaskModel,
@@ -133,6 +169,38 @@ class NodeExecutorProcess:
         if envelope is not None:
             self._emit_or_queue_task_event(envelope)
 
+    def emit_task_log(
+        self,
+        task: NodeTaskModel,
+        level: RuntimeFeedbackLogLevel,
+        message: str,
+        logger_name: str,
+        context: dict[str, Any],
+    ) -> bool:
+        envelope = self.task_log_envelope(
+            task,
+            level=level,
+            message=message,
+            logger_name=logger_name,
+            context=context,
+        )
+        if envelope is None:
+            return False
+        self._emit_or_queue_task_event(envelope)
+        return True
+
+    def task_logger(
+        self,
+        task: NodeTaskModel,
+        *,
+        logger_name: str,
+    ) -> NodeTaskLogger:
+        return NodeTaskLogger(
+            task=task,
+            logger_name=logger_name,
+            emit_log=self.emit_task_log,
+        )
+
     def handle_envelope(self, envelope: IPCEnvelope) -> tuple[IPCEnvelope, ...]:
         if envelope.message_type == IPCMessageType.NODE_TASK_CANCEL_REQUEST:
             return self._handle_cancel_request(envelope)
@@ -152,6 +220,7 @@ class NodeExecutorProcess:
         )
         accepted_events = self._emit_or_return(accepted)
         try:
+            self._bind_runtime_logger(executor, task)
             result = executor.execute(task)
             task_events = tuple(self._pending_task_events)
         except Exception as exc:
@@ -168,6 +237,7 @@ class NodeExecutorProcess:
             )
             return (*accepted_events, *task_events, failed)
         finally:
+            self._clear_runtime_logger(executor)
             self._state.finish_task(task.task_id)
             self._pending_task_events = []
         completed = _task_completed_envelope(
@@ -213,3 +283,22 @@ class NodeExecutorProcess:
                 event_emitter=self,
             )
         return FakeNodeExecutor(executor_id=self.executor_id)
+
+    def _bind_runtime_logger(self, executor: object, task: NodeTaskModel) -> None:
+        if not isinstance(executor, NodeTaskRuntimeLoggerAware):
+            return
+        executor.set_runtime_logger(
+            self.task_logger(
+                task,
+                logger_name=f"flowweaver.nodes.{task.node_type}",
+            )
+        )
+
+    @staticmethod
+    def _clear_runtime_logger(executor: object) -> None:
+        if not isinstance(executor, NodeTaskRuntimeLoggerAware):
+            return
+        try:
+            executor.set_runtime_logger(None)
+        except Exception:
+            pass

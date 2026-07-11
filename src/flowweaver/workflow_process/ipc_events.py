@@ -8,6 +8,7 @@ from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.ipc_messages import (
     IPCEnvelope,
     NodeTaskHeartbeatPayload,
+    NodeTaskLogPayload,
     NodeTaskProgressPayload,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
@@ -77,3 +78,12 @@ def record_node_task_ipc_event(
             current_stage=progress_payload.current_stage,
             metrics=progress_payload.metrics,
         )
+        return
+    if envelope.message_type == IPCMessageType.NODE_TASK_LOG:
+        log_payload = NodeTaskLogPayload.model_validate(envelope.payload)
+        if (
+            log_payload.task_id != task.task_id
+            or log_payload.node_instance_id != task.node_instance_id
+        ):
+            return
+        task_manager.record_task_log(task, payload=log_payload)

@@ -10,6 +10,7 @@ from flowweaver.common.time import utc_now
 from flowweaver.protocols.base import StrictModel
 from flowweaver.protocols.enums import IPCMessageType
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
+from flowweaver.protocols.runtime_logs import RuntimeLogPayloadModel
 
 
 class IPCEnvelope(StrictModel):
@@ -42,6 +43,11 @@ class NodeTaskProgressPayload(StrictModel):
     progress: float | None
     current_stage: str | None = None
     metrics: dict[str, int | float | str] = Field(default_factory=dict)
+
+
+class NodeTaskLogPayload(RuntimeLogPayloadModel):
+    node_instance_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
 
 
 class NodeTaskCancelRequestPayload(StrictModel):

@@ -19,6 +19,7 @@ from flowweaver.workflow.runtime_options import (
 )
 from flowweaver.workflow_process.dag import build_workflow_dag
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
+from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
 
 
 class CollectingEventSink:
@@ -498,3 +499,255 @@ def test_runtime_options_event_sink_rate_limits_noncritical_events() -> None:
         EventType.DATA_STAGED,
         EventType.NODE_FAILED,
     ]
+
+
+def test_runtime_options_event_sink_filters_workflow_and_node_log_levels() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                },
+                {
+                    "node_instance_id": "other",
+                    "node_type": "core.transform",
+                    "node_version": "1.0",
+                },
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "telemetry": {
+                        "log_level": "WARN",
+                        "event_level": "none",
+                    }
+                },
+                "node_overrides": {
+                    "source": {"telemetry": {"log_level": "DEBUG"}}
+                },
+            },
+        }
+    )
+    collector = CollectingEventSink()
+    sink = RuntimeOptionsEventSink(
+        collector,
+        workflow_options=resolve_workflow_runtime_options(definition),
+        runtime_options_by_node=resolve_runtime_options_by_node(definition),
+    )
+
+    sink.emit(_workflow_log_event(level="INFO", message="hidden workflow info"))
+    sink.emit(_workflow_log_event(level="WARN", message="visible workflow warning"))
+    sink.emit(
+        _node_log_event(
+            node_instance_id="source",
+            level="DEBUG",
+            message="visible source debug",
+        )
+    )
+    sink.emit(
+        _node_log_event(
+            node_instance_id="other",
+            level="INFO",
+            message="hidden other info",
+        )
+    )
+    sink.emit(
+        _node_log_event(
+            node_instance_id="other",
+            level="ERROR",
+            message="visible other error",
+        )
+    )
+
+    assert [event.payload["message"] for event in collector.events] == [
+        "visible workflow warning",
+        "visible source debug",
+        "visible other error",
+    ]
+
+
+def test_runtime_options_event_sink_sanitizes_logs_and_keeps_error() -> None:
+    definition = WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [
+                {
+                    "node_instance_id": "source",
+                    "node_type": "core.source",
+                    "node_version": "1.0",
+                }
+            ],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "telemetry": {
+                        "log_level": "DEBUG",
+                        "event_level": "none",
+                        "event_rate_limit_per_second": 1,
+                    },
+                    "diagnostics": {
+                        "include_metrics": False,
+                        "payload_byte_limit": 120,
+                        "redact_columns": ["password"],
+                        "mask_policy": "full",
+                    },
+                }
+            },
+        }
+    )
+    collector = CollectingEventSink()
+    sink = RuntimeOptionsEventSink(
+        collector,
+        workflow_options=resolve_workflow_runtime_options(definition),
+        runtime_options_by_node=resolve_runtime_options_by_node(definition),
+        monotonic_time=lambda: 12.4,
+    )
+
+    sink.emit(
+        _node_log_event(
+            node_instance_id="source",
+            level="INFO",
+            message="large context",
+            context={
+                "rows": [{"password": "secret"}] * 20,
+                "binary": b"raw-data",
+                "metrics": {"row_count": 20},
+                "password": "secret",
+                "details": "x" * 500,
+            },
+        )
+    )
+    sink.emit(
+        _node_log_event(
+            node_instance_id="source",
+            level="WARN",
+            message="rate limited warning",
+        )
+    )
+    sink.emit(
+        _node_log_event(
+            node_instance_id="source",
+            level="ERROR",
+            message="retained error",
+            context={"error_code": "E_LOG", "rows": [{"secret": "value"}]},
+        )
+    )
+
+    assert [event.payload["level"] for event in collector.events] == [
+        "INFO",
+        "ERROR",
+    ]
+    info_context = collector.events[0].payload["context"]
+    assert info_context["_runtime_options_payload_truncated"] is True
+    assert "rows" not in info_context
+    assert "binary" not in info_context
+    assert "metrics" not in info_context
+    assert collector.events[1].payload == {
+        "level": "ERROR",
+        "message": "retained error",
+        "logger_name": "flowweaver.nodes.test",
+        "context": {"error_code": "E_LOG"},
+        "node_instance_id": "source",
+        "task_id": "task-source",
+    }
+
+
+def test_workflow_runtime_loggers_keep_run_levels_isolated() -> None:
+    warn_definition = _definition_with_workflow_log_level("WARN")
+    debug_definition = _definition_with_workflow_log_level("DEBUG")
+    warn_collector = CollectingEventSink()
+    debug_collector = CollectingEventSink()
+    warn_logger = _workflow_runtime_logger(
+        definition=warn_definition,
+        workflow_run_id="run-warn",
+        collector=warn_collector,
+    )
+    debug_logger = _workflow_runtime_logger(
+        definition=debug_definition,
+        workflow_run_id="run-debug",
+        collector=debug_collector,
+    )
+
+    assert warn_logger.debug("hidden debug") is False
+    assert debug_logger.debug("visible debug") is True
+    assert warn_logger.error("visible error") is True
+
+    assert [event.workflow_run_id for event in warn_collector.events] == ["run-warn"]
+    assert [event.payload["level"] for event in warn_collector.events] == ["ERROR"]
+    assert [event.workflow_run_id for event in debug_collector.events] == [
+        "run-debug"
+    ]
+    assert [event.payload["level"] for event in debug_collector.events] == [
+        "DEBUG"
+    ]
+
+
+def _workflow_log_event(*, level: str, message: str) -> EventModel:
+    return EventModel(
+        event_type=EventType.WORKFLOW_LOG,
+        workflow_run_id="run-1",
+        payload={
+            "level": level,
+            "message": message,
+            "logger_name": "flowweaver.workflow_process",
+            "process_id": "process-1",
+            "context": {},
+        },
+    )
+
+
+def _node_log_event(
+    *,
+    node_instance_id: str,
+    level: str,
+    message: str,
+    context: dict[str, object] | None = None,
+) -> EventModel:
+    return EventModel(
+        event_type=EventType.NODE_LOG,
+        workflow_run_id="run-1",
+        node_run_id=f"node-run-{node_instance_id}",
+        payload={
+            "level": level,
+            "message": message,
+            "logger_name": "flowweaver.nodes.test",
+            "node_instance_id": node_instance_id,
+            "task_id": f"task-{node_instance_id}",
+            "context": context or {},
+        },
+    )
+
+
+def _definition_with_workflow_log_level(level: str) -> WorkflowDefinitionModel:
+    return WorkflowDefinitionModel.model_validate(
+        {
+            "nodes": [],
+            "connections": [],
+            "runtime_options": {
+                "workflow": {
+                    "telemetry": {"log_level": level, "event_level": "none"}
+                }
+            },
+        }
+    )
+
+
+def _workflow_runtime_logger(
+    *,
+    definition: WorkflowDefinitionModel,
+    workflow_run_id: str,
+    collector: CollectingEventSink,
+) -> WorkflowRuntimeLogger:
+    sink = RuntimeOptionsEventSink(
+        collector,
+        workflow_options=resolve_workflow_runtime_options(definition),
+        runtime_options_by_node={},
+    )
+    return WorkflowRuntimeLogger(
+        workflow_run_id=workflow_run_id,
+        process_id=f"process-{workflow_run_id}",
+        logger_name="flowweaver.workflow_process.test",
+        policy_provider=build_static_runtime_feedback_policy_provider(definition),
+        event_sink=sink,
+    )
