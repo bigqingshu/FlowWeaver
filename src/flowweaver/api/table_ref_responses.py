@@ -68,6 +68,7 @@ def _table_ref_can_read_rows(value: TableRefModel) -> bool:
     if "READ" not in value.capabilities:
         return False
     return value.lifecycle_status not in {
+        LifecycleStatus.RELEASABLE,
         LifecycleStatus.RELEASED,
         LifecycleStatus.RETIRED,
         LifecycleStatus.ORPHANED,

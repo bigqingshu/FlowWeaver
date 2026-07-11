@@ -40,6 +40,7 @@ def table_ref_is_readable(table_ref: TableRefModel) -> bool:
     if "READ" not in table_ref.capabilities:
         return False
     return table_ref.lifecycle_status not in {
+        LifecycleStatus.RELEASABLE,
         LifecycleStatus.RELEASED,
         LifecycleStatus.RETIRED,
         LifecycleStatus.ORPHANED,

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
-from flowweaver.protocols.enums import LifecycleStatus, TableStorageKind
+from flowweaver.engine.table_ref_release import (
+    TableRefReleaseOutcome,
+    TableRefReleaseService,
+)
 from flowweaver.protocols.table_ref import TableRefModel
-
-_INTERNAL_CLEANUP_STORAGE_KINDS = {
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
-}
 
 
 def cleanup_table_refs_for_run(
@@ -20,48 +18,30 @@ def cleanup_table_refs_for_run(
     cleaned: list[TableRefModel] = []
     skipped: list[dict[str, str]] = []
     failed: list[dict[str, str]] = []
+    release_service = TableRefReleaseService(
+        store=store,
+        provider_registry=provider_registry,
+    )
     for table_ref in store.list_table_refs_by_workflow_run(workflow_run_id):
-        skip_reason = table_cleanup_skip_reason(table_ref)
-        if skip_reason is not None:
+        result = release_service.release(table_ref.table_ref_id)
+        if result.outcome == TableRefReleaseOutcome.SKIPPED:
             skipped.append(
                 {
                     "table_ref_id": table_ref.table_ref_id,
-                    "reason": skip_reason,
+                    "reason": result.reason or "release_skipped",
                 }
             )
             continue
-        provider = provider_registry.get(table_ref.provider_id)
-        if provider is None or not provider_registry.supports_storage_kind(
-            table_ref.provider_id,
-            table_ref.storage_kind,
-        ):
-            skipped.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": "provider_unsupported",
-                }
-            )
-            continue
-        try:
-            provider.drop_table(table_ref)
-        except ValueError as exc:
+        if result.outcome == TableRefReleaseOutcome.FAILED:
             failed.append(
                 {
                     "table_ref_id": table_ref.table_ref_id,
-                    "reason": str(exc),
+                    "reason": result.reason or "release_failed",
                 }
             )
             continue
-        released = store.mark_table_ref_released(table_ref.table_ref_id)
-        if released is None:
-            skipped.append(
-                {
-                    "table_ref_id": table_ref.table_ref_id,
-                    "reason": "already_unavailable",
-                }
-            )
-            continue
-        cleaned.append(released)
+        if result.table_ref is not None:
+            cleaned.append(result.table_ref)
     return {
         "workflow_run_id": workflow_run_id,
         "cleaned_count": len(cleaned),
@@ -71,15 +51,3 @@ def cleanup_table_refs_for_run(
         "skipped": skipped,
         "failed": failed,
     }
-
-
-def table_cleanup_skip_reason(table_ref: TableRefModel) -> str | None:
-    if table_ref.storage_kind not in _INTERNAL_CLEANUP_STORAGE_KINDS:
-        return "external_or_unsupported_storage"
-    if table_ref.lifecycle_status in {
-        LifecycleStatus.RELEASED,
-        LifecycleStatus.RETIRED,
-        LifecycleStatus.ORPHANED,
-    }:
-        return "already_unavailable"
-    return None

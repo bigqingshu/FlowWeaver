@@ -304,3 +304,25 @@ def test_data_api_rejects_unavailable_table_ref(tmp_path: Path) -> None:
     )
 
     assert error["error_code"] == "TABLE_REF_NOT_AVAILABLE"
+
+
+def test_data_api_rejects_releasable_table_ref(tmp_path: Path) -> None:
+    provider_registry = TableProviderRegistry()
+    provider_registry.register(
+        FakeTableProvider(),
+        storage_kinds=(TableStorageKind.MEMORY,),
+    )
+    client, store = make_client(tmp_path, provider_registry=provider_registry)
+    table_ref = seed_table_ref(
+        store,
+        lifecycle_status=LifecycleStatus.RELEASABLE,
+    )
+
+    error = response_error(
+        client.get(
+            f"/api/v1/data/{table_ref.table_ref_id}/rows",
+            headers=auth_headers(),
+        )
+    )
+
+    assert error["error_code"] == "TABLE_REF_NOT_AVAILABLE"

@@ -69,6 +69,7 @@ def validate_memory_table_ref(
     if table_ref.storage_kind != TableStorageKind.MEMORY:
         raise ValueError("MemoryTableProvider only supports MEMORY")
     if table_ref.lifecycle_status in {
+        LifecycleStatus.RELEASABLE,
         LifecycleStatus.RELEASED,
         LifecycleStatus.RETIRED,
         LifecycleStatus.ORPHANED,

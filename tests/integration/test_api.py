@@ -2848,6 +2848,133 @@ def test_cleanup_run_table_refs_releases_internal_tables_after_terminal_run(
     assert response_error(unavailable)["error_code"] == "TABLE_REF_NOT_AVAILABLE"
 
 
+def test_cleanup_run_table_refs_preserves_active_shared_publication(
+    tmp_path: Path,
+) -> None:
+    client, store, container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Shared cleanup guard",
+        definition=valid_definition(),
+        workflow_id="workflow-shared-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-shared-cleanup",
+        status=WorkflowRunStatus.SUCCEEDED,
+        trigger_source="background_manual",
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-run-shared-cleanup",
+    )
+    provider = SQLiteRuntimeTableProvider(container.config.resolved_runtime_dir())
+    schema = [
+        FieldSchemaModel(
+            field_id="orders-row-id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        )
+    ]
+    staging = provider.create_staging_table(
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        output_name="orders",
+        schema=schema,
+    )
+    provider.insert_rows(staging, [{"row_id": 1}])
+    published = provider.published_ref_from_staging(staging)
+    provider.publish_staging(staging, published)
+    store.register_table_ref(published)
+    store.create_shared_publication(
+        publication_id="publication-cleanup-guard",
+        share_name="daily_report",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={"orders": published.table_ref_id},
+    )
+
+    cleanup = response_data(
+        client.delete(
+            f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+    rows = response_data(
+        client.get(
+            f"/api/v1/data/{published.table_ref_id}/rows",
+            headers=auth_headers(),
+        )
+    )
+
+    assert cleanup["cleaned_count"] == 0
+    assert cleanup["skipped_count"] == 1
+    assert cleanup["failed_count"] == 0
+    assert cleanup["skipped"] == [
+        {
+            "table_ref_id": published.table_ref_id,
+            "reason": "shared_publication_active",
+        }
+    ]
+    assert rows["rows"] == [{"row_id": 1}]
+    assert store.get_table_ref(published.table_ref_id) == published
+
+
+def test_cleanup_run_table_refs_preserves_active_table_lease(
+    tmp_path: Path,
+) -> None:
+    client, store, container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Lease cleanup guard",
+        definition=valid_definition(),
+        workflow_id="workflow-lease-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-lease-cleanup",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-run-lease-cleanup",
+    )
+    table_ref = make_api_table_ref(
+        table_ref_id="table-lease-cleanup",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+    )
+    store.register_table_ref(table_ref)
+    lease = container.table_lease_manager.acquire_read_lease(
+        table_ref_id=table_ref.table_ref_id,
+        owner_id="preview",
+        ttl_seconds=60,
+    )
+    assert lease.granted is True
+
+    cleanup = response_data(
+        client.delete(
+            f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+            headers=auth_headers(),
+        )
+    )
+
+    assert cleanup["cleaned_count"] == 0
+    assert cleanup["skipped_count"] == 1
+    assert cleanup["failed_count"] == 0
+    assert cleanup["skipped"] == [
+        {
+            "table_ref_id": table_ref.table_ref_id,
+            "reason": "active_table_lease",
+        }
+    ]
+    assert store.get_table_ref(table_ref.table_ref_id) == table_ref
+
+
 def test_cleanup_run_table_refs_rejects_running_run(
     tmp_path: Path,
 ) -> None:

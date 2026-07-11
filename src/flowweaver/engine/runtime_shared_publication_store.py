@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.ids import new_id
@@ -11,6 +12,7 @@ from flowweaver.engine.db_models import (
     SharedPublicationMemberRecord,
     SharedPublicationRecord,
 )
+from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import SharedPublication
 from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
@@ -43,6 +45,7 @@ from flowweaver.engine.runtime_shared_table_store_helpers import (
 
 
 class RuntimeSharedPublicationStoreMixin:
+    engine: Engine
     _session_factory: sessionmaker[Session]
 
     def create_shared_publication(
@@ -62,7 +65,7 @@ class RuntimeSharedPublicationStoreMixin:
         now = utc_now()
         publication_id = publication_id or new_id()
         member_records: list[SharedPublicationMemberRecord] = []
-        with self._session_factory.begin() as session:
+        with immediate_session(self.engine) as session:
             _require_shared_publication_producer_run(
                 session,
                 producer_run_id=producer_run_id,

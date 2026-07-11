@@ -60,6 +60,7 @@ def load_readable_table_ref(
             status_code=403,
         )
     if table_ref.lifecycle_status in {
+        LifecycleStatus.RELEASABLE,
         LifecycleStatus.RELEASED,
         LifecycleStatus.RETIRED,
         LifecycleStatus.ORPHANED,

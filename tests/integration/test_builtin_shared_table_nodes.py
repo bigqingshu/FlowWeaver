@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 
@@ -71,14 +72,20 @@ def make_table_ref(
     node_run_id: str,
     logical_table_id: str,
     version: int,
+    storage_kind: TableStorageKind = TableStorageKind.RUNTIME_SQL,
 ) -> TableRefModel:
+    provider_id = {
+        TableStorageKind.RUNTIME_SQL: "sqlite_runtime",
+        TableStorageKind.MEMORY: "memory",
+        TableStorageKind.EXTERNAL_SQL: "sqlite_external",
+    }[storage_kind]
     return TableRefModel(
         table_ref_id=table_ref_id,
         role=TableRole.CURRENT,
-        storage_kind=TableStorageKind.RUNTIME_SQL,
+        storage_kind=storage_kind,
         scope=TableScope.WORKFLOW_SCOPE,
         mutability=TableMutability.PUBLISHED_IMMUTABLE,
-        provider_id="sqlite_runtime",
+        provider_id=provider_id,
         resource_profile_id=None,
         mount_id=None,
         logical_table_id=logical_table_id,
@@ -350,4 +357,58 @@ def test_publish_shared_tables_node_requires_export_names(
     assert result.status == NodeResultStatus.FAILED
     assert result.error is not None
     assert "config.export_names must be a list" in result.error["message"]
+    assert store.get_latest_shared_publication("daily_report") is None
+
+
+@pytest.mark.parametrize(
+    ("storage_kind", "expected_error_code"),
+    [
+        (
+            TableStorageKind.MEMORY,
+            "SHARED_TABLE_STORAGE_NOT_DURABLE",
+        ),
+        (
+            TableStorageKind.EXTERNAL_SQL,
+            "SHARED_TABLE_REQUIRES_MATERIALIZED_SNAPSHOT",
+        ),
+    ],
+)
+def test_publish_shared_tables_node_rejects_non_durable_storage(
+    tmp_path: Path,
+    storage_kind: TableStorageKind,
+    expected_error_code: str,
+) -> None:
+    store = make_store(tmp_path)
+    create_workflow_run(
+        store,
+        workflow_id="workflow-producer",
+        workflow_run_id="run-producer",
+    )
+    table_ref = make_table_ref(
+        table_ref_id=f"table-{storage_kind.value.lower()}",
+        workflow_run_id="run-producer",
+        node_run_id="run-producer-node",
+        logical_table_id="orders",
+        version=1,
+        storage_kind=storage_kind,
+    )
+    store.register_table_ref(table_ref)
+    executor = BuiltinSharedTableNodeExecutor(store=store)
+
+    result = executor.execute(
+        make_task(
+            workflow_run_id="run-producer",
+            node_type=PUBLISH_SHARED_TABLES_NODE_TYPE,
+            node_instance_id="publish",
+            input_refs=[table_ref.table_ref_id],
+            config={
+                "share_name": "daily_report",
+                "export_names": ["orders"],
+            },
+        )
+    )
+
+    assert result.status == NodeResultStatus.FAILED
+    assert result.error is not None
+    assert expected_error_code in result.error["message"]
     assert store.get_latest_shared_publication("daily_report") is None

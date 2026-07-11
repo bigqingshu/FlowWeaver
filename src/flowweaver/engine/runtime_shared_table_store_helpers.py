@@ -13,7 +13,11 @@ from flowweaver.engine.db_models import (
     WorkflowRunRecord,
 )
 from flowweaver.engine.runtime_models import InputSnapshotEntry
-from flowweaver.protocols.enums import LifecycleStatus, TableMutability
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableMutability,
+    TableStorageKind,
+)
 
 
 def get_shared_publication_member_records(
@@ -69,6 +73,21 @@ def validate_shared_publication_members(
             raise ValueError(
                 "Shared publication member must be PUBLISHED_IMMUTABLE: "
                 f"{table_ref_id}"
+            )
+        if table_ref_record.storage_kind == TableStorageKind.MEMORY.value:
+            raise ValueError(
+                "SHARED_TABLE_STORAGE_NOT_DURABLE: "
+                f"Shared publication member must use RUNTIME_SQL: {table_ref_id}"
+            )
+        if table_ref_record.storage_kind == TableStorageKind.EXTERNAL_SQL.value:
+            raise ValueError(
+                "SHARED_TABLE_REQUIRES_MATERIALIZED_SNAPSHOT: "
+                f"Shared publication member must use RUNTIME_SQL: {table_ref_id}"
+            )
+        if table_ref_record.storage_kind != TableStorageKind.RUNTIME_SQL.value:
+            raise ValueError(
+                "SHARED_TABLE_STORAGE_UNSUPPORTED: "
+                f"Shared publication member must use RUNTIME_SQL: {table_ref_id}"
             )
         table_ref_records[export_name] = table_ref_record
     return table_ref_records
