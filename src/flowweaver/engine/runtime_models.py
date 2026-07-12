@@ -181,6 +181,12 @@ class RunTableDirectoryEntry:
 
 
 @dataclass(frozen=True)
+class RunTableCleanupCandidate:
+    table_ref_id: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class RuntimeEventLog:
     event_id: str
     sequence_number: int

@@ -37,6 +37,12 @@ class DataRefRecord(Base):
             "created_at",
             "table_ref_id",
         ),
+        Index(
+            "idx_data_refs_run_cleanup_keyset",
+            "workflow_run_id",
+            "created_at",
+            "table_ref_id",
+        ),
     )
 
     table_ref_id: Mapped[str] = mapped_column(Text, primary_key=True)

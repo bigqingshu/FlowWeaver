@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import DataRefRecord
-from flowweaver.engine.runtime_models import RunTableDirectoryEntry
+from flowweaver.engine.runtime_models import (
+    RunTableCleanupCandidate,
+    RunTableDirectoryEntry,
+)
 from flowweaver.engine.runtime_record_mappers import (
     _data_ref_from_model,
     _datetime_to_text,
@@ -20,6 +23,9 @@ from flowweaver.engine.runtime_table_ref_queries import (
 )
 from flowweaver.engine.runtime_table_ref_queries import (
     get_table_ref_from_session as _get_table_ref,
+)
+from flowweaver.engine.runtime_table_ref_queries import (
+    list_table_ref_cleanup_candidates_from_session as _list_cleanup_candidates,
 )
 from flowweaver.engine.runtime_table_ref_queries import (
     list_table_ref_directory_by_ids_from_session as _list_directory_by_ids,
@@ -78,6 +84,23 @@ class RuntimeTableRefStoreMixin:
     ) -> list[TableRefModel]:
         with self._session_factory() as session:
             return _list_by_workflow_run(session, workflow_run_id)
+
+    def list_table_ref_cleanup_candidates(
+        self,
+        workflow_run_id: str,
+        *,
+        after_created_at: str | None = None,
+        after_table_ref_id: str | None = None,
+        limit: int,
+    ) -> list[RunTableCleanupCandidate]:
+        with self._session_factory() as session:
+            return _list_cleanup_candidates(
+                session,
+                workflow_run_id,
+                after_created_at=after_created_at,
+                after_table_ref_id=after_table_ref_id,
+                limit=limit,
+            )
 
     def list_table_refs_by_ids(
         self,

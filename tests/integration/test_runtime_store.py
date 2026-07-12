@@ -251,6 +251,9 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "lifecycle_status",
         "version",
     ]
+    assert indexes(database_path, "data_refs")[
+        "idx_data_refs_run_cleanup_keyset"
+    ] == ["workflow_run_id", "created_at", "table_ref_id"]
     assert indexes(database_path, "node_runs")[
         "idx_node_runs_run_status_directory"
     ] == [

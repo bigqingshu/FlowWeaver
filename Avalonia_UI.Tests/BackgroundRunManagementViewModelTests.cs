@@ -135,7 +135,116 @@ public sealed class BackgroundRunManagementViewModelTests
         await viewModel.CleanupTablesCommand.ExecuteAsync(null);
 
         Assert.AreEqual("run-aborted", service.LastCleanedWorkflowRunId);
-        Assert.AreSame(result, published);
+        Assert.IsNotNull(published);
+        Assert.AreEqual(2, published.CleanedCount);
+        Assert.AreEqual(1, published.SkippedCount);
+    }
+
+    [TestMethod]
+    public async Task TerminalRunCleanupContinuesUntilCompleted()
+    {
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-complete", "SUCCEEDED")]),
+            CleanupBatchHandler = (cursor, _) => Task.FromResult(
+                ApiResponseEnvelope<RunTableCleanupResultDto>.Success(
+                    cursor is null
+                        ? new RunTableCleanupResultDto
+                        {
+                            WorkflowRunId = "run-complete",
+                            Outcome = "RETRY_PENDING",
+                            ProcessedCount = 10,
+                            CleanedCount = 10,
+                            CleanedTableRefIds = Enumerable.Range(0, 10)
+                                .Select(index => $"table-{index}")
+                                .ToArray(),
+                            ContinuationCursor = "cursor-1",
+                        }
+                        : new RunTableCleanupResultDto
+                        {
+                            WorkflowRunId = "run-complete",
+                            Outcome = "COMPLETED",
+                            ProcessedCount = 2,
+                            CleanedCount = 1,
+                            SkippedCount = 1,
+                            CleanedTableRefIds = ["table-10"],
+                            Skipped =
+                            [
+                                new RunTableCleanupIssueDto
+                                {
+                                    TableRefId = "external-1",
+                                    Reason = "external_or_unsupported_storage",
+                                },
+                            ],
+                        })),
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+        RunTableCleanupResultDto? published = null;
+        viewModel.TablesCleaned += (_, cleanupResult) => published = cleanupResult;
+
+        await viewModel.CleanupTablesCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, service.CleanupCallCount);
+        CollectionAssert.AreEqual(
+            new string?[] { null, "cursor-1" },
+            service.CleanupCursors.ToArray());
+        Assert.IsNotNull(published);
+        Assert.AreEqual("COMPLETED", published.Outcome);
+        Assert.AreEqual(12, published.ProcessedCount);
+        Assert.AreEqual(11, published.CleanedCount);
+        Assert.AreEqual(1, published.SkippedCount);
+        Assert.HasCount(11, published.CleanedTableRefIds);
+    }
+
+    [TestMethod]
+    public async Task SwitchingRunCancelsCleanupContinuationForOriginalRun()
+    {
+        var secondBatchStarted = NewCompletionSource();
+        CancellationToken secondBatchToken = default;
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-first", "SUCCEEDED"), Run("run-second", "SUCCEEDED")]),
+            CleanupBatchHandler = async (cursor, cancellationToken) =>
+            {
+                if (cursor is null)
+                {
+                    return ApiResponseEnvelope<RunTableCleanupResultDto>.Success(
+                        new RunTableCleanupResultDto
+                        {
+                            WorkflowRunId = "run-first",
+                            Outcome = "RETRY_PENDING",
+                            ProcessedCount = 1,
+                            CleanedCount = 1,
+                            CleanedTableRefIds = ["table-1"],
+                            ContinuationCursor = "cursor-1",
+                        });
+                }
+
+                secondBatchToken = cancellationToken;
+                secondBatchStarted.SetResult();
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+                throw new InvalidOperationException();
+            },
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+        var publishedRunIds = new List<string>();
+        viewModel.TablesCleaned += (runId, _) => publishedRunIds.Add(runId);
+
+        var cleanupTask = viewModel.CleanupTablesCommand.ExecuteAsync(null);
+        await secondBatchStarted.Task;
+        viewModel.SelectRun(viewModel.Runs[1]);
+        await cleanupTask;
+
+        Assert.IsTrue(secondBatchToken.IsCancellationRequested);
+        Assert.AreEqual("run-second", viewModel.SelectedRun?.WorkflowRunId);
+        CollectionAssert.AreEqual(
+            new[] { "run-first" },
+            publishedRunIds.ToArray());
+        Assert.AreEqual("runs.background.cleanup_cancelled", viewModel.Message);
     }
 
     [TestMethod]
@@ -310,6 +419,12 @@ public sealed class BackgroundRunManagementViewModelTests
             CancellationToken,
             Task<ApiResponseEnvelope<List<WorkflowRunDto>>>>? ListHandler { get; set; }
 
+        public Func<
+            string?,
+            CancellationToken,
+            Task<ApiResponseEnvelope<RunTableCleanupResultDto>>>?
+            CleanupBatchHandler { get; set; }
+
         public string? LastStartedWorkflowId { get; private set; }
 
         public string? LastStartedRunMode { get; private set; }
@@ -321,6 +436,8 @@ public sealed class BackgroundRunManagementViewModelTests
         public string? LastCleanedWorkflowRunId { get; private set; }
 
         public int CleanupCallCount { get; private set; }
+
+        public List<string?> CleanupCursors { get; } = [];
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> StartAsync(
             EngineHostConnectionSettings settings,
@@ -393,6 +510,22 @@ public sealed class BackgroundRunManagementViewModelTests
             CleanupCallCount++;
             LastCleanedWorkflowRunId = workflowRunId;
             return Task.FromResult(CleanupResponse);
+        }
+
+        public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupTablesBatchAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            int maxRefs,
+            int timeBudgetMs,
+            string? cursor = null,
+            CancellationToken cancellationToken = default)
+        {
+            CleanupCallCount++;
+            LastCleanedWorkflowRunId = workflowRunId;
+            CleanupCursors.Add(cursor);
+            return CleanupBatchHandler is null
+                ? Task.FromResult(CleanupResponse)
+                : CleanupBatchHandler(cursor, cancellationToken);
         }
     }
 }

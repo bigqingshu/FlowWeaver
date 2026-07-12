@@ -562,10 +562,37 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default)
     {
+        return CleanupRunTableRefsBatchAsync(
+            settings,
+            workflowRunId,
+            maxRefs: 100,
+            timeBudgetMs: 1000,
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsBatchAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int maxRefs,
+        int timeBudgetMs,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string?>>
+        {
+            new("max_refs", maxRefs.ToString()),
+            new("time_budget_ms", timeBudgetMs.ToString()),
+        };
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            query.Add(new KeyValuePair<string, string?>("cursor", cursor));
+        }
+
         return SendAsync<RunTableCleanupResultDto>(
             settings,
             HttpMethod.Delete,
             $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/table-refs",
+            query: query,
             cancellationToken: cancellationToken);
     }
 

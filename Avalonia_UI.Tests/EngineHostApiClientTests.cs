@@ -608,27 +608,33 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
-    public async Task CleanupRunTableRefsAsyncUsesDeleteAndParsesResult()
+    public async Task CleanupRunTableRefsBatchAsyncUsesBoundedQueryAndParsesResult()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-1","cleaned_count":1,"skipped_count":1,"failed_count":0,"cleaned_table_refs":[{"table_ref_id":"table-1","can_read_rows":false,"supports_paged_rows":false}],"skipped":[{"table_ref_id":"external-1","reason":"external_or_unsupported_storage"}],"failed":[]},"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":{"workflow_run_id":"run-1","outcome":"RETRY_PENDING","processed_count":2,"cleaned_count":1,"skipped_count":1,"failed_count":0,"cleaned_table_ref_ids":["table-1"],"skipped":[{"table_ref_id":"external-1","reason":"external_or_unsupported_storage"}],"failed":[],"continuation_cursor":"next-cursor"},"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
-        var result = await client.CleanupRunTableRefsAsync(
+        var result = await client.CleanupRunTableRefsBatchAsync(
             new EngineHostConnectionSettings { Token = "secret" },
-            "run 1");
+            "run 1",
+            maxRefs: 10,
+            timeBudgetMs: 250,
+            cursor: "cursor 1");
 
         Assert.IsTrue(result.Ok);
         Assert.AreEqual(HttpMethod.Delete, handler.RequestMethod);
         Assert.AreEqual(
-            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/table-refs"),
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/table-refs?max_refs=10&time_budget_ms=250&cursor=cursor%201"),
             handler.RequestUri);
+        Assert.AreEqual("RETRY_PENDING", result.Data?.Outcome);
+        Assert.AreEqual(2, result.Data?.ProcessedCount);
         Assert.AreEqual(1, result.Data?.CleanedCount);
-        Assert.AreEqual("table-1", result.Data?.CleanedTableRefs[0].TableRefId);
+        Assert.AreEqual("table-1", result.Data?.CleanedTableRefIds[0]);
         Assert.AreEqual("external-1", result.Data?.Skipped[0].TableRefId);
         Assert.AreEqual("external_or_unsupported_storage", result.Data?.Skipped[0].Reason);
+        Assert.AreEqual("next-cursor", result.Data?.ContinuationCursor);
     }
 
     [TestMethod]

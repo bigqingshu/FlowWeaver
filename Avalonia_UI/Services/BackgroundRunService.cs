@@ -90,4 +90,21 @@ public sealed class BackgroundRunService : IBackgroundRunService
             workflowRunId,
             cancellationToken);
     }
+
+    public Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupTablesBatchAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int maxRefs,
+        int timeBudgetMs,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        return _apiClient.CleanupRunTableRefsBatchAsync(
+            settings,
+            workflowRunId,
+            maxRefs,
+            timeBudgetMs,
+            cursor,
+            cancellationToken);
+    }
 }

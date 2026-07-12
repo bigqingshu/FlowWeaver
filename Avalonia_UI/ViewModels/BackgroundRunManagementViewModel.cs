@@ -19,6 +19,8 @@ public sealed record BackgroundRunFilterOptionViewModel(
 public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 {
     public const int PageSize = 50;
+    private const int CleanupBatchSize = 10;
+    private const int CleanupTimeBudgetMs = 1000;
 
     private readonly IBackgroundRunService service;
     private readonly Func<string, string> translate;
@@ -27,6 +29,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private bool canUseEngineActions;
     private int requestVersion;
     private CancellationTokenSource? requestCancellation;
+    private CancellationTokenSource? cleanupCancellation;
+    private string? cleanupWorkflowRunId;
     private bool suppressFilterRefresh;
 
     public BackgroundRunManagementViewModel(
@@ -102,6 +106,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public string CleanupText => translate("runs.background.cleanup");
 
+    public string CleanupCancelText => translate("runs.background.cleanup_cancel");
+
     public string PreviousPageText => translate("runs.background.previous_page");
 
     public string NextPageText => translate("runs.background.next_page");
@@ -139,6 +145,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         {
             workflowId = selectedWorkflowId;
             CancelRequest();
+            RequestCleanupCancellation();
             Offset = 0;
             Runs.Clear();
             SelectedRun = null;
@@ -334,6 +341,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         OnPropertyChanged(nameof(StartText));
         OnPropertyChanged(nameof(RetryText));
         OnPropertyChanged(nameof(CleanupText));
+        OnPropertyChanged(nameof(CleanupCancelText));
         OnPropertyChanged(nameof(PreviousPageText));
         OnPropertyChanged(nameof(NextPageText));
         OnPropertyChanged(nameof(RetryConfirmText));
@@ -343,6 +351,14 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     partial void OnSelectedRunChanged(WorkflowRunListItemViewModel? value)
     {
+        if (IsCleaningTables && !string.Equals(
+                cleanupWorkflowRunId,
+                value?.WorkflowRunId,
+                StringComparison.Ordinal))
+        {
+            RequestCleanupCancellation();
+        }
+
         SelectedRunChanged?.Invoke(value);
         NotifyCommandStateChanged();
     }
@@ -380,7 +396,11 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     partial void OnIsRetryingChanged(bool value) => NotifyBusyStateChanged();
 
-    partial void OnIsCleaningTablesChanged(bool value) => NotifyBusyStateChanged();
+    partial void OnIsCleaningTablesChanged(bool value)
+    {
+        NotifyBusyStateChanged();
+        CancelCleanupTablesCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnErrorMessageChanged(string? value)
     {
@@ -484,32 +504,161 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             return;
         }
 
+        var cancellation = new CancellationTokenSource();
+        cleanupCancellation = cancellation;
+        cleanupWorkflowRunId = run.WorkflowRunId;
         IsCleaningTables = true;
         ErrorMessage = null;
+        var processedCount = 0;
+        var cleanedCount = 0;
+        var skippedCount = 0;
+        var failedCount = 0;
+        var cleanedTableRefIds = new List<string>();
+        var skipped = new List<RunTableCleanupIssueDto>();
+        var failed = new List<RunTableCleanupIssueDto>();
+        string? cursor = null;
+        var outcome = "COMPLETED";
+        var receivedBatch = false;
         try
         {
-            var response = await service.CleanupTablesAsync(
-                settings,
-                run.WorkflowRunId,
-                CancellationToken.None);
-            if (!response.Ok || response.Data is null)
+            while (true)
             {
-                Message = translate("runs.background.cleanup_failed");
-                ErrorMessage = DescribeError(response);
-                return;
+                var previousCursor = cursor;
+                var response = await service.CleanupTablesBatchAsync(
+                    settings,
+                    run.WorkflowRunId,
+                    CleanupBatchSize,
+                    CleanupTimeBudgetMs,
+                    cursor,
+                    cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (!response.Ok || response.Data is null)
+                {
+                    if (receivedBatch)
+                    {
+                        TablesCleaned?.Invoke(
+                            run.WorkflowRunId,
+                            BuildCleanupResult(
+                                run.WorkflowRunId,
+                                "STOPPED",
+                                processedCount,
+                                cleanedCount,
+                                skippedCount,
+                                failedCount,
+                                cleanedTableRefIds,
+                                skipped,
+                                failed,
+                                cursor));
+                    }
+
+                    Message = translate("runs.background.cleanup_failed");
+                    ErrorMessage = DescribeError(response);
+                    return;
+                }
+
+                receivedBatch = true;
+                var batch = response.Data;
+                processedCount += batch.ProcessedCount;
+                cleanedCount += batch.CleanedCount;
+                skippedCount += batch.SkippedCount;
+                failedCount += batch.FailedCount;
+                cleanedTableRefIds.AddRange(batch.CleanedTableRefIds);
+                skipped.AddRange(batch.Skipped);
+                failed.AddRange(batch.Failed);
+                outcome = string.IsNullOrWhiteSpace(batch.Outcome)
+                    ? "COMPLETED"
+                    : batch.Outcome;
+                cursor = batch.ContinuationCursor;
+                if (!string.Equals(
+                        outcome,
+                        "RETRY_PENDING",
+                        StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(cursor) || string.Equals(
+                        cursor,
+                        previousCursor,
+                        StringComparison.Ordinal))
+                {
+                    TablesCleaned?.Invoke(
+                        run.WorkflowRunId,
+                        BuildCleanupResult(
+                            run.WorkflowRunId,
+                            "STOPPED",
+                            processedCount,
+                            cleanedCount,
+                            skippedCount,
+                            failedCount,
+                            cleanedTableRefIds,
+                            skipped,
+                            failed,
+                            cursor));
+                    Message = translate("runs.background.cleanup_failed");
+                    ErrorMessage = translate("runs.background.cleanup_stalled");
+                    return;
+                }
+
+                await Task.Yield();
             }
 
-            TablesCleaned?.Invoke(run.WorkflowRunId, response.Data);
+            var result = BuildCleanupResult(
+                run.WorkflowRunId,
+                outcome,
+                processedCount,
+                cleanedCount,
+                skippedCount,
+                failedCount,
+                cleanedTableRefIds,
+                skipped,
+                failed,
+                continuationCursor: null);
+            TablesCleaned?.Invoke(run.WorkflowRunId, result);
             Message = string.Format(
                 translate("runs.background.cleaned_format"),
-                response.Data.CleanedCount,
-                response.Data.SkippedCount,
-                response.Data.FailedCount);
+                result.CleanedCount,
+                result.SkippedCount,
+                result.FailedCount);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            if (receivedBatch)
+            {
+                TablesCleaned?.Invoke(
+                    run.WorkflowRunId,
+                    BuildCleanupResult(
+                        run.WorkflowRunId,
+                        "CANCELLED",
+                        processedCount,
+                        cleanedCount,
+                        skippedCount,
+                        failedCount,
+                        cleanedTableRefIds,
+                        skipped,
+                        failed,
+                        cursor));
+            }
+
+            Message = translate("runs.background.cleanup_cancelled");
         }
         finally
         {
+            if (ReferenceEquals(cleanupCancellation, cancellation))
+            {
+                cleanupCancellation = null;
+                cleanupWorkflowRunId = null;
+            }
+
+            cancellation.Dispose();
             IsCleaningTables = false;
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCancelCleanup))]
+    private void CancelCleanupTables()
+    {
+        RequestCleanupCancellation();
     }
 
     [RelayCommand(CanExecute = nameof(CanPreviousPage))]
@@ -534,6 +683,9 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private bool CanRetry() => CanRetrySelectedRun;
 
     private bool CanCleanup() => CanCleanupSelectedRun;
+
+    private bool CanCancelCleanup() =>
+        IsCleaningTables && cleanupCancellation is not null;
 
     private bool CanPreviousPage() =>
         canUseEngineActions && HasPreviousPage && !IsBusy;
@@ -566,6 +718,11 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         requestCancellation = null;
     }
 
+    private void RequestCleanupCancellation()
+    {
+        cleanupCancellation?.Cancel();
+    }
+
     private void CompleteRequest(CancellationTokenSource request)
     {
         if (ReferenceEquals(requestCancellation, request))
@@ -590,6 +747,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         StartCommand.NotifyCanExecuteChanged();
         RetryCommand.NotifyCanExecuteChanged();
         CleanupTablesCommand.NotifyCanExecuteChanged();
+        CancelCleanupTablesCommand.NotifyCanExecuteChanged();
         PreviousPageCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanCleanupSelectedRun));
@@ -662,5 +820,32 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private static string DescribeError<T>(ApiResponseEnvelope<T> response)
     {
         return response.Error?.Message ?? response.Error?.ErrorCode ?? "UNKNOWN_ERROR";
+    }
+
+    private static RunTableCleanupResultDto BuildCleanupResult(
+        string workflowRunId,
+        string outcome,
+        int processedCount,
+        int cleanedCount,
+        int skippedCount,
+        int failedCount,
+        IReadOnlyCollection<string> cleanedTableRefIds,
+        IReadOnlyCollection<RunTableCleanupIssueDto> skipped,
+        IReadOnlyCollection<RunTableCleanupIssueDto> failed,
+        string? continuationCursor)
+    {
+        return new RunTableCleanupResultDto
+        {
+            WorkflowRunId = workflowRunId,
+            Outcome = outcome,
+            ProcessedCount = processedCount,
+            CleanedCount = cleanedCount,
+            SkippedCount = skippedCount,
+            FailedCount = failedCount,
+            CleanedTableRefIds = cleanedTableRefIds.ToArray(),
+            Skipped = skipped.ToArray(),
+            Failed = failed.ToArray(),
+            ContinuationCursor = continuationCursor,
+        };
     }
 }

@@ -45,4 +45,15 @@ public interface IBackgroundRunService
         EngineHostConnectionSettings settings,
         string workflowRunId,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupTablesBatchAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int maxRefs,
+        int timeBudgetMs,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CleanupTablesAsync(settings, workflowRunId, cancellationToken);
+    }
 }

@@ -8,6 +8,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.api.run_table_cleanup import cleanup_table_refs_for_run
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -47,6 +48,16 @@ class FailOnceRuntimeProvider(SQLiteRuntimeTableProvider):
         self.calls += 1
         if self.calls == 1:
             raise ValueError("temporary drop failure")
+        super().drop_table(table_ref)
+
+
+class CountingMemoryProvider(MemoryTableProvider):
+    def __init__(self) -> None:
+        super().__init__({}, RLock())
+        self.drop_calls = 0
+
+    def drop_table(self, table_ref: TableRefModel) -> None:
+        self.drop_calls += 1
         super().drop_table(table_ref)
 
 
@@ -225,3 +236,146 @@ def test_release_stop_after_provider_keeps_releasable_for_restart(
     table_ref = store.get_table_ref(published.table_ref_id)
     assert table_ref is not None
     assert table_ref.lifecycle_status == LifecycleStatus.RELEASABLE
+
+
+def test_cleanup_run_table_refs_continues_250_refs_in_bounded_batches(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Bounded cleanup workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-bounded-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-bounded-cleanup",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-bounded-cleanup",
+    )
+    provider = CountingMemoryProvider()
+    registry = TableProviderRegistry()
+    registry.register(provider, storage_kinds=(TableStorageKind.MEMORY,))
+    schema = [
+        FieldSchemaModel(
+            field_id="row-id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        )
+    ]
+    for index in range(250):
+        table_ref = provider.create_memory_table(
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=node.node_run_id,
+            logical_table_id=f"table-{index:03d}",
+            schema=schema,
+            rows=[{"row_id": index}],
+        )
+        store.register_table_ref(table_ref)
+
+    cursor = None
+    cleaned_count = 0
+    batch_count = 0
+    while True:
+        calls_before = provider.drop_calls
+        result = cleanup_table_refs_for_run(
+            workflow_run_id=run.workflow_run_id,
+            store=store,
+            provider_registry=registry,
+            cursor=cursor,
+            max_refs=10,
+            time_budget_ms=10000,
+        )
+        batch_count += 1
+        cleaned_count += int(result["cleaned_count"])
+        assert int(result["processed_count"]) <= 10
+        assert provider.drop_calls - calls_before <= 10
+        if result["outcome"] == "COMPLETED":
+            assert result["continuation_cursor"] is None
+            break
+        assert result["outcome"] == "RETRY_PENDING"
+        cursor = str(result["continuation_cursor"])
+
+    assert batch_count == 25
+    assert cleaned_count == 250
+    assert provider.drop_calls == 250
+
+
+def test_cleanup_run_table_refs_stops_before_starting_ref_after_time_budget(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Timed cleanup workflow",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-timed-cleanup",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-timed-cleanup",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-timed-cleanup",
+    )
+    provider = CountingMemoryProvider()
+    registry = TableProviderRegistry()
+    registry.register(provider, storage_kinds=(TableStorageKind.MEMORY,))
+    schema = [
+        FieldSchemaModel(
+            field_id="row-id",
+            name="row_id",
+            data_type="INTEGER",
+            nullable=False,
+            ordinal=0,
+        )
+    ]
+    for index in range(3):
+        table_ref = provider.create_memory_table(
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=node.node_run_id,
+            logical_table_id=f"timed-{index}",
+            schema=schema,
+            rows=[],
+        )
+        store.register_table_ref(table_ref)
+    ticks = iter([0.0, 0.0, 0.5, 1.0])
+
+    first = cleanup_table_refs_for_run(
+        workflow_run_id=run.workflow_run_id,
+        store=store,
+        provider_registry=registry,
+        max_refs=10,
+        time_budget_ms=750,
+        clock=lambda: next(ticks),
+    )
+
+    assert first["outcome"] == "RETRY_PENDING"
+    assert first["processed_count"] == 2
+    assert first["cleaned_count"] == 2
+    assert provider.drop_calls == 2
+    assert first["continuation_cursor"] is not None
+
+    second = cleanup_table_refs_for_run(
+        workflow_run_id=run.workflow_run_id,
+        store=store,
+        provider_registry=registry,
+        cursor=str(first["continuation_cursor"]),
+        max_refs=10,
+        time_budget_ms=750,
+        clock=lambda: 0.0,
+    )
+
+    assert second["outcome"] == "COMPLETED"
+    assert second["processed_count"] == 1
+    assert provider.drop_calls == 3

@@ -3165,10 +3165,13 @@ def test_cleanup_run_table_refs_releases_internal_tables_after_terminal_run(
 
     assert cleanup["workflow_run_id"] == run.workflow_run_id
     assert cleanup["cleaned_count"] == 1
+    assert cleanup["processed_count"] == 1
     assert cleanup["skipped_count"] == 0
     assert cleanup["failed_count"] == 0
-    assert cleanup["cleaned_table_refs"][0]["table_ref_id"] == published.table_ref_id
-    assert cleanup["cleaned_table_refs"][0]["can_read_rows"] is False
+    assert cleanup["outcome"] == "COMPLETED"
+    assert cleanup["cleaned_table_ref_ids"] == [published.table_ref_id]
+    assert cleanup["continuation_cursor"] is None
+    assert "cleaned_table_refs" not in cleanup
     assert released is not None
     assert released.lifecycle_status == LifecycleStatus.RELEASED
     assert unavailable.status_code == 409
@@ -3324,6 +3327,29 @@ def test_cleanup_run_table_refs_rejects_running_run(
 
     assert response.status_code == 409
     assert response_error(response)["error_code"] == "WORKFLOW_RUN_NOT_TERMINAL"
+
+
+def test_cleanup_run_table_refs_rejects_invalid_cursor(tmp_path: Path) -> None:
+    client, store, _container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Invalid cleanup cursor",
+        definition=valid_definition(),
+        workflow_id="workflow-invalid-cleanup-cursor",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-invalid-cleanup-cursor",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+
+    response = client.delete(
+        f"/api/v1/runs/{run.workflow_run_id}/table-refs",
+        params={"cursor": "not-a-valid-cursor"},
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert response_error(response)["error_code"] == "INVALID_CLEANUP_CURSOR"
 
 
 def test_data_api_rejects_missing_and_invalid_table_ref_reads(

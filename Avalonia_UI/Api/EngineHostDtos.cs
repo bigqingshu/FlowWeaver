@@ -929,6 +929,12 @@ public sealed record RunTableCleanupResultDto
     [JsonPropertyName("workflow_run_id")]
     public string WorkflowRunId { get; init; } = string.Empty;
 
+    [JsonPropertyName("outcome")]
+    public string Outcome { get; init; } = string.Empty;
+
+    [JsonPropertyName("processed_count")]
+    public int ProcessedCount { get; init; }
+
     [JsonPropertyName("cleaned_count")]
     public int CleanedCount { get; init; }
 
@@ -938,14 +944,17 @@ public sealed record RunTableCleanupResultDto
     [JsonPropertyName("failed_count")]
     public int FailedCount { get; init; }
 
-    [JsonPropertyName("cleaned_table_refs")]
-    public TableRefDto[] CleanedTableRefs { get; init; } = [];
+    [JsonPropertyName("cleaned_table_ref_ids")]
+    public string[] CleanedTableRefIds { get; init; } = [];
 
     [JsonPropertyName("skipped")]
     public RunTableCleanupIssueDto[] Skipped { get; init; } = [];
 
     [JsonPropertyName("failed")]
     public RunTableCleanupIssueDto[] Failed { get; init; } = [];
+
+    [JsonPropertyName("continuation_cursor")]
+    public string? ContinuationCursor { get; init; }
 }
 
 public sealed record TableFieldSchemaDto

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -13,6 +13,7 @@ from flowweaver.engine.db_models import (
     NodeTaskResultRecord,
 )
 from flowweaver.engine.runtime_models import (
+    RunTableCleanupCandidate,
     RunTableDirectoryEntry,
     RunTableResultBinding,
 )
@@ -27,6 +28,11 @@ from flowweaver.protocols.table_ref import TableRefModel
 _AVAILABLE_LOGICAL_TABLE_STATUSES = (
     LifecycleStatus.ACTIVE.value,
     LifecycleStatus.PUBLISHED.value,
+)
+_CLEANUP_EXCLUDED_STATUSES = (
+    LifecycleStatus.RELEASED.value,
+    LifecycleStatus.RETIRED.value,
+    LifecycleStatus.ORPHANED.value,
 )
 
 
@@ -81,6 +87,42 @@ def list_table_refs_by_workflow_run_from_session(
         .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
     ).all()
     return [_table_ref_from_record(record) for record in records]
+
+
+def list_table_ref_cleanup_candidates_from_session(
+    session: Session,
+    workflow_run_id: str,
+    *,
+    after_created_at: str | None = None,
+    after_table_ref_id: str | None = None,
+    limit: int,
+) -> list[RunTableCleanupCandidate]:
+    statement = (
+        select(DataRefRecord.table_ref_id, DataRefRecord.created_at)
+        .where(DataRefRecord.workflow_run_id == workflow_run_id)
+        .where(
+            DataRefRecord.lifecycle_status.notin_(_CLEANUP_EXCLUDED_STATUSES)
+        )
+        .order_by(DataRefRecord.created_at, DataRefRecord.table_ref_id)
+        .limit(limit)
+    )
+    if after_created_at is not None and after_table_ref_id is not None:
+        statement = statement.where(
+            or_(
+                DataRefRecord.created_at > after_created_at,
+                and_(
+                    DataRefRecord.created_at == after_created_at,
+                    DataRefRecord.table_ref_id > after_table_ref_id,
+                ),
+            )
+        )
+    return [
+        RunTableCleanupCandidate(
+            table_ref_id=table_ref_id,
+            created_at=created_at,
+        )
+        for table_ref_id, created_at in session.execute(statement).all()
+    ]
 
 
 def list_table_refs_by_ids_from_session(

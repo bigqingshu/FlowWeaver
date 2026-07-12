@@ -149,6 +149,9 @@ def cleanup_run_table_refs(
         TableProviderRegistry,
         Depends(get_table_provider_registry),
     ],
+    cursor: str | None = None,
+    max_refs: Annotated[int, Query(ge=1, le=1000)] = 100,
+    time_budget_ms: Annotated[int, Query(ge=1, le=10000)] = 1000,
 ):
     run = store.get_workflow_run(workflow_run_id)
     if run is None:
@@ -161,11 +164,20 @@ def cleanup_run_table_refs(
             status_code=409,
             details={"workflow_run_id": workflow_run_id, "status": run.status},
         )
-    return ok_response(
-        request,
-        cleanup_table_refs_for_run(
+    try:
+        result = cleanup_table_refs_for_run(
             workflow_run_id=workflow_run_id,
             store=store,
             provider_registry=provider_registry,
-        ),
-    )
+            cursor=cursor,
+            max_refs=max_refs,
+            time_budget_ms=time_budget_ms,
+        )
+    except ValueError as exc:
+        return error_response(
+            request,
+            error_code="INVALID_CLEANUP_CURSOR",
+            message=str(exc),
+            status_code=422,
+        )
+    return ok_response(request, result)

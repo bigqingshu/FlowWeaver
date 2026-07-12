@@ -5252,8 +5252,10 @@ public sealed class MainWindowViewModelWorkflowTests
                     new RunTableCleanupResultDto
                     {
                         WorkflowRunId = "run-1",
+                        Outcome = "COMPLETED",
+                        ProcessedCount = 1,
                         CleanedCount = 1,
-                        CleanedTableRefs = [released],
+                        CleanedTableRefIds = [released.TableRefId],
                     }),
         };
         var viewModel = CreateViewModel(apiClient);

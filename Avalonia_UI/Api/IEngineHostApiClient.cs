@@ -199,6 +199,20 @@ public interface IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<RunTableCleanupResultDto>> CleanupRunTableRefsBatchAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        int maxRefs,
+        int timeBudgetMs,
+        string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CleanupRunTableRefsAsync(
+            settings,
+            workflowRunId,
+            cancellationToken);
+    }
+
     Task<ApiResponseEnvelope<TableDataSchemaDto>> GetTableDataSchemaAsync(
         EngineHostConnectionSettings settings,
         string tableRefId,
