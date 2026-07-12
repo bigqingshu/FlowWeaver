@@ -9,6 +9,10 @@ from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.engine.table_provider_registry import (
+    TableProviderRegistry,
+    create_default_table_provider_registry,
+)
 from flowweaver.node_executor import (
     BuiltinSharedTableNodeExecutor,
     BuiltinTableNodeExecutor,
@@ -55,6 +59,8 @@ class DefaultWorkflowProcessExecutorOwner:
         self._plugin_executor_factory = plugin_executor_factory
         self._data_registry: RuntimeDataRegistry | None = None
         self._table_provider: SQLiteRuntimeTableProvider | None = None
+        self._memory_provider: MemoryTableProvider | None = None
+        self._table_provider_registry: TableProviderRegistry | None = None
         self._table_executor: BuiltinTableNodeExecutor | None = None
         self._plugin_executor: NodeExecutor | None = None
         self._executor: NodeExecutor | None = None
@@ -79,29 +85,47 @@ class DefaultWorkflowProcessExecutorOwner:
             "closed",
             False,
         ):
+            self._ensure_table_runtime()
             self._plugin_executor = self._plugin_executor_factory(
                 plugin_catalog=self._plugin_catalog,
+                store=self._store,
+                runtime_dir=self._runtime_dir,
+                table_provider_registry=self._table_provider_registry,
             )
         return self._plugin_executor
 
     def _builtin_table_executor(self) -> BuiltinTableNodeExecutor:
-        if self._table_provider is None:
-            self._table_provider = SQLiteRuntimeTableProvider(self._runtime_dir)
-        if self._data_registry is None:
-            self._data_registry = RuntimeDataRegistry(
-                store=self._store,
-                table_provider=self._table_provider,
-            )
+        self._ensure_table_runtime()
+        assert self._table_provider is not None
+        assert self._data_registry is not None
+        assert self._memory_provider is not None
         if self._table_executor is None:
             self._table_executor = BuiltinTableNodeExecutor(
                 store=self._store,
                 registry=self._data_registry,
                 table_provider=self._table_provider,
-                memory_provider=MemoryTableProvider(
-                    limits=self._memory_table_limits,
-                ),
+                memory_provider=self._memory_provider,
             )
         return self._table_executor
+
+    def _ensure_table_runtime(self) -> None:
+        if self._table_provider is None:
+            self._table_provider = SQLiteRuntimeTableProvider(self._runtime_dir)
+        if self._memory_provider is None:
+            self._memory_provider = MemoryTableProvider(
+                limits=self._memory_table_limits,
+            )
+        if self._table_provider_registry is None:
+            self._table_provider_registry = create_default_table_provider_registry(
+                self._runtime_dir,
+                runtime_provider=self._table_provider,
+                memory_provider=self._memory_provider,
+            )
+        if self._data_registry is None:
+            self._data_registry = RuntimeDataRegistry(
+                store=self._store,
+                table_provider=self._table_provider,
+            )
 
     def close(self) -> None:
         close_executor(self._plugin_executor)

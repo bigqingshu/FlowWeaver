@@ -266,6 +266,17 @@ class PluginManifestModel(StrictModel):
                 "output table slots require matching output ports: "
                 + ", ".join(unknown_outputs)
             )
+        input_ports = {port.name: port for port in self.input_ports}
+        inconsistent_inputs = sorted(
+            slot.name
+            for slot in self.input_table_slots
+            if slot.required != input_ports[slot.name].required
+        )
+        if inconsistent_inputs:
+            raise ValueError(
+                "input table slot required flags must match input ports: "
+                + ", ".join(inconsistent_inputs)
+            )
         return self
 
     def to_node_definition(self) -> NodeDefinitionSpec:

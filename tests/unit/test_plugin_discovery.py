@@ -82,6 +82,22 @@ def test_discovery_disables_entrypoint_outside_package(tmp_path: Path) -> None:
     assert entry.disabled_reason == "entrypoint resolves outside plugin package"
 
 
+def test_discovery_disables_inconsistent_input_slot_requirement(
+    tmp_path: Path,
+) -> None:
+    plugin_root = tmp_path / "plugins"
+    manifest = _manifest()
+    manifest["input_table_slots"] = [{"name": "in", "required": False}]
+    _write_plugin(plugin_root, "inconsistent", manifest)
+
+    entry = discover_plugins(plugin_root).list_entries()[0]
+
+    assert entry.enabled is False
+    assert "required flags must match input ports" in (
+        entry.disabled_reason or ""
+    )
+
+
 def test_discovery_disables_duplicate_plugin_and_node_ids(tmp_path: Path) -> None:
     plugin_root = tmp_path / "plugins"
     _write_plugin(plugin_root, "first", _manifest())

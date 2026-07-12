@@ -9,6 +9,10 @@ from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
 from flowweaver.protocols.base import StrictModel
 from flowweaver.protocols.enums import NodeResultStatus
+from flowweaver.protocols.plugin_runtime import (
+    PluginTaskRuntimeModel,
+    PluginTaskRuntimeResultModel,
+)
 from flowweaver.protocols.runtime_feedback import (
     ResolvedRuntimeFeedbackPolicyModel,
 )
@@ -30,6 +34,7 @@ class NodeTaskModel(StrictModel):
     runtime_feedback_policy: ResolvedRuntimeFeedbackPolicyModel | None = None
     runtime_options_version: int = Field(default=0, ge=0)
     timeout_seconds: int
+    plugin_runtime: PluginTaskRuntimeModel | None = None
 
 
 class NodeTaskResultModel(StrictModel):
@@ -44,6 +49,7 @@ class NodeTaskResultModel(StrictModel):
     output_slot_bindings: dict[str, str] = Field(default_factory=dict)
     summary: dict[str, Any] = {}
     error: dict[str, Any] | None = None
+    plugin_runtime: PluginTaskRuntimeResultModel | None = None
     started_at: datetime = Field(default_factory=utc_now)
     finished_at: datetime = Field(default_factory=utc_now)
 

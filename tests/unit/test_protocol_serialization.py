@@ -16,6 +16,11 @@ from flowweaver.protocols import (
     NodeTaskCancelRequestPayload,
     NodeTaskModel,
     NodeTaskResultModel,
+    PluginInputTableRefModel,
+    PluginOutputTableResultModel,
+    PluginOutputTableTargetModel,
+    PluginTaskRuntimeModel,
+    PluginTaskRuntimeResultModel,
     ResolvedRuntimeFeedbackPolicyModel,
     TableMutability,
     TableRefModel,
@@ -218,6 +223,50 @@ def test_node_task_result_rejects_binding_outside_output_refs() -> None:
             output_refs=["table-result"],
             output_slot_bindings={"out": "missing-table"},
         )
+
+
+def test_plugin_runtime_payloads_round_trip_with_schema_alias() -> None:
+    schema = make_table_ref().schema
+    task_runtime = PluginTaskRuntimeModel(
+        inputs=[
+            PluginInputTableRefModel(
+                slot_name="in",
+                table_ref_id="table-1",
+                database_uri="file:///runtime/input.db?mode=ro",
+                table_name="input_table",
+                schema=schema,
+                materialized=False,
+            )
+        ],
+        output_targets=[
+            PluginOutputTableTargetModel(
+                slot_name="out",
+                database_path="runtime/staging/output.db",
+                table_name="output_table",
+            )
+        ],
+    )
+    result_runtime = PluginTaskRuntimeResultModel(
+        outputs=[
+            PluginOutputTableResultModel(
+                slot_name="out",
+                database_path="runtime/staging/output.db",
+                table_name="output_table",
+                schema=schema,
+            )
+        ]
+    )
+
+    restored_task = from_msgpack(to_msgpack(task_runtime), PluginTaskRuntimeModel)
+    restored_result = from_msgpack(
+        to_msgpack(result_runtime),
+        PluginTaskRuntimeResultModel,
+    )
+
+    assert restored_task == task_runtime
+    assert restored_task.inputs[0].schema[0].name == "amount"
+    assert restored_result == result_runtime
+    assert restored_result.outputs[0].schema[0].field_id == "field-1"
 
 
 def test_node_task_cancel_request_payload_msgpack_round_trip() -> None:

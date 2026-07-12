@@ -44,7 +44,7 @@ def submit_task_envelope(task: NodeTaskModel) -> IPCEnvelope:
         message_type=IPCMessageType.NODE_TASK_SUBMIT,
         workflow_run_id=task.workflow_run_id,
         node_run_id=task.node_run_id,
-        payload=task.model_dump(mode="json"),
+        payload=task.model_dump(mode="json", by_alias=True),
     )
 
 

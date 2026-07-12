@@ -71,8 +71,18 @@ def test_executor_owner_routes_plugin_namespace_to_plugin_executor(
     class TrackingPluginExecutor:
         executor_id = "tracking-plugin-executor"
 
-        def __init__(self, *, plugin_catalog) -> None:
+        def __init__(
+            self,
+            *,
+            plugin_catalog,
+            store,
+            runtime_dir,
+            table_provider_registry,
+        ) -> None:
             self.plugin_catalog = plugin_catalog
+            self.store = store
+            self.runtime_dir = runtime_dir
+            self.table_provider_registry = table_provider_registry
             self.closed = False
             created.append(self)
 
@@ -99,6 +109,9 @@ def test_executor_owner_routes_plugin_namespace_to_plugin_executor(
 
     assert first is second
     assert created == [first]
+    assert first.store is store
+    assert first.runtime_dir == tmp_path / "runtime"
+    assert first.table_provider_registry is not None
     assert first.closed is True
 
 
