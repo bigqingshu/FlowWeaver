@@ -10,6 +10,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError,
 )
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
+from flowweaver.nodes.table_node_output_target_models import (
+    TableOutputWriteResult,
+)
 from flowweaver.nodes.table_write_selected_helpers import (
     write_selected_columns_status_schema as _write_selected_columns_status_schema,
 )
@@ -44,6 +47,7 @@ class WriteSelectedColumnsNodeHandler:
             node_type=self.node_type,
         )
         source_row_count = context.count_rows(input_ref)
+        write_result: TableOutputWriteResult | None = None
         target_ref: TableRefModel | None = None
         status = "skipped"
         actual_write = False
@@ -58,7 +62,7 @@ class WriteSelectedColumnsNodeHandler:
                     "source_type=current_table"
                 )
             if config.target_type in {"run_table", "memory_table"}:
-                target_ref = _write_selected_runtime_target(
+                write_result = _write_selected_runtime_target(
                     task,
                     context,
                     input_ref=input_ref,
@@ -68,9 +72,10 @@ class WriteSelectedColumnsNodeHandler:
                     selected_fields=config.selected_fields,
                     target_fields=config.target_fields,
                 )
+                target_ref = write_result.table_ref
                 status = "written"
                 actual_write = True
-                affected_rows = source_row_count
+                affected_rows = write_result.affected_rows
                 skipped_rows = 0
                 skipped_reason = ""
                 if config.backup_before_write:
@@ -113,6 +118,17 @@ class WriteSelectedColumnsNodeHandler:
             output_slot_bindings["target"] = target_ref.table_ref_id
         return BuiltinTableExecutionResult(
             output_refs=output_refs,
+            writes=(write_result,) if write_result is not None else (),
             output_slot_bindings=output_slot_bindings,
+            summary_details={
+                "operation": "write_selected_columns",
+                "operation_status": status,
+                "actual_write": actual_write,
+                "source_row_count": source_row_count,
+                "affected_rows": affected_rows,
+                "skipped_rows": skipped_rows,
+                "skipped_reason": skipped_reason,
+                "warnings": warnings,
+            },
         )
 

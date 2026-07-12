@@ -5081,6 +5081,10 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
         "out": input_ref.table_ref_id,
         "memory": memory_ref.table_ref_id,
     }
+    assert save_result.summary["operation"] == "save_memory"
+    assert save_result.summary["actual_write"] is True
+    assert save_result.summary["affected_rows"] == 2
+    assert save_result.summary["writes"][0]["output_slot"] == "memory"
     assert memory_ref.provider_id == MEMORY_PROVIDER_ID
     assert memory_ref.storage_kind == TableStorageKind.MEMORY
     assert memory_ref.role == TableRole.AUXILIARY
@@ -5184,6 +5188,9 @@ def test_save_run_table_node_outputs_current_ref_and_named_transit_ref(
         "out": input_ref.table_ref_id,
         "transit": transit_ref.table_ref_id,
     }
+    assert save_result.summary["operation"] == "save_run"
+    assert save_result.summary["actual_write"] is True
+    assert save_result.summary["writes"][0]["affected_rows"] == 2
     assert transit_ref.provider_id == MEMORY_PROVIDER_ID
     assert transit_ref.storage_kind == TableStorageKind.MEMORY
     assert transit_ref.role == TableRole.AUXILIARY
@@ -5276,6 +5283,9 @@ def test_save_run_table_node_can_pass_through_without_memory_save(
     assert save_result.status == NodeResultStatus.SUCCEEDED
     assert save_result.output_refs == [input_ref.table_ref_id]
     assert save_result.output_slot_bindings == {"out": input_ref.table_ref_id}
+    assert save_result.summary["operation_status"] == "skipped"
+    assert save_result.summary["actual_write"] is False
+    assert "writes" not in save_result.summary
 
 
 def test_write_selected_columns_node_outputs_write_plan_status_table(
@@ -5324,6 +5334,10 @@ def test_write_selected_columns_node_outputs_write_plan_status_table(
     assert write_result.output_slot_bindings == {
         "status": status_ref.table_ref_id
     }
+    assert write_result.summary["operation"] == "write_selected_columns"
+    assert write_result.summary["operation_status"] == "skipped"
+    assert write_result.summary["actual_write"] is False
+    assert "writes" not in write_result.summary
     assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
     assert status_ref.logical_table_id == "write_selected_output"
     assert provider.read_rows(status_ref, offset=0, limit=10) == [
@@ -5436,6 +5450,11 @@ def test_write_selected_columns_node_writes_run_table_when_enabled(
         "status": status_ref.table_ref_id,
         "target": written_ref.table_ref_id,
     }
+    assert write_result.summary["operation"] == "write_selected_columns"
+    assert write_result.summary["actual_write"] is True
+    assert write_result.summary["affected_rows"] == 1
+    assert write_result.summary["writes"][0]["output_slot"] == "target"
+    assert write_result.summary["writes"][0]["target_existed"] is False
     assert written_ref.logical_table_id == "target_scratch"
     assert written_ref.role == TableRole.AUXILIARY
     assert written_ref.storage_kind == TableStorageKind.RUNTIME_SQL
@@ -5635,6 +5654,9 @@ def test_write_selected_columns_node_overwrites_existing_memory_table_target(
     second_status_ref = registry.get(second_result.output_refs[0])
     second_target_ref = registry.get(second_result.output_refs[1])
     assert second_target_ref.table_ref_id == first_target_ref.table_ref_id
+    assert second_result.summary["writes"][0]["target_type"] == "existing_memory"
+    assert second_result.summary["writes"][0]["target_existed"] is True
+    assert second_result.summary["writes"][0]["affected_rows"] == 1
     assert memory_provider.read_rows(
         first_target_ref,
         offset=0,
@@ -5964,6 +5986,10 @@ def test_write_back_table_node_outputs_writeback_status_table(
     assert writeback_result.output_slot_bindings == {
         "status": status_ref.table_ref_id
     }
+    assert writeback_result.summary["operation"] == "write_back_table"
+    assert writeback_result.summary["operation_status"] == "skipped"
+    assert writeback_result.summary["actual_write"] is False
+    assert "writes" not in writeback_result.summary
     assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
     assert status_ref.logical_table_id == "writeback_output"
     assert provider.read_rows(status_ref, offset=0, limit=10) == [
@@ -6139,6 +6165,11 @@ def test_write_back_table_node_writes_run_table_when_enabled(
         "status": status_ref.table_ref_id,
         "target": target_ref.table_ref_id,
     }
+    assert writeback_result.summary["operation"] == "write_back_table"
+    assert writeback_result.summary["actual_write"] is True
+    assert writeback_result.summary["affected_rows"] == 2
+    assert writeback_result.summary["writes"][0]["output_slot"] == "target"
+    assert writeback_result.summary["writes"][0]["target_existed"] is False
     assert target_ref.logical_table_id == "orders_projection"
     assert target_ref.role == TableRole.AUXILIARY
     assert target_ref.storage_kind == TableStorageKind.RUNTIME_SQL

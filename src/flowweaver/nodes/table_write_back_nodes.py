@@ -8,6 +8,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
 )
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
+from flowweaver.nodes.table_node_output_target_models import (
+    TableOutputWriteResult,
+)
 from flowweaver.nodes.table_write_back_node_config import (
     writeback_node_config as _writeback_node_config,
 )
@@ -47,6 +50,7 @@ class WriteBackTableNodeHandler:
         actual_write = False
         affected_rows = 0
         skipped_rows = source_row_count
+        write_result: TableOutputWriteResult | None = None
         target_ref: TableRefModel | None = None
         warnings: list[str] = []
         skipped_reason = "enable_write is false"
@@ -56,7 +60,7 @@ class WriteBackTableNodeHandler:
                     "target_to_source runtime writes are not implemented"
                 )
             elif config.target_type in {"run_table", "memory_table"}:
-                target_ref, affected_rows, skipped_rows = _writeback_runtime_target(
+                write_result, skipped_rows = _writeback_runtime_target(
                     task,
                     context,
                     input_ref=input_ref,
@@ -66,6 +70,8 @@ class WriteBackTableNodeHandler:
                     field_mappings=config.field_mappings,
                     source_empty_policy=config.source_empty_policy,
                 )
+                target_ref = write_result.table_ref
+                affected_rows = write_result.affected_rows
                 status = "written"
                 actual_write = True
                 skipped_reason = ""
@@ -119,5 +125,16 @@ class WriteBackTableNodeHandler:
             output_slot_bindings["target"] = target_ref.table_ref_id
         return BuiltinTableExecutionResult(
             output_refs=output_refs,
+            writes=(write_result,) if write_result is not None else (),
             output_slot_bindings=output_slot_bindings,
+            summary_details={
+                "operation": "write_back_table",
+                "operation_status": status,
+                "actual_write": actual_write,
+                "source_row_count": source_row_count,
+                "affected_rows": affected_rows,
+                "skipped_rows": skipped_rows,
+                "skipped_reason": skipped_reason,
+                "warnings": warnings,
+            },
         )

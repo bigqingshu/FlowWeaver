@@ -4,6 +4,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.table_node_output_target_models import (
+    TableOutputWriteResult,
+)
 from flowweaver.nodes.table_write_selected_projection import (
     validate_write_selected_append_schema as _validate_write_selected_append_schema,
 )
@@ -22,6 +25,7 @@ from flowweaver.nodes.table_write_selected_targets import (
 from flowweaver.protocols.enums import TableRole
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
+from flowweaver.workflow_process.table_output_targets import TableOutputTargetKind
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -36,7 +40,7 @@ def write_selected_runtime_target(
     write_mode: str,
     selected_fields: list[str],
     target_fields: list[str],
-) -> TableRefModel:
+) -> TableOutputWriteResult:
     if write_mode == "upsert":
         raise _NodeValidationError(
             "WriteSelectedColumnsNode write_mode=upsert is not supported for "
@@ -63,6 +67,8 @@ def write_selected_runtime_target(
         selected_fields=selected_fields,
         target_fields=target_fields,
     )
+    affected_rows = len(target_rows)
+    target_existed = existing_ref is not None
     if write_mode == "append" and existing_ref is not None:
         _validate_write_selected_append_schema(
             existing_ref.schema,
@@ -76,16 +82,17 @@ def write_selected_runtime_target(
         )
         if target_type == "memory_table":
             context.replace_memory_table_rows(existing_ref, target_rows)
-            return existing_ref
-        return context.replace_runtime_table_rows(
-            task,
-            target_ref=existing_ref,
-            output_name=target_table,
-            schema=target_schema,
-            rows=target_rows,
-        )
-    if target_type == "memory_table":
-        return context.create_memory_table(
+            table_ref = existing_ref
+        else:
+            table_ref = context.replace_runtime_table_rows(
+                task,
+                target_ref=existing_ref,
+                output_name=target_table,
+                schema=target_schema,
+                rows=target_rows,
+            )
+    elif target_type == "memory_table":
+        table_ref = context.create_memory_table(
             task,
             logical_table_id=target_table,
             schema=target_schema,
@@ -93,11 +100,38 @@ def write_selected_runtime_target(
             role=TableRole.AUXILIARY,
             version=_next_write_selected_target_version(existing_ref),
         )
-    return context.publish_rows(
-        task,
-        output_name=target_table,
-        schema=target_schema,
-        rows=target_rows,
-        role=TableRole.AUXILIARY,
-        version=_next_write_selected_target_version(existing_ref),
+    else:
+        table_ref = context.publish_rows(
+            task,
+            output_name=target_table,
+            schema=target_schema,
+            rows=target_rows,
+            role=TableRole.AUXILIARY,
+            version=_next_write_selected_target_version(existing_ref),
+        )
+    return TableOutputWriteResult(
+        slot="target",
+        target_kind=_target_kind(target_type, target_existed=target_existed),
+        table_ref=table_ref,
+        write_mode=write_mode,
+        affected_rows=affected_rows,
+        target_existed=target_existed,
+    )
+
+
+def _target_kind(
+    target_type: str,
+    *,
+    target_existed: bool,
+) -> TableOutputTargetKind:
+    if target_type == "memory_table":
+        return (
+            TableOutputTargetKind.EXISTING_MEMORY
+            if target_existed
+            else TableOutputTargetKind.NEW_MEMORY
+        )
+    return (
+        TableOutputTargetKind.EXISTING_RUNTIME_SQL
+        if target_existed
+        else TableOutputTargetKind.NEW_RUNTIME_SQL
     )

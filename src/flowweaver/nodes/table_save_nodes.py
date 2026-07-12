@@ -64,7 +64,12 @@ class SaveMemoryTableNodeHandler:
                 "out": input_ref.table_ref_id,
                 "memory": write_result.table_ref.table_ref_id,
             },
-            summary_details={"warnings": warnings} if warnings else {},
+            summary_details=_save_summary_details(
+                operation="save_memory",
+                actual_write=True,
+                affected_rows=write_result.affected_rows,
+                warnings=warnings,
+            ),
         )
 
 
@@ -99,7 +104,12 @@ class SaveRunTableNodeHandler:
             return BuiltinTableExecutionResult(
                 output_refs=(input_ref,),
                 output_slot_bindings={"out": input_ref.table_ref_id},
-                summary_details={"warnings": warnings} if warnings else {},
+                summary_details=_save_summary_details(
+                    operation="save_run",
+                    actual_write=False,
+                    affected_rows=0,
+                    warnings=warnings,
+                ),
             )
         write_result = _write_table_output_target(
             task,
@@ -115,8 +125,29 @@ class SaveRunTableNodeHandler:
                 "out": input_ref.table_ref_id,
                 "transit": write_result.table_ref.table_ref_id,
             },
-            summary_details={"warnings": warnings} if warnings else {},
+            summary_details=_save_summary_details(
+                operation="save_run",
+                actual_write=True,
+                affected_rows=write_result.affected_rows,
+                warnings=warnings,
+            ),
         )
+
+
+def _save_summary_details(
+    *,
+    operation: str,
+    actual_write: bool,
+    affected_rows: int,
+    warnings: list[str],
+) -> dict[str, object]:
+    return {
+        "operation": operation,
+        "operation_status": "written" if actual_write else "skipped",
+        "actual_write": actual_write,
+        "affected_rows": affected_rows,
+        "warnings": warnings,
+    }
 
 
 def _save_memory_target(
