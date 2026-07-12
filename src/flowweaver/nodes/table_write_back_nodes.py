@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from flowweaver.nodes.builtin_table_execution_result import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.builtin_table_node_types import WRITE_BACK_TABLE_NODE_TYPE
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
 )
+from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
 from flowweaver.nodes.table_write_back_node_config import (
     writeback_node_config as _writeback_node_config,
 )
@@ -27,9 +31,10 @@ class WriteBackTableNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
-        input_ref = context.require_single_input_ref(
+    ) -> BuiltinTableExecutionResult:
+        input_ref = _primary_input_ref(
             task,
+            context,
             node_type=self.node_type,
         )
         config = _writeback_node_config(
@@ -108,4 +113,11 @@ class WriteBackTableNodeHandler:
             schema=_writeback_status_schema(),
             rows=[status_row],
         )
-        return [status_ref] if target_ref is None else [status_ref, target_ref]
+        output_refs = (status_ref,) if target_ref is None else (status_ref, target_ref)
+        output_slot_bindings = {"status": status_ref.table_ref_id}
+        if target_ref is not None:
+            output_slot_bindings["target"] = target_ref.table_ref_id
+        return BuiltinTableExecutionResult(
+            output_refs=output_refs,
+            output_slot_bindings=output_slot_bindings,
+        )

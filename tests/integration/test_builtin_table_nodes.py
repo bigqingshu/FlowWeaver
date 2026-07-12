@@ -5098,6 +5098,51 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     ]
 
 
+def test_save_memory_table_node_prefers_explicit_memory_output_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-explicit-memory",
+            node_instance_id="generate_explicit_memory",
+            config={"rows": 1, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    save_result = executor.execute(
+        make_task(
+            node_type=SAVE_MEMORY_TABLE_NODE_TYPE,
+            node_run_id="node-run-save-memory-explicit",
+            node_instance_id="save_memory_explicit",
+            input_slot_bindings={"in": input_ref.table_ref_id},
+            config={
+                "table_name": "legacy_scratch",
+                "mode": "overwrite",
+                "output_targets": {
+                    "memory": {
+                        "target_kind": "new_memory",
+                        "table_name": "configured_scratch",
+                    }
+                },
+            },
+        )
+    )
+
+    assert save_result.status == NodeResultStatus.SUCCEEDED
+    memory_ref = registry.get(save_result.output_slot_bindings["memory"])
+    assert save_result.output_slot_bindings["out"] == input_ref.table_ref_id
+    assert memory_ref.logical_table_id == "configured_scratch"
+    assert memory_provider.count_rows(memory_ref) == 1
+    assert save_result.summary["warnings"] == [
+        "legacy table_name ignored in favor of output_targets.memory"
+    ]
+
+
 def test_save_run_table_node_outputs_current_ref_and_named_transit_ref(
     tmp_path: Path,
 ) -> None:
@@ -5152,6 +5197,53 @@ def test_save_run_table_node_outputs_current_ref_and_named_transit_ref(
     ) == [
         {"row_id": 1, "amount": 1.0},
         {"row_id": 2, "amount": 2.0},
+    ]
+
+
+def test_save_run_table_node_prefers_explicit_transit_output_target(
+    tmp_path: Path,
+) -> None:
+    executor, _store, registry, _provider, memory_provider = (
+        make_executor_with_memory_provider(tmp_path)
+    )
+    generate_result = executor.execute(
+        make_task(
+            node_type=GENERATE_TEST_TABLE_NODE_TYPE,
+            node_run_id="node-run-generate-explicit-transit",
+            node_instance_id="generate_explicit_transit",
+            config={"rows": 2, "columns": ["row_id"], "seed": 0},
+        )
+    )
+    input_ref = registry.get(generate_result.output_refs[0])
+
+    save_result = executor.execute(
+        make_task(
+            node_type=SAVE_RUN_TABLE_NODE_TYPE,
+            node_run_id="node-run-save-run-explicit",
+            node_instance_id="save_run_explicit",
+            input_slot_bindings={"in": input_ref.table_ref_id},
+            config={
+                "transit_name": "legacy_transit",
+                "save_memory": False,
+                "mode": "overwrite",
+                "output_targets": {
+                    "transit": {
+                        "target_kind": "new_memory",
+                        "table_name": "configured_transit",
+                    }
+                },
+            },
+        )
+    )
+
+    assert save_result.status == NodeResultStatus.SUCCEEDED
+    transit_ref = registry.get(save_result.output_slot_bindings["transit"])
+    assert save_result.output_slot_bindings["out"] == input_ref.table_ref_id
+    assert transit_ref.logical_table_id == "configured_transit"
+    assert memory_provider.count_rows(transit_ref) == 2
+    assert save_result.summary["warnings"] == [
+        "legacy save_memory=false ignored in favor of output_targets.transit",
+        "legacy transit name ignored in favor of output_targets.transit",
     ]
 
 
@@ -5229,6 +5321,9 @@ def test_write_selected_columns_node_outputs_write_plan_status_table(
     assert write_result.status == NodeResultStatus.SUCCEEDED
     assert len(write_result.output_refs) == 1
     status_ref = registry.get(write_result.output_refs[0])
+    assert write_result.output_slot_bindings == {
+        "status": status_ref.table_ref_id
+    }
     assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
     assert status_ref.logical_table_id == "write_selected_output"
     assert provider.read_rows(status_ref, offset=0, limit=10) == [
@@ -5290,6 +5385,9 @@ def test_write_selected_columns_node_does_not_create_runtime_target_when_disable
     assert write_result.status == NodeResultStatus.SUCCEEDED
     assert len(write_result.output_refs) == 1
     status_ref = registry.get(write_result.output_refs[0])
+    assert write_result.output_slot_bindings == {
+        "status": status_ref.table_ref_id
+    }
     status_rows = provider.read_rows(status_ref, offset=0, limit=10)
     assert status_rows[0]["target_type"] == "run_table"
     assert status_rows[0]["target_table"] == "disabled_target"
@@ -5334,6 +5432,10 @@ def test_write_selected_columns_node_writes_run_table_when_enabled(
     status_ref = registry.get(write_result.output_refs[0])
     written_ref = registry.get(write_result.output_refs[1])
     assert len(write_result.output_refs) == 2
+    assert write_result.output_slot_bindings == {
+        "status": status_ref.table_ref_id,
+        "target": written_ref.table_ref_id,
+    }
     assert written_ref.logical_table_id == "target_scratch"
     assert written_ref.role == TableRole.AUXILIARY
     assert written_ref.storage_kind == TableStorageKind.RUNTIME_SQL
@@ -5859,6 +5961,9 @@ def test_write_back_table_node_outputs_writeback_status_table(
     assert writeback_result.status == NodeResultStatus.SUCCEEDED
     assert len(writeback_result.output_refs) == 1
     status_ref = registry.get(writeback_result.output_refs[0])
+    assert writeback_result.output_slot_bindings == {
+        "status": status_ref.table_ref_id
+    }
     assert status_ref.lifecycle_status == LifecycleStatus.PUBLISHED
     assert status_ref.logical_table_id == "writeback_output"
     assert provider.read_rows(status_ref, offset=0, limit=10) == [
@@ -6030,6 +6135,10 @@ def test_write_back_table_node_writes_run_table_when_enabled(
     assert len(writeback_result.output_refs) == 2
     status_ref = registry.get(writeback_result.output_refs[0])
     target_ref = registry.get(writeback_result.output_refs[1])
+    assert writeback_result.output_slot_bindings == {
+        "status": status_ref.table_ref_id,
+        "target": target_ref.table_ref_id,
+    }
     assert target_ref.logical_table_id == "orders_projection"
     assert target_ref.role == TableRole.AUXILIARY
     assert target_ref.storage_kind == TableStorageKind.RUNTIME_SQL

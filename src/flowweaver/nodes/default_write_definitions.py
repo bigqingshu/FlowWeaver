@@ -57,6 +57,27 @@ def default_write_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             display_name="Save Run Table",
             input_ports=(NodePortSpec("in", required=True),),
             output_ports=(NodePortSpec("out"), NodePortSpec("transit")),
+            input_table_slots=(
+                _input_table_slot(
+                    "in",
+                    display_name="Input table",
+                    description="Table to pass through and save as transit memory.",
+                ),
+            ),
+            output_table_slots=(
+                _current_output_table_slot(
+                    "out",
+                    display_name="Current table",
+                    description="Original current table passed to the main chain.",
+                ),
+                _auxiliary_output_table_slot(
+                    "transit",
+                    display_name="Transit memory table",
+                    description="Workflow-run memory table saved by the node.",
+                    allow_new_memory=True,
+                    allow_existing_memory=True,
+                ),
+            ),
             config_schema=_save_run_table_schema(),
         ),
         NodeDefinitionSpec(
@@ -64,7 +85,14 @@ def default_write_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             node_version="1.0",
             display_name="Write Selected Columns",
             input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("status"),),
+            output_ports=(NodePortSpec("status"), NodePortSpec("target")),
+            input_table_slots=(
+                _input_table_slot(
+                    "in",
+                    display_name="Input table",
+                    description="Source table containing the selected columns.",
+                ),
+            ),
             config_schema=_write_selected_columns_schema(),
         ),
         NodeDefinitionSpec(
@@ -72,7 +100,14 @@ def default_write_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
             node_version="1.0",
             display_name="Write Back Table",
             input_ports=(NodePortSpec("in", required=True),),
-            output_ports=(NodePortSpec("status"),),
+            output_ports=(NodePortSpec("status"), NodePortSpec("target")),
+            input_table_slots=(
+                _input_table_slot(
+                    "in",
+                    display_name="Input table",
+                    description="Source table containing rows to write back.",
+                ),
+            ),
             config_schema=_write_back_table_schema(),
         ),
     )

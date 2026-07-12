@@ -9,8 +9,8 @@ def _save_memory_table_schema() -> NodeConfigSchemaSpec:
             "table_name": NodeConfigFieldSpec(
                 type="string",
                 title="Table Name",
-                required=True,
                 default="memory_table",
+                description="Legacy fallback when no memory output target is set.",
             ),
             "mode": NodeConfigFieldSpec(
                 type="enum",

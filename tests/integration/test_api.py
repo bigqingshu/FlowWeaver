@@ -608,17 +608,73 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {"name": "out", "required": False},
         {"name": "transit", "required": False},
     ]
+    assert by_type["SaveRunTableNode"]["input_table_slots"] == [
+        {
+            "name": "in",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
+            "display_name": "Input table",
+            "description": "Table to pass through and save as transit memory.",
+            "default_source": "upstream_current",
+        }
+    ]
+    assert by_type["SaveRunTableNode"]["output_table_slots"] == [
+        {
+            "name": "out",
+            "default_role": "CURRENT",
+            "allow_current": True,
+            "allow_new_memory": False,
+            "allow_new_runtime_sql": False,
+            "allow_existing_memory": False,
+            "allow_existing_runtime_sql": False,
+            "display_name": "Current table",
+            "description": "Original current table passed to the main chain.",
+        },
+        {
+            "name": "transit",
+            "default_role": "AUXILIARY",
+            "allow_current": False,
+            "allow_new_memory": True,
+            "allow_new_runtime_sql": False,
+            "allow_existing_memory": True,
+            "allow_existing_runtime_sql": False,
+            "display_name": "Transit memory table",
+            "description": "Workflow-run memory table saved by the node.",
+        },
+    ]
     assert by_type["WriteSelectedColumnsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["WriteSelectedColumnsNode"]["output_ports"] == [
-        {"name": "status", "required": False}
+        {"name": "status", "required": False},
+        {"name": "target", "required": False},
+    ]
+    assert by_type["WriteSelectedColumnsNode"]["input_table_slots"] == [
+        {
+            "name": "in",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
+            "display_name": "Input table",
+            "description": "Source table containing the selected columns.",
+            "default_source": "upstream_current",
+        }
     ]
     assert by_type["WriteBackTableNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
     assert by_type["WriteBackTableNode"]["output_ports"] == [
-        {"name": "status", "required": False}
+        {"name": "status", "required": False},
+        {"name": "target", "required": False},
+    ]
+    assert by_type["WriteBackTableNode"]["input_table_slots"] == [
+        {
+            "name": "in",
+            "required": True,
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
+            "display_name": "Input table",
+            "description": "Source table containing rows to write back.",
+            "default_source": "upstream_current",
+        }
     ]
     assert by_type["GenerateTestTableNode"]["ui_visibility"] == "visible"
     assert all("implementation_ref" not in definition for definition in definitions)
@@ -1218,8 +1274,8 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert save_memory_properties["table_name"] == {
         "type": "string",
         "title": "Table Name",
-        "required": True,
         "default": "memory_table",
+        "description": "Legacy fallback when no memory output target is set.",
     }
     assert save_memory_properties["mode"]["enum"] == ["overwrite"]
 
