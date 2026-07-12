@@ -172,6 +172,7 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
         output_refs=["table-result", "table-errors"],
         output_slot_bindings={
             "out": "table-result",
+            "preview": "table-result",
             "errors": "table-errors",
         },
         summary={
@@ -196,9 +197,27 @@ def test_node_task_and_result_msgpack_round_trip() -> None:
     assert restored_result.task_id == task.task_id
     assert restored_result.output_slot_bindings == {
         "out": "table-result",
+        "preview": "table-result",
         "errors": "table-errors",
     }
     assert restored_result.summary["affected_rows"] == 3
+
+
+def test_node_task_result_rejects_binding_outside_output_refs() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="output_slot_bindings values must be present in output_refs",
+    ):
+        NodeTaskResultModel(
+            task_id="task-invalid-binding",
+            node_run_id="node-invalid-binding",
+            attempt=1,
+            executor_id="executor-1",
+            process_generation=1,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=["table-result"],
+            output_slot_bindings={"out": "missing-table"},
+        )
 
 
 def test_node_task_cancel_request_payload_msgpack_round_trip() -> None:

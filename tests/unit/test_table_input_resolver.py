@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -23,6 +23,7 @@ from flowweaver.workflow_process.table_input_resolver import (
 @dataclass(frozen=True)
 class _FakeResult:
     output_refs: list[str]
+    output_slot_bindings: dict[str, str] = field(default_factory=dict)
 
 
 class _FakeStore:
@@ -52,11 +53,15 @@ def test_resolves_named_input_slots_from_list_config() -> None:
         node_run_id=source.node_run_id,
         role=TableRole.AUXILIARY,
         storage_kind=TableStorageKind.MEMORY,
-        logical_table_id="rules_table",
-        opaque_handle={"output_slot": "rules_table"},
+        logical_table_id="internal_rules_table",
     )
     store = _FakeStore(
-        results_by_node_run={source.node_run_id: _FakeResult(["rules-ref"])},
+        results_by_node_run={
+            source.node_run_id: _FakeResult(
+                ["rules-ref"],
+                {"rules_table": "rules-ref"},
+            )
+        },
         table_refs={"rules-ref": rules_ref},
     )
 
@@ -80,6 +85,115 @@ def test_resolves_named_input_slots_from_list_config() -> None:
     assert result.status == TableInputResolutionStatus.RESOLVED
     assert result.input_refs == ("rules-ref",)
     assert result.input_slot_bindings == {"rules": "rules-ref"}
+
+
+def test_selector_does_not_fall_back_when_result_bindings_are_present() -> None:
+    source = _node_run("source-run", "source")
+    table_ref = _table_ref(
+        "table-ref",
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        logical_table_id="legacy",
+        opaque_handle={"output_slot": "legacy"},
+    )
+    store = _FakeStore(
+        results_by_node_run={
+            source.node_run_id: _FakeResult(
+                [table_ref.table_ref_id],
+                {"out": table_ref.table_ref_id},
+            )
+        },
+        table_refs={table_ref.table_ref_id: table_ref},
+    )
+
+    result = resolve_configured_input_refs(
+        store=store,
+        config={
+            "input_source": {
+                "type": "upstream_table",
+                "source_node_instance_id": "source",
+                "output_slot": "legacy",
+            }
+        },
+        upstream_node_runs={"source": source},
+    )
+
+    assert result.status == TableInputResolutionStatus.ERROR
+    assert result.issue is not None
+    assert result.issue.message == (
+        "Input table selector did not match any upstream table"
+    )
+
+
+def test_selector_uses_legacy_handle_when_result_bindings_are_empty() -> None:
+    source = _node_run("source-run", "source")
+    table_ref = _table_ref(
+        "legacy-ref",
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+        logical_table_id="internal_table",
+        opaque_handle={"output_slot": "legacy_out"},
+    )
+    store = _FakeStore(
+        results_by_node_run={
+            source.node_run_id: _FakeResult([table_ref.table_ref_id])
+        },
+        table_refs={table_ref.table_ref_id: table_ref},
+    )
+
+    result = resolve_configured_input_refs(
+        store=store,
+        config={
+            "input_source": {
+                "type": "upstream_table",
+                "source_node_instance_id": "source",
+                "output_slot": "legacy_out",
+            }
+        },
+        upstream_node_runs={"source": source},
+    )
+
+    assert result.status == TableInputResolutionStatus.RESOLVED
+    assert result.input_refs == (table_ref.table_ref_id,)
+
+
+def test_selector_allows_multiple_slots_to_reference_the_same_table() -> None:
+    source = _node_run("source-run", "source")
+    table_ref = _table_ref(
+        "shared-ref",
+        node_run_id=source.node_run_id,
+        role=TableRole.CURRENT,
+        storage_kind=TableStorageKind.RUNTIME_SQL,
+    )
+    store = _FakeStore(
+        results_by_node_run={
+            source.node_run_id: _FakeResult(
+                [table_ref.table_ref_id],
+                {
+                    "out": table_ref.table_ref_id,
+                    "preview": table_ref.table_ref_id,
+                },
+            )
+        },
+        table_refs={table_ref.table_ref_id: table_ref},
+    )
+
+    result = resolve_configured_input_refs(
+        store=store,
+        config={
+            "input_source": {
+                "type": "upstream_table",
+                "source_node_instance_id": "source",
+                "output_slot": "preview",
+            }
+        },
+        upstream_node_runs={"source": source},
+    )
+
+    assert result.status == TableInputResolutionStatus.RESOLVED
+    assert result.input_refs == (table_ref.table_ref_id,)
 
 
 def test_duplicate_input_slots_are_rejected() -> None:

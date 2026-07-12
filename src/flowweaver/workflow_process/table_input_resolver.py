@@ -53,6 +53,7 @@ def resolve_configured_input_refs(
         matches = _matching_table_refs(
             store,
             output_refs=result.output_refs,
+            output_slot_bindings=result.output_slot_bindings,
             selector=selector,
         )
         if not matches:
@@ -84,10 +85,16 @@ def _matching_table_refs(
     store: RuntimeStore,
     *,
     output_refs: list[str],
+    output_slot_bindings: dict[str, str],
     selector: TableInputSelector,
 ) -> list[TableRefModel]:
     matches: list[TableRefModel] = []
-    for output_ref in output_refs:
+    candidate_output_refs = _candidate_output_refs(
+        output_refs=output_refs,
+        output_slot_bindings=output_slot_bindings,
+        output_slot=selector.output_slot,
+    )
+    for output_ref in candidate_output_refs:
         table_ref = store.get_table_ref(output_ref)
         if table_ref is None:
             continue
@@ -108,16 +115,34 @@ def _matching_table_refs(
             and table_ref.logical_table_id != selector.logical_table_id
         ):
             continue
-        if selector.output_slot is not None and not _matches_output_slot(
-            table_ref,
-            selector.output_slot,
+        if (
+            not output_slot_bindings
+            and selector.output_slot is not None
+            and not _matches_legacy_output_slot(table_ref, selector.output_slot)
         ):
             continue
         matches.append(table_ref)
     return matches
 
 
-def _matches_output_slot(table_ref: TableRefModel, output_slot: str) -> bool:
+def _candidate_output_refs(
+    *,
+    output_refs: list[str],
+    output_slot_bindings: dict[str, str],
+    output_slot: str | None,
+) -> list[str]:
+    if not output_slot_bindings or output_slot is None:
+        return output_refs
+    bound_ref = output_slot_bindings.get(output_slot)
+    if bound_ref is None or bound_ref not in output_refs:
+        return []
+    return [bound_ref]
+
+
+def _matches_legacy_output_slot(
+    table_ref: TableRefModel,
+    output_slot: str,
+) -> bool:
     handle_slot = table_ref.opaque_handle.get("output_slot")
     if isinstance(handle_slot, str) and handle_slot:
         return handle_slot == output_slot

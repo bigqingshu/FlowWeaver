@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
@@ -46,3 +46,19 @@ class NodeTaskResultModel(StrictModel):
     error: dict[str, Any] | None = None
     started_at: datetime = Field(default_factory=utc_now)
     finished_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def validate_output_slot_bindings(self) -> Self:
+        output_refs = set(self.output_refs)
+        unknown_refs = sorted(
+            {
+                output_ref
+                for output_ref in self.output_slot_bindings.values()
+                if output_ref not in output_refs
+            }
+        )
+        if unknown_refs:
+            raise ValueError(
+                "output_slot_bindings values must be present in output_refs"
+            )
+        return self

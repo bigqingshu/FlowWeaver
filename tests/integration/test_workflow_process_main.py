@@ -913,7 +913,18 @@ def table_ref_definition() -> dict:
                 "node_instance_id": "filter",
                 "node_type": FILTER_ROWS_NODE_TYPE,
                 "node_version": "1.0",
-                "config": {"field": "amount", "operator": "GT", "value": 2.0},
+                "config": {
+                    "field": "amount",
+                    "operator": "GT",
+                    "value": 2.0,
+                    "input_sources": {
+                        "in": {
+                            "type": "upstream_table",
+                            "source_node_instance_id": "generate",
+                            "output_slot": "out",
+                        }
+                    },
+                },
             },
         ],
         "connections": [
@@ -1368,8 +1379,16 @@ def test_workflow_process_passes_upstream_table_refs_to_downstream_task(
     assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
     assert generate_task.input_refs == []
     assert filter_task.input_refs == generate_result.output_refs
+    assert filter_task.input_slot_bindings == {
+        "in": generate_result.output_refs[0]
+    }
     assert len(generate_result.output_refs) == 1
     assert len(filter_result.output_refs) == 1
+    assert generate_result.output_slot_bindings == {
+        "out": generate_result.output_refs[0]
+    }
+    generated_ref = registry.get(generate_result.output_refs[0])
+    assert "output_slot" not in generated_ref.opaque_handle
     filtered_rows = provider.read_rows(
         filtered_ref,
         offset=0,
