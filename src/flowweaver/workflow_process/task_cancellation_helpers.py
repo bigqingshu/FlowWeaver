@@ -24,13 +24,13 @@ def mark_node_cancel_requested(
     store: RuntimeStore,
     task: NodeTaskModel,
     executor_id: str,
-) -> None:
+) -> bool:
     node_run = store.get_node_run(task.node_run_id)
     if node_run is None:
-        return
+        return False
     if node_run.status == NodeRunStatus.CANCEL_REQUESTED.value:
-        return
-    store.update_node_run_status(
+        return False
+    return store.update_node_run_status(
         task.node_run_id,
         NodeRunStatus.CANCEL_REQUESTED,
         executor_id=executor_id,
@@ -41,7 +41,7 @@ def mark_node_cancel_requested(
         ],
         owner_process_id=task.workflow_process_id,
         process_generation=task.process_generation,
-    )
+    ) is not None
 
 
 def cancel_grace_period_expired(
@@ -72,12 +72,13 @@ def request_cancel_for_in_flight_tasks(
     execution_pool: NodeTaskExecutionPool,
 ) -> None:
     for dispatched in execution_pool.in_flight_tasks():
-        mark_node_cancel_requested(
+        marked = mark_node_cancel_requested(
             store=store,
             task=dispatched.task,
             executor_id=dispatched.executor_id,
         )
-        request_cancel(dispatched.executor, dispatched.task)
+        if marked:
+            request_cancel(dispatched.executor, dispatched.task)
 
 
 def cancelled_task_result(

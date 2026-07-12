@@ -3,10 +3,12 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
 from flowweaver.common.ids import new_id
+from flowweaver.common.process_job import ProcessJob, create_process_job
 from flowweaver.engine.event_router import EventRouter, RuntimeEvent
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
 from flowweaver.engine.supervisor_executor_events import (
@@ -53,12 +55,15 @@ class Supervisor:
         runtime_store: RuntimeStore,
         event_router: EventRouter | None = None,
         python_executable: str | None = None,
+        process_job_factory: Callable[[], ProcessJob] = create_process_job,
     ) -> None:
         self._config = config
         self._runtime_store = runtime_store
         self._event_router = event_router
         self._python_executable = python_executable or sys.executable
+        self._process_job_factory = process_job_factory
         self._children: dict[str, subprocess.Popen] = {}
+        self._workflow_jobs: dict[str, ProcessJob] = {}
         self._executor_children: dict[str, subprocess.Popen] = {}
         self._runtime_events = SupervisorRuntimeEventChannels(event_router)
         self._stop_event = threading.Event()
@@ -76,7 +81,9 @@ class Supervisor:
             process.process_id,
         )
         self._runtime_events.register(process.process_id, runtime_event_path)
+        process_job: ProcessJob | None = None
         try:
+            process_job = self._process_job_factory()
             child = _start_workflow_child_process(
                 config=self._config,
                 runtime_store=self._runtime_store,
@@ -85,11 +92,26 @@ class Supervisor:
                 process=process,
                 runtime_event_path=runtime_event_path,
                 env=self._child_environment(),
+                process_job=process_job,
             )
-        except Exception:
+        except Exception as exc:
+            if process_job is not None:
+                self._close_process_job(process_job)
+            else:
+                self._runtime_store.mark_workflow_process_exited(
+                    process.process_id,
+                    exit_code=1,
+                    error={"message": str(exc)},
+                )
+                self._runtime_store.abort_workflow_run_for_process(
+                    process.process_id,
+                    reason="WORKFLOW_PROCESS_START_FAILED",
+                )
             self._runtime_events.forget(process.process_id)
             raise
+        assert process_job is not None
         self._children[process.process_id] = child
+        self._workflow_jobs[process.process_id] = process_job
         self._runtime_store.update_workflow_process_pid(process.process_id, child.pid)
         return process.process_id
 
@@ -146,6 +168,8 @@ class Supervisor:
             drain_runtime_events_for_process=self._drain_runtime_events_for_process,
             forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
+        for process_id in tuple(self._workflow_jobs):
+            self._release_workflow_job(process_id)
         _close_executor_children(
             children=self._executor_children,
             event_router=self._event_router,
@@ -162,6 +186,7 @@ class Supervisor:
             return
         child = self._children.get(process.process_id)
         if child is None:
+            self._release_workflow_job(process.process_id)
             return
         _stop_workflow_child(
             self._runtime_store,
@@ -175,6 +200,8 @@ class Supervisor:
             drain_runtime_events_for_process=self._drain_runtime_events_for_process,
             forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
+
+        self._release_workflow_job(process.process_id)
 
     def request_workflow_cancel(self, workflow_run_id: str) -> WorkflowProcess | None:
         return self._runtime_store.request_workflow_process_cancel(workflow_run_id)
@@ -195,13 +222,16 @@ class Supervisor:
         )
 
     def mark_lost_workflow_processes(self) -> list[WorkflowProcess]:
-        return _mark_lost_workflow_processes(
+        lost = _mark_lost_workflow_processes(
             config=self._config,
             runtime_store=self._runtime_store,
             children=self._children,
             drain_runtime_events_for_process=self._drain_runtime_events_for_process,
             forget_runtime_event_channel=self._forget_runtime_event_channel,
         )
+        for process in lost:
+            self._release_workflow_job(process.process_id)
+        return lost
 
     def drain_runtime_events(self) -> list[RuntimeEvent]:
         return self._runtime_events.drain_all()
@@ -233,9 +263,22 @@ class Supervisor:
         exit_code: int,
         error: dict[str, str] | None = None,
     ) -> WorkflowProcess | None:
+        self._release_workflow_job(process_id)
         return _finish_workflow_process(
             self._runtime_store,
             process_id,
             exit_code=exit_code,
             error=error,
         )
+
+    def _release_workflow_job(self, process_id: str) -> None:
+        process_job = self._workflow_jobs.pop(process_id, None)
+        if process_job is not None:
+            self._close_process_job(process_job)
+
+    @staticmethod
+    def _close_process_job(process_job: ProcessJob) -> None:
+        try:
+            process_job.close()
+        except Exception:
+            pass

@@ -2436,7 +2436,11 @@ def test_workflow_process_with_threaded_pool_requests_cancel_for_in_flight_task(
     assert executor.cancelled_task_id is not None
     assert loaded_workflow is not None
     assert loaded_workflow.status == "CANCELLED"
-    assert loaded_node.status == "CANCEL_REQUESTED"
+    assert loaded_node.status == "CANCELLED"
+    assert loaded_node.error == {
+        "message": "Node task cancelled cooperatively",
+        "reason": "WORKFLOW_CANCEL_REQUESTED",
+    }
     assert [event.event_type for event in store.list_runtime_events()] == [
         "WORKFLOW_STARTED",
         "NODE_QUEUED",

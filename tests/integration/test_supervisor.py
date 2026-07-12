@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 import time
@@ -487,10 +488,24 @@ def test_supervisor_passes_workflow_process_execution_config(
     store = make_store(tmp_path)
     run = create_run(store, definition=non_empty_definition())
     captured_command: list[str] = []
+    assigned_pids: list[int] = []
+    closed_jobs: list[bool] = []
+
+    class TrackingProcessJob:
+        enabled = True
+
+        def assign(self, process) -> None:
+            assigned_pids.append(process.pid)
+
+        def close(self) -> None:
+            closed_jobs.append(True)
 
     class FakeProcess:
         pid = 12345
         returncode: int | None = None
+
+        def __init__(self) -> None:
+            self.stdin = io.BytesIO()
 
         def poll(self) -> int | None:
             return self.returncode
@@ -517,6 +532,7 @@ def test_supervisor_passes_workflow_process_execution_config(
         ),
         runtime_store=store,
         python_executable=sys.executable,
+        process_job_factory=TrackingProcessJob,
     )
 
     process_id = supervisor.start_workflow_process(run.workflow_run_id)
@@ -529,5 +545,9 @@ def test_supervisor_passes_workflow_process_execution_config(
         assert captured_command[
             captured_command.index("--max-concurrent-node-tasks") + 1
         ] == "2"
+        assert "--wait-for-start-signal" in captured_command
+        assert assigned_pids == [12345]
     finally:
         supervisor.close()
+    assert closed_jobs == [True]
+    assert supervisor._workflow_jobs == {}

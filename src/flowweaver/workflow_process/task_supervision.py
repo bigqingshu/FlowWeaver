@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from queue import Queue
 from threading import Thread
@@ -46,6 +47,8 @@ from flowweaver.workflow_process.task_supervision_helpers import (
     task_supervision_poll_seconds as task_supervision_poll_seconds,
 )
 
+RefreshRuntimeOptionsForTask = Callable[[NodeTaskModel, NodeExecutor], None]
+
 
 def execute_node_task_with_supervision(
     *,
@@ -59,6 +62,7 @@ def execute_node_task_with_supervision(
     cleanup_staging_for_node: CleanupStagingForNode | None,
     cancel_grace_seconds: float,
     task: NodeTaskModel,
+    refresh_runtime_options_for_task: RefreshRuntimeOptionsForTask | None = None,
 ) -> NodeTaskResultModel | None:
     results: Queue[NodeTaskResultModel | Exception] = Queue(maxsize=1)
     cancel_requested_at: datetime | None = None
@@ -116,6 +120,8 @@ def execute_node_task_with_supervision(
         if heartbeat is None:
             close_executor(executor)
             return None
+        if refresh_runtime_options_for_task is not None:
+            refresh_runtime_options_for_task(task, executor)
         timeout_result = task_manager.mark_timed_out_task(task)
         if timeout_result.status == NodeTaskTimeoutStatus.TIMED_OUT:
             close_executor(executor)

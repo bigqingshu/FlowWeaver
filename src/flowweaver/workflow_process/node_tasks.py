@@ -100,6 +100,10 @@ class NodeTaskManager:
             return 0, None
         return provider.policy_snapshot_for_node(node_instance_id)
 
+    def runtime_options_version_for_task(self, task_id: str) -> int | None:
+        task = self._store.get_node_task(task_id)
+        return task.runtime_options_version if task is not None else None
+
     def submit_ready_node(
         self,
         *,

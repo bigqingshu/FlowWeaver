@@ -62,13 +62,18 @@ def record_node_task_ipc_event(
     task: NodeTaskModel,
     envelope: IPCEnvelope,
 ) -> None:
+    if (
+        envelope.workflow_run_id != task.workflow_run_id
+        or envelope.node_run_id != task.node_run_id
+    ):
+        return
     if envelope.message_type == IPCMessageType.NODE_TASK_HEARTBEAT:
         heartbeat_payload = NodeTaskHeartbeatPayload.model_validate(envelope.payload)
         if heartbeat_payload.task_id != task.task_id:
             return
         task_manager.record_task_heartbeat(
             task,
-            executor_id=heartbeat_payload.executor_id,
+            executor_id=executor_id,
             attempt=heartbeat_payload.attempt,
         )
         return
@@ -110,22 +115,40 @@ def push_runtime_options_to_in_flight_tasks(
 ) -> int:
     updated_count = 0
     for dispatched_task in execution_pool.in_flight_tasks():
-        executor = dispatched_task.executor
-        if not isinstance(executor, RuntimeOptionsUpdatableNodeExecutor):
-            continue
-        version, policy = task_manager.runtime_feedback_policy_snapshot_for_node(
-            dispatched_task.node_instance_id
-        )
-        if policy is None or dispatched_task.task.runtime_options_version >= version:
-            continue
-        try:
-            requested = executor.request_runtime_options_update(
-                dispatched_task.task,
-                runtime_options_version=version,
-                runtime_feedback_policy=policy,
-            )
-        except Exception:
-            requested = False
-        if requested:
+        if push_runtime_options_to_task(
+            task=dispatched_task.task,
+            node_instance_id=dispatched_task.node_instance_id,
+            executor=dispatched_task.executor,
+            task_manager=task_manager,
+        ):
             updated_count += 1
     return updated_count
+
+
+def push_runtime_options_to_task(
+    *,
+    task: NodeTaskModel,
+    node_instance_id: str,
+    executor: object,
+    task_manager: NodeTaskManager,
+) -> bool:
+    if not isinstance(executor, RuntimeOptionsUpdatableNodeExecutor):
+        return False
+    version, policy = task_manager.runtime_feedback_policy_snapshot_for_node(
+        node_instance_id
+    )
+    stored_version = task_manager.runtime_options_version_for_task(task.task_id)
+    applied_version = max(
+        task.runtime_options_version,
+        stored_version if stored_version is not None else 0,
+    )
+    if policy is None or applied_version >= version:
+        return False
+    try:
+        return executor.request_runtime_options_update(
+            task,
+            runtime_options_version=version,
+            runtime_feedback_policy=policy,
+        )
+    except Exception:
+        return False

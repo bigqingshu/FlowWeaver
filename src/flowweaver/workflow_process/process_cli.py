@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import traceback
 from collections.abc import Callable
 
@@ -29,7 +30,10 @@ def run_workflow_process_cli(
     parser.add_argument("--execution-mode")
     parser.add_argument("--max-concurrent-node-tasks")
     parser.add_argument("--memory-table-soft-row-limit", type=int)
+    parser.add_argument("--wait-for-start-signal", action="store_true")
     args = parser.parse_args(argv)
+    if args.wait_for_start_signal and sys.stdin.readline().strip() != "START":
+        return 1
     store = RuntimeStore(args.database_url)
     try:
         event_sink: RuntimeEventSink = (

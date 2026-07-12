@@ -45,6 +45,7 @@ def workflow_process_command(
         str(config.resolved_plugin_dir()),
         "--runtime-event-path",
         str(runtime_event_path),
+        "--wait-for-start-signal",
     ]
 
 

@@ -19,6 +19,9 @@ from flowweaver.workflow_process.executor_pool import (
     ThreadedNodeTaskExecutionPool,
 )
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
+from flowweaver.workflow_process.task_supervision import (
+    RefreshRuntimeOptionsForTask,
+)
 
 CleanupStagingForNode = Callable[[str, str], None]
 
@@ -57,6 +60,7 @@ def build_node_task_execute(
     task_manager: NodeTaskManager,
     cleanup_staging_for_node: CleanupStagingForNode | None,
     cancel_grace_seconds: float,
+    refresh_runtime_options_for_task: RefreshRuntimeOptionsForTask | None = None,
 ) -> Callable[[DispatchedNodeTask], NodeTaskResultModel | None]:
     if process_generation is None:
         return lambda _dispatched_task: None
@@ -75,6 +79,7 @@ def build_node_task_execute(
             cleanup_staging_for_node=cleanup_staging_for_node,
             cancel_grace_seconds=cancel_grace_seconds,
             task=dispatched_task.task,
+            refresh_runtime_options_for_task=refresh_runtime_options_for_task,
         )
 
     return execute_task

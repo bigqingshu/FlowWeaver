@@ -143,6 +143,18 @@ def run_workflow_process_loop(
     )
     task_manager = runtime_initialization.task_manager
     if execution_pool is None:
+        refresh_runtime_options_for_task = None
+        if execution_mode == "immediate":
+
+            def refresh_runtime_options_for_task(task, executor) -> None:
+                if runtime_options_poller.poll_if_due():
+                    ipc_events.push_runtime_options_to_task(
+                        task=task,
+                        node_instance_id=task.node_instance_id,
+                        executor=executor,
+                        task_manager=task_manager,
+                    )
+
         execute_task = execution_helpers.build_node_task_execute(
             store=store,
             workflow_run_id=workflow_run_id,
@@ -152,6 +164,7 @@ def run_workflow_process_loop(
             task_manager=task_manager,
             cleanup_staging_for_node=cleanup_staging_for_node,
             cancel_grace_seconds=cancel_grace_seconds,
+            refresh_runtime_options_for_task=refresh_runtime_options_for_task,
         )
         execution_pool = execution_helpers.create_node_task_execution_pool(
             execution_mode=execution_mode,
@@ -165,15 +178,11 @@ def run_workflow_process_loop(
         )
         if heartbeat is None:
             return 1
-        if process_cancellation.cancel_workflow_process_if_requested(
+        cancel_requested = process_cancellation.request_workflow_cancel_if_requested(
             store=store,
-            workflow_run_id=workflow_run_id,
             process_id=process_id,
-            process_generation=process_generation,
             execution_pool=execution_pool,
-            event_sink=event_sink,
-        ):
-            return 0
+        )
         if finalization.finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
         if runtime_options_poller.poll_if_due():
@@ -194,23 +203,34 @@ def run_workflow_process_loop(
         )
         if finalization.finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
-        dispatched_count = task_dispatch.dispatch_ready_nodes(
+        if cancel_requested and process_cancellation.finalize_workflow_cancel_if_idle(
             store=store,
             workflow_run_id=workflow_run_id,
-            workflow_process_id=process_id,
+            process_id=process_id,
             process_generation=process_generation,
-            heartbeat_interval_seconds=heartbeat_interval_seconds,
-            dag=dag,
-            task_manager=task_manager,
-            executor_factory=executor_factory,
-            cleanup_staging_for_node=cleanup_staging_for_node,
-            close_executor_after_task=close_executor_after_task,
-            cancel_grace_seconds=cancel_grace_seconds,
-            max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
-            max_concurrent_node_tasks=max_concurrent_node_tasks,
             execution_pool=execution_pool,
             event_sink=event_sink,
-        )
+        ):
+            return 0
+        dispatched_count = 0
+        if not cancel_requested:
+            dispatched_count = task_dispatch.dispatch_ready_nodes(
+                store=store,
+                workflow_run_id=workflow_run_id,
+                workflow_process_id=process_id,
+                process_generation=process_generation,
+                heartbeat_interval_seconds=heartbeat_interval_seconds,
+                dag=dag,
+                task_manager=task_manager,
+                executor_factory=executor_factory,
+                cleanup_staging_for_node=cleanup_staging_for_node,
+                close_executor_after_task=close_executor_after_task,
+                cancel_grace_seconds=cancel_grace_seconds,
+                max_ready_dispatch_per_cycle=max_ready_dispatch_per_cycle,
+                max_concurrent_node_tasks=max_concurrent_node_tasks,
+                execution_pool=execution_pool,
+                event_sink=event_sink,
+            )
         if finalization.finalize_if_workflow_run_terminal(store, workflow_run_id):
             return 0
         if finalization.complete_continue_independent_partial_failure_if_finished(

@@ -26,6 +26,28 @@ def cancel_workflow_process_if_requested(
     execution_pool: NodeTaskExecutionPool,
     event_sink: RuntimeEventSink,
 ) -> bool:
+    if not request_workflow_cancel_if_requested(
+        store=store,
+        process_id=process_id,
+        execution_pool=execution_pool,
+    ):
+        return False
+    return finalize_workflow_cancel_if_idle(
+        store=store,
+        workflow_run_id=workflow_run_id,
+        process_id=process_id,
+        process_generation=process_generation,
+        execution_pool=execution_pool,
+        event_sink=event_sink,
+    )
+
+
+def request_workflow_cancel_if_requested(
+    *,
+    store: RuntimeStore,
+    process_id: str,
+    execution_pool: NodeTaskExecutionPool,
+) -> bool:
     process = store.get_workflow_process(process_id)
     if process is None or process.cancel_requested_at is None:
         return False
@@ -33,6 +55,25 @@ def cancel_workflow_process_if_requested(
         store=store,
         execution_pool=execution_pool,
     )
+    return True
+
+
+def finalize_workflow_cancel_if_idle(
+    *,
+    store: RuntimeStore,
+    workflow_run_id: str,
+    process_id: str,
+    process_generation: int | None,
+    execution_pool: NodeTaskExecutionPool,
+    event_sink: RuntimeEventSink,
+) -> bool:
+    process = store.get_workflow_process(process_id)
+    if (
+        process is None
+        or process.cancel_requested_at is None
+        or execution_pool.in_flight_count() > 0
+    ):
+        return False
     cancel_active_loop_runs_for_workflow(
         store,
         workflow_run_id=workflow_run_id,

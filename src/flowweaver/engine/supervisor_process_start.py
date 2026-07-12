@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from flowweaver.common.config import EngineConfig
+from flowweaver.common.process_job import ProcessJob
 from flowweaver.engine.runtime_store import RuntimeStore, WorkflowProcess
 from flowweaver.engine.supervisor_commands import (
     node_executor_command as _node_executor_command,
@@ -32,6 +33,7 @@ def start_workflow_child_process(
     process: WorkflowProcess,
     runtime_event_path: Path,
     env: Mapping[str, str],
+    process_job: ProcessJob,
 ) -> subprocess.Popen:
     src_path = Path(__file__).resolve().parents[2]
     command = _workflow_process_command(
@@ -45,14 +47,25 @@ def start_workflow_child_process(
     )
     stdout_path, stderr_path = _workflow_process_log_paths(config, workflow_run_id)
     try:
-        return _launch_child_process(
+        child = _launch_child_process(
             command,
             cwd=src_path,
             env=env,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.PIPE,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
         )
+        try:
+            process_job.assign(child)
+            _release_workflow_start_gate(child)
+        except Exception:
+            try:
+                process_job.close()
+            finally:
+                if child.poll() is None:
+                    child.terminate()
+            raise
+        return child
     except Exception as exc:
         runtime_store.mark_workflow_process_exited(
             process.process_id,
@@ -64,6 +77,15 @@ def start_workflow_child_process(
             reason="WORKFLOW_PROCESS_START_FAILED",
         )
         raise
+
+
+def _release_workflow_start_gate(child: subprocess.Popen) -> None:
+    stdin = child.stdin
+    if stdin is None or stdin.closed:
+        raise RuntimeError("Workflow process start gate is unavailable")
+    stdin.write(b"START\n")
+    stdin.flush()
+    stdin.close()
 
 
 def start_executor_child_process(

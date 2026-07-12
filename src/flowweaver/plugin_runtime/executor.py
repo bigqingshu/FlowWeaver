@@ -29,6 +29,7 @@ from flowweaver.plugin_runtime.process_command import (
 from flowweaver.plugin_runtime.result_mapper import PluginResultMapper
 from flowweaver.plugin_runtime.staging import PluginTaskStaging
 from flowweaver.protocols.enums import NodeResultStatus
+from flowweaver.protocols.ipc_messages import IPCEnvelope
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.plugin_runtime import PluginTaskRuntimeModel
 from flowweaver.protocols.runtime_feedback import (
@@ -94,7 +95,7 @@ class PluginExternalProcessExecutor:
             self._event_handler = handler
             clients = tuple(self._active_clients.values())
         for client in clients:
-            client.set_event_handler(handler)
+            client.set_event_handler(self._forward_plugin_event)
 
     def execute(self, task: NodeTaskModel) -> NodeTaskResultModel:
         descriptor = self._plugin_catalog.descriptor_for_node(
@@ -180,7 +181,7 @@ class PluginExternalProcessExecutor:
                 ),
                 cwd=descriptor.package_dir,
                 env=plugin_process_environment(),
-                event_handler=self._event_handler,
+                event_handler=self._forward_plugin_event,
                 inject_src_pythonpath=False,
                 startup_timeout_seconds=min(
                     self._startup_timeout_seconds,
@@ -291,6 +292,21 @@ class PluginExternalProcessExecutor:
     ) -> SubprocessNodeExecutorIpcClient | None:
         with self._lock:
             return self._active_clients.get(task_id)
+
+    def _forward_plugin_event(
+        self,
+        task: NodeTaskModel,
+        envelope: IPCEnvelope,
+    ) -> None:
+        if (
+            envelope.workflow_run_id != task.workflow_run_id
+            or envelope.node_run_id != task.node_run_id
+        ):
+            return
+        with self._lock:
+            event_handler = self._event_handler
+        if event_handler is not None:
+            event_handler(task, envelope)
 
     def _validate_result(
         self,
