@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from flowweaver.nodes.builtin_table_node_types import UNPIVOT_ROWS_NODE_TYPE
 from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
+from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
@@ -19,7 +22,6 @@ from flowweaver.nodes.table_row_unpivot_helpers import (
     unpivot_rows_output_schema as _unpivot_rows_output_schema,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 
 class UnpivotRowsNodeHandler:
@@ -29,7 +31,7 @@ class UnpivotRowsNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

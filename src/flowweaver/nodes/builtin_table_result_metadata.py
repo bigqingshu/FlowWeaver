@@ -8,6 +8,9 @@ from flowweaver.nodes.builtin_table_node_types import (
     SAVE_RUN_TABLE_NODE_TYPE,
     STATUS_OUTPUT_NODE_TYPES,
 )
+from flowweaver.nodes.table_node_output_target_models import (
+    TableOutputWriteResult,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
@@ -18,8 +21,12 @@ from flowweaver.workflow_process.table_output_targets import (
 )
 
 
-def table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
-    return {
+def table_output_summary(
+    output_refs: Sequence[TableRefModel],
+    *,
+    writes: Sequence[TableOutputWriteResult] = (),
+) -> dict[str, Any]:
+    summary = {
         "output_ref_count": len(output_refs),
         "outputs": [
             {
@@ -31,6 +38,9 @@ def table_output_summary(output_refs: list[TableRefModel]) -> dict[str, Any]:
             for table_ref in output_refs
         ],
     }
+    if writes:
+        summary["writes"] = [write.to_summary() for write in writes]
+    return summary
 
 
 def output_slot_bindings_for_result(

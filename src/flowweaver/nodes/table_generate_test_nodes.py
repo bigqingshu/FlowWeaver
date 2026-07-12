@@ -9,10 +9,13 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError,
 )
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+from flowweaver.protocols.table_ref import FieldSchemaModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -24,7 +27,7 @@ class GenerateTestTableNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         if task.input_refs:
             raise _NodeValidationError("GenerateTestTableNode does not accept inputs")
         rows_count = _int_config(task.config, "rows")

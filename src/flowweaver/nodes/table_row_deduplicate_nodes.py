@@ -7,6 +7,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
@@ -27,7 +30,6 @@ from flowweaver.nodes.table_row_deduplicate_helpers import (
     deduplicate_output_schema as _deduplicate_output_schema,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -39,7 +41,7 @@ class DeduplicateRowsNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

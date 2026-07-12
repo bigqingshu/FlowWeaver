@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Protocol
 
+from flowweaver.nodes.builtin_table_execution_result import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -17,7 +20,7 @@ class BuiltinTableNodeHandler(Protocol):
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult | list[TableRefModel]:
         ...
 
 

@@ -8,13 +8,15 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
 )
+from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.table_node_io import primary_input_ref as _primary_input_ref
 from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -26,7 +28,7 @@ class FilterRowsNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

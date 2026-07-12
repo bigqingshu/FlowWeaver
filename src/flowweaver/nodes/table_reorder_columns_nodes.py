@@ -7,6 +7,9 @@ from flowweaver.nodes.table_node_config import (
 )
 from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     primary_input_ref as _primary_input_ref,
 )
 from flowweaver.nodes.table_node_io import (
@@ -19,7 +22,6 @@ from flowweaver.nodes.table_reorder_columns_helpers import (
     reorder_columns_output_plan as _reorder_columns_output_plan,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 
 class ReorderColumnsNodeHandler:
@@ -29,7 +31,7 @@ class ReorderColumnsNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

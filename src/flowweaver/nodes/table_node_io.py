@@ -3,9 +3,15 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from flowweaver.nodes.builtin_table_execution_result import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
+)
+from flowweaver.nodes.table_node_output_target_models import (
+    TableOutputWriteResult,
 )
 from flowweaver.nodes.table_node_storage_kinds import (
     NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
@@ -46,27 +52,27 @@ def publish_primary_table_output(
     node_type: str,
     schema: Sequence[FieldSchemaModel],
     row_batches: Iterable[Sequence[dict[str, Any]]],
-) -> list[TableRefModel]:
+) -> BuiltinTableExecutionResult:
     targets = primary_output_targets(task.config, node_type=node_type)
-    primary_ref = write_table_output_target(
+    primary_write = write_table_output_target(
         task,
         context,
         target=targets[0],
         schema=schema,
         row_batches=row_batches,
     )
-    output_refs = [primary_ref]
+    writes = [primary_write]
     for target in targets[1:]:
-        output_refs.append(
+        writes.append(
             write_table_output_target(
                 task,
                 context,
                 target=target,
-                schema=primary_ref.schema,
-                row_batches=context.iter_row_batches(primary_ref),
+                schema=primary_write.table_ref.schema,
+                row_batches=context.iter_row_batches(primary_write.table_ref),
             )
         )
-    return output_refs
+    return BuiltinTableExecutionResult.from_writes(writes)
 
 
 def primary_output_targets(
@@ -98,7 +104,7 @@ def write_table_output_target(
     target: TableOutputTarget,
     schema: Sequence[FieldSchemaModel],
     row_batches: Iterable[Sequence[dict[str, Any]]],
-) -> TableRefModel:
+) -> TableOutputWriteResult:
     if target.is_existing_target:
         result = context.replace_output_target_batches(
             task,
@@ -114,7 +120,7 @@ def write_table_output_target(
             schema=schema,
             row_batches=row_batches,
         )
-    return result.table_ref
+    return result
 
 
 def output_save_enabled(config: dict[str, Any]) -> bool:

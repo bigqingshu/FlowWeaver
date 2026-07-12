@@ -15,6 +15,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError,
 )
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     primary_input_ref as _primary_input_ref,
 )
 from flowweaver.nodes.table_node_io import (
@@ -40,7 +43,6 @@ from flowweaver.nodes.table_numeric_column_operation_output import (
 )
 from flowweaver.nodes.table_ops import find_field
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -52,7 +54,7 @@ class NumericColumnOperationNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

@@ -27,10 +27,12 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError,
 )
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     publish_primary_table_output as _publish_primary_table_output,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 _NodeValidationError = BuiltinTableNodeValidationError
 
@@ -42,7 +44,7 @@ class ListFilesNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         if task.input_refs:
             raise _NodeValidationError("ListFilesNode does not accept inputs")
         directory = _list_files_directory_config(task.config)

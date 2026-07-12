@@ -6,6 +6,9 @@ from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.nodes.builtin_sql import SqlMappingNodeRunner
+from flowweaver.nodes.builtin_table_execution_result import (
+    BuiltinTableExecutionResult,
+)
 from flowweaver.nodes.builtin_table_registry import (
     create_builtin_table_node_handler_registry,
 )
@@ -21,7 +24,6 @@ from flowweaver.nodes.table_node_handlers import (
 )
 from flowweaver.protocols.enums import ErrorOrigin, NodeResultStatus
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 
 class BuiltinTableNodeRunner:
@@ -51,7 +53,7 @@ class BuiltinTableNodeRunner:
     ) -> NodeTaskResultModel:
         started_at = utc_now()
         try:
-            output_refs = self._execute_node(task)
+            execution_result = self._execute_node(task)
         except BuiltinTableNodeValidationError as exc:
             return NodeTaskResultModel(
                 task_id=task.task_id,
@@ -68,6 +70,18 @@ class BuiltinTableNodeRunner:
                 started_at=started_at,
                 finished_at=utc_now(),
             )
+        output_refs = list(execution_result.output_refs)
+        output_slot_bindings = dict(execution_result.output_slot_bindings)
+        if not output_slot_bindings:
+            output_slot_bindings = _output_slot_bindings_for_result(
+                task,
+                output_refs,
+            )
+        summary = _table_output_summary(
+            output_refs,
+            writes=execution_result.writes,
+        )
+        summary.update(execution_result.summary_details)
         return NodeTaskResultModel(
             task_id=task.task_id,
             node_run_id=task.node_run_id,
@@ -76,16 +90,19 @@ class BuiltinTableNodeRunner:
             process_generation=task.process_generation,
             status=NodeResultStatus.SUCCEEDED,
             output_refs=[table_ref.table_ref_id for table_ref in output_refs],
-            output_slot_bindings=_output_slot_bindings_for_result(task, output_refs),
-            summary=_table_output_summary(output_refs),
+            output_slot_bindings=output_slot_bindings,
+            summary=summary,
             started_at=started_at,
             finished_at=utc_now(),
         )
 
-    def _execute_node(self, task: NodeTaskModel) -> list[TableRefModel]:
+    def _execute_node(self, task: NodeTaskModel) -> BuiltinTableExecutionResult:
         handler = self._handler_registry.get(task.node_type)
         if handler is not None:
-            return handler.execute(task, self._context)
+            result = handler.execute(task, self._context)
+            if isinstance(result, BuiltinTableExecutionResult):
+                return result
+            return BuiltinTableExecutionResult.from_output_refs(result)
         raise BuiltinTableNodeValidationError(
             f"Unsupported builtin node type: {task.node_type}"
         )

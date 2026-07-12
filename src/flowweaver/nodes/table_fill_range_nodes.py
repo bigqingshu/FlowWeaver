@@ -25,6 +25,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeValidationError,
 )
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     primary_input_ref as _primary_input_ref,
 )
 from flowweaver.nodes.table_node_io import (
@@ -34,7 +37,6 @@ from flowweaver.nodes.table_value_source_config import (
     value_source_config as _value_source_config,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 DEFAULT_FILL_RANGE_MAX_CELLS = 100_000
 _NodeValidationError = BuiltinTableNodeValidationError
@@ -47,7 +49,7 @@ class FillRangeNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,

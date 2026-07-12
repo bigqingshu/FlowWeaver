@@ -220,6 +220,19 @@ def test_generate_test_table_node_publishes_runtime_sql_table_ref(
                 "storage_kind": TableStorageKind.RUNTIME_SQL.value,
             }
         ],
+        "writes": [
+            {
+                "output_slot": "out",
+                "target_type": "current",
+                "target_table": "generate_output",
+                "target_table_ref_id": published.table_ref_id,
+                "storage_kind": TableStorageKind.RUNTIME_SQL.value,
+                "role": TableRole.CURRENT.value,
+                "write_mode": "create",
+                "affected_rows": 4,
+                "target_existed": False,
+            }
+        ],
     }
     assert published.lifecycle_status == LifecycleStatus.PUBLISHED
     assert published.logical_table_id == "generate_output"
@@ -264,6 +277,13 @@ def test_generate_test_table_node_can_save_memory_output(
         "out": current_ref.table_ref_id,
         "saved_table": memory_ref.table_ref_id,
     }
+    assert [
+        write["output_slot"] for write in result.summary["writes"]
+    ] == ["out", "saved_table"]
+    assert [write["affected_rows"] for write in result.summary["writes"]] == [
+        2,
+        2,
+    ]
     assert current_ref.role == TableRole.CURRENT
     assert current_ref.storage_kind == TableStorageKind.RUNTIME_SQL
     assert current_ref.logical_table_id == "generate_save_memory_output"
@@ -960,6 +980,9 @@ def test_filter_rows_node_can_overwrite_existing_memory_output_target(
     assert filter_result.status == NodeResultStatus.SUCCEEDED
     assert filter_result.output_refs == [target_ref.table_ref_id]
     assert filter_result.output_slot_bindings == {"out": target_ref.table_ref_id}
+    assert filter_result.summary["writes"][0]["write_mode"] == "overwrite"
+    assert filter_result.summary["writes"][0]["target_existed"] is True
+    assert filter_result.summary["writes"][0]["affected_rows"] == 1
     assert memory_provider.read_rows(target_ref, offset=0, limit=10) == [
         {"row_id": 2, "amount": 3.0, "label": "keep"}
     ]

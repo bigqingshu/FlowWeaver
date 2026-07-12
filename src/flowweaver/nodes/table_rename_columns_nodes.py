@@ -4,6 +4,9 @@ from flowweaver.nodes.builtin_table_node_types import RENAME_COLUMNS_NODE_TYPE
 from flowweaver.nodes.table_node_config import enum_config as _enum_config
 from flowweaver.nodes.table_node_handlers import BuiltinTableNodeContext
 from flowweaver.nodes.table_node_io import (
+    BuiltinTableExecutionResult,
+)
+from flowweaver.nodes.table_node_io import (
     primary_input_ref as _primary_input_ref,
 )
 from flowweaver.nodes.table_node_io import (
@@ -22,7 +25,6 @@ from flowweaver.nodes.table_rename_columns_helpers import (
     rename_columns_schema as _rename_columns_schema,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import TableRefModel
 
 
 class RenameColumnsNodeHandler:
@@ -32,7 +34,7 @@ class RenameColumnsNodeHandler:
         self,
         task: NodeTaskModel,
         context: BuiltinTableNodeContext,
-    ) -> list[TableRefModel]:
+    ) -> BuiltinTableExecutionResult:
         input_ref = _primary_input_ref(
             task,
             context,
