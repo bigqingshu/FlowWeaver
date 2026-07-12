@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from flowweaver.common.config import WorkflowProcessExecutionMode
+from flowweaver.common.config import MemoryTableLimits, WorkflowProcessExecutionMode
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutor
 from flowweaver.protocols.node_task import NodeTaskResultModel
@@ -26,12 +26,14 @@ def create_default_workflow_process_executor_owner(
     *,
     store: RuntimeStore,
     runtime_dir: Path,
+    memory_table_limits: MemoryTableLimits,
     default_executor_factory: Callable[[], NodeExecutor],
     shared_table_executor_factory: Callable[..., NodeExecutor],
 ) -> DefaultWorkflowProcessExecutorOwner:
     return DefaultWorkflowProcessExecutorOwner(
         store=store,
         runtime_dir=runtime_dir,
+        memory_table_limits=memory_table_limits,
         default_executor_factory=default_executor_factory,
         shared_table_executor_factory=shared_table_executor_factory,
     )

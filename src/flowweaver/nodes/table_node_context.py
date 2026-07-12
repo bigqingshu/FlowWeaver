@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from flowweaver.common.config import MemoryTableLimits
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
@@ -24,4 +25,8 @@ class BuiltinTableNodeContext(TableNodeContextReadMixin, TableNodeContextWriteMi
     memory_provider: MemoryTableProvider
     sql_mapping_runner: SqlMappingNodeRunner | None = None
     row_batch_size: int = DEFAULT_ROW_BATCH_SIZE
+
+    @property
+    def memory_table_limits(self) -> MemoryTableLimits:
+        return self.memory_provider.limits
 

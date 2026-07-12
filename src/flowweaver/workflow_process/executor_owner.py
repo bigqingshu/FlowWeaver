@@ -4,6 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from flowweaver.common.config import MemoryTableLimits
+from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
@@ -30,6 +32,7 @@ class DefaultWorkflowProcessExecutorOwner:
         *,
         store: RuntimeStore,
         runtime_dir: Path,
+        memory_table_limits: MemoryTableLimits,
         default_executor_factory: Callable[[], NodeExecutor] = (
             SubprocessNodeExecutorIpcClient
         ),
@@ -39,6 +42,7 @@ class DefaultWorkflowProcessExecutorOwner:
     ) -> None:
         self._store = store
         self._runtime_dir = runtime_dir
+        self._memory_table_limits = memory_table_limits
         self._default_executor_factory = default_executor_factory
         self._shared_table_executor_factory = shared_table_executor_factory
         self._data_registry: RuntimeDataRegistry | None = None
@@ -71,6 +75,9 @@ class DefaultWorkflowProcessExecutorOwner:
                 store=self._store,
                 registry=self._data_registry,
                 table_provider=self._table_provider,
+                memory_provider=MemoryTableProvider(
+                    limits=self._memory_table_limits,
+                ),
             )
         return self._table_executor
 

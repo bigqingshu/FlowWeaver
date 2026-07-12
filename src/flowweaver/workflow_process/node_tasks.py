@@ -8,6 +8,9 @@ from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import NodeRun, RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.protocols.ipc_messages import NodeTaskLogPayload
+from flowweaver.protocols.memory_table_warnings import (
+    memory_table_soft_limit_warnings_from_summary,
+)
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.runtime_feedback import (
     ResolvedRuntimeFeedbackPolicyModel,
@@ -50,6 +53,7 @@ from flowweaver.workflow_process.node_task_telemetry import (
 from flowweaver.workflow_process.node_task_timeout import (
     mark_timed_out_task as _mark_timed_out_task,
 )
+from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
 
 
 class NodeTaskManager:
@@ -62,6 +66,7 @@ class NodeTaskManager:
         failure_policy_mode: FailurePolicyMode | str | None = None,
         runtime_feedback_policy_provider: RuntimeFeedbackPolicyProvider | None = None,
         table_provider_registry: TableProviderRegistry | None = None,
+        runtime_logger: WorkflowRuntimeLogger | None = None,
     ) -> None:
         self._store = store
         self._event_sink = event_sink
@@ -71,7 +76,9 @@ class NodeTaskManager:
         )
         self._runtime_feedback_policy_provider = runtime_feedback_policy_provider
         self._table_provider_registry = table_provider_registry
+        self._runtime_logger = runtime_logger
         self._last_progress_emitted_at: dict[str, datetime] = {}
+        self._emitted_memory_table_warning_keys: set[tuple[str, str, str]] = set()
 
     @property
     def failure_policy_mode(self) -> FailurePolicyMode:
@@ -224,7 +231,7 @@ class NodeTaskManager:
         )
 
     def apply_result(self, result: NodeTaskResultModel) -> NodeTaskApplyResult:
-        return _apply_node_task_result_to_runtime(
+        apply_result = _apply_node_task_result_to_runtime(
             store=self._store,
             event_sink=self._event_sink,
             dag=self._dag,
@@ -233,3 +240,42 @@ class NodeTaskManager:
             table_provider_registry=self._table_provider_registry,
             result=result,
         )
+        if apply_result.status == NodeTaskApplyStatus.APPLIED:
+            self._emit_memory_table_soft_limit_warnings(result)
+        return apply_result
+
+    def _emit_memory_table_soft_limit_warnings(
+        self,
+        result: NodeTaskResultModel,
+    ) -> None:
+        logger = self._runtime_logger
+        if logger is None:
+            return
+        task = self._store.get_node_task(result.task_id)
+        if task is None:
+            return
+        output_refs = set(result.output_refs)
+        for warning in memory_table_soft_limit_warnings_from_summary(result.summary):
+            if warning.table_ref_id not in output_refs:
+                continue
+            warning_key = (
+                task.workflow_run_id,
+                warning.warning_code,
+                warning.table_ref_id,
+            )
+            if warning_key in self._emitted_memory_table_warning_keys:
+                continue
+            try:
+                emitted = logger.warn(
+                    f"memory table row soft limit exceeded: "
+                    f"{warning.logical_table_id}",
+                    context={
+                        **warning.model_dump(mode="json"),
+                        "node_instance_id": task.node_instance_id,
+                        "task_id": task.task_id,
+                    },
+                )
+            except Exception:
+                continue
+            if emitted:
+                self._emitted_memory_table_warning_keys.add(warning_key)

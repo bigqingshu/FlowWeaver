@@ -19,8 +19,12 @@ from flowweaver.nodes.table_node_output_target_models import (
 from flowweaver.nodes.table_node_row_batch_counter import (
     RowBatchCounter as _RowBatchCounter,
 )
+from flowweaver.protocols.enums import TableStorageKind
+from flowweaver.protocols.memory_table_warnings import (
+    MemoryTableSoftLimitWarningModel,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
-from flowweaver.protocols.table_ref import FieldSchemaModel
+from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
     TableOutputTarget,
     TableOutputTargetKind,
@@ -88,6 +92,11 @@ def publish_output_target_batches(
         table_ref=table_ref,
         write_mode="create",
         affected_rows=counter.row_count,
+        memory_table_soft_limit_warning=_memory_table_soft_limit_warning(
+            context,
+            table_ref=table_ref,
+            row_count=counter.row_count,
+        ),
     )
 
 
@@ -127,6 +136,11 @@ def replace_output_target_batches(
         write_mode="overwrite",
         affected_rows=counter.row_count,
         target_existed=True,
+        memory_table_soft_limit_warning=_memory_table_soft_limit_warning(
+            context,
+            table_ref=table_ref,
+            row_count=counter.row_count,
+        ),
     )
 
 
@@ -136,3 +150,22 @@ def _required_target_table_name(target: TableOutputTarget) -> str:
             f"output target {target.slot} requires a table name"
         )
     return target.logical_table_id
+
+
+def _memory_table_soft_limit_warning(
+    context: TableNodeOutputContext,
+    *,
+    table_ref: TableRefModel,
+    row_count: int,
+) -> MemoryTableSoftLimitWarningModel | None:
+    if table_ref.storage_kind != TableStorageKind.MEMORY:
+        return None
+    soft_row_limit = context.memory_table_limits.soft_row_limit
+    if soft_row_limit == 0 or row_count <= soft_row_limit:
+        return None
+    return MemoryTableSoftLimitWarningModel(
+        table_ref_id=table_ref.table_ref_id,
+        logical_table_id=table_ref.logical_table_id,
+        row_count=row_count,
+        soft_row_limit=soft_row_limit,
+    )

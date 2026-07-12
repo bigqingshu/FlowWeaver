@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from flowweaver.common.config import MemoryTableLimits
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.table_provider_registry import (
@@ -25,6 +26,7 @@ from flowweaver.workflow_process.loop_runtime_initialization import (
     initialize_enabled_loop_runtime_state,
 )
 from flowweaver.workflow_process.node_tasks import NodeTaskManager
+from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
 
 
 @dataclass(frozen=True)
@@ -43,7 +45,9 @@ def initialize_workflow_process_runtime(
     process_generation: int | None,
     dag: WorkflowDag,
     runtime_dir: Path,
+    memory_table_limits: MemoryTableLimits,
     runtime_feedback_policy_provider: RuntimeFeedbackPolicyProvider,
+    runtime_logger: WorkflowRuntimeLogger,
 ) -> WorkflowProcessRuntimeInitialization:
     initialize_node_runs(
         store,
@@ -65,7 +69,10 @@ def initialize_workflow_process_runtime(
         process_generation=process_generation,
         dag=dag,
     )
-    table_provider_registry = create_default_table_provider_registry(runtime_dir)
+    table_provider_registry = create_default_table_provider_registry(
+        runtime_dir,
+        memory_table_limits=memory_table_limits,
+    )
     recover_serial_loop_runtime_state(
         store,
         table_provider_registry,
@@ -81,6 +88,7 @@ def initialize_workflow_process_runtime(
         failure_policy_mode=definition.failure_policy.mode,
         runtime_feedback_policy_provider=runtime_feedback_policy_provider,
         table_provider_registry=table_provider_registry,
+        runtime_logger=runtime_logger,
     )
     return WorkflowProcessRuntimeInitialization(
         task_manager=task_manager,

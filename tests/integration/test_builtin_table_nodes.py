@@ -6,6 +6,10 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.common.config import (
+    DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+    MemoryTableLimits,
+)
 from flowweaver.engine.memory_table_provider import (
     MEMORY_PROVIDER_ID,
     MemoryTableProvider,
@@ -58,6 +62,10 @@ from flowweaver.protocols.enums import (
     TableRole,
     TableStorageKind,
 )
+from flowweaver.protocols.memory_table_warnings import (
+    MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE,
+    MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel
 
@@ -87,7 +95,11 @@ def make_executor(tmp_path: Path) -> tuple[
     return executor, store, registry, provider
 
 
-def make_executor_with_memory_provider(tmp_path: Path) -> tuple[
+def make_executor_with_memory_provider(
+    tmp_path: Path,
+    *,
+    memory_table_soft_row_limit: int = DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+) -> tuple[
     BuiltinTableNodeExecutor,
     RuntimeStore,
     RuntimeDataRegistry,
@@ -96,7 +108,12 @@ def make_executor_with_memory_provider(tmp_path: Path) -> tuple[
 ]:
     store = make_store(tmp_path)
     provider = SQLiteRuntimeTableProvider(tmp_path / "runtime" / "workflow_runs")
-    memory_provider = MemoryTableProvider(tables={})
+    memory_provider = MemoryTableProvider(
+        tables={},
+        limits=MemoryTableLimits(
+            soft_row_limit=memory_table_soft_row_limit,
+        ),
+    )
     registry = RuntimeDataRegistry(store=store, table_provider=provider)
     executor = BuiltinTableNodeExecutor(
         executor_id="builtin-executor-1",
@@ -5048,7 +5065,10 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     tmp_path: Path,
 ) -> None:
     executor, _store, registry, provider, memory_provider = (
-        make_executor_with_memory_provider(tmp_path)
+        make_executor_with_memory_provider(
+            tmp_path,
+            memory_table_soft_row_limit=1,
+        )
     )
     generate_result = executor.execute(
         make_task(
@@ -5085,6 +5105,16 @@ def test_save_memory_table_node_outputs_current_ref_and_auxiliary_memory_ref(
     assert save_result.summary["actual_write"] is True
     assert save_result.summary["affected_rows"] == 2
     assert save_result.summary["writes"][0]["output_slot"] == "memory"
+    memory_warning = save_result.summary[
+        MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY
+    ][0]
+    assert memory_warning == {
+        "warning_code": MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE,
+        "table_ref_id": save_result.output_slot_bindings["memory"],
+        "logical_table_id": "scratch",
+        "row_count": 2,
+        "soft_row_limit": 1,
+    }
     assert memory_ref.provider_id == MEMORY_PROVIDER_ID
     assert memory_ref.storage_kind == TableStorageKind.MEMORY
     assert memory_ref.role == TableRole.AUXILIARY

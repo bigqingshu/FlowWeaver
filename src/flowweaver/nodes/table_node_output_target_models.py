@@ -4,8 +4,12 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from flowweaver.common.config import MemoryTableLimits
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.protocols.enums import TableRole
+from flowweaver.protocols.memory_table_warnings import (
+    MemoryTableSoftLimitWarningModel,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
@@ -21,6 +25,7 @@ class TableOutputWriteResult:
     write_mode: str
     affected_rows: int
     target_existed: bool = False
+    memory_table_soft_limit_warning: MemoryTableSoftLimitWarningModel | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -37,6 +42,10 @@ class TableOutputWriteResult:
 
 
 class TableNodeOutputContext(Protocol):
+    @property
+    def memory_table_limits(self) -> MemoryTableLimits:
+        ...
+
     @property
     def registry(self) -> RuntimeDataRegistry:
         ...

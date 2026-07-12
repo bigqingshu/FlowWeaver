@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, MutableMapping, Sequence
 from typing import Any
 
+from flowweaver.common.config import MemoryTableLimits
 from flowweaver.engine.memory_table_building import (
     build_memory_table_from_batches as _build_memory_table_from_batches,
 )
@@ -34,9 +35,15 @@ class MemoryTableProvider:
         self,
         tables: MutableMapping[str, _MemoryTable] | None = None,
         lock: Any | None = None,
+        limits: MemoryTableLimits | None = None,
     ) -> None:
         self._tables = tables if tables is not None else _GLOBAL_MEMORY_TABLES
         self._lock = lock if lock is not None else _GLOBAL_MEMORY_TABLES_LOCK
+        self._limits = limits or MemoryTableLimits()
+
+    @property
+    def limits(self) -> MemoryTableLimits:
+        return self._limits
 
     def create_memory_table(
         self,

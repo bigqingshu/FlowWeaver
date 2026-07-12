@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from flowweaver.common.config import WorkflowProcessExecutionMode
+from flowweaver.common.config import MemoryTableLimits, WorkflowProcessExecutionMode
 from flowweaver.engine.runtime_event_sink import RuntimeEventSink
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutorFactory
@@ -34,6 +34,7 @@ def run_workflow_process_loop(
     process_generation: int | None,
     event_sink: RuntimeEventSink,
     runtime_dir: Path,
+    memory_table_limits: MemoryTableLimits,
     executor_factory: NodeExecutorFactory,
     cleanup_staging_for_node: CleanupStagingForNode | None,
     close_executor_after_task: bool,
@@ -135,7 +136,9 @@ def run_workflow_process_loop(
             process_generation=process_generation,
             dag=dag,
             runtime_dir=runtime_dir,
+            memory_table_limits=memory_table_limits,
             runtime_feedback_policy_provider=runtime_feedback_policy_provider,
+            runtime_logger=runtime_logger,
         )
     )
     task_manager = runtime_initialization.task_manager

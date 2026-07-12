@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
@@ -11,8 +12,18 @@ WorkflowProcessExecutionMode = Literal["immediate", "threaded"]
 
 DEFAULT_WORKFLOW_PROCESS_EXECUTION_MODE: WorkflowProcessExecutionMode = "immediate"
 DEFAULT_WORKFLOW_PROCESS_MAX_CONCURRENT_NODE_TASKS = 1
+DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT = 100_000
 ALLOWED_WORKFLOW_PROCESS_EXECUTION_MODES = {"immediate", "threaded"}
 ALLOWED_WORKFLOW_PROCESS_MAX_CONCURRENT_NODE_TASKS = {1, 2}
+
+
+@dataclass(frozen=True)
+class MemoryTableLimits:
+    soft_row_limit: int = DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT
+
+    def __post_init__(self) -> None:
+        if isinstance(self.soft_row_limit, bool) or self.soft_row_limit < 0:
+            raise ValueError("memory table soft row limit must be non-negative")
 
 
 def resolve_workflow_process_execution_mode(
@@ -61,6 +72,11 @@ class EngineConfig(StrictModel):
     max_ipc_message_bytes: int = 1024 * 1024
     max_runtime_db_bytes: int = 1024 * 1024 * 1024
     max_log_file_bytes: int = 10 * 1024 * 1024
+    memory_table_soft_row_limit: int = Field(
+        default=DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+        ge=0,
+        strict=True,
+    )
     staging_ttl_seconds: int = 3600
     orphan_cleanup_interval: int = 300
     workflow_process_heartbeat_interval_seconds: int = 2
@@ -126,3 +142,6 @@ class EngineConfig(StrictModel):
 
     def resolved_temp_dir(self) -> Path:
         return self.temp_dir or self.data_dir / "temp"
+
+    def memory_table_limits(self) -> MemoryTableLimits:
+        return MemoryTableLimits(soft_row_limit=self.memory_table_soft_row_limit)

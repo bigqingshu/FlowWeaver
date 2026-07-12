@@ -52,6 +52,10 @@ from flowweaver.protocols.enums import (
     TableStorageKind,
 )
 from flowweaver.protocols.ipc_messages import IPCEnvelope, NodeTaskLogPayload
+from flowweaver.protocols.memory_table_warnings import (
+    MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE,
+    MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY,
+)
 from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.runtime_feedback import RuntimeFeedbackPolicyOverlayModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
@@ -1559,6 +1563,63 @@ def test_workflow_process_save_memory_auxiliary_ref_does_not_flow_downstream(
         {"row_id": 1, "amount": 1.0, "status": "new"},
         {"row_id": 2, "amount": 2.0, "status": "new"},
     ]
+
+
+def test_workflow_process_default_owner_emits_memory_soft_limit_warning(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Memory soft limit workflow",
+        definition=save_memory_passthrough_definition(),
+        workflow_id="workflow-memory-soft-limit",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-memory-soft-limit",
+    )
+    process = store.claim_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-memory-soft-limit",
+    )
+    assert process is not None
+
+    exit_code = run_workflow_process(
+        store=store,
+        workflow_run_id=run.workflow_run_id,
+        process_id=process.process_id,
+        process_generation=process.process_generation,
+        heartbeat_interval_seconds=0,
+        memory_table_soft_row_limit=1,
+    )
+
+    save_memory_run = store.get_node_run_for_instance(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="save_memory",
+    )
+    assert save_memory_run is not None
+    result = store.get_latest_succeeded_node_task_result_for_node_run(
+        save_memory_run.node_run_id
+    )
+    assert result is not None
+    warning = result.summary[MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY][0]
+    warning_logs = [
+        event
+        for event in store.list_runtime_events()
+        if event.event_type == "WORKFLOW_LOG"
+        and event.payload.get("context", {}).get("warning_code")
+        == MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE
+    ]
+
+    assert exit_code == 0
+    assert store.get_workflow_run(run.workflow_run_id).status == "SUCCEEDED"
+    assert warning["row_count"] == 2
+    assert warning["soft_row_limit"] == 1
+    assert len(warning_logs) == 1
+    assert warning_logs[0].payload["level"] == "WARN"
+    assert warning_logs[0].payload["context"]["table_ref_id"] == (
+        warning["table_ref_id"]
+    )
 
 
 def test_workflow_process_fails_invalid_builtin_node_config(

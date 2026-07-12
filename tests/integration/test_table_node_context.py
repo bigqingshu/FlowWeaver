@@ -6,6 +6,10 @@ import pytest
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.common.config import (
+    DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+    MemoryTableLimits,
+)
 from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_data_registry import RuntimeDataRegistry
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -18,6 +22,9 @@ from flowweaver.protocols.enums import (
     NodeRunStatus,
     TableRole,
     TableStorageKind,
+)
+from flowweaver.protocols.memory_table_warnings import (
+    MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE,
 )
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel
@@ -89,6 +96,47 @@ def test_publish_output_target_rows_supports_current_memory_and_runtime(
     ]
     assert context.read_all_rows(runtime_result.table_ref) == [
         {"row_id": 3, "amount": 4.0}
+    ]
+
+
+def test_memory_output_target_reports_soft_limit_without_rejecting_write(
+    tmp_path: Path,
+) -> None:
+    context, task = make_context(tmp_path, memory_table_soft_row_limit=1)
+    schema = make_test_schema()
+
+    memory_result = context.publish_output_target_rows(
+        task,
+        target=new_memory_target("memory_copy", "scratch"),
+        output_name="unused",
+        schema=schema,
+        rows=[
+            {"row_id": 1, "amount": 2.0},
+            {"row_id": 2, "amount": 3.0},
+        ],
+    )
+    runtime_result = context.publish_output_target_rows(
+        task,
+        target=new_runtime_target("runtime_copy", "runtime_stage"),
+        output_name="unused",
+        schema=schema,
+        rows=[
+            {"row_id": 1, "amount": 2.0},
+            {"row_id": 2, "amount": 3.0},
+        ],
+    )
+
+    warning = memory_result.memory_table_soft_limit_warning
+    assert warning is not None
+    assert warning.warning_code == MEMORY_TABLE_SOFT_LIMIT_WARNING_CODE
+    assert warning.table_ref_id == memory_result.table_ref.table_ref_id
+    assert warning.logical_table_id == "scratch"
+    assert warning.row_count == 2
+    assert warning.soft_row_limit == 1
+    assert runtime_result.memory_table_soft_limit_warning is None
+    assert context.read_all_rows(memory_result.table_ref) == [
+        {"row_id": 1, "amount": 2.0},
+        {"row_id": 2, "amount": 3.0},
     ]
 
 
@@ -277,7 +325,11 @@ def test_input_slot_helpers_reject_missing_slot_and_wrong_storage_kind(
         )
 
 
-def make_context(tmp_path: Path) -> tuple[BuiltinTableNodeContext, NodeTaskModel]:
+def make_context(
+    tmp_path: Path,
+    *,
+    memory_table_soft_row_limit: int = DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+) -> tuple[BuiltinTableNodeContext, NodeTaskModel]:
     database_path = tmp_path / "metadata.db"
     migrate(database_path)
     store = RuntimeStore.from_sqlite_path(database_path)
@@ -303,7 +355,12 @@ def make_context(tmp_path: Path) -> tuple[BuiltinTableNodeContext, NodeTaskModel
         store=store,
         registry=registry,
         table_provider=provider,
-        memory_provider=MemoryTableProvider(tables={}),
+        memory_provider=MemoryTableProvider(
+            tables={},
+            limits=MemoryTableLimits(
+                soft_row_limit=memory_table_soft_row_limit,
+            ),
+        ),
     )
     task = NodeTaskModel(
         task_id="task-1",

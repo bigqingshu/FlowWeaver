@@ -38,7 +38,8 @@ def get_table_provider_registry(request: Request) -> TableProviderRegistry:
     container = get_container(request)
     if container.table_provider_registry is None:
         container.table_provider_registry = create_default_table_provider_registry(
-            container.config.resolved_runtime_dir()
+            container.config.resolved_runtime_dir(),
+            memory_table_limits=container.config.memory_table_limits(),
         )
     return container.table_provider_registry
 

@@ -11,6 +11,9 @@ from flowweaver.nodes.builtin_table_node_types import (
 from flowweaver.nodes.table_node_output_target_models import (
     TableOutputWriteResult,
 )
+from flowweaver.protocols.memory_table_warnings import (
+    MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
@@ -40,6 +43,13 @@ def table_output_summary(
     }
     if writes:
         summary["writes"] = [write.to_summary() for write in writes]
+        memory_warnings = [
+            write.memory_table_soft_limit_warning.model_dump(mode="json")
+            for write in writes
+            if write.memory_table_soft_limit_warning is not None
+        ]
+        if memory_warnings:
+            summary[MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY] = memory_warnings
     return summary
 
 

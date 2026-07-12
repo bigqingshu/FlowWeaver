@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from flowweaver.common.config import MemoryTableLimits
 from flowweaver.engine.external_sql_table_provider import (
     SQLiteExternalSqlTableProvider,
 )
@@ -70,6 +71,7 @@ def create_default_table_provider_registry(
     *,
     runtime_provider: SQLiteRuntimeTableProvider | None = None,
     memory_provider: MemoryTableProvider | None = None,
+    memory_table_limits: MemoryTableLimits | None = None,
 ) -> TableProviderRegistry:
     registry = TableProviderRegistry()
     registry.register(
@@ -81,7 +83,7 @@ def create_default_table_provider_registry(
         storage_kinds=(TableStorageKind.EXTERNAL_SQL,),
     )
     registry.register(
-        memory_provider or MemoryTableProvider(),
+        memory_provider or MemoryTableProvider(limits=memory_table_limits),
         storage_kinds=(TableStorageKind.MEMORY,),
     )
     return registry

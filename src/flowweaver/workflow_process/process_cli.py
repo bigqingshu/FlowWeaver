@@ -27,6 +27,7 @@ def run_workflow_process_cli(
     parser.add_argument("--runtime-dir")
     parser.add_argument("--execution-mode")
     parser.add_argument("--max-concurrent-node-tasks")
+    parser.add_argument("--memory-table-soft-row-limit", type=int)
     args = parser.parse_args(argv)
     store = RuntimeStore(args.database_url)
     try:
@@ -45,6 +46,7 @@ def run_workflow_process_cli(
             runtime_dir=args.runtime_dir,
             execution_mode=args.execution_mode,
             max_concurrent_node_tasks=args.max_concurrent_node_tasks,
+            memory_table_soft_row_limit=args.memory_table_soft_row_limit,
         )
     except Exception:
         traceback.print_exc()

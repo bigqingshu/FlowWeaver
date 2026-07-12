@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from alembic import command
@@ -16,6 +17,10 @@ from flowweaver.protocols.enums import (
     NodeResultStatus,
     NodeRunStatus,
     WorkflowRunStatus,
+)
+from flowweaver.protocols.memory_table_warnings import (
+    MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY,
+    MemoryTableSoftLimitWarningModel,
 )
 from flowweaver.workflow.definition import (
     FailurePolicyMode,
@@ -35,6 +40,7 @@ from flowweaver.workflow_process.node_tasks import (
     NodeTaskManager,
     NodeTaskTimeoutStatus,
 )
+from flowweaver.workflow_process.runtime_logger import WorkflowRuntimeLogger
 
 
 def migrate(database_path: Path) -> None:
@@ -203,7 +209,12 @@ def cascading_dependents_definition() -> dict:
     }
 
 
-def create_running_process(store: RuntimeStore, definition: dict):
+def create_running_process(
+    store: RuntimeStore,
+    definition: dict,
+    *,
+    runtime_logger: WorkflowRuntimeLogger | None = None,
+):
     workflow = store.create_workflow_definition(
         name="Node task workflow",
         definition=definition,
@@ -245,6 +256,7 @@ def create_running_process(store: RuntimeStore, definition: dict):
         runtime_feedback_policy_provider=(
             build_static_runtime_feedback_policy_provider(definition_model)
         ),
+        runtime_logger=runtime_logger,
     )
     return run, process, manager
 
@@ -341,6 +353,55 @@ def test_ready_node_submission_and_executor_acceptance(tmp_path: Path) -> None:
         "NODE_QUEUED",
         "NODE_STARTED",
     ]
+
+
+def test_memory_table_soft_limit_warning_is_logged_once_per_table_and_run(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    runtime_logger = Mock(spec=WorkflowRuntimeLogger)
+    runtime_logger.warn.return_value = True
+    run, process, manager = create_running_process(
+        store,
+        linear_definition(),
+        runtime_logger=runtime_logger,
+    )
+    warning = MemoryTableSoftLimitWarningModel(
+        table_ref_id="memory-table-ref-1",
+        logical_table_id="scratch",
+        row_count=2,
+        soft_row_limit=1,
+    ).model_dump(mode="json")
+
+    for node_instance_id in ("source", "transform"):
+        task = submit_and_accept(
+            store,
+            manager,
+            workflow_run_id=run.workflow_run_id,
+            workflow_process_id=process.process_id,
+            process_generation=process.process_generation,
+            node_instance_id=node_instance_id,
+        )
+        result = FakeNodeExecutor(
+            executor_id="executor-1",
+            output_refs=["memory-table-ref-1"],
+        ).execute(task).model_copy(
+            update={
+                "summary": {
+                    MEMORY_TABLE_SOFT_LIMIT_WARNINGS_SUMMARY_KEY: [warning]
+                }
+            }
+        )
+
+        assert manager.apply_result(result).status == NodeTaskApplyStatus.APPLIED
+
+    runtime_logger.warn.assert_called_once()
+    warning_context = runtime_logger.warn.call_args.kwargs["context"]
+    assert {
+        key: warning_context[key] for key in warning
+    } == warning
+    assert warning_context["node_instance_id"] == "source"
+    assert warning_context["task_id"]
 
 
 def test_ready_node_submission_preserves_input_slot_bindings(

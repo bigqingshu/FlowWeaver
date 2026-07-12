@@ -37,6 +37,8 @@ def workflow_process_command(
         config.workflow_process_execution_mode,
         "--max-concurrent-node-tasks",
         str(config.workflow_process_max_concurrent_node_tasks),
+        "--memory-table-soft-row-limit",
+        str(config.memory_table_soft_row_limit),
         "--runtime-dir",
         str(config.resolved_runtime_dir()),
         "--runtime-event-path",

@@ -55,7 +55,8 @@ class EngineHostBootstrap:
             event_router=event_router,
         )
         table_provider_registry = create_default_table_provider_registry(
-            config.resolved_runtime_dir()
+            config.resolved_runtime_dir(),
+            memory_table_limits=config.memory_table_limits(),
         )
         lifecycle_service = SharedPublicationLifecycleService(
             runtime_store,

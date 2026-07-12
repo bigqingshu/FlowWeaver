@@ -12,7 +12,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from flowweaver.api.app import create_app
-from flowweaver.common.config import EngineConfig
+from flowweaver.common.config import EngineConfig, MemoryTableLimits
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.memory_table_provider import (
     MEMORY_PROVIDER_ID,
@@ -208,6 +208,22 @@ def test_memory_table_provider_reads_registered_rows() -> None:
         columns=["amount"],
         order_by=["-amount"],
     ) == [{"amount": 12.5}, {"amount": 7.0}]
+
+
+def test_memory_table_provider_soft_limit_does_not_reject_or_evict_rows() -> None:
+    provider = MemoryTableProvider(
+        tables={},
+        limits=MemoryTableLimits(soft_row_limit=1),
+    )
+
+    table_ref = create_memory_ref(provider)
+
+    assert provider.limits == MemoryTableLimits(soft_row_limit=1)
+    assert provider.count_rows(table_ref) == 2
+    assert provider.read_rows(table_ref, offset=0, limit=10) == [
+        {"row_id": 1, "amount": 12.5},
+        {"row_id": 2, "amount": 7.0},
+    ]
 
 
 def test_memory_table_provider_unsorted_page_only_reads_selected_fields() -> None:

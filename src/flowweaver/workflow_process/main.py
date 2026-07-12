@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import NoReturn
 
 from flowweaver.common.config import (
+    DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
+    MemoryTableLimits,
     WorkflowProcessExecutionMode,
     resolve_workflow_process_execution_mode,
     resolve_workflow_process_max_concurrent_node_tasks,
@@ -96,11 +98,15 @@ _run_workflow_process_loop = process_loop.run_workflow_process_loop
 
 
 def _DefaultWorkflowProcessExecutorOwner(
-    *, store: RuntimeStore, runtime_dir: Path
+    *,
+    store: RuntimeStore,
+    runtime_dir: Path,
+    memory_table_limits: MemoryTableLimits | None = None,
 ) -> DefaultWorkflowProcessExecutorOwner:
     return execution_helpers.create_default_workflow_process_executor_owner(
         store=store,
         runtime_dir=runtime_dir,
+        memory_table_limits=memory_table_limits or MemoryTableLimits(),
         default_executor_factory=SubprocessNodeExecutorIpcClient,
         shared_table_executor_factory=BuiltinSharedTableNodeExecutor,
     )
@@ -127,6 +133,7 @@ def run_workflow_process(
     cancel_grace_seconds: float = 5.0,
     max_ready_dispatch_per_cycle: int | None = None,
     max_concurrent_node_tasks: int | str | None = None,
+    memory_table_soft_row_limit: int | None = None,
     execution_mode: WorkflowProcessExecutionMode | str | None = None,
     execution_pool: NodeTaskExecutionPool | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
@@ -137,12 +144,20 @@ def run_workflow_process(
         resolve_workflow_process_max_concurrent_node_tasks(max_concurrent_node_tasks)
     )
     resolved_runtime_dir = Path(runtime_dir or Path("runtime") / "workflow_runs")
+    memory_table_limits = MemoryTableLimits(
+        soft_row_limit=(
+            DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT
+            if memory_table_soft_row_limit is None
+            else memory_table_soft_row_limit
+        )
+    )
     reusable_executor_owner: DefaultWorkflowProcessExecutorOwner | None = None
     close_executor_after_task = True
     if executor_factory is None:
         reusable_executor_owner = _DefaultWorkflowProcessExecutorOwner(
             store=store,
             runtime_dir=resolved_runtime_dir,
+            memory_table_limits=memory_table_limits,
         )
         executor_factory = reusable_executor_owner.executor_for_task
         close_executor_after_task = False
@@ -155,6 +170,7 @@ def run_workflow_process(
             process_generation=process_generation,
             event_sink=event_sink,
             runtime_dir=resolved_runtime_dir,
+            memory_table_limits=memory_table_limits,
             executor_factory=executor_factory,
             cleanup_staging_for_node=cleanup_staging_for_node,
             close_executor_after_task=close_executor_after_task,

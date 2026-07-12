@@ -4,7 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from flowweaver.common.config import (
+    DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT,
     EngineConfig,
+    MemoryTableLimits,
     resolve_workflow_process_execution_mode,
     resolve_workflow_process_max_concurrent_node_tasks,
 )
@@ -20,6 +22,11 @@ def test_engine_config_defaults_to_immediate_single_task_execution() -> None:
     assert config.shared_publication_cleanup_enabled is False
     assert config.shared_publication_cleanup_publication_batch_size == 20
     assert config.shared_publication_cleanup_table_ref_batch_size == 50
+    assert (
+        config.memory_table_soft_row_limit
+        == DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT
+    )
+    assert config.memory_table_limits() == MemoryTableLimits()
 
 
 def test_engine_config_accepts_threaded_mode_with_two_tasks() -> None:
@@ -32,6 +39,20 @@ def test_engine_config_accepts_threaded_mode_with_two_tasks() -> None:
     assert config.workflow_process_max_concurrent_node_tasks == 2
     assert resolve_workflow_process_execution_mode("threaded") == "threaded"
     assert resolve_workflow_process_max_concurrent_node_tasks("2") == 2
+
+
+def test_engine_config_accepts_disabled_memory_table_soft_limit() -> None:
+    config = EngineConfig(memory_table_soft_row_limit=0)
+
+    assert config.memory_table_limits() == MemoryTableLimits(soft_row_limit=0)
+
+
+@pytest.mark.parametrize("soft_row_limit", [-1, True])
+def test_engine_config_rejects_invalid_memory_table_soft_limit(
+    soft_row_limit: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        EngineConfig(memory_table_soft_row_limit=soft_row_limit)
 
 
 @pytest.mark.parametrize("execution_mode", ["process", "", 1])
