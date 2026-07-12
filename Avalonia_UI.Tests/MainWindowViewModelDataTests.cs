@@ -370,6 +370,290 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task SharedPublicationCleanupPreviewShowsLifecycleAndEligibility()
+    {
+        var expiresAt = DateTimeOffset.Parse("2026-07-12T00:00:00Z");
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items =
+                        [
+                            SharedPublicationSummary("pub-1", "daily_report", 1) with
+                            {
+                                ExpiresAt = expiresAt,
+                                IsLatestPublished = false,
+                            },
+                        ],
+                        Total = 1,
+                    }),
+            SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = "pub-1",
+                        Eligible = true,
+                        Status = "PUBLISHED",
+                        ExpiresAt = expiresAt,
+                        ReleasableMemberCount = 2,
+                        ProtectedMemberCount = 1,
+                        ActiveReadLeaseCount = 0,
+                        ActiveTableLeaseCount = 0,
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => apiClient.SharedPublicationCleanupPreviewCallCount > 0);
+
+        Assert.AreEqual("pub-1", apiClient.LastSharedPublicationCleanupPreviewPublicationId);
+        Assert.AreEqual("PUBLISHED", viewModel.SharedPublicationCleanupStatusText);
+        Assert.AreEqual(
+            expiresAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+            viewModel.SharedPublicationCleanupExpiresAtText);
+        Assert.AreEqual(
+            "Releasable 2 · protected 1 · read leases 0 · table leases 0",
+            viewModel.SharedPublicationCleanupCountsText);
+        Assert.AreEqual(
+            "This version can be cleaned.",
+            viewModel.SharedPublicationCleanupMessage);
+        Assert.IsTrue(viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationCleanupPreviewDisplaysBlockers()
+    {
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [SharedPublicationSummary("pub-2", "daily_report", 2)],
+                        Total = 1,
+                    }),
+            SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = "pub-2",
+                        Status = "PUBLISHED",
+                        Blockers =
+                        [
+                            "LATEST_VERSION_PROTECTED",
+                            "ACTIVE_READ_LEASE",
+                        ],
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => apiClient.SharedPublicationCleanupPreviewCallCount > 0);
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "The latest active version is protected",
+                "An active read lease exists",
+            },
+            viewModel.SharedPublicationCleanupBlockers.ToArray());
+        Assert.IsTrue(viewModel.HasSharedPublicationCleanupBlockers);
+        Assert.IsFalse(viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationCleanupBlockedResponseRefreshesPreview()
+    {
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items =
+                        [
+                            SharedPublicationSummary("pub-1", "daily_report", 1) with
+                            {
+                                IsLatestPublished = false,
+                            },
+                        ],
+                        Total = 1,
+                    }),
+            SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = "pub-1",
+                        Eligible = true,
+                        Status = "PUBLISHED",
+                    }),
+        };
+        apiClient.SharedPublicationCleanupHandler = (publicationId, _) =>
+        {
+            apiClient.SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = publicationId,
+                        Status = "PUBLISHED",
+                        Blockers = ["ACTIVE_TABLE_LEASE"],
+                    });
+            return Task.FromResult(
+                ApiResponseEnvelope<SharedPublicationCleanupResultDto>.Success(
+                    new SharedPublicationCleanupResultDto
+                    {
+                        PublicationId = publicationId,
+                        Outcome = "BLOCKED",
+                        Status = "PUBLISHED",
+                        Blockers = ["ACTIVE_TABLE_LEASE"],
+                    }));
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+
+        await viewModel.CleanupSharedPublicationCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(1, apiClient.SharedPublicationCleanupCallCount);
+        Assert.AreEqual(
+            "The server blocked cleanup after rechecking conditions.",
+            viewModel.SharedPublicationCleanupMessage);
+        CollectionAssert.AreEqual(
+            new[] { "An active table lease exists" },
+            viewModel.SharedPublicationCleanupBlockers.ToArray());
+        Assert.IsFalse(viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationCleanupSuccessRefreshesSelectedVersion()
+    {
+        var releasedSummary = SharedPublicationSummary("pub-1", "daily_report", 1) with
+        {
+            Status = "RELEASED",
+            IsLatestPublished = false,
+            ReleasedAt = DateTimeOffset.Parse("2026-07-12T01:00:00Z"),
+        };
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items =
+                        [
+                            SharedPublicationSummary("pub-1", "daily_report", 1) with
+                            {
+                                IsLatestPublished = false,
+                            },
+                        ],
+                        Total = 1,
+                    }),
+            SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = "pub-1",
+                        Eligible = true,
+                        Status = "PUBLISHED",
+                    }),
+        };
+        apiClient.SharedPublicationCleanupHandler = (publicationId, _) =>
+        {
+            apiClient.SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [releasedSummary],
+                        Total = 1,
+                    });
+            apiClient.SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = publicationId,
+                        Status = "RELEASED",
+                        Blockers = ["PUBLICATION_NOT_PUBLISHED"],
+                    });
+            return Task.FromResult(
+                ApiResponseEnvelope<SharedPublicationCleanupResultDto>.Success(
+                    new SharedPublicationCleanupResultDto
+                    {
+                        PublicationId = publicationId,
+                        Outcome = "CLEANED",
+                        Status = "RELEASED",
+                        ReleasedMemberCount = 1,
+                    }));
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+
+        await viewModel.CleanupSharedPublicationCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(1, apiClient.SharedPublicationCleanupCallCount);
+        Assert.AreEqual("pub-1", apiClient.LastSharedPublicationCleanupPublicationId);
+        Assert.AreEqual("RELEASED", viewModel.SelectedSharedPublicationVersion?.Status);
+        Assert.AreEqual(
+            "The shared version was cleaned and its metadata was retained.",
+            viewModel.SharedPublicationCleanupMessage);
+        Assert.IsFalse(viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationCleanupRetryPendingRemainsActionable()
+    {
+        var releasingSummary = SharedPublicationSummary("pub-1", "daily_report", 1) with
+        {
+            Status = "RELEASING",
+            IsLatestPublished = false,
+        };
+        var apiClient = new FakeApiClient
+        {
+            SharedPublicationVersionSummariesResponse =
+                ApiResponseEnvelope<SharedPublicationSummaryPageDto>.Success(
+                    new SharedPublicationSummaryPageDto
+                    {
+                        Items = [releasingSummary],
+                        Total = 1,
+                    }),
+            SharedPublicationCleanupPreviewResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                    new SharedPublicationCleanupPreviewDto
+                    {
+                        PublicationId = "pub-1",
+                        Status = "RELEASING",
+                        Blockers = ["PUBLICATION_NOT_PUBLISHED"],
+                    }),
+            SharedPublicationCleanupResponse =
+                ApiResponseEnvelope<SharedPublicationCleanupResultDto>.Success(
+                    new SharedPublicationCleanupResultDto
+                    {
+                        PublicationId = "pub-1",
+                        Outcome = "RETRY_PENDING",
+                        Status = "RELEASING",
+                        RemainingMemberCount = 2,
+                    }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SharedPublicationVersionShareNameFilter = "daily_report";
+        await viewModel.RefreshSharedPublicationVersionsCommand.ExecuteAsync(null);
+        await WaitUntilAsync(() => viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+
+        await viewModel.CleanupSharedPublicationCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(
+            "This cleanup pass finished with at least 2 member(s) remaining.",
+            viewModel.SharedPublicationCleanupMessage);
+        Assert.IsTrue(viewModel.CleanupSharedPublicationCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task SharedPublicationMemberPreviewLoadsExistingDataWorkbench()
     {
         var apiClient = new FakeApiClient
@@ -1657,6 +1941,21 @@ public sealed class MainWindowViewModelDataTests
             ApiResponseEnvelope<SharedPublicationMemberPageDto>.Success(
                 new SharedPublicationMemberPageDto());
 
+        public ApiResponseEnvelope<SharedPublicationCleanupPreviewDto> SharedPublicationCleanupPreviewResponse { get; set; } =
+            ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>.Success(
+                new SharedPublicationCleanupPreviewDto
+                {
+                    Status = "PUBLISHED",
+                });
+
+        public ApiResponseEnvelope<SharedPublicationCleanupResultDto> SharedPublicationCleanupResponse { get; set; } =
+            ApiResponseEnvelope<SharedPublicationCleanupResultDto>.Success(
+                new SharedPublicationCleanupResultDto
+                {
+                    Outcome = "BLOCKED",
+                    Status = "PUBLISHED",
+                });
+
         public ApiResponseEnvelope<List<NodeRunDto>> NodeRunsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeRunDto>>.Success(new List<NodeRunDto>());
 
@@ -1696,6 +1995,20 @@ public sealed class MainWindowViewModelDataTests
             SharedPublicationMembersHandler
         { get; set; }
 
+        public Func<
+            string,
+            CancellationToken,
+            Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>>>?
+            SharedPublicationCleanupPreviewHandler
+        { get; set; }
+
+        public Func<
+            string,
+            CancellationToken,
+            Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>>>?
+            SharedPublicationCleanupHandler
+        { get; set; }
+
         public string? LastNodeRunWorkflowRunId { get; private set; }
 
         public string? LastTableRefWorkflowRunId { get; private set; }
@@ -1725,6 +2038,14 @@ public sealed class MainWindowViewModelDataTests
         public int LastSharedPublicationVersionsLimit { get; private set; }
 
         public string? LastSharedPublicationMembersPublicationId { get; private set; }
+
+        public string? LastSharedPublicationCleanupPreviewPublicationId { get; private set; }
+
+        public string? LastSharedPublicationCleanupPublicationId { get; private set; }
+
+        public int SharedPublicationCleanupPreviewCallCount { get; private set; }
+
+        public int SharedPublicationCleanupCallCount { get; private set; }
 
         public List<int> SharedPublicationMemberOffsets { get; } = [];
 
@@ -2216,6 +2537,32 @@ public sealed class MainWindowViewModelDataTests
                 limit,
                 cancellationToken)
                 ?? Task.FromResult(SharedPublicationMembersResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>> GetSharedPublicationCleanupPreviewAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            SharedPublicationCleanupPreviewCallCount++;
+            LastSharedPublicationCleanupPreviewPublicationId = publicationId;
+            return SharedPublicationCleanupPreviewHandler?.Invoke(
+                publicationId,
+                cancellationToken)
+                ?? Task.FromResult(SharedPublicationCleanupPreviewResponse);
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>> CleanupSharedPublicationAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            SharedPublicationCleanupCallCount++;
+            LastSharedPublicationCleanupPublicationId = publicationId;
+            return SharedPublicationCleanupHandler?.Invoke(
+                publicationId,
+                cancellationToken)
+                ?? Task.FromResult(SharedPublicationCleanupResponse);
         }
     }
 }

@@ -2660,6 +2660,12 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
             headers=auth_headers(),
         )
     )
+    cleanup_result = response_data(
+        client.post(
+            f"/api/v1/shared-publications/{publication.publication_id}/cleanup",
+            headers=auth_headers(),
+        )
+    )
 
     assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
     assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
@@ -2734,6 +2740,9 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
             "PRODUCER_RUN_ACTIVE",
         ],
     }
+    assert cleanup_result["outcome"] == "BLOCKED"
+    assert cleanup_result["status"] == "PUBLISHED"
+    assert cleanup_result["blockers"] == cleanup_preview["blockers"]
 
 
 def test_shared_publication_cleanup_preview_returns_not_found(tmp_path: Path) -> None:
@@ -2746,6 +2755,96 @@ def test_shared_publication_cleanup_preview_returns_not_found(tmp_path: Path) ->
 
     assert response.status_code == 404
     assert response_error(response)["error_code"] == "SHARED_PUBLICATION_NOT_FOUND"
+
+
+def test_shared_publication_cleanup_api_releases_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    client, store, container = make_client(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cleanup API",
+        definition=valid_definition(),
+        workflow_id="workflow-cleanup-api",
+    )
+    run = store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cleanup-api",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="generate",
+        node_type="GenerateTestTableNode",
+        node_run_id="node-cleanup-api",
+    )
+    provider = SQLiteRuntimeTableProvider(container.config.resolved_runtime_dir())
+
+    def create_table(output_name: str) -> TableRefModel:
+        staging = provider.create_staging_table(
+            workflow_run_id=run.workflow_run_id,
+            node_run_id=node.node_run_id,
+            output_name=output_name,
+            schema=[
+                FieldSchemaModel(
+                    field_id=f"{output_name}-row-id",
+                    name="row_id",
+                    data_type="INTEGER",
+                    nullable=False,
+                    ordinal=0,
+                )
+            ],
+        )
+        provider.insert_rows(staging, [{"row_id": 1}])
+        published = provider.published_ref_from_staging(staging)
+        provider.publish_staging(staging, published)
+        store.register_table_ref(published)
+        return published
+
+    old_table = create_table("cleanup_old")
+    latest_table = create_table("cleanup_latest")
+    old_publication = store.create_shared_publication(
+        publication_id="publication-cleanup-api-old",
+        share_name="cleanup-api-share",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={"old": old_table.table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    store.create_shared_publication(
+        publication_id="publication-cleanup-api-latest",
+        share_name="cleanup-api-share",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id=run.workflow_run_id,
+        members={"latest": latest_table.table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    with store.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE shared_publications "
+            "SET expires_at = '2000-01-01T00:00:00+00:00' "
+            "WHERE publication_id = 'publication-cleanup-api-old'"
+        )
+
+    first = response_data(
+        client.post(
+            f"/api/v1/shared-publications/{old_publication.publication_id}/cleanup",
+            headers=auth_headers(),
+        )
+    )
+    second = response_data(
+        client.post(
+            f"/api/v1/shared-publications/{old_publication.publication_id}/cleanup",
+            headers=auth_headers(),
+        )
+    )
+
+    assert first["outcome"] == "CLEANED"
+    assert first["released_member_count"] == 1
+    assert first["remaining_member_count"] == 0
+    assert second["outcome"] == "ALREADY_RELEASED"
+    released = store.get_table_ref(old_table.table_ref_id)
+    assert released is not None
+    assert released.lifecycle_status == LifecycleStatus.RELEASED
 
 
 def test_data_api_reads_table_ref_schema_summary_and_limited_rows(

@@ -6567,6 +6567,22 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>> GetSharedPublicationCleanupPreviewAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>> CleanupSharedPublicationAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class FakeWorkflowImportFileService : IWorkflowImportFileService

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,8 +14,10 @@ from sqlalchemy import event, text
 from flowweaver.common.database import sqlite_url
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.shared_publication_lifecycle import (
     SharedPublicationCleanupBlocker,
+    SharedPublicationCleanupOutcome,
     SharedPublicationLifecycleService,
 )
 from flowweaver.engine.shared_table_reader import (
@@ -22,6 +25,8 @@ from flowweaver.engine.shared_table_reader import (
     SharedTableVersionPolicy,
 )
 from flowweaver.engine.table_lease_manager import TableLeaseManager
+from flowweaver.engine.table_provider_registry import TableProviderRegistry
+from flowweaver.engine.table_ref_release import TableRefReleaseService
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     TableMutability,
@@ -31,6 +36,33 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
+
+
+class CountingRuntimeProvider(SQLiteRuntimeTableProvider):
+    def __init__(self, runtime_dir: Path) -> None:
+        super().__init__(runtime_dir)
+        self.drop_calls = 0
+
+    def drop_table(self, table_ref: TableRefModel) -> None:
+        self.drop_calls += 1
+        super().drop_table(table_ref)
+
+
+class FailOnceRuntimeProvider(CountingRuntimeProvider):
+    def drop_table(self, table_ref: TableRefModel) -> None:
+        self.drop_calls += 1
+        if self.drop_calls == 1:
+            raise ValueError("temporary cleanup failure")
+        SQLiteRuntimeTableProvider.drop_table(self, table_ref)
+
+
+class NoopCountingRuntimeProvider(SQLiteRuntimeTableProvider):
+    def __init__(self, runtime_dir: Path) -> None:
+        super().__init__(runtime_dir)
+        self.drop_calls = 0
+
+    def drop_table(self, table_ref: TableRefModel) -> None:
+        self.drop_calls += 1
 
 
 def make_store(tmp_path: Path) -> RuntimeStore:
@@ -166,6 +198,124 @@ def seed_lifecycle_context(
 
 def blocker_values(preview) -> set[str]:
     return {blocker.value for blocker in preview.blockers}
+
+
+def register_runtime_table(
+    store: RuntimeStore,
+    provider: SQLiteRuntimeTableProvider,
+    *,
+    workflow_run_id: str,
+    node_run_id: str,
+    output_name: str,
+) -> TableRefModel:
+    staging = provider.create_staging_table(
+        workflow_run_id=workflow_run_id,
+        node_run_id=node_run_id,
+        output_name=output_name,
+        schema=[
+            FieldSchemaModel(
+                field_id=f"{output_name}-value",
+                name="value",
+                data_type="INTEGER",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+    )
+    provider.insert_rows(staging, [{"value": 1}])
+    published = provider.published_ref_from_staging(staging)
+    provider.publish_staging(staging, published)
+    store.register_table_ref(published)
+    return published
+
+
+def seed_cleanup_context(
+    tmp_path: Path,
+    *,
+    old_member_count: int = 1,
+) -> tuple[
+    RuntimeStore,
+    SQLiteRuntimeTableProvider,
+    str,
+    tuple[TableRefModel, ...],
+    datetime,
+]:
+    store = make_store(tmp_path)
+    workflow = store.create_workflow_definition(
+        name="Cleanup producer",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-cleanup-producer",
+    )
+    store.create_workflow_run(
+        workflow_id=workflow.workflow_id,
+        workflow_run_id="run-cleanup-producer",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    store.create_node_run(
+        workflow_run_id="run-cleanup-producer",
+        node_instance_id="source",
+        node_type="core.source",
+        node_run_id="node-cleanup-producer",
+    )
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime-tables")
+    old_refs = tuple(
+        register_runtime_table(
+            store,
+            provider,
+            workflow_run_id="run-cleanup-producer",
+            node_run_id="node-cleanup-producer",
+            output_name=f"old_{index}",
+        )
+        for index in range(old_member_count)
+    )
+    latest_ref = register_runtime_table(
+        store,
+        provider,
+        workflow_run_id="run-cleanup-producer",
+        node_run_id="node-cleanup-producer",
+        output_name="latest",
+    )
+    old_publication = store.create_shared_publication(
+        publication_id="publication-cleanup-old",
+        share_name="cleanup-share",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id="run-cleanup-producer",
+        members={
+            f"member-{index}": table_ref.table_ref_id
+            for index, table_ref in enumerate(old_refs)
+        },
+        retention_policy={"retention_seconds": 1},
+    )
+    latest_publication = store.create_shared_publication(
+        publication_id="publication-cleanup-latest",
+        share_name="cleanup-share",
+        producer_workflow_id=workflow.workflow_id,
+        producer_run_id="run-cleanup-producer",
+        members={"latest": latest_ref.table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    return (
+        store,
+        provider,
+        old_publication.publication_id,
+        old_refs,
+        latest_publication.created_at + timedelta(seconds=2),
+    )
+
+
+def make_cleanup_service(
+    store: RuntimeStore,
+    provider: SQLiteRuntimeTableProvider,
+) -> SharedPublicationLifecycleService:
+    registry = TableProviderRegistry()
+    registry.register(provider, storage_kinds=(TableStorageKind.RUNTIME_SQL,))
+    return SharedPublicationLifecycleService(
+        store,
+        table_ref_release_service=TableRefReleaseService(
+            store=store,
+            provider_registry=registry,
+        ),
+    )
 
 
 def test_cleanup_preview_is_fixed_query_and_candidate_lookup_is_bounded(
@@ -411,3 +561,190 @@ def test_two_cleanup_claimants_only_transition_once(tmp_path: Path) -> None:
     assert publication.cleanup_attempt_count == 1
     with store.engine.connect() as connection:
         assert connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one() == 5000
+
+
+def test_manual_cleanup_releases_runtime_table_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    store, provider, publication_id, old_refs, now = seed_cleanup_context(tmp_path)
+    service = make_cleanup_service(store, provider)
+
+    first = service.cleanup(publication_id, now=now)
+    second = service.cleanup(publication_id, now=now)
+
+    assert first.outcome == SharedPublicationCleanupOutcome.CLEANED
+    assert first.status == "RELEASED"
+    assert first.processed_member_count == 1
+    assert first.released_member_count == 1
+    assert first.remaining_member_count == 0
+    assert second.outcome == SharedPublicationCleanupOutcome.ALREADY_RELEASED
+    publication = store.get_shared_publication(publication_id)
+    assert publication is not None
+    assert publication.status == "RELEASED"
+    assert publication.released_at == now
+    assert [member.table_ref_id for member in publication.members] == [
+        old_refs[0].table_ref_id
+    ]
+    released_ref = store.get_table_ref(old_refs[0].table_ref_id)
+    assert released_ref is not None
+    assert released_ref.lifecycle_status == LifecycleStatus.RELEASED
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        provider.read_rows(old_refs[0], offset=0, limit=1)
+
+
+def test_manual_cleanup_failure_stays_releasing_and_retries(
+    tmp_path: Path,
+) -> None:
+    store, _provider, publication_id, old_refs, now = seed_cleanup_context(tmp_path)
+    provider = FailOnceRuntimeProvider(tmp_path / "runtime-tables")
+    service = make_cleanup_service(store, provider)
+
+    first = service.cleanup(publication_id, now=now)
+    claimed_ref = store.get_table_ref(old_refs[0].table_ref_id)
+    failed_publication = store.get_shared_publication(publication_id)
+    second = service.cleanup(publication_id, now=now + timedelta(seconds=1))
+
+    assert first.outcome == SharedPublicationCleanupOutcome.RETRY_PENDING
+    assert first.failed_member_count == 1
+    assert first.remaining_member_count == 1
+    assert claimed_ref is not None
+    assert claimed_ref.lifecycle_status == LifecycleStatus.RELEASABLE
+    assert failed_publication is not None
+    assert failed_publication.status == "RELEASING"
+    assert failed_publication.last_cleanup_error is not None
+    assert second.outcome == SharedPublicationCleanupOutcome.CLEANED
+    assert second.released_member_count == 1
+    assert provider.drop_calls == 2
+    completed = store.get_shared_publication(publication_id)
+    assert completed is not None
+    assert completed.status == "RELEASED"
+    assert completed.cleanup_attempt_count == 2
+    assert completed.last_cleanup_error is None
+
+
+def test_manual_cleanup_is_bounded_and_finishes_in_multiple_calls(
+    tmp_path: Path,
+) -> None:
+    store, provider, publication_id, old_refs, now = seed_cleanup_context(
+        tmp_path,
+        old_member_count=3,
+    )
+    service = make_cleanup_service(store, provider)
+
+    first = service.cleanup(publication_id, max_table_refs=1, now=now)
+    second = service.cleanup(
+        publication_id,
+        max_table_refs=1,
+        now=now + timedelta(seconds=1),
+    )
+    third = service.cleanup(
+        publication_id,
+        max_table_refs=1,
+        now=now + timedelta(seconds=2),
+    )
+
+    assert first.outcome == SharedPublicationCleanupOutcome.RETRY_PENDING
+    assert first.processed_member_count == 1
+    assert first.remaining_member_count == 2
+    assert second.outcome == SharedPublicationCleanupOutcome.RETRY_PENDING
+    assert second.processed_member_count == 1
+    assert third.outcome == SharedPublicationCleanupOutcome.CLEANED
+    assert third.processed_member_count == 1
+    assert all(
+        store.get_table_ref(table_ref.table_ref_id).lifecycle_status
+        == LifecycleStatus.RELEASED
+        for table_ref in old_refs
+    )
+
+
+def test_large_manual_cleanup_limits_provider_work_per_request(
+    tmp_path: Path,
+) -> None:
+    store, _lifecycle, _reader, publication_id, _latest_id, _table_ids, now = (
+        seed_lifecycle_context(tmp_path, old_member_count=250)
+    )
+    provider = NoopCountingRuntimeProvider(tmp_path / "runtime-tables")
+    service = make_cleanup_service(store, provider)
+
+    result = service.cleanup(publication_id, max_table_refs=10, now=now)
+
+    assert result.outcome == SharedPublicationCleanupOutcome.RETRY_PENDING
+    assert result.processed_member_count == 10
+    assert result.released_member_count == 10
+    assert result.remaining_member_count == 11
+    assert provider.drop_calls == 10
+
+
+def test_manual_cleanup_rechecks_preview_and_blocks_active_lease(
+    tmp_path: Path,
+) -> None:
+    store, provider, publication_id, old_refs, now = seed_cleanup_context(tmp_path)
+    counting_provider = CountingRuntimeProvider(tmp_path / "runtime-tables")
+    service = make_cleanup_service(store, counting_provider)
+    preview = service.preview(publication_id, now=now)
+    assert preview is not None
+    assert preview.eligible is True
+    lease = TableLeaseManager(store.engine).acquire_read_lease(
+        table_ref_id=old_refs[0].table_ref_id,
+        owner_id="manual-cleanup-blocker",
+        ttl_seconds=300,
+    )
+    assert lease.granted is True
+
+    result = service.cleanup(publication_id, now=now)
+
+    assert result.outcome == SharedPublicationCleanupOutcome.BLOCKED
+    assert SharedPublicationCleanupBlocker.ACTIVE_TABLE_LEASE in result.blockers
+    assert counting_provider.drop_calls == 0
+    publication = store.get_shared_publication(publication_id)
+    assert publication is not None
+    assert publication.status == "PUBLISHED"
+    assert provider.read_rows(old_refs[0], offset=0, limit=1) == [{"value": 1}]
+
+
+def test_manual_cleanup_does_not_drop_legacy_external_member(
+    tmp_path: Path,
+) -> None:
+    store, _provider, publication_id, old_refs, now = seed_cleanup_context(tmp_path)
+    counting_provider = CountingRuntimeProvider(tmp_path / "runtime-tables")
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE data_refs SET storage_kind = 'EXTERNAL_SQL' "
+                "WHERE table_ref_id = :table_ref_id"
+            ),
+            {"table_ref_id": old_refs[0].table_ref_id},
+        )
+    service = make_cleanup_service(store, counting_provider)
+
+    result = service.cleanup(publication_id, now=now)
+
+    assert result.outcome == SharedPublicationCleanupOutcome.BLOCKED
+    assert SharedPublicationCleanupBlocker.MEMBER_NOT_RELEASABLE in result.blockers
+    assert counting_provider.drop_calls == 0
+
+
+def test_manual_cleanup_does_not_drop_member_referenced_by_other_publication(
+    tmp_path: Path,
+) -> None:
+    store, provider, publication_id, old_refs, now = seed_cleanup_context(tmp_path)
+    store.create_shared_publication(
+        publication_id="publication-cleanup-other-reference",
+        share_name="cleanup-other-reference",
+        producer_workflow_id="workflow-cleanup-producer",
+        producer_run_id="run-cleanup-producer",
+        members={"shared": old_refs[0].table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    counting_provider = CountingRuntimeProvider(tmp_path / "runtime-tables")
+    service = make_cleanup_service(store, counting_provider)
+
+    result = service.cleanup(publication_id, now=now)
+
+    assert result.outcome == SharedPublicationCleanupOutcome.BLOCKED
+    assert (
+        SharedPublicationCleanupBlocker.MEMBER_REFERENCED_BY_OTHER_PUBLICATION
+        in result.blockers
+    )
+    assert counting_provider.drop_calls == 0
+    assert provider.read_rows(old_refs[0], offset=0, limit=1) == [{"value": 1}]

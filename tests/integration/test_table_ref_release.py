@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from threading import RLock
 
 import pytest
 from alembic import command
 from alembic.config import Config
 
+from flowweaver.engine.memory_table_provider import MemoryTableProvider
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
@@ -14,7 +16,11 @@ from flowweaver.engine.table_ref_release import (
     TableRefReleaseOutcome,
     TableRefReleaseService,
 )
-from flowweaver.protocols.enums import LifecycleStatus, WorkflowRunStatus
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableStorageKind,
+    WorkflowRunStatus,
+)
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -157,3 +163,36 @@ def test_release_retries_releasable_table_after_provider_failure(
     assert released is not None
     assert released.lifecycle_status == LifecycleStatus.RELEASED
     assert fail_once_provider.calls == 2
+
+
+def test_release_service_drops_active_memory_table(tmp_path: Path) -> None:
+    store, _published, _workflow_id, workflow_run_id = seed_runtime_table(tmp_path)
+    provider = MemoryTableProvider({}, RLock())
+    table_ref = provider.create_memory_table(
+        workflow_run_id=workflow_run_id,
+        node_run_id="node-release",
+        logical_table_id="memory-orders",
+        schema=[
+            FieldSchemaModel(
+                field_id="memory-row-id",
+                name="row_id",
+                data_type="INTEGER",
+                nullable=False,
+                ordinal=0,
+            )
+        ],
+        rows=[{"row_id": 1}],
+    )
+    store.register_table_ref(table_ref)
+    registry = TableProviderRegistry()
+    registry.register(provider, storage_kinds=(TableStorageKind.MEMORY,))
+    service = TableRefReleaseService(store=store, provider_registry=registry)
+
+    result = service.release(table_ref.table_ref_id)
+
+    assert result.outcome == TableRefReleaseOutcome.RELEASED
+    released = store.get_table_ref(table_ref.table_ref_id)
+    assert released is not None
+    assert released.lifecycle_status == LifecycleStatus.RELEASED
+    with pytest.raises(ValueError, match="memory table is not available"):
+        provider.read_rows(table_ref, offset=0, limit=1)

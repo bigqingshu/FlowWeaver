@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
@@ -17,7 +18,6 @@ from flowweaver.engine.runtime_record_mappers import (
     _datetime_to_text,
     _table_ref_from_record,
 )
-from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.protocols.enums import (
     LifecycleStatus,
@@ -25,6 +25,9 @@ from flowweaver.protocols.enums import (
     TableStorageKind,
 )
 from flowweaver.protocols.table_ref import TableRefModel
+
+if TYPE_CHECKING:
+    from flowweaver.engine.runtime_store import RuntimeStore
 
 
 class TableRefReleaseOutcome(str, Enum):
@@ -69,7 +72,12 @@ class TableRefReleaseService:
         self._store = store
         self._provider_registry = provider_registry
 
-    def release(self, table_ref_id: str) -> TableRefReleaseResult:
+    def release(
+        self,
+        table_ref_id: str,
+        *,
+        excluding_publication_id: str | None = None,
+    ) -> TableRefReleaseResult:
         current = self._store.get_table_ref(table_ref_id)
         if current is None:
             return TableRefReleaseResult(
@@ -96,7 +104,10 @@ class TableRefReleaseService:
                 reason="provider_unsupported",
             )
 
-        claim = self._claim(table_ref_id)
+        claim = self._claim(
+            table_ref_id,
+            excluding_publication_id=excluding_publication_id,
+        )
         if claim.table_ref is None:
             return TableRefReleaseResult(
                 table_ref_id=table_ref_id,
@@ -128,7 +139,12 @@ class TableRefReleaseService:
             table_ref=released,
         )
 
-    def _claim(self, table_ref_id: str) -> _TableRefReleaseClaim:
+    def _claim(
+        self,
+        table_ref_id: str,
+        *,
+        excluding_publication_id: str | None,
+    ) -> _TableRefReleaseClaim:
         now = utc_now()
         with immediate_session(self._store.engine) as session:
             record = session.get(DataRefRecord, table_ref_id)
@@ -138,12 +154,15 @@ class TableRefReleaseService:
                 return _TableRefReleaseClaim(None, "already_unavailable")
             if record.lifecycle_status == LifecycleStatus.RELEASABLE.value:
                 return _TableRefReleaseClaim(_table_ref_from_record(record))
-            if record.lifecycle_status != LifecycleStatus.PUBLISHED.value:
+            claimable_statuses = {LifecycleStatus.PUBLISHED.value}
+            if record.storage_kind == TableStorageKind.MEMORY.value:
+                claimable_statuses.add(LifecycleStatus.ACTIVE.value)
+            if record.lifecycle_status not in claimable_statuses:
                 return _TableRefReleaseClaim(
                     None,
                     f"lifecycle_status_{record.lifecycle_status.lower()}",
                 )
-            active_publication_id = session.scalar(
+            active_publication_statement = (
                 select(SharedPublicationMemberRecord.publication_id)
                 .join(
                     SharedPublicationRecord,
@@ -158,6 +177,12 @@ class TableRefReleaseService:
                 )
                 .limit(1)
             )
+            if excluding_publication_id is not None:
+                active_publication_statement = active_publication_statement.where(
+                    SharedPublicationRecord.publication_id
+                    != excluding_publication_id
+                )
+            active_publication_id = session.scalar(active_publication_statement)
             if active_publication_id is not None:
                 return _TableRefReleaseClaim(None, "shared_publication_active")
             active_table_lease_id = session.scalar(

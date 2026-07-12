@@ -8,6 +8,7 @@ from flowweaver.api.api_models import APIResponseModel
 from flowweaver.api.dependencies import (
     check_origin,
     get_runtime_store,
+    get_table_provider_registry,
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
@@ -15,6 +16,7 @@ from flowweaver.api.run_pagination import paginated_ok_response, pagination_reje
 from flowweaver.api.runtime_shared_publication_responses import (
     shared_publication_catalog_entry_to_jsonable,
     shared_publication_cleanup_preview_to_jsonable,
+    shared_publication_cleanup_result_to_jsonable,
     shared_publication_member_to_jsonable,
     shared_publication_summary_to_jsonable,
 )
@@ -22,6 +24,8 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.shared_publication_lifecycle import (
     SharedPublicationLifecycleService,
 )
+from flowweaver.engine.table_provider_registry import TableProviderRegistry
+from flowweaver.engine.table_ref_release import TableRefReleaseService
 
 router = APIRouter(
     prefix="/api/v1/shared-publications",
@@ -153,4 +157,27 @@ def get_shared_publication_cleanup_preview(
     return ok_response(
         request,
         shared_publication_cleanup_preview_to_jsonable(preview),
+    )
+
+
+@router.post("/{publication_id}/cleanup", response_model=APIResponseModel)
+def cleanup_shared_publication(
+    request: Request,
+    publication_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    provider_registry: Annotated[
+        TableProviderRegistry,
+        Depends(get_table_provider_registry),
+    ],
+):
+    result = SharedPublicationLifecycleService(
+        store,
+        table_ref_release_service=TableRefReleaseService(
+            store=store,
+            provider_registry=provider_registry,
+        ),
+    ).cleanup(publication_id)
+    return ok_response(
+        request,
+        shared_publication_cleanup_result_to_jsonable(result),
     )

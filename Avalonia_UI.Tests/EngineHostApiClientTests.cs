@@ -1054,7 +1054,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub-3","share_name":"daily report","publication_version":3,"producer_workflow_id":"wf-1","producer_run_id":"run-1","status":"PUBLISHED","input_snapshot_id":null,"retention_policy":null,"created_at":"2026-07-11T01:02:03Z","member_count":4,"is_latest_published":true}],"offset":10,"limit":20,"total":30,"has_more":false},"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"publication_id":"pub-3","share_name":"daily report","publication_version":3,"producer_workflow_id":"wf-1","producer_run_id":"run-1","status":"PUBLISHED","input_snapshot_id":null,"retention_policy":null,"created_at":"2026-07-11T01:02:03Z","expires_at":"2026-07-12T01:02:03Z","release_started_at":null,"cleanup_last_progress_at":null,"released_at":null,"cleanup_attempt_count":2,"last_cleanup_error":null,"member_count":4,"is_latest_published":true}],"offset":10,"limit":20,"total":30,"has_more":false},"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
@@ -1071,6 +1071,10 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual("pub-3", result.Data?.Items[0].PublicationId);
         Assert.AreEqual(4, result.Data?.Items[0].MemberCount);
         Assert.IsTrue(result.Data?.Items[0].IsLatestPublished);
+        Assert.AreEqual(
+            DateTimeOffset.Parse("2026-07-12T01:02:03Z"),
+            result.Data?.Items[0].ExpiresAt);
+        Assert.AreEqual(2, result.Data?.Items[0].CleanupAttemptCount);
     }
 
     [TestMethod]
@@ -1098,6 +1102,54 @@ public sealed class EngineHostApiClientTests
         Assert.AreEqual("RUNTIME_SQL", result.Data?.Items[0].TableRefStorageKind);
         Assert.IsTrue(result.Data?.Items[0].CanReadRows);
         Assert.AreEqual(7, result.Data?.Total);
+    }
+
+    [TestMethod]
+    public async Task SharedPublicationCleanupPreviewUsesEncodedPublicationPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"publication_id":"pub 3","eligible":false,"status":"PUBLISHED","expires_at":"2026-07-12T00:00:00Z","is_latest_published":true,"active_read_lease_count":1,"active_table_lease_count":2,"releasable_member_count":3,"protected_member_count":4,"blockers":["LATEST_VERSION_PROTECTED"]},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetSharedPublicationCleanupPreviewAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "pub 3");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/pub%203/cleanup-preview"),
+            handler.RequestUri);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.IsFalse(result.Data?.Eligible);
+        Assert.AreEqual(2, result.Data?.ActiveTableLeaseCount);
+        CollectionAssert.AreEqual(
+            new[] { "LATEST_VERSION_PROTECTED" },
+            result.Data?.Blockers);
+    }
+
+    [TestMethod]
+    public async Task CleanupSharedPublicationAsyncPostsAndParsesRetryResult()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"ok":true,"data":{"publication_id":"pub-1","outcome":"RETRY_PENDING","status":"RELEASING","processed_member_count":2,"released_member_count":1,"skipped_member_count":0,"failed_member_count":1,"remaining_member_count":3,"blockers":[],"member_results":[{"table_ref_id":"table-1","outcome":"FAILED","reason":"temporary"}]},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.CleanupSharedPublicationAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "pub-1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/shared-publications/pub-1/cleanup"),
+            handler.RequestUri);
+        Assert.AreEqual("RETRY_PENDING", result.Data?.Outcome);
+        Assert.AreEqual(3, result.Data?.RemainingMemberCount);
+        Assert.AreEqual("temporary", result.Data?.MemberResults[0].Reason);
     }
 
     [TestMethod]

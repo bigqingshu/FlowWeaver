@@ -55,6 +55,17 @@ public sealed class DataPreviewPageStructureTests
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding LoadMoreSharedPublicationVersionMembersCommand}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding ExpiresAtText}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding RefreshSharedPublicationCleanupPreviewCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "Command=\"{Binding CleanupSharedPublicationCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "ItemsSource=\"{Binding SharedPublicationCleanupBlockers}\"");
+        StringAssert.Contains(xaml, "<Button.Flyout>");
         Assert.IsFalse(xaml.Contains("Rows", StringComparison.Ordinal));
     }
 

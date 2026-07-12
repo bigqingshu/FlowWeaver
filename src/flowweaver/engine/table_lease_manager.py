@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from flowweaver.common.ids import new_id
 from flowweaver.common.time import utc_now
-from flowweaver.engine.db_models import TableLeaseRecord
+from flowweaver.engine.db_models import DataRefRecord, TableLeaseRecord
 from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.table_lease_models import (
     LeaseAcquireResult as LeaseAcquireResult,
@@ -35,7 +35,11 @@ from flowweaver.engine.table_lease_queries import (
 from flowweaver.engine.table_lease_queries import (
     expire_stale_table_leases as _expire_stale_table_leases,
 )
-from flowweaver.protocols.enums import TableLeaseStatus, TableLeaseType
+from flowweaver.protocols.enums import (
+    LifecycleStatus,
+    TableLeaseStatus,
+    TableLeaseType,
+)
 
 
 class TableLeaseManager:
@@ -131,6 +135,23 @@ class TableLeaseManager:
         expires_at = now + timedelta(seconds=ttl_seconds)
         with self._immediate_session() as session:
             self._expire_stale_leases(session, now)
+            table_ref = session.get(DataRefRecord, table_ref_id)
+            if (
+                table_ref is None
+                or table_ref.lifecycle_status
+                in {
+                    LifecycleStatus.RELEASABLE.value,
+                    LifecycleStatus.RELEASED.value,
+                    LifecycleStatus.RETIRED.value,
+                    LifecycleStatus.ORPHANED.value,
+                }
+            ):
+                return LeaseAcquireResult(
+                    granted=False,
+                    lease=None,
+                    conflict_lease_ids=[],
+                    reason="TABLE_REF_NOT_AVAILABLE",
+                )
             active_leases = _active_table_leases(session, table_ref_id, now)
             conflicts = _conflicting_table_leases(lease_type, active_leases)
             if conflicts:

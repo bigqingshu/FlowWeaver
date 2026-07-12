@@ -23,6 +23,10 @@ public sealed class SharedPublicationListItemViewModel
         Status = publication.Status;
         InputSnapshotId = publication.InputSnapshotId;
         CreatedAt = publication.CreatedAt;
+        ExpiresAt = publication.ExpiresAt;
+        ReleaseStartedAt = publication.ReleaseStartedAt;
+        ReleasedAt = publication.ReleasedAt;
+        CleanupAttemptCount = publication.CleanupAttemptCount;
         Members = new ObservableCollection<SharedPublicationMemberListItemViewModel>(
             publication.Members.Select(member => new SharedPublicationMemberListItemViewModel(member)));
         memberCount = publication.Members.Length;
@@ -41,6 +45,10 @@ public sealed class SharedPublicationListItemViewModel
         Status = publication.Status;
         InputSnapshotId = publication.InputSnapshotId;
         CreatedAt = publication.CreatedAt;
+        ExpiresAt = publication.ExpiresAt;
+        ReleaseStartedAt = publication.ReleaseStartedAt;
+        ReleasedAt = publication.ReleasedAt;
+        CleanupAttemptCount = publication.CleanupAttemptCount;
         Members = new ObservableCollection<SharedPublicationMemberListItemViewModel>();
         memberCount = publication.MemberCount;
     }
@@ -61,6 +69,14 @@ public sealed class SharedPublicationListItemViewModel
 
     public DateTimeOffset CreatedAt { get; }
 
+    public DateTimeOffset? ExpiresAt { get; }
+
+    public DateTimeOffset? ReleaseStartedAt { get; }
+
+    public DateTimeOffset? ReleasedAt { get; }
+
+    public int CleanupAttemptCount { get; }
+
     public ObservableCollection<SharedPublicationMemberListItemViewModel> Members { get; }
 
     public DisplayTextFormatter DisplayTextFormatter { get; }
@@ -68,6 +84,8 @@ public sealed class SharedPublicationListItemViewModel
     public string VersionText => $"v{PublicationVersion}";
 
     public string CreatedAtText => CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+    public string ExpiresAtText => ExpiresAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
 
     public string MemberCountText => DisplayTextFormatter.FormatMemberCount(memberCount);
 

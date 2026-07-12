@@ -31,13 +31,16 @@ public partial class MainWindowViewModel
         SharedPublicationListItemViewModel? value)
     {
         CancelSharedPublicationMembersLoad();
+        CancelSharedPublicationCleanupRequest();
         ResetSharedPublicationMemberPreviewState();
+        ResetSharedPublicationCleanupState();
         SelectedSharedPublicationVersionMembers.Clear();
         SelectedSharedPublicationVersionMember = null;
         HasMoreSharedPublicationVersionMembers = false;
         if (value is not null)
         {
             _ = RefreshSelectedSharedPublicationVersionMembersAsync(value);
+            _ = RefreshSharedPublicationCleanupPreviewAsync();
         }
     }
 }

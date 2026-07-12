@@ -1015,6 +1015,22 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>> GetSharedPublicationCleanupPreviewAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>> CleanupSharedPublicationAsync(
+            EngineHostConnectionSettings settings,
+            string publicationId,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private static WorkflowDefinitionDto Workflow(string workflowId, string name)

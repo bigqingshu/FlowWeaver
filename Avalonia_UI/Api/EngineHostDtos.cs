@@ -1010,6 +1010,24 @@ public sealed record SharedPublicationDto
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
 
+    [JsonPropertyName("expires_at")]
+    public DateTimeOffset? ExpiresAt { get; init; }
+
+    [JsonPropertyName("release_started_at")]
+    public DateTimeOffset? ReleaseStartedAt { get; init; }
+
+    [JsonPropertyName("cleanup_last_progress_at")]
+    public DateTimeOffset? CleanupLastProgressAt { get; init; }
+
+    [JsonPropertyName("released_at")]
+    public DateTimeOffset? ReleasedAt { get; init; }
+
+    [JsonPropertyName("cleanup_attempt_count")]
+    public int CleanupAttemptCount { get; init; }
+
+    [JsonPropertyName("last_cleanup_error")]
+    public JsonElement? LastCleanupError { get; init; }
+
     [JsonPropertyName("members")]
     public SharedPublicationMemberDto[] Members { get; init; } = [];
 }
@@ -1106,6 +1124,24 @@ public sealed record SharedPublicationSummaryDto
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
 
+    [JsonPropertyName("expires_at")]
+    public DateTimeOffset? ExpiresAt { get; init; }
+
+    [JsonPropertyName("release_started_at")]
+    public DateTimeOffset? ReleaseStartedAt { get; init; }
+
+    [JsonPropertyName("cleanup_last_progress_at")]
+    public DateTimeOffset? CleanupLastProgressAt { get; init; }
+
+    [JsonPropertyName("released_at")]
+    public DateTimeOffset? ReleasedAt { get; init; }
+
+    [JsonPropertyName("cleanup_attempt_count")]
+    public int CleanupAttemptCount { get; init; }
+
+    [JsonPropertyName("last_cleanup_error")]
+    public JsonElement? LastCleanupError { get; init; }
+
     [JsonPropertyName("member_count")]
     public int MemberCount { get; init; }
 
@@ -1147,4 +1183,82 @@ public sealed record SharedPublicationMemberPageDto
 
     [JsonPropertyName("has_more")]
     public bool HasMore { get; init; }
+}
+
+public sealed record SharedPublicationCleanupPreviewDto
+{
+    [JsonPropertyName("publication_id")]
+    public string PublicationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("eligible")]
+    public bool Eligible { get; init; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; init; } = string.Empty;
+
+    [JsonPropertyName("expires_at")]
+    public DateTimeOffset? ExpiresAt { get; init; }
+
+    [JsonPropertyName("is_latest_published")]
+    public bool IsLatestPublished { get; init; }
+
+    [JsonPropertyName("active_read_lease_count")]
+    public int ActiveReadLeaseCount { get; init; }
+
+    [JsonPropertyName("active_table_lease_count")]
+    public int ActiveTableLeaseCount { get; init; }
+
+    [JsonPropertyName("releasable_member_count")]
+    public int ReleasableMemberCount { get; init; }
+
+    [JsonPropertyName("protected_member_count")]
+    public int ProtectedMemberCount { get; init; }
+
+    [JsonPropertyName("blockers")]
+    public string[] Blockers { get; init; } = [];
+}
+
+public sealed record SharedPublicationCleanupMemberResultDto
+{
+    [JsonPropertyName("table_ref_id")]
+    public string TableRefId { get; init; } = string.Empty;
+
+    [JsonPropertyName("outcome")]
+    public string Outcome { get; init; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; init; }
+}
+
+public sealed record SharedPublicationCleanupResultDto
+{
+    [JsonPropertyName("publication_id")]
+    public string PublicationId { get; init; } = string.Empty;
+
+    [JsonPropertyName("outcome")]
+    public string Outcome { get; init; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("processed_member_count")]
+    public int ProcessedMemberCount { get; init; }
+
+    [JsonPropertyName("released_member_count")]
+    public int ReleasedMemberCount { get; init; }
+
+    [JsonPropertyName("skipped_member_count")]
+    public int SkippedMemberCount { get; init; }
+
+    [JsonPropertyName("failed_member_count")]
+    public int FailedMemberCount { get; init; }
+
+    [JsonPropertyName("remaining_member_count")]
+    public int RemainingMemberCount { get; init; }
+
+    [JsonPropertyName("blockers")]
+    public string[] Blockers { get; init; } = [];
+
+    [JsonPropertyName("member_results")]
+    public SharedPublicationCleanupMemberResultDto[] MemberResults { get; init; } = [];
 }

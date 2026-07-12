@@ -4,6 +4,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import text
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import RuntimeStore, sqlite_url
@@ -148,3 +149,23 @@ def test_expired_read_lease_is_recovered_before_write(tmp_path: Path) -> None:
     assert write.lease is not None
     assert write.lease.status == TableLeaseStatus.ACTIVE.value
 
+
+def test_table_lease_rejects_releasable_table_ref(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    manager = TableLeaseManager(store.engine)
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE data_refs SET lifecycle_status = 'RELEASABLE' "
+                "WHERE table_ref_id = 'table-1'"
+            )
+        )
+
+    result = manager.acquire_read_lease(
+        table_ref_id="table-1",
+        owner_id="late-reader",
+        ttl_seconds=60,
+    )
+
+    assert result.granted is False
+    assert result.reason == "TABLE_REF_NOT_AVAILABLE"

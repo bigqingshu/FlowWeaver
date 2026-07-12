@@ -12,6 +12,7 @@ from flowweaver.engine.runtime_models import (
 )
 from flowweaver.engine.shared_publication_lifecycle import (
     SharedPublicationCleanupPreview,
+    SharedPublicationCleanupResult,
 )
 
 
@@ -123,6 +124,30 @@ def shared_publication_cleanup_preview_to_jsonable(
         "releasable_member_count": value.releasable_member_count,
         "protected_member_count": value.protected_member_count,
         "blockers": [blocker.value for blocker in value.blockers],
+    }
+
+
+def shared_publication_cleanup_result_to_jsonable(
+    value: SharedPublicationCleanupResult,
+) -> dict[str, Any]:
+    return {
+        "publication_id": value.publication_id,
+        "outcome": value.outcome.value,
+        "status": value.status,
+        "processed_member_count": value.processed_member_count,
+        "released_member_count": value.released_member_count,
+        "skipped_member_count": value.skipped_member_count,
+        "failed_member_count": value.failed_member_count,
+        "remaining_member_count": value.remaining_member_count,
+        "blockers": [blocker.value for blocker in value.blockers],
+        "member_results": [
+            {
+                "table_ref_id": result.table_ref_id,
+                "outcome": result.outcome,
+                "reason": result.reason,
+            }
+            for result in value.member_results
+        ],
     }
 
 

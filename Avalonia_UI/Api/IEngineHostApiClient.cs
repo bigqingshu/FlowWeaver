@@ -259,4 +259,14 @@ public interface IEngineHostApiClient
         int offset = 0,
         int limit = 100,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>> GetSharedPublicationCleanupPreviewAsync(
+        EngineHostConnectionSettings settings,
+        string publicationId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>> CleanupSharedPublicationAsync(
+        EngineHostConnectionSettings settings,
+        string publicationId,
+        CancellationToken cancellationToken = default);
 }

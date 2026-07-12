@@ -6,5 +6,8 @@ public partial class MainWindowViewModel
     {
         RefreshSharedPublicationsCommand.NotifyCanExecuteChanged();
         RefreshSharedPublicationVersionsCommand.NotifyCanExecuteChanged();
+        RefreshSharedPublicationCleanupPreviewCommand.NotifyCanExecuteChanged();
+        CleanupSharedPublicationCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanConfirmSharedPublicationCleanup));
     }
 }

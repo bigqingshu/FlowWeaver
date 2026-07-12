@@ -60,6 +60,7 @@ public partial class MainWindowViewModel
 
             if (response.Ok && response.Data is not null)
             {
+                var previousPublicationId = SelectedSharedPublicationVersion?.PublicationId;
                 SharedPublicationVersions.Clear();
                 foreach (var publication in response.Data.Items)
                 {
@@ -67,7 +68,9 @@ public partial class MainWindowViewModel
                         new SharedPublicationListItemViewModel(publication, DisplayTextFormatter));
                 }
 
-                SelectedSharedPublicationVersion = SharedPublicationVersions.FirstOrDefault();
+                SelectedSharedPublicationVersion = SharedPublicationVersions.FirstOrDefault(
+                    publication => publication.PublicationId == previousPublicationId)
+                    ?? SharedPublicationVersions.FirstOrDefault();
 
                 SharedPublicationVersionMessage =
                     F(

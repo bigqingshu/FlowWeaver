@@ -755,6 +755,30 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<SharedPublicationCleanupPreviewDto>> GetSharedPublicationCleanupPreviewAsync(
+        EngineHostConnectionSettings settings,
+        string publicationId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<SharedPublicationCleanupPreviewDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/shared-publications/{Uri.EscapeDataString(publicationId)}/cleanup-preview",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<SharedPublicationCleanupResultDto>> CleanupSharedPublicationAsync(
+        EngineHostConnectionSettings settings,
+        string publicationId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<SharedPublicationCleanupResultDto>(
+            settings,
+            HttpMethod.Post,
+            $"api/v1/shared-publications/{Uri.EscapeDataString(publicationId)}/cleanup",
+            cancellationToken: cancellationToken);
+    }
+
     public async Task<ApiResponseEnvelope<TData>> SendAsync<TData>(
         EngineHostConnectionSettings settings,
         HttpMethod method,

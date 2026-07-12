@@ -23,7 +23,7 @@ from flowweaver.engine.memory_table_storage import (
     GLOBAL_MEMORY_TABLES_LOCK as _GLOBAL_MEMORY_TABLES_LOCK,
 )
 from flowweaver.engine.memory_table_storage import MemoryTable as _MemoryTable
-from flowweaver.protocols.enums import TableRole
+from flowweaver.protocols.enums import TableRole, TableStorageKind
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 
@@ -149,7 +149,10 @@ class MemoryTableProvider:
             )
 
     def drop_table(self, table_ref: TableRefModel) -> None:
-        self._validate_ref(table_ref)
+        if table_ref.provider_id != self.provider_id:
+            raise ValueError("table_ref belongs to a different provider")
+        if table_ref.storage_kind != TableStorageKind.MEMORY:
+            raise ValueError("MemoryTableProvider only supports MEMORY")
         memory_table_id = _memory_table_id(table_ref)
         with self._lock:
             self._tables.pop(memory_table_id, None)
