@@ -28,11 +28,8 @@ from flowweaver.engine.table_provider_registry import (
     create_default_table_provider_registry,
 )
 from flowweaver.engine.table_ref_release import TableRefReleaseService
-from flowweaver.nodes.default_registry import (
-    create_default_node_registry,
-    default_node_definitions,
-)
-from flowweaver.plugin_runtime.discovery import discover_plugins
+from flowweaver.nodes.default_registry import create_default_node_registry
+from flowweaver.plugin_runtime.bootstrap import load_plugin_catalog
 
 
 class EngineHostBootstrap:
@@ -74,13 +71,7 @@ class EngineHostBootstrap:
             store=runtime_store,
             lifecycle_service=lifecycle_service,
         )
-        core_definitions = default_node_definitions()
-        plugin_catalog = discover_plugins(
-            config.resolved_plugin_dir()
-        ).with_reserved_definitions(
-            core_definitions,
-            reserved_plugin_ids={"flowweaver.core", "flowweaver.dev_test"},
-        )
+        plugin_catalog = load_plugin_catalog(config.resolved_plugin_dir())
         return ServiceContainer(
             config=config,
             runtime_store=runtime_store,

@@ -17,10 +17,13 @@ from flowweaver.node_executor.ipc_client_messages import (
     submit_task_envelope,
 )
 from flowweaver.node_executor.ipc_client_subprocess_helpers import (
+    StderrTailCollector,
+)
+from flowweaver.node_executor.ipc_client_subprocess_helpers import (
     child_environment as _child_environment,
 )
 from flowweaver.node_executor.ipc_client_subprocess_helpers import (
-    read_response_from_child as _read_response_from_child,
+    read_response_from_child_with_limits as _read_response_from_child,
 )
 from flowweaver.node_executor.ipc_client_subprocess_helpers import (
     src_path as _src_path,
@@ -50,11 +53,16 @@ class SubprocessNodeExecutorIpcClient:
         env: Mapping[str, str] | None = None,
         command: list[str] | None = None,
         event_handler: NodeTaskIpcEventHandler | None = None,
+        inject_src_pythonpath: bool = True,
+        startup_timeout_seconds: float | None = None,
+        max_response_chars: int = 1024 * 1024,
     ) -> None:
         self.executor_id = executor_id
         self._event_handler = event_handler
         self._closed = False
         self._write_lock = Lock()
+        self._startup_timeout_seconds = startup_timeout_seconds
+        self._max_response_chars = max_response_chars
         self._child = subprocess.Popen(
             command
             or [
@@ -67,7 +75,10 @@ class SubprocessNodeExecutorIpcClient:
                 executor_id,
             ],
             cwd=str(cwd or _src_path()),
-            env=_child_environment(env),
+            env=_child_environment(
+                env,
+                include_src_path=inject_src_pythonpath,
+            ),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -75,6 +86,7 @@ class SubprocessNodeExecutorIpcClient:
             encoding="utf-8",
             bufsize=1,
         )
+        self._stderr_tail = StderrTailCollector(self._child.stderr)
         self._expect_ready()
 
     def set_event_handler(self, handler: NodeTaskIpcEventHandler | None) -> None:
@@ -142,12 +154,15 @@ class SubprocessNodeExecutorIpcClient:
             except subprocess.TimeoutExpired:
                 self._child.kill()
                 self._child.wait(timeout=2)
+        self._stderr_tail.join()
         for stream in (self._child.stdout, self._child.stderr):
             if stream is not None and not stream.closed:
                 stream.close()
 
     def _expect_ready(self) -> None:
-        response = self._read_response()
+        response = self._read_response(
+            timeout_seconds=self._startup_timeout_seconds,
+        )
         if (
             response is not None
             and response.message_type == IPCMessageType.EXECUTOR_READY
@@ -155,7 +170,11 @@ class SubprocessNodeExecutorIpcClient:
         ):
             return
         self.close()
-        raise RuntimeError("Node executor subprocess did not become ready")
+        message = "Node executor subprocess did not become ready"
+        stderr = self._stderr_tail.text()
+        if stderr:
+            message = f"{message}: {stderr}"
+        raise RuntimeError(message)
 
     def _write_envelope(self, envelope: IPCEnvelope) -> bool:
         with self._write_lock:
@@ -165,8 +184,16 @@ class SubprocessNodeExecutorIpcClient:
                 envelope=envelope,
             )
 
-    def _read_response(self) -> IPCEnvelope | None:
-        return _read_response_from_child(self._child)
+    def _read_response(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> IPCEnvelope | None:
+        return _read_response_from_child(
+            self._child,
+            timeout_seconds=timeout_seconds,
+            max_chars=self._max_response_chars,
+        )
 
     def _emit_event(self, task: NodeTaskModel, envelope: IPCEnvelope) -> None:
         if self._event_handler is not None:
@@ -180,4 +207,8 @@ class SubprocessNodeExecutorIpcClient:
         )
 
     def _failure_error(self) -> dict[str, Any]:
-        return _subprocess_failure_error(self._child)
+        self._stderr_tail.join(timeout_seconds=0.5)
+        return _subprocess_failure_error(
+            self._child,
+            stderr_tail=self._stderr_tail.text(),
+        )

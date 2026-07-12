@@ -41,6 +41,8 @@ def workflow_process_command(
         str(config.memory_table_soft_row_limit),
         "--runtime-dir",
         str(config.resolved_runtime_dir()),
+        "--plugin-dir",
+        str(config.resolved_plugin_dir()),
         "--runtime-event-path",
         str(runtime_event_path),
     ]

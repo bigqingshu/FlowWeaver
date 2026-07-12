@@ -32,3 +32,5 @@ def test_workflow_process_command_includes_memory_table_soft_row_limit() -> None
 
     option_index = command.index("--memory-table-soft-row-limit")
     assert command[option_index + 1] == "321"
+    plugin_dir_index = command.index("--plugin-dir")
+    assert command[plugin_dir_index + 1] == "plugins"

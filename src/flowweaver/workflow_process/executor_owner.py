@@ -17,6 +17,8 @@ from flowweaver.node_executor import (
 )
 from flowweaver.nodes.builtin_shared_table import is_shared_table_node_type
 from flowweaver.nodes.builtin_table import is_table_node_type
+from flowweaver.plugin_runtime.catalog import PluginCatalog
+from flowweaver.plugin_runtime.executor import PluginExternalProcessExecutor
 from flowweaver.protocols.node_task import NodeTaskModel
 
 
@@ -39,21 +41,30 @@ class DefaultWorkflowProcessExecutorOwner:
         shared_table_executor_factory: Callable[..., NodeExecutor] = (
             BuiltinSharedTableNodeExecutor
         ),
+        plugin_catalog: PluginCatalog | None = None,
+        plugin_executor_factory: Callable[..., NodeExecutor] = (
+            PluginExternalProcessExecutor
+        ),
     ) -> None:
         self._store = store
         self._runtime_dir = runtime_dir
         self._memory_table_limits = memory_table_limits
         self._default_executor_factory = default_executor_factory
         self._shared_table_executor_factory = shared_table_executor_factory
+        self._plugin_catalog = plugin_catalog or PluginCatalog.empty()
+        self._plugin_executor_factory = plugin_executor_factory
         self._data_registry: RuntimeDataRegistry | None = None
         self._table_provider: SQLiteRuntimeTableProvider | None = None
         self._table_executor: BuiltinTableNodeExecutor | None = None
+        self._plugin_executor: NodeExecutor | None = None
         self._executor: NodeExecutor | None = None
 
     def executor_for_task(
         self,
         task: NodeTaskModel,
     ) -> NodeExecutor:
+        if task.node_type.startswith("plugin."):
+            return self._external_plugin_executor()
         if is_table_node_type(task.node_type):
             return self._builtin_table_executor()
         if is_shared_table_node_type(task.node_type):
@@ -61,6 +72,17 @@ class DefaultWorkflowProcessExecutorOwner:
         if self._executor is None or getattr(self._executor, "closed", False):
             self._executor = self._default_executor_factory()
         return self._executor
+
+    def _external_plugin_executor(self) -> NodeExecutor:
+        if self._plugin_executor is None or getattr(
+            self._plugin_executor,
+            "closed",
+            False,
+        ):
+            self._plugin_executor = self._plugin_executor_factory(
+                plugin_catalog=self._plugin_catalog,
+            )
+        return self._plugin_executor
 
     def _builtin_table_executor(self) -> BuiltinTableNodeExecutor:
         if self._table_provider is None:
@@ -82,8 +104,8 @@ class DefaultWorkflowProcessExecutorOwner:
         return self._table_executor
 
     def close(self) -> None:
-        if self._executor is None:
-            return
+        close_executor(self._plugin_executor)
+        self._plugin_executor = None
         close_executor(self._executor)
         self._executor = None
 

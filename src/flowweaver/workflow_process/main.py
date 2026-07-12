@@ -22,6 +22,8 @@ from flowweaver.node_executor import (
     NodeExecutorFactory,
     SubprocessNodeExecutorIpcClient,
 )
+from flowweaver.plugin_runtime.bootstrap import load_plugin_catalog
+from flowweaver.plugin_runtime.executor import PluginExternalProcessExecutor
 from flowweaver.workflow_process import (
     ipc_events,
     process_cancellation,
@@ -102,13 +104,21 @@ def _DefaultWorkflowProcessExecutorOwner(
     store: RuntimeStore,
     runtime_dir: Path,
     memory_table_limits: MemoryTableLimits | None = None,
+    plugin_dir: Path | str | None = None,
 ) -> DefaultWorkflowProcessExecutorOwner:
+    plugin_catalog = (
+        load_plugin_catalog(Path(plugin_dir))
+        if plugin_dir is not None
+        else None
+    )
     return execution_helpers.create_default_workflow_process_executor_owner(
         store=store,
         runtime_dir=runtime_dir,
         memory_table_limits=memory_table_limits or MemoryTableLimits(),
         default_executor_factory=SubprocessNodeExecutorIpcClient,
         shared_table_executor_factory=BuiltinSharedTableNodeExecutor,
+        plugin_catalog=plugin_catalog,
+        plugin_executor_factory=PluginExternalProcessExecutor,
     )
 
 
@@ -128,6 +138,7 @@ def run_workflow_process(
     process_generation: int | None = None,
     event_sink: RuntimeEventSink | None = None,
     runtime_dir: Path | str | None = None,
+    plugin_dir: Path | str | None = None,
     executor_factory: NodeExecutorFactory | None = None,
     cleanup_staging_for_node: CleanupStagingForNode | None = None,
     cancel_grace_seconds: float = 5.0,
@@ -158,6 +169,7 @@ def run_workflow_process(
             store=store,
             runtime_dir=resolved_runtime_dir,
             memory_table_limits=memory_table_limits,
+            plugin_dir=plugin_dir,
         )
         executor_factory = reusable_executor_owner.executor_for_task
         close_executor_after_task = False

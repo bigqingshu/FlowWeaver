@@ -117,6 +117,8 @@ def _discover_package(
             return _disabled(package_name, "entrypoint resolves outside plugin package")
         if not entrypoint_path.is_file():
             return _disabled(package_name, "entrypoint does not exist")
+        if entrypoint_path.suffix.lower() not in {".py", ".exe"}:
+            return _disabled(package_name, "entrypoint must be a .py or .exe file")
         descriptor = PluginDescriptor(
             package_name=package_name,
             package_dir=resolved_package,

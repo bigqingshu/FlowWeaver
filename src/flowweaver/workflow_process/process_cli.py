@@ -25,6 +25,7 @@ def run_workflow_process_cli(
     parser.add_argument("--heartbeat-interval-seconds", type=float, default=2.0)
     parser.add_argument("--runtime-event-path")
     parser.add_argument("--runtime-dir")
+    parser.add_argument("--plugin-dir")
     parser.add_argument("--execution-mode")
     parser.add_argument("--max-concurrent-node-tasks")
     parser.add_argument("--memory-table-soft-row-limit", type=int)
@@ -44,6 +45,7 @@ def run_workflow_process_cli(
             heartbeat_interval_seconds=args.heartbeat_interval_seconds,
             event_sink=event_sink,
             runtime_dir=args.runtime_dir,
+            plugin_dir=args.plugin_dir,
             execution_mode=args.execution_mode,
             max_concurrent_node_tasks=args.max_concurrent_node_tasks,
             memory_table_soft_row_limit=args.memory_table_soft_row_limit,

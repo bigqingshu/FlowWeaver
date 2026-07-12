@@ -30,6 +30,10 @@ _CONFIG_FIELD_TYPES = {
     "object",
     "string",
 }
+_RESERVED_PLUGIN_CONFIG_FIELDS = {
+    "allow_external_actions",
+    "enable_execute",
+}
 
 
 class PluginConfigFieldModel(StrictModel):
@@ -90,6 +94,8 @@ class PluginConfigSchemaModel(StrictModel):
     ) -> dict[str, PluginConfigFieldModel]:
         for name in value:
             _validate_identifier(name, field_name="config property")
+            if name in _RESERVED_PLUGIN_CONFIG_FIELDS:
+                raise ValueError(f"reserved plugin config property: {name}")
         return value
 
     def to_spec(self) -> NodeConfigSchemaSpec:
@@ -210,6 +216,13 @@ class PluginManifestModel(StrictModel):
     def validate_identifier(cls, value: str) -> str:
         return _validate_identifier(value, field_name="identifier")
 
+    @field_validator("node_type")
+    @classmethod
+    def validate_plugin_node_namespace(cls, value: str) -> str:
+        if not value.startswith("plugin."):
+            raise ValueError("plugin node_type must start with 'plugin.'")
+        return value
+
     @field_validator(
         "plugin_version",
         "node_version",
@@ -256,6 +269,21 @@ class PluginManifestModel(StrictModel):
         return self
 
     def to_node_definition(self) -> NodeDefinitionSpec:
+        config_properties = dict(self.config_schema.to_spec().properties)
+        config_properties.update(
+            {
+                "allow_external_actions": NodeConfigFieldSpec(
+                    type="boolean",
+                    title="Allow External Actions",
+                    default=False,
+                ),
+                "enable_execute": NodeConfigFieldSpec(
+                    type="boolean",
+                    title="Enable Execute",
+                    default=False,
+                ),
+            }
+        )
         return NodeDefinitionSpec(
             node_type=self.node_type,
             node_version=self.node_version,
@@ -273,7 +301,7 @@ class PluginManifestModel(StrictModel):
                 slot.to_spec() for slot in self.output_table_slots
             ),
             execution_mode=PLUGIN_NODE_EXECUTION_MODE,
-            config_schema=self.config_schema.to_spec(),
+            config_schema=NodeConfigSchemaSpec(properties=config_properties),
         )
 
 

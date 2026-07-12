@@ -6,6 +6,7 @@ from pathlib import Path
 from flowweaver.common.config import MemoryTableLimits, WorkflowProcessExecutionMode
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.node_executor import NodeExecutor
+from flowweaver.plugin_runtime.catalog import PluginCatalog
 from flowweaver.protocols.node_task import NodeTaskResultModel
 from flowweaver.workflow_process import task_supervision as supervision
 from flowweaver.workflow_process.executor_owner import (
@@ -29,13 +30,20 @@ def create_default_workflow_process_executor_owner(
     memory_table_limits: MemoryTableLimits,
     default_executor_factory: Callable[[], NodeExecutor],
     shared_table_executor_factory: Callable[..., NodeExecutor],
+    plugin_catalog: PluginCatalog | None = None,
+    plugin_executor_factory: Callable[..., NodeExecutor] | None = None,
 ) -> DefaultWorkflowProcessExecutorOwner:
+    kwargs = {}
+    if plugin_executor_factory is not None:
+        kwargs["plugin_executor_factory"] = plugin_executor_factory
     return DefaultWorkflowProcessExecutorOwner(
         store=store,
         runtime_dir=runtime_dir,
         memory_table_limits=memory_table_limits,
         default_executor_factory=default_executor_factory,
         shared_table_executor_factory=shared_table_executor_factory,
+        plugin_catalog=plugin_catalog,
+        **kwargs,
     )
 
 

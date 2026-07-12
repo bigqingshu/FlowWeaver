@@ -38,11 +38,14 @@ def test_discovery_registers_valid_manifest_without_importing_runner(
     assert definition.input_table_slots[0].name == "in"
     assert definition.output_table_slots[0].allow_new_runtime_sql is True
     assert definition.config_schema is not None
-    assert definition.config_schema.to_schema()["properties"]["field_name"] == {
+    config_properties = definition.config_schema.to_schema()["properties"]
+    assert config_properties["field_name"] == {
         "type": "string",
         "title": "Field Name",
         "required": True,
     }
+    assert config_properties["enable_execute"]["default"] is False
+    assert config_properties["allow_external_actions"]["default"] is False
 
 
 def test_discovery_disables_invalid_manifest_without_blocking_valid_plugin(
@@ -106,7 +109,7 @@ def test_catalog_disables_reserved_core_definition_and_plugin_id(
         "reserved_node",
         _manifest(
             plugin_id="example.reserved",
-            node_type="CoreNode",
+            node_type="plugin.core_conflict",
         ),
     )
     _write_plugin(
@@ -121,7 +124,7 @@ def test_catalog_disables_reserved_core_definition_and_plugin_id(
     catalog = discover_plugins(plugin_root).with_reserved_definitions(
         [
             NodeDefinitionSpec(
-                node_type="CoreNode",
+                node_type="plugin.core_conflict",
                 node_version="1.0",
                 display_name="Core Node",
             )

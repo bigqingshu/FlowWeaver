@@ -100,6 +100,18 @@ class PluginCatalog:
             if entry.enabled and entry.descriptor is not None
         )
 
+    def descriptor_for_node(
+        self,
+        node_type: str,
+        node_version: str,
+    ) -> PluginDescriptor | None:
+        for entry in self._entries:
+            if not entry.enabled or entry.descriptor is None:
+                continue
+            if entry.descriptor.registry_key == (node_type, node_version):
+                return entry.descriptor
+        return None
+
     def with_reserved_definitions(
         self,
         definitions: Iterable[NodeDefinitionSpec],
