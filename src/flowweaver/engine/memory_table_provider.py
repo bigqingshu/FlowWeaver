@@ -111,10 +111,16 @@ class MemoryTableProvider:
             self._tables[memory_table_id] = memory_table
 
     def get_schema(self, table_ref: TableRefModel) -> list[FieldSchemaModel]:
-        return list(self._load_table(table_ref).schema)
+        self._validate_ref(table_ref)
+        memory_table_id = _memory_table_id(table_ref)
+        with self._lock:
+            return list(self._get_table_locked(memory_table_id).schema)
 
     def count_rows(self, table_ref: TableRefModel) -> int:
-        return len(self._load_table(table_ref).rows)
+        self._validate_ref(table_ref)
+        memory_table_id = _memory_table_id(table_ref)
+        with self._lock:
+            return len(self._get_table_locked(memory_table_id).rows)
 
     def read_rows(
         self,
@@ -131,12 +137,28 @@ class MemoryTableProvider:
             raise ValueError("limit must be non-negative")
         if filters:
             raise ValueError("MemoryTableProvider does not support filters yet")
-        table = self._load_table(table_ref)
+        self._validate_ref(table_ref)
         selected_columns = _selected_columns(table_ref, columns)
-        rows = _ordered_rows(table_ref, list(table.rows), order_by)
+        memory_table_id = _memory_table_id(table_ref)
+        if limit == 0:
+            _ordered_rows(table_ref, [], order_by)
+            with self._lock:
+                self._get_table_locked(memory_table_id)
+            return []
+        if not order_by:
+            with self._lock:
+                table = self._get_table_locked(memory_table_id)
+                return [
+                    {column: row.get(column) for column in selected_columns}
+                    for row in table.rows[offset : offset + limit]
+                ]
+        with self._lock:
+            table = self._get_table_locked(memory_table_id)
+            rows = [dict(row) for row in table.rows]
+        ordered_rows = _ordered_rows(table_ref, rows, order_by)
         return [
             {column: row.get(column) for column in selected_columns}
-            for row in rows[offset : offset + limit]
+            for row in ordered_rows[offset : offset + limit]
         ]
 
     def create_table(self, table_ref: TableRefModel) -> None:
@@ -164,17 +186,11 @@ class MemoryTableProvider:
     ) -> None:
         raise ValueError("MemoryTableProvider does not support publish_staging")
 
-    def _load_table(self, table_ref: TableRefModel) -> _MemoryTable:
-        self._validate_ref(table_ref)
-        memory_table_id = _memory_table_id(table_ref)
-        with self._lock:
-            table = self._tables.get(memory_table_id)
-            if table is None:
-                raise ValueError("memory table is not available")
-            return _MemoryTable(
-                schema=list(table.schema),
-                rows=[dict(row) for row in table.rows],
-            )
+    def _get_table_locked(self, memory_table_id: str) -> _MemoryTable:
+        table = self._tables.get(memory_table_id)
+        if table is None:
+            raise ValueError("memory table is not available")
+        return table
 
     def _validate_ref(self, table_ref: TableRefModel) -> None:
         _validate_memory_table_ref(table_ref, provider_id=self.provider_id)
