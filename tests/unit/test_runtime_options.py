@@ -108,7 +108,7 @@ def test_resolve_runtime_options_applies_profile_presets() -> None:
     assert workflow.telemetry.progress_interval_seconds == 5
     assert workflow.diagnostics.include_metrics is False
     assert workflow.diagnostics.payload_byte_limit == 65536
-    assert workflow.diagnostics.ttl_seconds == 604800
+    assert workflow.diagnostics.ttl_seconds == 0
     assert workflow.diagnostics.mask_policy == "partial"
     assert source == workflow
     assert diagnose.profile == "diagnostic"
@@ -118,7 +118,7 @@ def test_resolve_runtime_options_applies_profile_presets() -> None:
     assert diagnose.telemetry.progress_enabled is True
     assert diagnose.diagnostics.include_metrics is True
     assert diagnose.diagnostics.payload_byte_limit == 262144
-    assert diagnose.diagnostics.ttl_seconds == 86400
+    assert diagnose.diagnostics.ttl_seconds == 0
 
 
 def test_resolve_runtime_options_merges_workflow_and_node_override() -> None:

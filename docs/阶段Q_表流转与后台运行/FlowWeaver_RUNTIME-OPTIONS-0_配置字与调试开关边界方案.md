@@ -1,7 +1,7 @@
 # FlowWeaver RUNTIME-OPTIONS-0：配置字与运行反馈开关边界方案
 
 > 文档状态：边界方案，已由 RUNTIME-OPTIONS-1、2 落实
-> 当前阶段：保留原始职责边界；实现状态以 RUNTIME-OPTIONS-2 完成记录为准
+> 当前阶段：保留原始职责边界；实现状态以 RUNTIME-OPTIONS-2 完成记录和 2026-07-12 有效字段收口为准
 > 不适用范围：节点业务参数实现、权限审计模型、完整专用编辑器、全量性能优化
 
 ## 0. 实施状态（2026-07-11）
@@ -16,6 +16,8 @@
 - 节点发送前过滤和主程序最终过滤均已生效，真实控制 progress、metrics、run-scoped log、payload 和脱敏。
 - current run 使用版本化 overlay，可在运行中切换主程序、新任务和支持更新能力的活动节点。
 - 普通、预览和手动后台 run 共用同一 current run 编辑入口；该入口不修改 workflow draft 或 revision。
+
+2026-07-12 收口后，当前产品只编辑和执行固定反馈字段。`strict_validation` 与 `diagnostics.ttl_seconds` 仅作为旧修订兼容读取字段保留：后端仍可加载，Avalonia 不展示控件，patcher 不主动生成或改写，预设也不再提供非零 TTL。
 
 仍未纳入当前完成范围：动态配置字 schema、插件私有命名空间、TTL 自动清理、权限审计，以及用配置字改变节点业务计算或数据产物。后续节点特有设置继续进入节点 `config_schema` 和业务 `config`。
 

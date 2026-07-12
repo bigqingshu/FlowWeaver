@@ -46,7 +46,11 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
             }
         }
 
-        rootObject["runtime_options"] = CreateRuntimeOptionsObject(draft);
+        var runtimeOptions = CreateRuntimeOptionsObject(draft);
+        PreserveCompatibilityFields(
+            rootObject["runtime_options"] as JsonObject,
+            runtimeOptions);
+        rootObject["runtime_options"] = runtimeOptions;
         return new WorkflowDefinitionDraftRuntimeOptionsPatchResult
         {
             Status = WorkflowDefinitionDraftRuntimeOptionsPatchStatus.Succeeded,
@@ -79,7 +83,6 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
         return new JsonObject
         {
             ["profile"] = workflow.Profile,
-            ["strict_validation"] = workflow.StrictValidation,
             ["telemetry"] = CreateTelemetryObject(workflow.Telemetry),
             ["diagnostics"] = CreateDiagnosticsObject(workflow.Diagnostics),
         };
@@ -105,7 +108,6 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
             ["capture_error_context"] = diagnostics.CaptureErrorContext,
             ["include_metrics"] = diagnostics.IncludeMetrics,
             ["payload_byte_limit"] = diagnostics.PayloadByteLimit,
-            ["ttl_seconds"] = diagnostics.TtlSeconds,
             ["redact_columns"] = CreateStringArray(diagnostics.RedactColumns),
             ["mask_policy"] = diagnostics.MaskPolicy,
         };
@@ -140,12 +142,6 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
             "profile",
             nodeOverride.Profile,
             workflow.Profile);
-        AddIfDifferent(
-            result,
-            "strict_validation",
-            nodeOverride.StrictValidation,
-            workflow.StrictValidation);
-
         if (nodeOverride.Telemetry is not null)
         {
             var telemetry = CreateTelemetryOverrideObject(
@@ -220,11 +216,6 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
             "payload_byte_limit",
             nodeOverride.PayloadByteLimit,
             workflow.PayloadByteLimit);
-        AddIfDifferent(
-            result,
-            "ttl_seconds",
-            nodeOverride.TtlSeconds,
-            workflow.TtlSeconds);
         if (nodeOverride.RedactColumns is not null &&
             !nodeOverride.RedactColumns.SequenceEqual(
                 workflow.RedactColumns,
@@ -239,6 +230,103 @@ public static class WorkflowDefinitionDraftRuntimeOptionsPatcher
             nodeOverride.MaskPolicy,
             workflow.MaskPolicy);
         return result;
+    }
+
+    private static void PreserveCompatibilityFields(
+        JsonObject? existingRuntimeOptions,
+        JsonObject updatedRuntimeOptions)
+    {
+        if (existingRuntimeOptions is null)
+        {
+            return;
+        }
+
+        if (existingRuntimeOptions["workflow"] is JsonObject existingWorkflow &&
+            updatedRuntimeOptions["workflow"] is JsonObject updatedWorkflow)
+        {
+            PreserveProperty(
+                existingWorkflow,
+                updatedWorkflow,
+                "strict_validation");
+            PreserveNestedProperty(
+                existingWorkflow,
+                updatedWorkflow,
+                "diagnostics",
+                "ttl_seconds");
+        }
+
+        if (existingRuntimeOptions["node_overrides"] is not JsonObject existingOverrides ||
+            updatedRuntimeOptions["node_overrides"] is not JsonObject updatedOverrides)
+        {
+            return;
+        }
+
+        foreach (var existingOverrideEntry in existingOverrides)
+        {
+            if (existingOverrideEntry.Value is not JsonObject existingOverride)
+            {
+                continue;
+            }
+
+            var hasStrictValidation = existingOverride.ContainsKey(
+                "strict_validation");
+            var hasTtlSeconds = existingOverride["diagnostics"] is JsonObject diagnostics &&
+                diagnostics.ContainsKey("ttl_seconds");
+            if (!hasStrictValidation && !hasTtlSeconds)
+            {
+                continue;
+            }
+
+            var updatedOverride = updatedOverrides[existingOverrideEntry.Key]
+                as JsonObject;
+            if (updatedOverride is null)
+            {
+                updatedOverride = new JsonObject();
+                updatedOverrides[existingOverrideEntry.Key] = updatedOverride;
+            }
+
+            PreserveProperty(
+                existingOverride,
+                updatedOverride,
+                "strict_validation");
+            PreserveNestedProperty(
+                existingOverride,
+                updatedOverride,
+                "diagnostics",
+                "ttl_seconds");
+        }
+    }
+
+    private static void PreserveProperty(
+        JsonObject source,
+        JsonObject target,
+        string propertyName)
+    {
+        if (source.TryGetPropertyValue(propertyName, out var value))
+        {
+            target[propertyName] = value?.DeepClone();
+        }
+    }
+
+    private static void PreserveNestedProperty(
+        JsonObject source,
+        JsonObject target,
+        string objectName,
+        string propertyName)
+    {
+        if (source[objectName] is not JsonObject sourceNested ||
+            !sourceNested.TryGetPropertyValue(propertyName, out var value))
+        {
+            return;
+        }
+
+        if (target[objectName] is not JsonObject targetNested)
+        {
+            targetNested = new JsonObject();
+            target[objectName] = targetNested;
+        }
+
+        targetNested[propertyName] = value?.DeepClone();
     }
 
     private static void AddIfDifferent(

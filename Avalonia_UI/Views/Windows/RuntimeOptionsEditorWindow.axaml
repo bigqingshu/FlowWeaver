@@ -22,7 +22,7 @@
                                Foreground="{DynamicResource TextPrimaryBrush}"/>
 
                     <Grid ColumnDefinitions="170,*"
-                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="12"
                           RowSpacing="8">
                         <TextBlock Text="{Binding RuntimeOptionsProfileText}"
@@ -48,16 +48,11 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <CheckBox Grid.Row="1"
-                                  Grid.ColumnSpan="2"
-                                  Content="{Binding RuntimeOptionsStrictValidationText}"
-                                  IsChecked="{Binding RuntimeOptionsStrictValidationDraft, Mode=TwoWay}"/>
-
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="1"
                                    Text="{Binding RuntimeOptionsLogLevelText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="2"
+                        <ComboBox Grid.Row="1"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
                                   SelectedValue="{Binding RuntimeOptionsLogLevelDraft, Mode=TwoWay}"
@@ -78,11 +73,11 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="3"
+                        <TextBlock Grid.Row="2"
                                    Text="{Binding RuntimeOptionsEventLevelText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="3"
+                        <ComboBox Grid.Row="2"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
                                   SelectedValue="{Binding RuntimeOptionsEventLevelDraft, Mode=TwoWay}"
@@ -103,58 +98,50 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="4"
+                        <TextBlock Grid.Row="3"
                                    Text="{Binding RuntimeOptionsEventRateLimitText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="4"
+                        <TextBox Grid.Row="3"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsEventRateLimitPerSecondDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <CheckBox Grid.Row="5"
+                        <CheckBox Grid.Row="4"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsProgressEnabledText}"
                                   IsChecked="{Binding RuntimeOptionsProgressEnabledDraft, Mode=TwoWay}"/>
 
-                        <TextBlock Grid.Row="6"
+                        <TextBlock Grid.Row="5"
                                    Text="{Binding RuntimeOptionsProgressIntervalText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="6"
+                        <TextBox Grid.Row="5"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsProgressIntervalSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <CheckBox Grid.Row="7"
+                        <CheckBox Grid.Row="6"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsCaptureErrorContextText}"
                                   IsChecked="{Binding RuntimeOptionsCaptureErrorContextDraft, Mode=TwoWay}"/>
 
-                        <CheckBox Grid.Row="8"
+                        <CheckBox Grid.Row="7"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsIncludeMetricsText}"
                                   IsChecked="{Binding RuntimeOptionsIncludeMetricsDraft, Mode=TwoWay}"/>
 
-                        <TextBlock Grid.Row="9"
+                        <TextBlock Grid.Row="8"
                                    Text="{Binding RuntimeOptionsPayloadByteLimitText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="9"
+                        <TextBox Grid.Row="8"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsPayloadByteLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <TextBlock Grid.Row="10"
-                                   Text="{Binding RuntimeOptionsTtlSecondsText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="10"
-                                 Grid.Column="1"
-                                 Text="{Binding RuntimeOptionsTtlSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-
-                        <TextBlock Grid.Row="11"
+                        <TextBlock Grid.Row="9"
                                    Text="{Binding RuntimeOptionsMaskPolicyText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="11"
+                        <ComboBox Grid.Row="9"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
                                   SelectedValue="{Binding RuntimeOptionsMaskPolicyDraft, Mode=TwoWay}"
@@ -203,7 +190,7 @@
                     </ComboBox>
 
                     <Grid ColumnDefinitions="170,*"
-                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                           ColumnSpacing="12"
                           RowSpacing="8"
                           IsEnabled="{Binding HasSelectedRuntimeOptionsNode}">
@@ -230,16 +217,11 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <CheckBox Grid.Row="1"
-                                  Grid.ColumnSpan="2"
-                                  Content="{Binding RuntimeOptionsStrictValidationText}"
-                                  IsChecked="{Binding RuntimeOptionsSelectedNodeStrictValidationDraft, Mode=TwoWay}"/>
-
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="1"
                                    Text="{Binding RuntimeOptionsLogLevelText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="2"
+                        <ComboBox Grid.Row="1"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsLogLevelOptions}"
                                   SelectedValue="{Binding RuntimeOptionsSelectedNodeLogLevelDraft, Mode=TwoWay}"
@@ -260,11 +242,11 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="3"
+                        <TextBlock Grid.Row="2"
                                    Text="{Binding RuntimeOptionsEventLevelText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="3"
+                        <ComboBox Grid.Row="2"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsEventLevelOptions}"
                                   SelectedValue="{Binding RuntimeOptionsSelectedNodeEventLevelDraft, Mode=TwoWay}"
@@ -285,58 +267,50 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="4"
+                        <TextBlock Grid.Row="3"
                                    Text="{Binding RuntimeOptionsEventRateLimitText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="4"
+                        <TextBox Grid.Row="3"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsSelectedNodeEventRateLimitPerSecondDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <CheckBox Grid.Row="5"
+                        <CheckBox Grid.Row="4"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsProgressEnabledText}"
                                   IsChecked="{Binding RuntimeOptionsSelectedNodeProgressEnabledDraft, Mode=TwoWay}"/>
 
-                        <TextBlock Grid.Row="6"
+                        <TextBlock Grid.Row="5"
                                    Text="{Binding RuntimeOptionsProgressIntervalText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="6"
+                        <TextBox Grid.Row="5"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsSelectedNodeProgressIntervalSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <CheckBox Grid.Row="7"
+                        <CheckBox Grid.Row="6"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsCaptureErrorContextText}"
                                   IsChecked="{Binding RuntimeOptionsSelectedNodeCaptureErrorContextDraft, Mode=TwoWay}"/>
 
-                        <CheckBox Grid.Row="8"
+                        <CheckBox Grid.Row="7"
                                   Grid.ColumnSpan="2"
                                   Content="{Binding RuntimeOptionsIncludeMetricsText}"
                                   IsChecked="{Binding RuntimeOptionsSelectedNodeIncludeMetricsDraft, Mode=TwoWay}"/>
 
-                        <TextBlock Grid.Row="9"
+                        <TextBlock Grid.Row="8"
                                    Text="{Binding RuntimeOptionsPayloadByteLimitText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="9"
+                        <TextBox Grid.Row="8"
                                  Grid.Column="1"
                                  Text="{Binding RuntimeOptionsSelectedNodePayloadByteLimitDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                        <TextBlock Grid.Row="10"
-                                   Text="{Binding RuntimeOptionsTtlSecondsText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <TextBox Grid.Row="10"
-                                 Grid.Column="1"
-                                 Text="{Binding RuntimeOptionsSelectedNodeTtlSecondsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-
-                        <TextBlock Grid.Row="11"
+                        <TextBlock Grid.Row="9"
                                    Text="{Binding RuntimeOptionsMaskPolicyText}"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextSecondaryBrush}"/>
-                        <ComboBox Grid.Row="11"
+                        <ComboBox Grid.Row="9"
                                   Grid.Column="1"
                                   ItemsSource="{Binding RuntimeOptionsMaskPolicyOptions}"
                                   SelectedValue="{Binding RuntimeOptionsSelectedNodeMaskPolicyDraft, Mode=TwoWay}"

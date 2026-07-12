@@ -36,7 +36,6 @@ _PROFILE_PRESET_OVERRIDES: dict[str, dict[str, object]] = {
     "normal": SYSTEM_DEFAULT_RUNTIME_OPTIONS.model_dump(mode="json"),
     "background_fast": {
         "profile": "background_fast",
-        "strict_validation": True,
         "telemetry": {
             "log_level": "WARN",
             "event_level": "basic",
@@ -48,14 +47,12 @@ _PROFILE_PRESET_OVERRIDES: dict[str, dict[str, object]] = {
             "capture_error_context": True,
             "include_metrics": False,
             "payload_byte_limit": 65536,
-            "ttl_seconds": 604800,
             "redact_columns": [],
             "mask_policy": "partial",
         },
     },
     "diagnostic": {
         "profile": "diagnostic",
-        "strict_validation": True,
         "telemetry": {
             "log_level": "DEBUG",
             "event_level": "verbose",
@@ -67,7 +64,6 @@ _PROFILE_PRESET_OVERRIDES: dict[str, dict[str, object]] = {
             "capture_error_context": True,
             "include_metrics": True,
             "payload_byte_limit": 262144,
-            "ttl_seconds": 86400,
             "redact_columns": [],
             "mask_policy": "partial",
         },

@@ -87,6 +87,15 @@ public sealed class WorkflowDefinitionDraftRuntimeOptionsPatcherTests
                 .GetProperty("diagnostics")
                 .GetProperty("redact_columns")[0]
                 .GetString());
+        Assert.IsFalse(
+            runtimeOptions.GetProperty("workflow").TryGetProperty(
+                "strict_validation",
+                out _));
+        Assert.IsFalse(
+            runtimeOptions
+                .GetProperty("workflow")
+                .GetProperty("diagnostics")
+                .TryGetProperty("ttl_seconds", out _));
     }
 
     [TestMethod]
@@ -181,6 +190,78 @@ public sealed class WorkflowDefinitionDraftRuntimeOptionsPatcherTests
         Assert.AreEqual("amount", node.GetProperty("config").GetProperty("field").GetString());
         Assert.IsFalse(node.GetProperty("config").TryGetProperty("runtime_options", out _));
         Assert.IsFalse(node.GetProperty("config").TryGetProperty("__runtime", out _));
+    }
+
+    [TestMethod]
+    public void ApplyPreservesCompatibilityOnlyFieldsWithoutUsingDraftValues()
+    {
+        var result = WorkflowDefinitionDraftRuntimeOptionsPatcher.Apply(
+            """
+            {
+              "nodes": [],
+              "connections": [],
+              "runtime_options": {
+                "version": "1.0",
+                "workflow": {
+                  "profile": "custom",
+                  "strict_validation": false,
+                  "diagnostics": {
+                    "ttl_seconds": 123
+                  }
+                },
+                "node_overrides": {
+                  "node_1": {
+                    "strict_validation": false,
+                    "diagnostics": {
+                      "ttl_seconds": 456
+                    }
+                  }
+                }
+              }
+            }
+            """,
+            new RuntimeOptionsDraft
+            {
+                Workflow = new RuntimeOptionsWorkflowDraft
+                {
+                    StrictValidation = true,
+                    Diagnostics = new RuntimeOptionsDiagnosticsDraft
+                    {
+                        TtlSeconds = 999,
+                    },
+                },
+                NodeOverrides = new Dictionary<string, RuntimeOptionsNodeOverrideDraft>
+                {
+                    ["node_1"] = new()
+                    {
+                        StrictValidation = true,
+                        Diagnostics = new RuntimeOptionsDiagnosticsOverrideDraft
+                        {
+                            TtlSeconds = 999,
+                        },
+                    },
+                },
+            });
+
+        Assert.IsTrue(result.Succeeded);
+        using var updated = JsonDocument.Parse(
+            result.UpdatedWorkflowDefinitionDraftJson);
+        var runtimeOptions = updated.RootElement.GetProperty("runtime_options");
+        var workflow = runtimeOptions.GetProperty("workflow");
+        Assert.IsFalse(workflow.GetProperty("strict_validation").GetBoolean());
+        Assert.AreEqual(
+            123,
+            workflow.GetProperty("diagnostics").GetProperty("ttl_seconds").GetInt32());
+        var nodeOverride = runtimeOptions
+            .GetProperty("node_overrides")
+            .GetProperty("node_1");
+        Assert.IsFalse(nodeOverride.GetProperty("strict_validation").GetBoolean());
+        Assert.AreEqual(
+            456,
+            nodeOverride
+                .GetProperty("diagnostics")
+                .GetProperty("ttl_seconds")
+                .GetInt32());
     }
 
     [TestMethod]

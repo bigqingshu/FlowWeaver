@@ -147,8 +147,8 @@ RUNTIME-OPTIONS-2 只管理当前已经明确需要控制的运行反馈：
 边界说明：
 
 - `profile` 只是以上固定字段的预设入口，不作为节点协议中的独立能力。
-- `version` 和 `strict_validation` 只服务工作流配置保存与校验，不下发给节点。
-- `ttl_seconds` 保持旧工作流 JSON 兼容，但本阶段不实现清理任务，也不进入 current run 动态覆盖。
+- `version` 只用于配置结构兼容，`profile` 只作为固定字段预设入口。
+- `strict_validation` 和 `ttl_seconds` 仅保留旧工作流 JSON 兼容读取；Avalonia 不再提供编辑控件，patcher 不主动生成或修改，且二者不进入节点任务或 current run overlay。
 - 后续节点特有设置直接进入该节点的 `config_schema` 和业务 `config`。
 - 节点特有设置不得借“配置字扩展”重新进入主程序运行反馈协议。
 - 如未来出现新的全局运行反馈需求，必须重新立项评估，不在当前模型中提前占位。
@@ -1144,6 +1144,8 @@ M2 稳定性闸门：
 | 运行中的配置字动态切换 | 已落实 | current run overlay、requested/applied version、controller、活动节点 update/applied IPC、ACK 持久化和 Avalonia 入口全部贯通 |
 
 配置字只影响反馈、日志和诊断数据，不改变节点业务 `config`、工作流 DAG、output refs、表数据或节点终态。
+
+截至 2026-07-12，结构化编辑器和预设已只承诺上述十个真实反馈字段。旧修订中的 `strict_validation` 与 `ttl_seconds` 会原样保留，但新编辑不会生成或改写；`background_fast`、`diagnostic` 也不再赋予非零 TTL。
 
 ### 19.3 自动化验证结果
 
