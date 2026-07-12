@@ -1,11 +1,12 @@
 # FlowWeaver SHARED-TABLE-1：共享表 UI 与生命周期收口执行计划
 
-> 文档状态：待执行
+> 文档状态：已执行完成
 > 编写日期：2026-07-11
 > 对账基线：`main` / `origin/main`，提交 `f636ba25`
 > 当前依据：现有 `SharedPublication`、发布/读取共享表节点、Avalonia 数据页和通用节点配置编辑器
 > 本阶段目标：把“共享表核心链路可运行”收口为“UI 可直接配置和预览、旧版本可安全手动清理并按保留期自动回收”
 > 性能与耦合评审补充：2026-07-11，新增共享存储边界、统一释放保护和轻量目录查询两个前置批次
+> 完成日期：2026-07-12
 
 ## 1. 执行结论
 
@@ -994,3 +995,88 @@ git diff --check
 - 清理后元数据保留，历史 UI 能解释数据已释放。
 - 后端全量、Ruff、mypy、Avalonia build/test 和 `git diff --check` 通过。
 - 每批均有独立中文提交和对应验证记录。
+
+## 14. 完成记录（2026-07-12）
+
+### 14.1 批次提交
+
+| 批次 | 提交 | 结果 |
+| --- | --- | --- |
+| 计划文档 | `e603c969` | 固定九批执行边界、性能闸门和停止点 |
+| BASE-1 | `456d0354` | SharedPublication 固定为 RUNTIME_SQL，统一 TableRef 释放保护 |
+| BASE-2 | `fa3339d9` | catalog、version、member 分页查询和 Avalonia 数据页迁移 |
+| UI-1 | `b7d4bb3f` | 通用 `array<string>` 编辑、校验和无损回写 |
+| UI-2 | `692b701b` | 发布/读取共享表节点专用可视化编辑器 |
+| UI-3 | `bfb8d4ce` | 共享成员直接复用现有数据预览工作台 |
+| LIFE-1 | `69c57778` | 生命周期迁移、索引、原子 reader/claim 和 blocker |
+| LIFE-2 | `bd13a5ff` | cleanup preview、手动清理 API 和 Avalonia 操作闭环 |
+| LIFE-3 | `03282d65` | 有界 worker、stale recovery 和 ServiceContainer 生命周期 |
+| CLOSE | 本次文档收口提交 | 真实 SQLite 端到端验收、最终验证和完成记录 |
+
+各批次严格按 BASE-1、BASE-2、UI-1、UI-2、UI-3、LIFE-1、LIFE-2、LIFE-3、CLOSE 顺序执行；每批完成定向及全量验证后独立中文提交并推送。
+
+### 14.2 十步验收证据
+
+本轮 UI 操作路径使用已编译的 Avalonia API、service、ViewModel 和 command 自动化测试；运行与生命周期路径使用真实 metadata SQLite、`SQLiteRuntimeTableProvider`、workflow process、reader、release service 和 lifecycle service。没有用手工伪造结果替代数据表释放与重开验证。
+
+| 步骤 | 结果 | 自动化或工程证据 |
+| --- | --- | --- |
+| 1. 创建生产 workflow 并连接发布节点 | 通过 | `test_workflow_process_runs_shared_table_nodes_in_main_loop` 运行真实生成表和发布节点；专用 editor factory 与输入映射测试通过 |
+| 2. 不进入高级 JSON 配置 share、export names、retention | 通过 | `PublishEditorMapsStableInputsAndBuildsUniqueExportNames`、`ApplySelectedNodeConfigDraftRoundTripsSharedTableStringArrays` |
+| 3. 发布 V1，生产 run 清理受共享引用保护 | 通过 | `test_shared_table_end_to_end_preserves_versions_cleanup_and_restart` 验证真实 SQLite V1；`test_cleanup_run_table_refs_preserves_active_shared_publication` 验证 release guard |
+| 4. 配置 LATEST 和部分成员 | 通过 | `ReadEditorLoadsCatalogVersionAndMembersThenBuildsLatestConfig` 和 reader selected-members 原子固定测试 |
+| 5. 消费数据与 V1 一致 | 通过 | 新端到端测试直接读取 provider 行值 `101`；workflow process 共享读取输出 refs 测试通过 |
+| 6. 发布 V2 后已有消费仍固定 V1 | 通过 | `test_stage_i_workflow_process_keeps_consumer_pinned_to_read_publication`；新端到端测试同时验证 V1=`101`、V2=`202` |
+| 7. 从共享版本直接预览成员 | 通过 | `SharedPublicationMemberPreviewLoadsExistingDataWorkbench` 复用 schema、summary、rows 工作台；released member 不重复请求 rows |
+| 8. V1 到期后活动租约阻断，释放后 eligible | 通过 | 新端到端测试在同一 publication 上依次断言 `ACTIVE_READ_LEASE` 和无 blocker |
+| 9. 清理 V1，V2 不受影响且 V1 元数据保留 | 通过 | 新端到端测试执行真实 SQLite drop，V1 行不可读、member 元数据保留、V2 继续返回 `202`；Avalonia success/blocked/retry 状态测试通过 |
+| 10. 重开后 V2 可读、V1 稳定为 RELEASED | 通过 | 新端到端测试 dispose 并重开 `RuntimeStore` 后再次按 LATEST 读取 V2；V1 重复 cleanup 返回 `ALREADY_RELEASED`；stale worker recovery 测试覆盖中断恢复 |
+
+### 14.3 完成定义对账
+
+| 目标边界 | 最终状态 |
+| --- | --- |
+| 节点无需高级 JSON | 已完成；通用字符串数组与两个专用共享节点编辑器均已接入 |
+| 共享存储承诺 | 已完成；新 publication 只接受 RUNTIME_SQL，MEMORY / EXTERNAL_SQL 返回明确错误 |
+| 统一释放不变量 | 已完成；run cleanup 和 shared cleanup 复用 `TableRefReleaseService`，物理释放前原子 claim |
+| 轻量目录 | 已完成；catalog、version、member 分页，完整接口消除 publication -> members N+1 |
+| 动态选择和预览 | 已完成；share、version、member 按需加载，成员进入现有 data preview |
+| 生命周期闭环 | 已完成；`retention_seconds -> expires_at -> preview -> manual/worker cleanup` 使用同一 service |
+| 竞态和恢复 | 已完成；reader/claim 原子互斥、latest/lease/reference 保护、RELEASING stale recovery |
+| 元数据保留 | 已完成；清理只释放可回收资源，publication、member、来源 run 和版本记录继续保留 |
+
+### 14.4 性能与低耦合闸门
+
+- 10,000 条 publication 候选查询只执行一次 SELECT，并同时命中 `(status, expires_at)` 与 `(status, cleanup_last_progress_at)` 索引。
+- cleanup preview 对 25 个成员保持固定 6 次 SELECT，不按成员循环查询 lease 或 publication reference。
+- 250 成员 publication 在 `max_table_refs=10` 时单轮只执行 10 次 provider 操作，并返回 `RETRY_PENDING` 续跑。
+- worker 同时受 publication 数、TableRef 数和 monotonic 时间预算约束；空闲周期不读取成员或表格行。
+- Avalonia 目录、版本和成员均按页加载并取消迟到请求；共享 ViewModel 不持久化 API 列表或运行时租约。
+- API 和 worker 共用 bootstrap 创建的唯一 registry/lifecycle service；Supervisor 不感知 retention 和 cleanup blocker。
+- ServiceContainer 关闭顺序固定为 worker、Supervisor、RuntimeStore，worker 停止后不再访问已释放 store。
+
+### 14.5 最终验证
+
+| 验证组 | 结果 |
+| --- | --- |
+| 新增真实 SQLite CLOSE 场景 | 1 通过 |
+| 共享节点、reader、目录、生命周期、worker、release、API 定向集 | 90 通过 |
+| workflow process 共享链路定向集 | 3 通过 |
+| Avalonia 共享表和字符串数组定向集 | 40 通过 |
+| 后端全量 | 694 通过，2 跳过，耗时约 463 秒 |
+| Ruff | `src tests migrations` 通过 |
+| mypy | 486 个源码文件通过 |
+| Avalonia solution build | 0 警告，0 错误 |
+| Avalonia 全量 | 581 通过 |
+| `git diff --check` | 通过 |
+
+后端全量只保留 `fastapi.testclient` 关于 Starlette/httpx 兼容层的既有弃用警告，本阶段没有新增测试警告或失败。
+
+### 14.6 明确延后范围
+
+- 不支持 MEMORY / EXTERNAL_SQL 的隐式物化或跨进程固定快照；需要后续显式物化节点时另行立项。
+- 不实现多人协同编辑、实时流、消息队列、共享 schema 协议或共享版本原地修改。
+- 不把共享表 retention 放入运行配置字，不让 Supervisor 承担共享生命周期规则。
+- 不以本计划为由推进 MainWindowViewModel 全量页面迁移；当前只保持已有页面组合和预览桥接边界。
+
+本阶段未修改或纳入并行未提交的 `2026-07-11_当前阶段程序判断.md`。

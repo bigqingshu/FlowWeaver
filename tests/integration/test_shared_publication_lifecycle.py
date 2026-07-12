@@ -31,7 +31,10 @@ from flowweaver.engine.shared_table_reader import (
 )
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
-from flowweaver.engine.table_ref_release import TableRefReleaseService
+from flowweaver.engine.table_ref_release import (
+    TableRefReleaseOutcome,
+    TableRefReleaseService,
+)
 from flowweaver.protocols.enums import (
     LifecycleStatus,
     TableMutability,
@@ -212,6 +215,7 @@ def register_runtime_table(
     workflow_run_id: str,
     node_run_id: str,
     output_name: str,
+    value: int = 1,
 ) -> TableRefModel:
     staging = provider.create_staging_table(
         workflow_run_id=workflow_run_id,
@@ -227,7 +231,7 @@ def register_runtime_table(
             )
         ],
     )
-    provider.insert_rows(staging, [{"value": 1}])
+    provider.insert_rows(staging, [{"value": value}])
     published = provider.published_ref_from_staging(staging)
     provider.publish_staging(staging, published)
     store.register_table_ref(published)
@@ -988,3 +992,215 @@ def test_worker_never_cleans_latest_published_version(tmp_path: Path) -> None:
     latest = store.get_shared_publication("publication-cleanup-latest")
     assert latest is not None
     assert latest.status == "PUBLISHED"
+
+
+def test_shared_table_end_to_end_preserves_versions_cleanup_and_restart(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    store = make_store(tmp_path)
+    provider = SQLiteRuntimeTableProvider(tmp_path / "runtime-tables")
+    producer_workflow = store.create_workflow_definition(
+        name="Shared table end-to-end producer",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-shared-e2e-producer",
+    )
+    consumer_workflow = store.create_workflow_definition(
+        name="Shared table end-to-end consumer",
+        definition={"schema_version": "1.0", "nodes": [], "connections": []},
+        workflow_id="workflow-shared-e2e-consumer",
+    )
+
+    store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-shared-e2e-producer-v1",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    store.create_node_run(
+        workflow_run_id="run-shared-e2e-producer-v1",
+        node_instance_id="source-v1",
+        node_type="core.source",
+        node_run_id="node-shared-e2e-producer-v1",
+    )
+    store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-shared-e2e-consumer-v1",
+    )
+    table_v1 = register_runtime_table(
+        store,
+        provider,
+        workflow_run_id="run-shared-e2e-producer-v1",
+        node_run_id="node-shared-e2e-producer-v1",
+        output_name="orders_v1",
+        value=101,
+    )
+    publication_v1 = store.create_shared_publication(
+        publication_id="publication-shared-e2e-v1",
+        share_name="shared-e2e",
+        producer_workflow_id=producer_workflow.workflow_id,
+        producer_run_id="run-shared-e2e-producer-v1",
+        members={"orders": table_v1.table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    registry = TableProviderRegistry()
+    registry.register(provider, storage_kinds=(TableStorageKind.RUNTIME_SQL,))
+    release_service = TableRefReleaseService(
+        store=store,
+        provider_registry=registry,
+    )
+    lifecycle_service = SharedPublicationLifecycleService(
+        store,
+        table_ref_release_service=release_service,
+    )
+
+    guarded_release = release_service.release(table_v1.table_ref_id)
+
+    assert guarded_release.outcome == TableRefReleaseOutcome.SKIPPED
+    assert guarded_release.reason == "shared_publication_active"
+    assert provider.read_rows(table_v1, offset=0, limit=10) == [{"value": 101}]
+
+    reader = SharedTableReader(store)
+    read_v1 = reader.read(
+        consumer_workflow_run_id="run-shared-e2e-consumer-v1",
+        share_name="shared-e2e",
+        version_policy=SharedTableVersionPolicy.LATEST,
+        selected_members=("orders",),
+        lease_expires_at=utc_now() + timedelta(minutes=5),
+    )
+    assert read_v1.publication.publication_id == publication_v1.publication_id
+    assert read_v1.publication.publication_version == 1
+    assert provider.read_rows(read_v1.table_refs[0], offset=0, limit=10) == [
+        {"value": 101}
+    ]
+
+    store.create_workflow_run(
+        workflow_id=producer_workflow.workflow_id,
+        workflow_run_id="run-shared-e2e-producer-v2",
+        status=WorkflowRunStatus.SUCCEEDED,
+    )
+    store.create_node_run(
+        workflow_run_id="run-shared-e2e-producer-v2",
+        node_instance_id="source-v2",
+        node_type="core.source",
+        node_run_id="node-shared-e2e-producer-v2",
+    )
+    table_v2 = register_runtime_table(
+        store,
+        provider,
+        workflow_run_id="run-shared-e2e-producer-v2",
+        node_run_id="node-shared-e2e-producer-v2",
+        output_name="orders_v2",
+        value=202,
+    )
+    publication_v2 = store.create_shared_publication(
+        publication_id="publication-shared-e2e-v2",
+        share_name="shared-e2e",
+        producer_workflow_id=producer_workflow.workflow_id,
+        producer_run_id="run-shared-e2e-producer-v2",
+        members={"orders": table_v2.table_ref_id},
+        retention_policy={"retention_seconds": 1},
+    )
+    store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-shared-e2e-consumer-v2",
+    )
+    read_v2 = reader.read(
+        consumer_workflow_run_id="run-shared-e2e-consumer-v2",
+        share_name="shared-e2e",
+        version_policy=SharedTableVersionPolicy.LATEST,
+        selected_members=("orders",),
+        lease_expires_at=utc_now() + timedelta(minutes=5),
+    )
+
+    assert publication_v2.publication_version == 2
+    assert read_v1.publication.publication_id == publication_v1.publication_id
+    assert read_v1.input_snapshot.inputs[0].publication_version == 1
+    assert provider.read_rows(read_v1.table_refs[0], offset=0, limit=10) == [
+        {"value": 101}
+    ]
+    assert read_v2.publication.publication_id == publication_v2.publication_id
+    assert provider.read_rows(read_v2.table_refs[0], offset=0, limit=10) == [
+        {"value": 202}
+    ]
+
+    evaluated_at = publication_v2.created_at + timedelta(seconds=2)
+    blocked_preview = lifecycle_service.preview(
+        publication_v1.publication_id,
+        now=evaluated_at,
+    )
+    assert blocked_preview is not None
+    assert blocked_preview.eligible is False
+    assert (
+        SharedPublicationCleanupBlocker.ACTIVE_READ_LEASE
+        in blocked_preview.blockers
+    )
+
+    store.release_read_lease(read_v1.read_lease.lease_id)
+    store.release_read_lease(read_v2.read_lease.lease_id)
+    eligible_preview = lifecycle_service.preview(
+        publication_v1.publication_id,
+        now=evaluated_at,
+    )
+    assert eligible_preview is not None
+    assert eligible_preview.eligible is True
+    assert eligible_preview.blockers == ()
+
+    cleanup_result = lifecycle_service.cleanup(
+        publication_v1.publication_id,
+        now=evaluated_at,
+    )
+
+    assert cleanup_result.outcome == SharedPublicationCleanupOutcome.CLEANED
+    released_v1 = store.get_shared_publication(publication_v1.publication_id)
+    current_v2 = store.get_shared_publication(publication_v2.publication_id)
+    assert released_v1 is not None
+    assert released_v1.status == "RELEASED"
+    assert [member.table_ref_id for member in released_v1.members] == [
+        table_v1.table_ref_id
+    ]
+    assert current_v2 is not None
+    assert current_v2.status == "PUBLISHED"
+    assert store.get_latest_shared_publication("shared-e2e") == current_v2
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        provider.read_rows(table_v1, offset=0, limit=10)
+    assert provider.read_rows(table_v2, offset=0, limit=10) == [{"value": 202}]
+
+    store.dispose()
+    reopened_store = RuntimeStore.from_sqlite_path(database_path)
+    reopened_store.create_workflow_run(
+        workflow_id=consumer_workflow.workflow_id,
+        workflow_run_id="run-shared-e2e-consumer-restarted",
+    )
+    reopened_v1 = reopened_store.get_shared_publication(
+        publication_v1.publication_id
+    )
+    reopened_v2 = reopened_store.get_shared_publication(
+        publication_v2.publication_id
+    )
+    assert reopened_v1 is not None
+    assert reopened_v1.status == "RELEASED"
+    assert reopened_v2 is not None
+    assert reopened_v2.status == "PUBLISHED"
+    assert (
+        reopened_store.get_latest_shared_publication("shared-e2e") == reopened_v2
+    )
+
+    restarted_read = SharedTableReader(reopened_store).read(
+        consumer_workflow_run_id="run-shared-e2e-consumer-restarted",
+        share_name="shared-e2e",
+        version_policy=SharedTableVersionPolicy.LATEST,
+        selected_members=("orders",),
+        lease_expires_at=utc_now() + timedelta(minutes=5),
+    )
+    assert restarted_read.publication.publication_id == publication_v2.publication_id
+    assert provider.read_rows(restarted_read.table_refs[0], offset=0, limit=10) == [
+        {"value": 202}
+    ]
+    assert (
+        make_cleanup_service(reopened_store, provider)
+        .cleanup(publication_v1.publication_id)
+        .outcome
+        == SharedPublicationCleanupOutcome.ALREADY_RELEASED
+    )
+    reopened_store.release_read_lease(restarted_read.read_lease.lease_id)
+    reopened_store.dispose()
