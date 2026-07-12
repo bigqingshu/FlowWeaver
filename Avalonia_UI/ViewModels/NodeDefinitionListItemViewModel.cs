@@ -10,11 +10,20 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
     public NodeDefinitionListItemViewModel(
         NodeDefinitionDto definition,
         DisplayTextFormatter? displayTextFormatter = null,
-        NodeConfigSchemaParseResult? configSchema = null)
+        NodeConfigSchemaParseResult? configSchema = null,
+        PluginCatalogEntryDto? plugin = null)
     {
         DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
+        IsCatalogDefinition = true;
         NodeType = definition.NodeType;
         NodeVersion = definition.NodeVersion;
+        PackageName = plugin?.PackageName ?? string.Empty;
+        PluginId = definition.PluginId;
+        PluginVersion = plugin?.PluginVersion;
+        ProviderType = definition.ProviderType;
+        Category = definition.Category;
+        Enabled = definition.Enabled;
+        DisabledReason = definition.DisabledReason;
         DisplayName = definition.DisplayName;
         InputPorts = definition.InputPorts;
         OutputPorts = definition.OutputPorts;
@@ -29,9 +38,52 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
             definition.ConfigSchema);
     }
 
+    public NodeDefinitionListItemViewModel(
+        PluginCatalogEntryDto plugin,
+        DisplayTextFormatter? displayTextFormatter = null)
+    {
+        DisplayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
+        IsCatalogDefinition = false;
+        NodeType = plugin.NodeType ?? string.Empty;
+        NodeVersion = plugin.NodeVersion ?? string.Empty;
+        PackageName = plugin.PackageName;
+        PluginId = plugin.PluginId ?? plugin.PackageName;
+        PluginVersion = plugin.PluginVersion;
+        ProviderType = "user_plugin";
+        Category = plugin.Category;
+        Enabled = plugin.Enabled;
+        DisabledReason = plugin.DisabledReason;
+        DisplayName = plugin.DisplayName ?? plugin.PackageName;
+        InputPorts = [];
+        OutputPorts = [];
+        InputTableSlots = [];
+        OutputTableSlots = [];
+        ExecutionMode = plugin.ExecutionMode ?? string.Empty;
+        DefaultTimeoutSeconds = 0;
+        RetrySafe = false;
+        UiVisibility = "visible";
+        ConfigSchema = NodeConfigSchemaParser.Parse(string.Empty, null);
+    }
+
+    public bool IsCatalogDefinition { get; }
+
     public string NodeType { get; }
 
     public string NodeVersion { get; }
+
+    public string PackageName { get; }
+
+    public string PluginId { get; }
+
+    public string? PluginVersion { get; }
+
+    public string ProviderType { get; }
+
+    public string? Category { get; }
+
+    public bool Enabled { get; }
+
+    public string? DisabledReason { get; }
 
     public string DisplayName { get; }
 
@@ -57,7 +109,30 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
 
     public DisplayTextFormatter DisplayTextFormatter { get; }
 
-    public string TypeText => $"{NodeType}@{NodeVersion}";
+    public bool CanAdd =>
+        IsCatalogDefinition
+        && Enabled
+        && string.Equals(UiVisibility, "visible", System.StringComparison.OrdinalIgnoreCase);
+
+    public bool HasNodeIdentity =>
+        !string.IsNullOrWhiteSpace(NodeType)
+        && !string.IsNullOrWhiteSpace(NodeVersion);
+
+    public bool HasDisabledReason => !string.IsNullOrWhiteSpace(DisabledReason);
+
+    public string TypeText => HasNodeIdentity
+        ? $"{NodeType}@{NodeVersion}"
+        : PackageName;
+
+    public string SourceText => DisplayTextFormatter.FormatNodeCatalogSource(
+        ProviderType,
+        PluginId,
+        PluginVersion);
+
+    public string StatusText => DisplayTextFormatter.FormatNodeCatalogStatus(Enabled);
+
+    public string DisabledReasonText =>
+        DisplayTextFormatter.FormatNodeCatalogDisabledReason(DisabledReason ?? string.Empty);
 
     public string DisplayNameText =>
         DisplayTextFormatter.FormatNodeDefinitionDisplayName(
@@ -68,7 +143,9 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
 
     public string OutputPortsText => FormatPorts(OutputPorts);
 
-    public string TimeoutText => $"{DefaultTimeoutSeconds}s";
+    public string TimeoutText => DefaultTimeoutSeconds > 0
+        ? $"{DefaultTimeoutSeconds}s"
+        : "-";
 
     public string ConfigSchemaSummaryText
     {
@@ -100,6 +177,9 @@ public sealed class NodeDefinitionListItemViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(DisplayNameText));
         OnPropertyChanged(nameof(ConfigSchemaSummaryText));
+        OnPropertyChanged(nameof(SourceText));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(DisabledReasonText));
     }
 
     private static string FormatPorts(NodePortDefinitionDto[] ports)

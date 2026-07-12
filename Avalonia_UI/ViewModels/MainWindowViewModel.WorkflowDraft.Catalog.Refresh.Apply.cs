@@ -8,18 +8,24 @@ public partial class MainWindowViewModel
 {
     private void ApplyLoadedNodeDefinitions(
         IReadOnlyCollection<NodeDefinitionDto> definitions,
+        IReadOnlyCollection<PluginCatalogEntryDto> plugins,
         string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
+        NodeDefinitionCatalogStateDto? catalogState,
+        PluginCatalogStateDto? pluginCatalogState)
     {
         SelectedNewDraftNodeDefinition = null;
         NodeDefinitions.Clear();
+        AddableNodeDefinitions.Clear();
         nodeDefinitionByKey.Clear();
         var schemaCatalogKey = PrepareNodeConfigSchemaCache(
             connectionKey,
             catalogState);
-        AddLoadedNodeDefinitionItems(definitions, schemaCatalogKey);
+        AddLoadedNodeDefinitionItems(definitions, plugins, schemaCatalogKey);
 
-        nodeDefinitionCatalogCacheState.RecordLoadedCatalog(connectionKey, catalogState);
+        nodeDefinitionCatalogCacheState.RecordLoadedCatalog(
+            connectionKey,
+            catalogState,
+            pluginCatalogState);
         RefreshNodeEditorSchemaFallbackNodes();
         NotifyNodeDefinitionCatalogPresentationStateChanged();
         RefreshWorkflowDefinitionDraftStructureState();

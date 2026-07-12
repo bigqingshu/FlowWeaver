@@ -54,6 +54,45 @@ public sealed class DisplayTextFormatter
             : statusKey);
     }
 
+    public string FormatNodeCatalogSource(
+        string providerType,
+        string pluginId,
+        string? pluginVersion)
+    {
+        if (string.Equals(providerType, "core", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return Text("node_catalog.source.core");
+        }
+
+        var source = string.IsNullOrWhiteSpace(pluginId)
+            ? Text("node_catalog.source.plugin_unknown")
+            : pluginId;
+        return string.IsNullOrWhiteSpace(pluginVersion)
+            ? Format("format.node_catalog.source.plugin", source)
+            : Format("format.node_catalog.source.plugin_version", source, pluginVersion);
+    }
+
+    public string FormatNodeCatalogStatus(bool enabled)
+    {
+        return Text(enabled
+            ? "node_catalog.status.available"
+            : "node_catalog.status.unavailable");
+    }
+
+    public string FormatNodeCatalogDisabledReason(string reason)
+    {
+        return string.IsNullOrWhiteSpace(reason)
+            ? string.Empty
+            : Format("format.node_catalog.disabled_reason", reason);
+    }
+
+    public string FormatUnavailableNodeReason(string reason)
+    {
+        return string.IsNullOrWhiteSpace(reason)
+            ? Text("node_editor.status.unavailable_json_fallback")
+            : Format("format.node_editor.unavailable_reason", reason);
+    }
+
     public string FormatConfigSchemaUnavailable()
     {
         return Text("node_catalog.config_schema_unavailable");
@@ -223,6 +262,15 @@ public sealed class DisplayTextFormatter
             "node_editor.status.builtin" => "Built-in editor",
             "node_editor.status.json_fallback" => "JSON fallback",
             "node_editor.status.unregistered_json_fallback" => "Not registered, JSON fallback",
+            "node_editor.status.unavailable_json_fallback" => "Definition unavailable, JSON fallback only",
+            "format.node_editor.unavailable_reason" => "Unavailable: {0}",
+            "node_catalog.source.core" => "Built-in",
+            "node_catalog.source.plugin_unknown" => "Unknown plugin",
+            "format.node_catalog.source.plugin" => "Plugin {0}",
+            "format.node_catalog.source.plugin_version" => "Plugin {0} v{1}",
+            "node_catalog.status.available" => "Available",
+            "node_catalog.status.unavailable" => "Unavailable",
+            "format.node_catalog.disabled_reason" => "Reason: {0}",
             "node_catalog.config_schema_unavailable" => "Config schema unavailable",
             "node_catalog.no_config_fields" => "No config fields",
             "node_config.type.string" => "String",

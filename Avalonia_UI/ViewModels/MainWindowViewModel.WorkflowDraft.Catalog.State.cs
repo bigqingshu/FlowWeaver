@@ -17,4 +17,7 @@ public partial class MainWindowViewModel
 
     public ObservableCollection<NodeDefinitionListItemViewModel> NodeDefinitions { get; } =
         new();
+
+    public ObservableCollection<NodeDefinitionListItemViewModel> AddableNodeDefinitions { get; } =
+        new();
 }

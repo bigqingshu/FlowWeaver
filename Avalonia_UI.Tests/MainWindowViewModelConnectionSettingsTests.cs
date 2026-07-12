@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -256,6 +257,72 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         Assert.HasCount(1, viewModel.NodeDefinitions);
         Assert.AreEqual("GenerateTestTableNode", viewModel.NodeDefinitions[0].NodeType);
         Assert.AreEqual("Loaded 1 node definition(s).", viewModel.NodeDefinitionCatalogMessage);
+    }
+
+    [TestMethod]
+    public async Task CheckConnectionRefreshesCatalogWhenPluginHashChanges()
+    {
+        var apiClient = new FakeApiClient
+        {
+            HealthResponse =
+                ApiResponseEnvelope<HealthStatusDto>.Success(new HealthStatusDto { Status = "ok" }),
+            NodeDefinitionCatalogStateResponse =
+                ApiResponseEnvelope<NodeDefinitionCatalogStateDto>.Success(
+                    new NodeDefinitionCatalogStateDto
+                    {
+                        CatalogHash = "nodes-1",
+                        NodeCount = 1,
+                    }),
+            NodeDefinitionsResponse =
+                ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                    new List<NodeDefinitionDto>
+                    {
+                        NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                    }),
+            PluginsResponse = ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+                new List<PluginCatalogEntryDto>
+                {
+                    new()
+                    {
+                        PackageName = "broken-1",
+                        Enabled = false,
+                        DisabledReason = "invalid manifest",
+                    },
+                }),
+        };
+        apiClient.PluginCatalogStateResponses.Enqueue(
+            ApiResponseEnvelope<PluginCatalogStateDto>.Success(
+                new PluginCatalogStateDto { CatalogHash = "plugins-1" }));
+        apiClient.PluginCatalogStateResponses.Enqueue(
+            ApiResponseEnvelope<PluginCatalogStateDto>.Success(
+                new PluginCatalogStateDto { CatalogHash = "plugins-2" }));
+        var viewModel = CreateViewModel(apiClient, new FakeConnectionSettingsStore());
+        viewModel.BaseUrl = "http://127.0.0.1:8012/";
+        viewModel.Token = "secret";
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        apiClient.PluginsResponse = ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+            new List<PluginCatalogEntryDto>
+            {
+                new()
+                {
+                    PackageName = "broken-2",
+                    Enabled = false,
+                    DisabledReason = "unsupported protocol",
+                },
+            });
+
+        await viewModel.CheckConnectionCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(2, apiClient.GetNodeDefinitionCatalogStateCallCount);
+        Assert.AreEqual(2, apiClient.GetPluginCatalogStateCallCount);
+        Assert.AreEqual(2, apiClient.ListNodeDefinitionsCallCount);
+        Assert.AreEqual(2, apiClient.ListPluginsCallCount);
+        Assert.IsNotNull(viewModel.NodeDefinitions.SingleOrDefault(
+            item => item.PackageName == "broken-2"));
+        Assert.IsNull(viewModel.NodeDefinitions.SingleOrDefault(
+            item => item.PackageName == "broken-1"));
     }
 
     [TestMethod]
@@ -562,6 +629,18 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public Queue<ApiResponseEnvelope<NodeDefinitionCatalogStateDto>> NodeDefinitionCatalogStateResponses { get; } =
             new();
 
+        public ApiResponseEnvelope<List<PluginCatalogEntryDto>> PluginsResponse { get; set; } =
+            ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+                new List<PluginCatalogEntryDto>());
+
+        public ApiResponseEnvelope<PluginCatalogStateDto> PluginCatalogStateResponse { get; set; } =
+            ApiResponseEnvelope<PluginCatalogStateDto>.Failure(
+                "NOT_CONFIGURED",
+                "No plugin catalog state response configured.");
+
+        public Queue<ApiResponseEnvelope<PluginCatalogStateDto>> PluginCatalogStateResponses { get; } =
+            new();
+
         public ApiResponseEnvelope<WorkflowDefinitionDto> WorkflowDetailResponse { get; set; } =
             ApiResponseEnvelope<WorkflowDefinitionDto>.Failure(
                 "NOT_CONFIGURED",
@@ -575,6 +654,10 @@ public sealed class MainWindowViewModelConnectionSettingsTests
         public int ListNodeDefinitionsCallCount { get; private set; }
 
         public int GetNodeDefinitionCatalogStateCallCount { get; private set; }
+
+        public int ListPluginsCallCount { get; private set; }
+
+        public int GetPluginCatalogStateCallCount { get; private set; }
 
         public int ListWorkflowsCallCount { get; private set; }
 
@@ -609,6 +692,27 @@ public sealed class MainWindowViewModelConnectionSettingsTests
                 NodeDefinitionCatalogStateResponses.Count > 0
                     ? NodeDefinitionCatalogStateResponses.Dequeue()
                     : NodeDefinitionCatalogStateResponse);
+        }
+
+        public Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            ListPluginsCallCount++;
+            LastSettings = settings;
+            return Task.FromResult(PluginsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<PluginCatalogStateDto>> GetPluginCatalogStateAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            GetPluginCatalogStateCallCount++;
+            LastSettings = settings;
+            return Task.FromResult(
+                PluginCatalogStateResponses.Count > 0
+                    ? PluginCatalogStateResponses.Dequeue()
+                    : PluginCatalogStateResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(

@@ -97,6 +97,28 @@ public sealed class NodeDefinitionCatalogCacheStateTests
     }
 
     [TestMethod]
+    public void PluginCatalogHashParticipatesInCatalogHit()
+    {
+        var cacheState = new NodeDefinitionCatalogCacheState();
+        const string connectionKey = "http://127.0.0.1:8000|token:abc";
+        var nodeState = new NodeDefinitionCatalogStateDto
+        {
+            CatalogHash = "nodes-1",
+        };
+        var pluginState = new PluginCatalogStateDto
+        {
+            CatalogHash = "plugins-1",
+        };
+        cacheState.RecordLoadedCatalog(connectionKey, nodeState, pluginState);
+
+        Assert.IsTrue(cacheState.IsCatalogHit(connectionKey, nodeState, pluginState));
+        Assert.IsFalse(cacheState.IsCatalogHit(
+            connectionKey,
+            nodeState,
+            new PluginCatalogStateDto { CatalogHash = "plugins-2" }));
+    }
+
+    [TestMethod]
     public void SchemaCatalogKeyReportsOnlyActualChanges()
     {
         var cacheState = new NodeDefinitionCatalogCacheState();

@@ -3199,6 +3199,133 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task RefreshNodeDefinitionsMergesPluginMetadataAndFiltersUnavailableRows()
+    {
+        var apiClient = new FakeApiClient
+        {
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition("GenerateTestTableNode", "Generate Test Table"),
+                    new()
+                    {
+                        NodeType = "plugin.example.table_projection",
+                        NodeVersion = "1.0",
+                        PluginId = "example.table_projection",
+                        ProviderType = "user_plugin",
+                        Category = "table",
+                        Enabled = true,
+                        DisplayName = "Table Projection",
+                        ExecutionMode = "external_process",
+                        DefaultTimeoutSeconds = 60,
+                        UiVisibility = "visible",
+                    },
+                }),
+            PluginsResponse = ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+                new List<PluginCatalogEntryDto>
+                {
+                    new()
+                    {
+                        PackageName = "table_projection",
+                        PluginId = "example.table_projection",
+                        PluginVersion = "2.1.0",
+                        NodeType = "plugin.example.table_projection",
+                        NodeVersion = "1.0",
+                        DisplayName = "Table Projection",
+                        Enabled = true,
+                    },
+                    new()
+                    {
+                        PackageName = "broken_plugin",
+                        Enabled = false,
+                        DisabledReason = "invalid plugin manifest",
+                    },
+                }),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+
+        Assert.HasCount(3, viewModel.NodeDefinitions);
+        Assert.HasCount(2, viewModel.AddableNodeDefinitions);
+        var plugin = viewModel.NodeDefinitions.Single(
+            item => item.NodeType == "plugin.example.table_projection");
+        Assert.AreEqual("Plugin example.table_projection v2.1.0", plugin.SourceText);
+        Assert.AreEqual("Available", plugin.StatusText);
+        Assert.IsTrue(plugin.CanAdd);
+        var broken = viewModel.NodeDefinitions.Single(
+            item => item.PackageName == "broken_plugin");
+        Assert.AreEqual("Unavailable", broken.StatusText);
+        Assert.AreEqual("Reason: invalid plugin manifest", broken.DisabledReasonText);
+        Assert.IsFalse(broken.CanAdd);
+        Assert.IsFalse(viewModel.AddableNodeDefinitions.Contains(broken));
+    }
+
+    [TestMethod]
+    public async Task SavedDisabledPluginNodeRemainsVisibleWithBackendReason()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "disabled-plugin",
+                  "node_type": "plugin.example.disabled",
+                  "node_version": "1.0",
+                  "display_name": "Saved Plugin",
+                  "config": {"field": "amount"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        var apiClient = new FakeApiClient
+        {
+            PluginsResponse = ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+                new List<PluginCatalogEntryDto>
+                {
+                    new()
+                    {
+                        PackageName = "disabled_plugin",
+                        PluginId = "example.disabled",
+                        PluginVersion = "1.4.0",
+                        NodeType = "plugin.example.disabled",
+                        NodeVersion = "1.0",
+                        DisplayName = "Disabled Plugin",
+                        Enabled = false,
+                        DisabledReason = "protocol version is not supported",
+                    },
+                }),
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto> { Workflow("wf-1", "Plugin Flow", 1) }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Plugin Flow", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+        };
+        var viewModel = CreateViewModel(apiClient);
+
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+
+        Assert.IsNotNull(viewModel.WorkflowDefinitionDetail);
+        Assert.HasCount(1, viewModel.WorkflowDefinitionDetail.Nodes);
+        var node = viewModel.WorkflowDefinitionDetail.Nodes.Single();
+        Assert.AreEqual("plugin.example.disabled", node.NodeType);
+        Assert.IsTrue(node.IsUnavailable);
+        Assert.IsTrue(node.UsesJsonFallback);
+        Assert.IsFalse(node.HasRegisteredNodeEditor);
+        Assert.AreEqual(
+            NodeEditorResolution.UnavailableJsonFallbackStatusKey,
+            node.NodeEditorResolution.StatusKey);
+        Assert.AreEqual("protocol version is not supported", node.UnavailableReasonText);
+        StringAssert.Contains(node.NodeSummaryText, "Unavailable: protocol version is not supported");
+        Assert.AreEqual("{\r\n  \"field\": \"amount\"\r\n}", node.ConfigJson);
+    }
+
+    [TestMethod]
     public async Task SelectedNodeConfigDraftSummaryUsesLoadedNodeSchema()
     {
         var definitionJson =
@@ -5953,6 +6080,10 @@ public sealed class MainWindowViewModelWorkflowTests
         public ApiResponseEnvelope<List<NodeDefinitionDto>> NodeDefinitionsResponse { get; set; } =
             ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(new List<NodeDefinitionDto>());
 
+        public ApiResponseEnvelope<List<PluginCatalogEntryDto>> PluginsResponse { get; set; } =
+            ApiResponseEnvelope<List<PluginCatalogEntryDto>>.Success(
+                new List<PluginCatalogEntryDto>());
+
         public ApiResponseEnvelope<List<WorkflowDefinitionDto>> WorkflowsResponse { get; set; } =
             ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(new List<WorkflowDefinitionDto>());
 
@@ -6092,6 +6223,14 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             LastSettings = settings;
             return Task.FromResult(NodeDefinitionsResponse);
+        }
+
+        public Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
+            EngineHostConnectionSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            LastSettings = settings;
+            return Task.FromResult(PluginsResponse);
         }
 
         public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(

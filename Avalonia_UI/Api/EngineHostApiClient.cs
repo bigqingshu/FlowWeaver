@@ -59,6 +59,28 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<List<PluginCatalogEntryDto>>(
+            settings,
+            HttpMethod.Get,
+            "api/v1/plugins",
+            cancellationToken: cancellationToken);
+    }
+
+    public Task<ApiResponseEnvelope<PluginCatalogStateDto>> GetPluginCatalogStateAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<PluginCatalogStateDto>(
+            settings,
+            HttpMethod.Get,
+            "api/v1/plugins/state",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default)

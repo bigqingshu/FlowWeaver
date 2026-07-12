@@ -9,6 +9,8 @@ public partial class MainWindowViewModel
             && HasWorkflowDefinitionDraft
             && !IsWorkflowDefinitionDraftBusy
             && !HasWorkflowDefinitionRevisionConflict
+            && (SelectedNewDraftNodeDefinition is null
+                || SelectedNewDraftNodeDefinition.CanAdd)
             && !string.IsNullOrWhiteSpace(NewDraftNodeInstanceId)
             && !string.IsNullOrWhiteSpace(NewDraftNodeType)
             && !string.IsNullOrWhiteSpace(NewDraftNodeVersion)

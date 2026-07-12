@@ -117,6 +117,55 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListPluginsAsyncUsesSafeReadOnlyPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"ok":true,"data":[{"package_name":"table_projection","plugin_id":"example.table_projection","plugin_version":"2.1.0","node_type":"plugin.example.table_projection","node_version":"1.0","display_name":"Table Projection","category":"table","execution_mode":"external_process","protocol":"flowweaver.plugin.v1","external_actions":false,"manifest_hash":"manifest-1","enabled":false,"disabled_reason":"duplicate plugin_id"}],"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListPluginsAsync(new EngineHostConnectionSettings
+        {
+            Token = "secret",
+        });
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual("Bearer", handler.Authorization?.Scheme);
+        Assert.AreEqual(new Uri("http://127.0.0.1:8000/api/v1/plugins"), handler.RequestUri);
+        Assert.AreEqual("table_projection", result.Data?[0].PackageName);
+        Assert.AreEqual("example.table_projection", result.Data?[0].PluginId);
+        Assert.AreEqual("2.1.0", result.Data?[0].PluginVersion);
+        Assert.IsFalse(result.Data?[0].Enabled);
+        Assert.AreEqual("duplicate plugin_id", result.Data?[0].DisabledReason);
+        Assert.IsNull(typeof(PluginCatalogEntryDto).GetProperty("Entrypoint"));
+        Assert.IsNull(typeof(PluginCatalogEntryDto).GetProperty("PackageDirectory"));
+    }
+
+    [TestMethod]
+    public async Task GetPluginCatalogStateAsyncUsesStatePath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"ok":true,"data":{"catalog_hash":"plugins-1","plugin_count":3,"enabled_count":1},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetPluginCatalogStateAsync(new EngineHostConnectionSettings
+        {
+            Token = "secret",
+        });
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(new Uri("http://127.0.0.1:8000/api/v1/plugins/state"), handler.RequestUri);
+        Assert.AreEqual("plugins-1", result.Data?.CatalogHash);
+        Assert.AreEqual(3, result.Data?.PluginCount);
+        Assert.AreEqual(1, result.Data?.EnabledCount);
+    }
+
+    [TestMethod]
     public async Task GetWorkflowAsyncUsesDetailPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

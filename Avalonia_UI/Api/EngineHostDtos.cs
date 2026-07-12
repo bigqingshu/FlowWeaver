@@ -79,6 +79,21 @@ public sealed record NodeDefinitionDto
     [JsonPropertyName("node_version")]
     public string NodeVersion { get; init; } = string.Empty;
 
+    [JsonPropertyName("plugin_id")]
+    public string PluginId { get; init; } = "flowweaver.core";
+
+    [JsonPropertyName("provider_type")]
+    public string ProviderType { get; init; } = "core";
+
+    [JsonPropertyName("category")]
+    public string? Category { get; init; }
+
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; init; } = true;
+
+    [JsonPropertyName("disabled_reason")]
+    public string? DisabledReason { get; init; }
+
     [JsonPropertyName("display_name")]
     public string DisplayName { get; init; } = string.Empty;
 
@@ -104,7 +119,7 @@ public sealed record NodeDefinitionDto
     public bool RetrySafe { get; init; }
 
     [JsonPropertyName("ui_visibility")]
-    public string UiVisibility { get; init; } = string.Empty;
+    public string UiVisibility { get; init; } = "visible";
 
     [JsonPropertyName("config_schema_version")]
     public string ConfigSchemaVersion { get; init; } = string.Empty;
@@ -123,6 +138,60 @@ public sealed record NodeDefinitionCatalogStateDto
 
     [JsonPropertyName("program_hash")]
     public string? ProgramHash { get; init; }
+}
+
+public sealed record PluginCatalogEntryDto
+{
+    [JsonPropertyName("package_name")]
+    public string PackageName { get; init; } = string.Empty;
+
+    [JsonPropertyName("plugin_id")]
+    public string? PluginId { get; init; }
+
+    [JsonPropertyName("plugin_version")]
+    public string? PluginVersion { get; init; }
+
+    [JsonPropertyName("node_type")]
+    public string? NodeType { get; init; }
+
+    [JsonPropertyName("node_version")]
+    public string? NodeVersion { get; init; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; init; }
+
+    [JsonPropertyName("category")]
+    public string? Category { get; init; }
+
+    [JsonPropertyName("execution_mode")]
+    public string? ExecutionMode { get; init; }
+
+    [JsonPropertyName("protocol")]
+    public string? Protocol { get; init; }
+
+    [JsonPropertyName("external_actions")]
+    public bool? ExternalActions { get; init; }
+
+    [JsonPropertyName("manifest_hash")]
+    public string? ManifestHash { get; init; }
+
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; init; }
+
+    [JsonPropertyName("disabled_reason")]
+    public string? DisabledReason { get; init; }
+}
+
+public sealed record PluginCatalogStateDto
+{
+    [JsonPropertyName("catalog_hash")]
+    public string CatalogHash { get; init; } = string.Empty;
+
+    [JsonPropertyName("plugin_count")]
+    public int PluginCount { get; init; }
+
+    [JsonPropertyName("enabled_count")]
+    public int EnabledCount { get; init; }
 }
 
 public sealed record WorkflowDefinitionDto

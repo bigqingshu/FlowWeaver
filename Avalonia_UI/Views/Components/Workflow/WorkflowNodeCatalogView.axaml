@@ -27,14 +27,15 @@
             </Grid>
 
             <Grid Grid.Row="1"
-                  ColumnDefinitions="1.4*,1*,1*,Auto,Auto"
+                  ColumnDefinitions="1.6*,1*,1*,1.2*,Auto,Auto"
                   ColumnSpacing="12"
                   IsVisible="{Binding HasNodeDefinitions}">
                 <TextBlock Text="{Binding NodeText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Grid.Column="1" Text="{Binding InputsText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
                 <TextBlock Grid.Column="2" Text="{Binding OutputsText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Grid.Column="3" Text="{Binding ModeText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <TextBlock Grid.Column="4" Text="{Binding TimeoutText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="3" Text="{Binding NodeCatalogSourceText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="4" Text="{Binding ModeText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="5" Text="{Binding TimeoutText}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
             </Grid>
 
             <Border Grid.Row="2"
@@ -59,7 +60,7 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:NodeDefinitionListItemViewModel"
                                   x:DataType="vm:NodeDefinitionListItemViewModel">
-                        <Grid ColumnDefinitions="1.4*,1*,1*,Auto,Auto"
+                        <Grid ColumnDefinitions="1.6*,1*,1*,1.2*,Auto,Auto"
                               RowDefinitions="Auto,Auto"
                               ColumnSpacing="12"
                               Margin="8">
@@ -89,13 +90,29 @@
                                        TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Column="3"
+                            <StackPanel Grid.Column="3"
+                                        Grid.RowSpan="2"
+                                        Spacing="2"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SourceText}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding StatusText}"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding DisabledReasonText}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextErrorBrush}"
+                                           IsVisible="{Binding HasDisabledReason}"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="4"
                                        Grid.RowSpan="2"
                                        Text="{Binding ExecutionMode}"
                                        TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
-                            <TextBlock Grid.Column="4"
+                            <TextBlock Grid.Column="5"
                                        Grid.RowSpan="2"
                                        Text="{Binding TimeoutText}"
                                        VerticalAlignment="Center"

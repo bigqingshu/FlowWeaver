@@ -93,4 +93,38 @@ public sealed class NodeEditorResolverTests
             resolution.StatusKey);
         Assert.AreEqual(NodeEditorKey.PublishSharedTables, resolution.EditorKey);
     }
+
+    [TestMethod]
+    public void ResolveReturnsUnavailableFallbackForDisabledCatalogDefinition()
+    {
+        var resolver = new NodeEditorResolver(BuiltinNodeEditors.CreateRegistry());
+        resolver.ReplaceSchemaFallbackNodes(
+            new[]
+            {
+                ("plugin.example.disabled", "2.0", "Enabled Plugin Version"),
+            });
+        resolver.ReplaceUnavailableNodes(
+            new[]
+            {
+                (
+                    "plugin.example.disabled",
+                    "1.0",
+                    "Disabled Plugin",
+                    "protocol version is not supported"),
+            });
+
+        var resolution = resolver.Resolve(
+            "plugin.example.disabled",
+            "Saved Plugin",
+            "1.0");
+
+        Assert.AreEqual("Disabled Plugin", resolution.DisplayName);
+        Assert.AreEqual(NodeEditorKind.JsonFallback, resolution.Kind);
+        Assert.IsFalse(resolution.HasRegisteredEditor);
+        Assert.IsTrue(resolution.UsesJsonFallback);
+        Assert.AreEqual(
+            NodeEditorResolution.UnavailableJsonFallbackStatusKey,
+            resolution.StatusKey);
+        Assert.AreEqual("protocol version is not supported", resolution.UnavailableReason);
+    }
 }

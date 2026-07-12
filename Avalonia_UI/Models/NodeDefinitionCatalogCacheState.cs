@@ -11,11 +11,13 @@ public sealed class NodeDefinitionCatalogCacheState
     private string? loadedConnectionKey;
     private string? loadedCatalogHash;
     private string? loadedProgramHash;
+    private string? loadedPluginCatalogHash;
     private string? schemaCatalogKey;
 
     public bool IsCatalogHit(
         string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
+        NodeDefinitionCatalogStateDto? catalogState,
+        PluginCatalogStateDto? pluginCatalogState = null)
     {
         var catalogHash = NormalizeToken(catalogState?.CatalogHash);
         if (!hasLoadedCatalog || catalogHash is null)
@@ -28,17 +30,23 @@ public sealed class NodeDefinitionCatalogCacheState
             && string.Equals(
                 loadedProgramHash,
                 NormalizeToken(catalogState?.ProgramHash),
+                StringComparison.Ordinal)
+            && string.Equals(
+                loadedPluginCatalogHash,
+                NormalizeToken(pluginCatalogState?.CatalogHash),
                 StringComparison.Ordinal);
     }
 
     public void RecordLoadedCatalog(
         string connectionKey,
-        NodeDefinitionCatalogStateDto? catalogState)
+        NodeDefinitionCatalogStateDto? catalogState,
+        PluginCatalogStateDto? pluginCatalogState = null)
     {
         hasLoadedCatalog = true;
         loadedConnectionKey = connectionKey;
         loadedCatalogHash = NormalizeToken(catalogState?.CatalogHash);
         loadedProgramHash = NormalizeToken(catalogState?.ProgramHash);
+        loadedPluginCatalogHash = NormalizeToken(pluginCatalogState?.CatalogHash);
     }
 
     public void InvalidateCatalog()
@@ -47,6 +55,7 @@ public sealed class NodeDefinitionCatalogCacheState
         loadedConnectionKey = null;
         loadedCatalogHash = null;
         loadedProgramHash = null;
+        loadedPluginCatalogHash = null;
     }
 
     public string? PrepareSchemaCatalogKey(

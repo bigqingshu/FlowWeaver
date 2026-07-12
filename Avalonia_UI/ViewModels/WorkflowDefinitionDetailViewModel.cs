@@ -83,18 +83,19 @@ public sealed class WorkflowDefinitionDetailViewModel
         foreach (var node in nodes.EnumerateArray())
         {
             var nodeType = GetString(node, "node_type");
+            var nodeVersion = GetString(node, "node_version");
             var displayName = GetString(node, "display_name");
             yield return new WorkflowDefinitionNodeListItemViewModel(
                 GetString(node, "node_instance_id"),
                 nodeType,
-                GetString(node, "node_version"),
+                nodeVersion,
                 displayName,
                 GetBool(node, "enabled", defaultValue: true),
                 TryGetProperty(node, "config", out var config)
                     ? FormatJson(config)
                     : "{}",
                 displayTextFormatter,
-                nodeEditorResolver.Resolve(nodeType, displayName),
+                nodeEditorResolver.Resolve(nodeType, displayName, nodeVersion),
                 displayOrder);
             displayOrder++;
         }
@@ -250,10 +251,18 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
                 ? NodeType
                 : NodeEditorResolution.DisplayName);
 
-    public string NodeSummaryText =>
-        string.IsNullOrWhiteSpace(NodeTypeDisplayText)
-            ? NodeInstanceId
-            : $"{NodeInstanceId} / {NodeTypeDisplayText}";
+    public string NodeSummaryText
+    {
+        get
+        {
+            var summary = string.IsNullOrWhiteSpace(NodeTypeDisplayText)
+                ? NodeInstanceId
+                : $"{NodeInstanceId} / {NodeTypeDisplayText}";
+            return IsUnavailable
+                ? $"{summary} | {DisplayTextFormatter.FormatUnavailableNodeReason(UnavailableReasonText)}"
+                : summary;
+        }
+    }
 
     public string DisplayNameText =>
         string.IsNullOrWhiteSpace(DisplayName) ? "-" : DisplayName;
@@ -266,6 +275,11 @@ public sealed class WorkflowDefinitionNodeListItemViewModel : ObservableObject
     public bool HasRegisteredNodeEditor => NodeEditorResolution.HasRegisteredEditor;
 
     public bool UsesJsonFallback => NodeEditorResolution.UsesJsonFallback;
+
+    public bool IsUnavailable =>
+        NodeEditorResolution.StatusKey == NodeEditorResolution.UnavailableJsonFallbackStatusKey;
+
+    public string UnavailableReasonText => NodeEditorResolution.UnavailableReason ?? string.Empty;
 }
 
 public sealed class WorkflowDefinitionConnectionListItemViewModel

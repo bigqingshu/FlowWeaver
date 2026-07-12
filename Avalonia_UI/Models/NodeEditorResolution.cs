@@ -16,6 +16,11 @@ public sealed record NodeEditorResolution(
     public const string UnregisteredJsonFallbackStatusKey =
         "node_editor.status.unregistered_json_fallback";
 
+    public const string UnavailableJsonFallbackStatusKey =
+        "node_editor.status.unavailable_json_fallback";
+
+    public string? UnavailableReason { get; init; }
+
     public static NodeEditorResolution JsonFallback(
         string nodeType,
         string displayName,
@@ -43,5 +48,23 @@ public sealed record NodeEditorResolution(
             false,
             BuiltInStatusKey,
             descriptor.EditorKey);
+    }
+
+    public static NodeEditorResolution UnavailableJsonFallback(
+        string nodeType,
+        string displayName,
+        string reason)
+    {
+        return new NodeEditorResolution(
+            nodeType,
+            NodeEditorKind.JsonFallback,
+            displayName,
+            false,
+            true,
+            UnavailableJsonFallbackStatusKey,
+            NodeEditorKey.None)
+        {
+            UnavailableReason = reason,
+        };
     }
 }

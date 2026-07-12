@@ -21,6 +21,20 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
+    Task<ApiResponseEnvelope<PluginCatalogStateDto>> GetPluginCatalogStateAsync(
+        EngineHostConnectionSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
     Task<ApiResponseEnvelope<List<WorkflowDefinitionDto>>> ListWorkflowsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);

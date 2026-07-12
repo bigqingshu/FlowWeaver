@@ -17,7 +17,7 @@ public partial class MainWindowViewModel
             node.Enabled,
             node.ConfigJson,
             DisplayTextFormatter,
-            _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName),
+            _nodeEditorResolver.Resolve(node.NodeType, node.DisplayName, node.NodeVersion),
             displayOrder)
         {
             IsBatchSelected = isBatchSelected,

@@ -258,4 +258,59 @@ public sealed class NodeDefinitionListItemViewModelTests
         Assert.AreEqual("Custom Plugin", item.DisplayNameText);
         Assert.AreEqual("1 个配置字段：Custom Field", item.ConfigSchemaSummaryText);
     }
+
+    [TestMethod]
+    public void PluginDefinitionShowsSourceVersionAndAvailability()
+    {
+        var item = new NodeDefinitionListItemViewModel(
+            new NodeDefinitionDto
+            {
+                NodeType = "plugin.example.table_projection",
+                NodeVersion = "1.0",
+                PluginId = "example.table_projection",
+                ProviderType = "user_plugin",
+                DisplayName = "Table Projection",
+                Enabled = true,
+                UiVisibility = "visible",
+            },
+            plugin: new PluginCatalogEntryDto
+            {
+                PackageName = "table_projection",
+                PluginId = "example.table_projection",
+                PluginVersion = "2.1.0",
+                NodeType = "plugin.example.table_projection",
+                NodeVersion = "1.0",
+                Enabled = true,
+            });
+
+        Assert.AreEqual("Plugin example.table_projection v2.1.0", item.SourceText);
+        Assert.AreEqual("Available", item.StatusText);
+        Assert.IsTrue(item.CanAdd);
+        Assert.IsTrue(item.IsCatalogDefinition);
+        Assert.IsFalse(item.HasDisabledReason);
+    }
+
+    [TestMethod]
+    public async Task DisabledPluginPackageShowsBackendReasonAndCannotBeAdded()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var item = new NodeDefinitionListItemViewModel(
+            new PluginCatalogEntryDto
+            {
+                PackageName = "broken_plugin",
+                Enabled = false,
+                DisabledReason = "invalid plugin manifest",
+            },
+            new DisplayTextFormatter(localizationService));
+
+        Assert.AreEqual("broken_plugin", item.DisplayNameText);
+        Assert.AreEqual("broken_plugin", item.TypeText);
+        Assert.AreEqual("插件 broken_plugin", item.SourceText);
+        Assert.AreEqual("不可用", item.StatusText);
+        Assert.AreEqual("原因：invalid plugin manifest", item.DisabledReasonText);
+        Assert.IsFalse(item.CanAdd);
+        Assert.IsFalse(item.IsCatalogDefinition);
+        Assert.IsTrue(item.HasDisabledReason);
+    }
 }

@@ -21,11 +21,27 @@ public partial class MainWindowViewModel
     {
         _nodeEditorResolver.ReplaceSchemaFallbackNodes(
             NodeDefinitions
-                .Where(definition => definition.ConfigSchemaDescriptor?.IsSupported == true)
+                .Where(definition =>
+                    definition.IsCatalogDefinition
+                    && definition.Enabled
+                    && definition.ConfigSchemaDescriptor?.IsSupported == true)
                 .Select(definition => (
                     definition.NodeType,
+                    definition.NodeVersion,
                     string.IsNullOrWhiteSpace(definition.DisplayName)
                         ? definition.NodeType
                         : definition.DisplayName)));
+        _nodeEditorResolver.ReplaceUnavailableNodes(
+            NodeDefinitions
+                .Where(definition =>
+                    !definition.Enabled
+                    && definition.HasNodeIdentity)
+                .Select(definition => (
+                    definition.NodeType,
+                    definition.NodeVersion,
+                    string.IsNullOrWhiteSpace(definition.DisplayName)
+                        ? definition.NodeType
+                        : definition.DisplayName,
+                    definition.DisabledReason ?? string.Empty)));
     }
 }

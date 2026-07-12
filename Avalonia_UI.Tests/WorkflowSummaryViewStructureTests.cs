@@ -311,7 +311,7 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(addNodeXaml, "Text=\"{Binding NodeTypeText}\"");
         StringAssert.Contains(
             addNodeXaml,
-            "ItemsSource=\"{Binding NodeDefinitions}\"");
+            "ItemsSource=\"{Binding AddableNodeDefinitions}\"");
         StringAssert.Contains(
             addNodeXaml,
             "SelectedItem=\"{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}\"");
@@ -324,6 +324,7 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             addNodeXaml,
             "x:DataType=\"vm:NodeDefinitionListItemViewModel\"");
+        StringAssert.Contains(addNodeXaml, "Text=\"{Binding SourceText}\"");
         Assert.IsFalse(
             addNodeXaml.Contains("Text=\"{Binding NodeInstanceIdText}\"", StringComparison.Ordinal));
         Assert.IsFalse(
@@ -568,6 +569,24 @@ public sealed class WorkflowSummaryViewStructureTests
             nodeMoveSemanticsIndex,
             actionButtonsIndex,
             "The node action buttons should stay below the compact info flyout without permanent log text.");
+    }
+
+    [TestMethod]
+    public void NodeCatalogShowsPluginSourceStatusAndBackendReason()
+    {
+        var xaml = ReadSourceFile(
+            "Avalonia_UI",
+            "Views",
+            "Components",
+            "Workflow",
+            "WorkflowNodeCatalogView.axaml");
+
+        StringAssert.Contains(xaml, "Text=\"{Binding NodeCatalogSourceText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SourceText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding StatusText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DisabledReasonText}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasDisabledReason}\"");
+        Assert.IsFalse(xaml.Contains("entrypoint", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]

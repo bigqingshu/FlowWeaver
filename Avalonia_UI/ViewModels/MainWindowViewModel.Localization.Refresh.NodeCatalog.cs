@@ -9,6 +9,7 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(NodeCatalogEmptyStateText));
         OnPropertyChanged(nameof(InputsText));
         OnPropertyChanged(nameof(OutputsText));
+        OnPropertyChanged(nameof(NodeCatalogSourceText));
         OnPropertyChanged(nameof(ModeText));
         OnPropertyChanged(nameof(TimeoutText));
     }

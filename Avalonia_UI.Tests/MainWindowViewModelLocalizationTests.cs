@@ -675,6 +675,7 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("节点", viewModel.NodeText);
         Assert.AreEqual("输入", viewModel.InputsText);
         Assert.AreEqual("输出", viewModel.OutputsText);
+        Assert.AreEqual("来源", viewModel.NodeCatalogSourceText);
         Assert.AreEqual("模式", viewModel.ModeText);
         Assert.AreEqual("超时", viewModel.TimeoutText);
         Assert.AreEqual(

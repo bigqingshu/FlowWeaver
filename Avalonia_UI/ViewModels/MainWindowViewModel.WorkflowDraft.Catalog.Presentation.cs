@@ -38,6 +38,8 @@ public partial class MainWindowViewModel
 
     public string OutputsText => T("node_catalog.outputs");
 
+    public string NodeCatalogSourceText => T("node_catalog.source");
+
     public string ModeText => T("node_catalog.mode");
 
     public string TimeoutText => T("node_catalog.timeout");
