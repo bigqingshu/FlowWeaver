@@ -1,16 +1,27 @@
 # FlowWeaver 节点实现状态与后续计划
 
-更新时间：2026-07-07
+更新时间：2026-07-12
 
 ## 文档定位
 
 本文件用于记录当前节点实现阶段的真实状态，并作为后续继续批量补节点的执行看板。
 
+## 2026-07-12 状态校正
+
+阶段 Q 第一版已经完成节点表契约收口。后文 7 月 7 日的数量分类和“预览占位”描述保留为节点提取历史，当前判断以本节和源码为准：
+
+- 真实表处理节点使用声明式输入/输出表槽位；控制、资源、插件和共享专用节点不要求机械补齐通用槽位。
+- `SaveRunTableNode` 声明 `in` 输入和 `out/transit` 输出，使用批读取；显式 `output_targets.transit` 真实执行，旧配置兼容。
+- `WriteSelectedColumnsNode`、`WriteBackTableNode` 声明 `in`，输出 `status`，真实目标表存在时同时输出可选择的 `target` binding。
+- Save/Write 节点都通过显式执行结果生成统一 `writes` summary，不再靠重新解析配置猜产物顺序。
+- enabled 串行 loop region 已由 workflow process 真实执行和记录轮次；跳转和子工作流仍属于后续控制流完整化。
+- 配置字已进入 NodeTask 策略快照和版本，支持节点发送前过滤、运行日志等级和 current run 动态更新/ACK。
+
 当前判断以代码事实为准：
 
 ```text
 后端注册表：src/flowweaver/nodes/default_registry.py
-节点执行器：src/flowweaver/nodes/builtin_table.py
+节点执行器：src/flowweaver/nodes/builtin_table_runner.py 与分类 handler 模块
 配置字模型：src/flowweaver/workflow/definition.py
 配置字运行合并：src/flowweaver/workflow/runtime_options.py
 前端汉化：Avalonia_UI/Localization/zh-Hans.json
@@ -55,7 +66,7 @@
 | 新建日期时间列 | `AddCurrentDateTimeColumnNode` | 新建或覆盖日期时间字段，支持固定时间、逐行、模板格式 |
 | 格式规范化与日期时间解析 | `ParseDateTimeNode` | 支持日期、时间、日期时间解析，支持输出状态和未匹配策略 |
 | 条件判断节点 | `ConditionFlagNode` | 第一版作为普通结果节点实现，输出条件状态表；支持行数、字段存在、字段值条件，支持固定值和当前行字段值来源，支持 `any`、`all`、`first`、`count` 聚合；不改变 DAG 执行路径 |
-| 保存中转数据 | `SaveRunTableNode` | 保存运行内中转表，同时输出当前表和辅助中转表引用 |
+| 保存中转数据 | `SaveRunTableNode` | 声明 `in` 和 `out/transit` 表槽位，按批读取输入，同时输出当前表和辅助中转表引用；新旧输出配置兼容 |
 | 获取文件列表 | `ListFilesNode` | 读取目录文件元数据，支持递归、隐藏项、扩展名、glob 和数量限制 |
 
 ## 已注册且部分真实执行的节点
@@ -64,8 +75,8 @@
 
 | 节点方案 | 后端节点类型 | 当前状态 |
 |---|---|---|
-| 选定列写入指定表 | `WriteSelectedColumnsNode` | `target_type=run_table/memory_table` 且 `enable_write=true` 时可真实生成辅助目标表；支持 `create`、`overwrite`、`append`，状态表输出 `actual_write`、`affected_rows`、`skipped_rows`、`warning_count`、`warnings` 和 `target_table_ref_id`；`sqlite` 目标仍跳过真实写入 |
-| 字段映射写入表 | `WriteBackTableNode` | `target_type=run_table/memory_table` 且 `enable_write=true` 时可按字段映射真实生成辅助目标表；支持 `create`、`overwrite`、`append`、空值跳过和状态摘要；`sqlite` 目标仍跳过真实写入 |
+| 选定列写入指定表 | `WriteSelectedColumnsNode` | 声明 `in`、`status` 和可选 `target`；运行内 SQL/内存目标真实写入时返回状态表与目标表 binding，支持 `create`、`overwrite`、`append`；外部 SQLite 仍不执行真实写入 |
+| 字段映射写入表 | `WriteBackTableNode` | 声明 `in`、`status` 和可选 `target`；运行内 SQL/内存目标可按字段映射真实写入并返回目标 binding，支持空值跳过和统一写入摘要；外部 SQLite 仍不执行真实写入 |
 | 批量重命名 | `BatchRenameFilesNode` | 默认只输出计划；`actual_rename=true` 时可真实重命名文件，支持目标目录创建、冲突跳过/覆盖/自动追加序号和 JSONL 日志 |
 
 ## 已注册但处于预览占位的节点
@@ -78,8 +89,8 @@
 | 跳转锚点节点 | `JumpAnchorNode` | 输出统一控制状态表，记录 `anchor_name`、说明和后续调度参数；`actual_control=false`，不改变 DAG 执行路径 |
 | 无条件跳转节点 | `UnconditionalJumpNode` | 输出统一控制状态表，支持按锚点或节点实例 ID 生成跳转计划；`actual_control=false`，不改变 DAG 执行路径 |
 | 条件跳转节点 | `ConditionalJumpNode` | 读取条件状态表，支持 true/false 分支按锚点或节点实例 ID 生成跳转计划；`actual_control=false`，不改变 DAG 执行路径 |
-| 循环执行起点 | `LoopStartNode` | 输出统一控制状态表，记录循环 ID、输入行数、最大循环次数和计划迭代次数；`actual_control=false`，不改变 DAG 执行路径 |
-| 循环判断回跳 | `LoopJudgeNode` | 读取输入表并输出统一控制状态表，支持 `always_success`、`row_count`、`field_value` 预览判断；`actual_control=false`，不执行真实回跳 |
+| 循环执行起点 | `LoopStartNode` | 输出统一循环控制状态；节点本体不直接改写 DAG，但 enabled loop region 会由 workflow process 创建真实 loop/iteration 运行状态 |
+| 循环判断回跳 | `LoopJudgeNode` | 输出统一循环判断；enabled 串行 loop region 会由 workflow process 解释 continue/end 并推进或释放出口 |
 | 节点组与子工作流 | `SubWorkflowNode` | 输出统一控制状态表，记录组名、输入引用、子节点数量、输入映射和输出计划；`actual_control=false`，不创建子 `WorkflowRun` |
 
 ## 既有基础节点
@@ -111,11 +122,10 @@
 | 前端入口 | 已有独立配置字窗口、结构化编辑和 JSON 草稿编辑 |
 | 节点业务隔离 | 节点 handler 不直接读取配置字，业务参数继续由节点 `config_schema` 和节点 `config` 承载 |
 
-当前配置字字段包括：
+当前结构化编辑器承诺的配置字字段包括：
 
 ```text
 profile
-strict_validation
 telemetry.log_level
 telemetry.event_level
 telemetry.event_rate_limit_per_second
@@ -124,18 +134,19 @@ telemetry.progress_interval_seconds
 diagnostics.capture_error_context
 diagnostics.include_metrics
 diagnostics.payload_byte_limit
-diagnostics.ttl_seconds
 diagnostics.redact_columns
 diagnostics.mask_policy
 ```
 
+旧工作流 JSON 中的 `strict_validation` 和 `diagnostics.ttl_seconds` 仅兼容读取并原样保留。Avalonia 不再生成、修改或展示这两个字段，运行时也没有对应执行消费者。
+
 当前落点说明：
 
 ```text
-配置字已经能影响运行事件输出和诊断 payload。
+配置字已经能影响 workflow/node 日志、运行事件、进度和诊断 payload。
 配置字没有写入节点 config，也不会污染节点业务 schema。
 NodeTaskManager 可以按节点实例取得合并后的配置字。
-NodeTaskModel 当前仍保持业务任务模型，不额外携带配置字字段。
+NodeTaskModel 携带 resolved feedback policy 和 runtime options version，活动节点支持 update/applied IPC 与 ACK。
 ```
 
 ## 未完成节点
@@ -162,7 +173,7 @@ NodeTaskModel 当前仍保持业务任务模型，不额外携带配置字字段
 |---:|---|---|
 | 1 | 选定列写入指定表 | 已部分完成：运行中转表和内存表目标真实写入，外部 SQLite 仍保持跳过 |
 | 2 | 字段映射写入表 | 已部分完成：运行中转表和内存表目标真实写入，外部 SQLite 仍保持跳过 |
-| 3 | 写入结果统一 | 已部分完成：`WriteSelectedColumnsNode` 和 `WriteBackTableNode` 状态表均包含 affected_rows、skipped_rows、warnings、actual_write 和 target_table_ref_id |
+| 3 | 写入结果统一 | 已完成第一版：两个节点均生成显式 write result、统一 `writes` summary，并在真实目标存在时登记 `target` binding |
 
 ### 第三批：完善外部资源类节点
 
