@@ -7,7 +7,9 @@ from flowweaver.nodes.table_node_handlers import (
     BuiltinTableNodeContext,
     BuiltinTableNodeValidationError,
 )
-from flowweaver.protocols.enums import TableStorageKind
+from flowweaver.nodes.table_node_storage_kinds import (
+    NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
+)
 from flowweaver.protocols.node_task import NodeTaskModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 from flowweaver.workflow_process.table_output_targets import (
@@ -15,11 +17,6 @@ from flowweaver.workflow_process.table_output_targets import (
     TableOutputTargetResolutionStatus,
     default_current_output_target,
     resolve_configured_output_targets,
-)
-
-NODE_READABLE_TABLE_STORAGE_KINDS = (
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
 )
 
 
@@ -34,7 +31,7 @@ def primary_input_ref(
             task,
             "in",
             node_type=node_type,
-            allowed_storage_kinds=NODE_READABLE_TABLE_STORAGE_KINDS,
+            allowed_storage_kinds=NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
         )
     return context.require_single_input_ref(
         task,

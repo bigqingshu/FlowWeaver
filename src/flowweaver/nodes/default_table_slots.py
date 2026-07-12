@@ -4,17 +4,10 @@ from flowweaver.nodes.registry import (
     NodeTableInputSlotSpec,
     NodeTableOutputSlotSpec,
 )
+from flowweaver.nodes.table_node_storage_kinds import (
+    NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
+)
 from flowweaver.protocols.enums import TableRole, TableStorageKind
-
-_READABLE_TABLE_STORAGE_KINDS = (
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
-    TableStorageKind.EXTERNAL_SQL,
-)
-_NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS = (
-    TableStorageKind.RUNTIME_SQL,
-    TableStorageKind.MEMORY,
-)
 
 
 def _input_table_slot(
@@ -23,7 +16,9 @@ def _input_table_slot(
     display_name: str,
     description: str,
     required: bool = True,
-    allowed_storage_kinds: tuple[TableStorageKind, ...] = _READABLE_TABLE_STORAGE_KINDS,
+    allowed_storage_kinds: tuple[
+        TableStorageKind, ...
+    ] = NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
 ) -> NodeTableInputSlotSpec:
     return NodeTableInputSlotSpec(
         name=name,
@@ -41,7 +36,7 @@ def _single_transform_input_table_slots() -> tuple[NodeTableInputSlotSpec, ...]:
             "in",
             display_name="Input table",
             description="Workflow-local table to transform.",
-            allowed_storage_kinds=_NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
+            allowed_storage_kinds=NODE_EXECUTION_READABLE_TABLE_STORAGE_KINDS,
         ),
     )
 

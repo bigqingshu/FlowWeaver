@@ -496,7 +496,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {
             "name": "in",
             "required": True,
-            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
             "display_name": "Main table",
             "description": "Main table to annotate with lookup results.",
             "default_source": "upstream_current",
@@ -504,7 +504,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {
             "name": "lookup",
             "required": True,
-            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
             "display_name": "Lookup table",
             "description": "Reference table used for field-name lookup.",
             "default_source": "upstream_current",
@@ -571,7 +571,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         {
             "name": "in",
             "required": True,
-            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY", "EXTERNAL_SQL"],
+            "allowed_storage_kinds": ["RUNTIME_SQL", "MEMORY"],
             "display_name": "Input table",
             "description": "Table to pass through and save as memory output.",
             "default_source": "upstream_current",
