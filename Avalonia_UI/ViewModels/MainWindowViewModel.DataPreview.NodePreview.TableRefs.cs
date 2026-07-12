@@ -12,19 +12,33 @@ public partial class MainWindowViewModel
         return tableRef.CanReadRows;
     }
 
-    private static TableRefDto? FindLatestReadableNodeTableRef(
-        IEnumerable<TableRefDto> tableRefs,
+    private static RunTableDirectoryItemDto? FindLatestReadableNodeTableRef(
+        IEnumerable<RunTableDirectoryItemDto> tableRefs,
         string sourceNodeInstanceId)
     {
         return tableRefs
             .Where(item =>
-                string.Equals(
-                    item.SourceNodeInstanceId,
+                LogicalResultNodeInstanceIds(item).Contains(
                     sourceNodeInstanceId,
-                    StringComparison.Ordinal)
+                    StringComparer.Ordinal)
                 && IsReadableTableRef(item))
             .OrderByDescending(item => item.Version)
             .ThenByDescending(item => item.CreatedAt)
             .FirstOrDefault();
+    }
+
+    private static IEnumerable<string> LogicalResultNodeInstanceIds(
+        RunTableDirectoryItemDto tableRef)
+    {
+        if (tableRef.ResultBindings.Length > 0)
+        {
+            return tableRef.ResultBindings
+                .Select(binding => binding.NodeInstanceId)
+                .Where(nodeInstanceId => !string.IsNullOrWhiteSpace(nodeInstanceId));
+        }
+
+        return string.IsNullOrWhiteSpace(tableRef.SourceNodeInstanceId)
+            ? []
+            : [tableRef.SourceNodeInstanceId];
     }
 }

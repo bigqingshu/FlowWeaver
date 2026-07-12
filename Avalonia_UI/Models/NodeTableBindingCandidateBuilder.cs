@@ -68,7 +68,7 @@ public sealed class NodeTableBindingCandidateBuilder
         string selectedNodeInstanceId,
         string catalogHash,
         IReadOnlyCollection<NodeDefinitionDto> nodeDefinitions,
-        IReadOnlyCollection<TableRefDto> tableCatalog)
+        IReadOnlyCollection<RunTableDirectoryItemDto> tableCatalog)
     {
         var key = new CandidateCacheKey(
             draftRevision,
@@ -98,7 +98,7 @@ public sealed class NodeTableBindingCandidateBuilder
         WorkflowDefinitionDraftSnapshot snapshot,
         string selectedNodeInstanceId,
         IReadOnlyCollection<NodeDefinitionDto> nodeDefinitions,
-        IReadOnlyCollection<TableRefDto> tableCatalog)
+        IReadOnlyCollection<RunTableDirectoryItemDto> tableCatalog)
     {
         if (!snapshot.Succeeded || snapshot.Root.ValueKind != JsonValueKind.Object)
         {
@@ -118,8 +118,9 @@ public sealed class NodeTableBindingCandidateBuilder
         var definitions = nodeDefinitions.ToDictionary(
             definition => (definition.NodeType, definition.NodeVersion),
             definition => definition);
-        var recentTables = tableCatalog
-            .Where(table => directUpstreamIds.Contains(table.SourceNodeInstanceId ?? string.Empty))
+        var recentOutputs = tableCatalog
+            .SelectMany(ExpandLogicalOutputs)
+            .Where(output => directUpstreamIds.Contains(output.SourceNodeInstanceId))
             .ToArray();
         var candidates = new List<NodeTableInputBindingCandidate>();
         var declaredSourceSlots = new HashSet<(string SourceNodeId, string OutputSlot)>();
@@ -153,7 +154,7 @@ public sealed class NodeTableBindingCandidateBuilder
                         ? slot.DefaultRole
                         : "AUXILIARY";
                 var recent = FindLatestRecentTable(
-                    recentTables,
+                    recentOutputs,
                     upstreamId,
                     slot.Name,
                     configuredTarget?.StorageKind,
@@ -168,44 +169,43 @@ public sealed class NodeTableBindingCandidateBuilder
                         ? slot.Name
                         : slot.DisplayName,
                     OutputRole = outputRole,
-                    StorageKind = configuredTarget?.StorageKind ?? recent?.StorageKind,
-                    LogicalTableId = configuredTarget?.LogicalTableId ?? recent?.LogicalTableId,
-                    RecentTableRefId = recent?.TableRefId,
-                    RecentVersion = recent?.Version,
-                    RecentLifecycleStatus = recent?.LifecycleStatus,
+                    StorageKind = configuredTarget?.StorageKind ?? recent?.Table.StorageKind,
+                    LogicalTableId = configuredTarget?.LogicalTableId ?? recent?.Table.LogicalTableId,
+                    RecentTableRefId = recent?.Table.TableRefId,
+                    RecentVersion = recent?.Table.Version,
+                    RecentLifecycleStatus = recent?.Table.LifecycleStatus,
                 });
             }
         }
 
-        foreach (var table in recentTables
-            .Where(table => !string.IsNullOrWhiteSpace(table.OutputSlot))
-            .GroupBy(table => (
-                SourceNodeId: table.SourceNodeInstanceId!,
-                OutputSlot: table.OutputSlot!))
+        foreach (var output in recentOutputs
+            .GroupBy(item => (
+                SourceNodeId: item.SourceNodeInstanceId,
+                item.OutputSlot))
             .Select(group => group
-                .OrderByDescending(table => table.Version)
-                .ThenByDescending(table => table.CreatedAt)
+                .OrderByDescending(item => item.Table.Version)
+                .ThenByDescending(item => item.Table.CreatedAt)
                 .First()))
         {
-            var key = (table.SourceNodeInstanceId!, table.OutputSlot!);
+            var key = (output.SourceNodeInstanceId, output.OutputSlot);
             if (declaredSourceSlots.Contains(key))
             {
                 continue;
             }
 
-            nodes.TryGetValue(table.SourceNodeInstanceId!, out var sourceNode);
+            nodes.TryGetValue(output.SourceNodeInstanceId, out var sourceNode);
             candidates.Add(new NodeTableInputBindingCandidate
             {
-                SourceNodeInstanceId = table.SourceNodeInstanceId!,
-                SourceNodeDisplayName = sourceNode?.DisplayName ?? table.SourceNodeInstanceId!,
-                OutputSlot = table.OutputSlot!,
-                OutputSlotDisplayName = table.OutputSlot!,
-                OutputRole = table.Role,
-                StorageKind = table.StorageKind,
-                LogicalTableId = table.LogicalTableId,
-                RecentTableRefId = table.TableRefId,
-                RecentVersion = table.Version,
-                RecentLifecycleStatus = table.LifecycleStatus,
+                SourceNodeInstanceId = output.SourceNodeInstanceId,
+                SourceNodeDisplayName = sourceNode?.DisplayName ?? output.SourceNodeInstanceId,
+                OutputSlot = output.OutputSlot,
+                OutputSlotDisplayName = output.OutputSlot,
+                OutputRole = output.Table.Role,
+                StorageKind = output.Table.StorageKind,
+                LogicalTableId = output.Table.LogicalTableId,
+                RecentTableRefId = output.Table.TableRefId,
+                RecentVersion = output.Table.Version,
+                RecentLifecycleStatus = output.Table.LifecycleStatus,
             });
         }
 
@@ -217,7 +217,8 @@ public sealed class NodeTableBindingCandidateBuilder
     }
 
     private static IReadOnlyList<NodeTableExistingOutputTargetCandidate>
-        BuildExistingOutputTargets(IReadOnlyCollection<TableRefDto> tableCatalog)
+        BuildExistingOutputTargets(
+            IReadOnlyCollection<RunTableDirectoryItemDto> tableCatalog)
     {
         return tableCatalog
             .Where(table =>
@@ -250,33 +251,70 @@ public sealed class NodeTableBindingCandidateBuilder
             .ToArray();
     }
 
-    private static TableRefDto? FindLatestRecentTable(
-        IEnumerable<TableRefDto> tables,
+    private static LogicalTableOutput? FindLatestRecentTable(
+        IEnumerable<LogicalTableOutput> outputs,
         string sourceNodeId,
         string outputSlot,
         string? storageKind,
         string? logicalTableId,
         string outputRole)
     {
-        return tables
-            .Where(table =>
-                string.Equals(table.SourceNodeInstanceId, sourceNodeId, StringComparison.Ordinal) &&
-                string.Equals(table.OutputSlot, outputSlot, StringComparison.Ordinal) &&
+        return outputs
+            .Where(output =>
+                string.Equals(output.SourceNodeInstanceId, sourceNodeId, StringComparison.Ordinal) &&
+                string.Equals(output.OutputSlot, outputSlot, StringComparison.Ordinal) &&
                 (storageKind is null || string.Equals(
-                    table.StorageKind,
+                    output.Table.StorageKind,
                     storageKind,
                     StringComparison.Ordinal)) &&
                 (logicalTableId is null || string.Equals(
-                    table.LogicalTableId,
+                    output.Table.LogicalTableId,
                     logicalTableId,
                     StringComparison.Ordinal)) &&
                 (string.IsNullOrWhiteSpace(outputRole) || string.Equals(
-                    table.Role,
+                    output.Table.Role,
                     outputRole,
                     StringComparison.Ordinal)))
-            .OrderByDescending(table => table.Version)
-            .ThenByDescending(table => table.CreatedAt)
+            .OrderByDescending(output => output.Table.Version)
+            .ThenByDescending(output => output.Table.CreatedAt)
             .FirstOrDefault();
+    }
+
+    private static IEnumerable<LogicalTableOutput> ExpandLogicalOutputs(
+        RunTableDirectoryItemDto table)
+    {
+        if (table.ResultBindings.Length > 0)
+        {
+            foreach (var binding in table.ResultBindings)
+            {
+                if (string.IsNullOrWhiteSpace(binding.NodeInstanceId))
+                {
+                    continue;
+                }
+
+                foreach (var outputSlot in binding.OutputSlots)
+                {
+                    if (!string.IsNullOrWhiteSpace(outputSlot))
+                    {
+                        yield return new LogicalTableOutput(
+                            table,
+                            binding.NodeInstanceId,
+                            outputSlot);
+                    }
+                }
+            }
+
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(table.SourceNodeInstanceId) &&
+            !string.IsNullOrWhiteSpace(table.OutputSlot))
+        {
+            yield return new LogicalTableOutput(
+                table,
+                table.SourceNodeInstanceId,
+                table.OutputSlot);
+        }
     }
 
     private static Dictionary<string, DraftNodeInfo> ReadNodes(JsonElement root)
@@ -376,4 +414,9 @@ public sealed class NodeTableBindingCandidateBuilder
         string DraftRevision,
         string SelectedNodeInstanceId,
         string CatalogHash);
+
+    private sealed record LogicalTableOutput(
+        RunTableDirectoryItemDto Table,
+        string SourceNodeInstanceId,
+        string OutputSlot);
 }

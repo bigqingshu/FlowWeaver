@@ -117,6 +117,7 @@ def list_run_table_refs(
             table_ref_summary_to_jsonable(
                 entry.table_ref,
                 source_node_instance_id=entry.source_node_instance_id,
+                result_bindings=entry.result_bindings,
             )
             for entry in entries
         ]
@@ -125,6 +126,7 @@ def list_run_table_refs(
             table_ref_to_jsonable(
                 entry.table_ref,
                 source_node_instance_id=entry.source_node_instance_id,
+                result_bindings=entry.result_bindings,
             )
             for entry in entries
         ]

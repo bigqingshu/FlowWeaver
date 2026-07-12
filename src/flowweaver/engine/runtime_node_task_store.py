@@ -15,7 +15,7 @@ from flowweaver.engine.db_models import NodeRunRecord, NodeTaskRecord
 from flowweaver.engine.immediate_session import immediate_session
 from flowweaver.engine.runtime_models import NodeRun
 from flowweaver.engine.runtime_node_task_record_mappers import (
-    _node_task_result_to_record,
+    _add_node_task_result_to_session,
     _node_task_to_record,
 )
 from flowweaver.engine.runtime_record_codecs import _json_dumps
@@ -97,7 +97,7 @@ class RuntimeNodeTaskStoreMixin:
     def record_node_task_result_once(self, result: NodeTaskResultModel) -> bool:
         try:
             with self._session_factory.begin() as session:
-                session.add(_node_task_result_to_record(result))
+                _add_node_task_result_to_session(session, result)
             return True
         except IntegrityError:
             return False

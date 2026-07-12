@@ -20,8 +20,8 @@ from flowweaver.engine.runtime_node_run_status_update import (
     node_run_status_update_values as _node_run_status_update_values,
 )
 from flowweaver.engine.runtime_node_task_record_mappers import (
+    _add_node_task_result_to_session,
     _node_run_from_record,
-    _node_task_result_to_record,
 )
 from flowweaver.engine.runtime_status_guards import (
     TERMINAL_NODE_STATUSES as _TERMINAL_NODE_STATUSES,
@@ -49,7 +49,7 @@ def record_node_task_result_and_update_node_run_status_in_session(
     owner_process_id: str | None,
     process_generation: int | None,
 ) -> NodeRun:
-    session.add(_node_task_result_to_record(result))
+    _add_node_task_result_to_session(session, result)
     session.flush()
     source_statuses = _node_run_status_source_values(
         status,

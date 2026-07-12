@@ -64,7 +64,7 @@ public sealed partial class WorkflowNodeTableBindingsViewModel : ViewModelBase
         NodeDefinitionDto? selectedDefinition,
         IReadOnlyCollection<NodeDefinitionDto> nodeDefinitions,
         string catalogHash,
-        IReadOnlyCollection<TableRefDto> tableCatalog,
+        IReadOnlyCollection<RunTableDirectoryItemDto> tableCatalog,
         NodeTableBindingsDraftReadResult readResult)
     {
         isLoading = true;

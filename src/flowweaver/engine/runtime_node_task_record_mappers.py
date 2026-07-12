@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 
+from sqlalchemy.orm import Session
+
 from flowweaver.common.time import utc_now
 from flowweaver.engine.db_models import (
     NodeRunRecord,
     NodeTaskRecord,
+    NodeTaskResultOutputBindingRecord,
     NodeTaskResultRecord,
 )
 from flowweaver.engine.runtime_models import NodeRun
@@ -129,6 +132,26 @@ def _node_task_result_to_record(
         error_json=_json_dumps(result.error) if result.error is not None else None,
         started_at=_datetime_to_text(result.started_at),
         finished_at=_datetime_to_text(result.finished_at),
+    )
+
+
+def _add_node_task_result_to_session(
+    session: Session,
+    result: NodeTaskResultModel,
+) -> None:
+    session.add(_node_task_result_to_record(result))
+    session.flush()
+    session.add_all(
+        NodeTaskResultOutputBindingRecord(
+            result_id=result.result_id,
+            task_id=result.task_id,
+            node_run_id=result.node_run_id,
+            output_slot=output_slot,
+            output_ref_id=output_ref_id,
+        )
+        for output_slot, output_ref_id in sorted(
+            result.output_slot_bindings.items()
+        )
     )
 
 

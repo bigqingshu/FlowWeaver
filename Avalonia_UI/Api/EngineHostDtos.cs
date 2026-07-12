@@ -737,6 +737,9 @@ public sealed record LoopIterationTableRefDto
     [JsonPropertyName("output_slot")]
     public string? OutputSlot { get; init; }
 
+    [JsonPropertyName("result_bindings")]
+    public ResultBindingSummaryDto[] ResultBindings { get; init; } = [];
+
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -768,7 +771,7 @@ public sealed record RuntimeEventDto
     public JsonElement Payload { get; init; }
 }
 
-public sealed record TableRefDto
+public record TableRefDto
 {
     [JsonPropertyName("table_ref_id")]
     public string TableRefId { get; init; } = string.Empty;
@@ -843,10 +846,61 @@ public sealed record TableRefDto
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+public sealed record ResultBindingSummaryDto
+{
+    [JsonPropertyName("node_run_id")]
+    public string NodeRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("node_instance_id")]
+    public string NodeInstanceId { get; init; } = string.Empty;
+
+    [JsonPropertyName("output_slots")]
+    public string[] OutputSlots { get; init; } = [];
+}
+
+public sealed record RunTableDirectoryItemDto : TableRefDto
+{
+    [JsonPropertyName("result_bindings")]
+    public ResultBindingSummaryDto[] ResultBindings { get; init; } = [];
+
+    public static RunTableDirectoryItemDto FromTableRef(TableRefDto value)
+    {
+        return value is RunTableDirectoryItemDto directoryItem
+            ? directoryItem
+            : new RunTableDirectoryItemDto
+            {
+                TableRefId = value.TableRefId,
+                WorkflowRunId = value.WorkflowRunId,
+                NodeRunId = value.NodeRunId,
+                SourceNodeRunId = value.SourceNodeRunId,
+                SourceNodeInstanceId = value.SourceNodeInstanceId,
+                Role = value.Role,
+                StorageKind = value.StorageKind,
+                Scope = value.Scope,
+                Mutability = value.Mutability,
+                ProviderId = value.ProviderId,
+                ResourceProfileId = value.ResourceProfileId,
+                MountId = value.MountId,
+                LogicalTableId = value.LogicalTableId,
+                OutputSlot = value.OutputSlot,
+                TableType = value.TableType,
+                PreviewPersistence = value.PreviewPersistence,
+                CanReadRows = value.CanReadRows,
+                SupportsPagedRows = value.SupportsPagedRows,
+                Schema = value.Schema,
+                SchemaFingerprint = value.SchemaFingerprint,
+                Version = value.Version,
+                Capabilities = value.Capabilities,
+                LifecycleStatus = value.LifecycleStatus,
+                CreatedAt = value.CreatedAt,
+            };
+    }
+}
+
 public sealed record RunTableDirectoryPageDto
 {
     [JsonPropertyName("items")]
-    public TableRefDto[] Items { get; init; } = [];
+    public RunTableDirectoryItemDto[] Items { get; init; } = [];
 
     [JsonPropertyName("offset")]
     public int Offset { get; init; }

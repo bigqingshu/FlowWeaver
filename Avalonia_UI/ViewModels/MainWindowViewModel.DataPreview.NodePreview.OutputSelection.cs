@@ -18,9 +18,7 @@ public partial class MainWindowViewModel
 
         var nodeInstanceIdsWithReadableOutput = tableRefsResponse.Data
             .Where(IsReadableTableRef)
-            .Select(tableRef => tableRef.SourceNodeInstanceId)
-            .Where(nodeInstanceId => !string.IsNullOrWhiteSpace(nodeInstanceId))
-            .Cast<string>()
+            .SelectMany(LogicalResultNodeInstanceIds)
             .ToHashSet(StringComparer.Ordinal);
         var latestOutputNode = WorkflowDefinitionDraftNodes
             .Reverse()

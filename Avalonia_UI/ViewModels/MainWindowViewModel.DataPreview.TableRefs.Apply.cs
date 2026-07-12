@@ -6,7 +6,8 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private void ApplyRefreshedTableRefs(IReadOnlyList<TableRefDto> tableRefs)
+    private void ApplyRefreshedTableRefs(
+        IReadOnlyList<RunTableDirectoryItemDto> tableRefs)
     {
         var previousSelectedTableRefId = SelectedDataPreviewTableRef?.TableRefId;
         dataPreviewSelectionState.Capture(

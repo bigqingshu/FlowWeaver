@@ -88,7 +88,7 @@ public partial class MainWindowViewModel
             selectedDefinition,
             definitions,
             catalogHash,
-            TableRefs.Select(ToTableRefDto).ToArray(),
+            TableRefs.Select(ToRunTableDirectoryItemDto).ToArray(),
             workflowDefinitionDraftParseCache.GetNodeTableBindings(
                 WorkflowDefinitionDraftJson,
                 selectedNode.NodeInstanceId));
@@ -119,9 +119,10 @@ public partial class MainWindowViewModel
         };
     }
 
-    private static TableRefDto ToTableRefDto(TableRefListItemViewModel table)
+    private static RunTableDirectoryItemDto ToRunTableDirectoryItemDto(
+        TableRefListItemViewModel table)
     {
-        return new TableRefDto
+        return new RunTableDirectoryItemDto
         {
             TableRefId = table.TableRefId,
             WorkflowRunId = table.WorkflowRunId,
@@ -137,6 +138,7 @@ public partial class MainWindowViewModel
             MountId = table.MountId,
             LogicalTableId = table.LogicalTableId,
             OutputSlot = table.OutputSlot,
+            ResultBindings = table.ResultBindings,
             TableType = table.TableType,
             PreviewPersistence = table.PreviewPersistence,
             CanReadRows = table.CanReadRows,

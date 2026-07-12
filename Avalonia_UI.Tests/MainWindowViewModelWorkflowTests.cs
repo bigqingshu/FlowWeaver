@@ -5846,13 +5846,13 @@ public sealed class MainWindowViewModelWorkflowTests
         };
     }
 
-    private static TableRefDto TableRef(
+    private static RunTableDirectoryItemDto TableRef(
         string tableRefId,
         string workflowRunId,
         string nodeRunId,
         string? sourceNodeInstanceId = null)
     {
-        return new TableRefDto
+        return new RunTableDirectoryItemDto
         {
             TableRefId = tableRefId,
             WorkflowRunId = workflowRunId,
@@ -5866,6 +5866,17 @@ public sealed class MainWindowViewModelWorkflowTests
             ProviderId = "runtime",
             LogicalTableId = "orders",
             OutputSlot = "out",
+            ResultBindings = sourceNodeInstanceId is null
+                ? []
+                :
+                [
+                    new ResultBindingSummaryDto
+                    {
+                        NodeRunId = nodeRunId,
+                        NodeInstanceId = sourceNodeInstanceId,
+                        OutputSlots = ["out"],
+                    },
+                ],
             TableType = "runtime_sql_table",
             PreviewPersistence = "workflow_run_sql",
             CanReadRows = true,
@@ -6294,6 +6305,7 @@ public sealed class MainWindowViewModelWorkflowTests
                 .ToDictionary(item => item.NodeRunId, item => item.NodeInstanceId)
                 ?? new Dictionary<string, string>();
             var filtered = tableRefsResponse.Data
+                .Select(RunTableDirectoryItemDto.FromTableRef)
                 .Select(item => item with
                 {
                     SourceNodeInstanceId = item.SourceNodeInstanceId ??

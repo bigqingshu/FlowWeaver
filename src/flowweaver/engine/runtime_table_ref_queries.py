@@ -6,8 +6,16 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from flowweaver.engine.db_models import DataRefRecord, NodeRunRecord
-from flowweaver.engine.runtime_models import RunTableDirectoryEntry
+from flowweaver.engine.db_models import (
+    DataRefRecord,
+    NodeRunRecord,
+    NodeTaskResultOutputBindingRecord,
+    NodeTaskResultRecord,
+)
+from flowweaver.engine.runtime_models import (
+    RunTableDirectoryEntry,
+    RunTableResultBinding,
+)
 from flowweaver.engine.runtime_record_mappers import _table_ref_from_record
 from flowweaver.protocols.enums import (
     LifecycleStatus,
@@ -120,12 +128,18 @@ def list_table_ref_directory_from_session(
     )
     if limit is not None:
         statement = statement.limit(limit)
+    rows = session.execute(statement).all()
+    bindings_by_ref = _latest_result_bindings_by_output_ref_id(
+        session,
+        [record.table_ref_id for record, _source_node_instance_id in rows],
+    )
     return [
         RunTableDirectoryEntry(
             table_ref=_table_ref_from_record(record),
             source_node_instance_id=source_node_instance_id,
+            result_bindings=bindings_by_ref.get(record.table_ref_id, ()),
         )
-        for record, source_node_instance_id in session.execute(statement).all()
+        for record, source_node_instance_id in rows
     ]
 
 
@@ -144,13 +158,94 @@ def list_table_ref_directory_by_ids_from_session(
         .where(DataRefRecord.table_ref_id.in_(table_ref_ids))
         .order_by(DataRefRecord.table_ref_id)
     ).all()
+    bindings_by_ref = _latest_result_bindings_by_output_ref_id(
+        session,
+        [record.table_ref_id for record, _source_node_instance_id in rows],
+    )
     return [
         RunTableDirectoryEntry(
             table_ref=_table_ref_from_record(record),
             source_node_instance_id=source_node_instance_id,
+            result_bindings=bindings_by_ref.get(record.table_ref_id, ()),
         )
         for record, source_node_instance_id in rows
     ]
+
+
+def _latest_result_bindings_by_output_ref_id(
+    session: Session,
+    output_ref_ids: list[str],
+) -> dict[str, tuple[RunTableResultBinding, ...]]:
+    if not output_ref_ids:
+        return {}
+    ranked_bindings = (
+        select(
+            NodeTaskResultOutputBindingRecord.output_ref_id.label(
+                "output_ref_id"
+            ),
+            NodeTaskResultOutputBindingRecord.node_run_id.label("node_run_id"),
+            NodeRunRecord.node_instance_id.label("node_instance_id"),
+            NodeTaskResultOutputBindingRecord.output_slot.label("output_slot"),
+            func.row_number()
+            .over(
+                partition_by=(
+                    NodeTaskResultOutputBindingRecord.node_run_id,
+                    NodeTaskResultOutputBindingRecord.output_slot,
+                ),
+                order_by=(
+                    NodeTaskResultRecord.finished_at.desc(),
+                    NodeTaskResultOutputBindingRecord.result_id.desc(),
+                ),
+            )
+            .label("binding_rank"),
+        )
+        .join(
+            NodeTaskResultRecord,
+            NodeTaskResultOutputBindingRecord.result_id
+            == NodeTaskResultRecord.result_id,
+        )
+        .join(
+            NodeRunRecord,
+            NodeTaskResultOutputBindingRecord.node_run_id
+            == NodeRunRecord.node_run_id,
+        )
+        .subquery()
+    )
+    rows = session.execute(
+        select(
+            ranked_bindings.c.output_ref_id,
+            ranked_bindings.c.node_run_id,
+            ranked_bindings.c.node_instance_id,
+            ranked_bindings.c.output_slot,
+        )
+        .where(ranked_bindings.c.binding_rank == 1)
+        .where(ranked_bindings.c.output_ref_id.in_(output_ref_ids))
+        .order_by(
+            ranked_bindings.c.output_ref_id,
+            ranked_bindings.c.node_instance_id,
+            ranked_bindings.c.node_run_id,
+            ranked_bindings.c.output_slot,
+        )
+    ).all()
+    slots_by_binding: dict[tuple[str, str, str], list[str]] = {}
+    for output_ref_id, node_run_id, node_instance_id, output_slot in rows:
+        key = (output_ref_id, node_run_id, node_instance_id)
+        slots_by_binding.setdefault(key, []).append(output_slot)
+    result: dict[str, list[RunTableResultBinding]] = {}
+    for (output_ref_id, node_run_id, node_instance_id), output_slots in (
+        slots_by_binding.items()
+    ):
+        result.setdefault(output_ref_id, []).append(
+            RunTableResultBinding(
+                node_run_id=node_run_id,
+                node_instance_id=node_instance_id,
+                output_slots=tuple(output_slots),
+            )
+        )
+    return {
+        output_ref_id: tuple(bindings)
+        for output_ref_id, bindings in result.items()
+    }
 
 
 def count_table_ref_directory_from_session(

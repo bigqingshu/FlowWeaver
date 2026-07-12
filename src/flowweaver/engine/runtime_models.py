@@ -167,9 +167,17 @@ class LoopIterationNodeRun:
 
 
 @dataclass(frozen=True)
+class RunTableResultBinding:
+    node_run_id: str
+    node_instance_id: str
+    output_slots: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RunTableDirectoryEntry:
     table_ref: TableRefModel
     source_node_instance_id: str | None
+    result_bindings: tuple[RunTableResultBinding, ...]
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using Avalonia_UI.Api;
 
 namespace Avalonia_UI.ViewModels;
@@ -54,6 +55,7 @@ public sealed class LoopIterationTableRefListItemViewModel
         LifecycleStatus = tableRef.LifecycleStatus;
         SourceNodeInstanceId = tableRef.SourceNodeInstanceId;
         OutputSlot = tableRef.OutputSlot;
+        ResultBindings = tableRef.ResultBindings;
     }
 
     public string TableRefId { get; }
@@ -74,9 +76,26 @@ public sealed class LoopIterationTableRefListItemViewModel
 
     public string? OutputSlot { get; }
 
-    public string SourceText => string.IsNullOrWhiteSpace(SourceNodeInstanceId)
-        ? "-"
-        : string.IsNullOrWhiteSpace(OutputSlot)
-            ? SourceNodeInstanceId
-            : $"{SourceNodeInstanceId}.{OutputSlot}";
+    public ResultBindingSummaryDto[] ResultBindings { get; }
+
+    public string SourceText
+    {
+        get
+        {
+            var logicalOutputs = ResultBindings
+                .SelectMany(binding => binding.OutputSlots.Select(outputSlot =>
+                    $"{binding.NodeInstanceId}.{outputSlot}"))
+                .ToArray();
+            if (logicalOutputs.Length > 0)
+            {
+                return string.Join(", ", logicalOutputs);
+            }
+
+            return string.IsNullOrWhiteSpace(SourceNodeInstanceId)
+                ? "-"
+                : string.IsNullOrWhiteSpace(OutputSlot)
+                    ? SourceNodeInstanceId
+                    : $"{SourceNodeInstanceId}.{OutputSlot}";
+        }
+    }
 }

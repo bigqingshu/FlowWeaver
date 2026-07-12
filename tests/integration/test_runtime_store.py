@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from flowweaver.common.time import utc_now
 from flowweaver.engine.runtime_store import (
@@ -179,6 +179,7 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "node_runs",
         "node_tasks",
         "node_task_results",
+        "node_task_result_output_bindings",
         "data_refs",
         "shared_publications",
         "shared_publication_members",
@@ -204,6 +205,30 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         database_path,
         "node_task_results",
     )
+    assert column_names(
+        database_path,
+        "node_task_result_output_bindings",
+    ) == {
+        "result_id",
+        "task_id",
+        "node_run_id",
+        "output_slot",
+        "output_ref_id",
+    }
+    assert foreign_keys(
+        database_path,
+        "node_task_result_output_bindings",
+    ) == {
+        ("result_id", "node_task_results", "result_id"),
+        ("task_id", "node_tasks", "task_id"),
+        ("node_run_id", "node_runs", "node_run_id"),
+    }
+    assert indexes(database_path, "node_task_result_output_bindings")[
+        "idx_node_task_result_bindings_output_ref"
+    ] == ["output_ref_id"]
+    assert indexes(database_path, "node_task_result_output_bindings")[
+        "idx_node_task_result_bindings_node_slot"
+    ] == ["node_run_id", "output_slot"]
     assert "trigger_source" in column_names(database_path, "workflow_runs")
     assert column_names(database_path, "workflow_run_runtime_options") == {
         "workflow_run_id",
@@ -342,6 +367,99 @@ def test_shared_publication_lifecycle_migration_backfills_valid_retention_only(
     assert publication is not None
     assert publication.status == "PUBLISHED"
     assert publication.expires_at is not None
+
+
+def test_result_binding_migration_backfills_existing_result_json(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    config = alembic_config(database_path)
+    command.upgrade(config, "20260711_0024")
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, node = create_producer_context(store)
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-before-binding-migration",
+    )
+    task = NodeTaskModel(
+        task_id="task-before-binding-migration",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    store.create_node_task(task)
+    table_ref = make_table_ref(
+        table_ref_id="table-before-binding-migration",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    store.register_table_ref(table_ref)
+    now = utc_now().isoformat()
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "INSERT INTO node_task_results ("
+            "result_id, task_id, node_run_id, attempt, executor_id, "
+            "process_generation, status, output_refs_json, "
+            "output_slot_bindings_json, summary_json, error_json, "
+            "started_at, finished_at"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "result-before-binding-migration",
+                task.task_id,
+                node.node_run_id,
+                node.attempt,
+                "executor-1",
+                process.process_generation,
+                NodeResultStatus.SUCCEEDED.value,
+                '["table-before-binding-migration"]',
+                '{"out":"table-before-binding-migration",'
+                '"preview":"table-before-binding-migration"}',
+                "{}",
+                None,
+                now,
+                now,
+            ),
+        )
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        migrated = connection.execute(
+            "SELECT result_id, task_id, node_run_id, output_slot, "
+            "output_ref_id FROM node_task_result_output_bindings "
+            "ORDER BY output_slot"
+        ).fetchall()
+    assert migrated == [
+        (
+            "result-before-binding-migration",
+            task.task_id,
+            node.node_run_id,
+            "out",
+            table_ref.table_ref_id,
+        ),
+        (
+            "result-before-binding-migration",
+            task.task_id,
+            node.node_run_id,
+            "preview",
+            table_ref.table_ref_id,
+        ),
+    ]
+    directory = RuntimeStore.from_sqlite_path(
+        database_path
+    ).list_table_ref_directory(run.workflow_run_id)
+    assert directory[0].result_bindings[0].node_run_id == node.node_run_id
+    assert directory[0].result_bindings[0].output_slots == ("out", "preview")
 
 
 def test_table_ref_identity_migration_preserves_existing_refs(
@@ -1562,6 +1680,18 @@ def test_runtime_store_records_node_task_result_and_terminal_node_atomically(
     )
     assert loaded is not None
     assert loaded.output_slot_bindings == {"out": "table-1"}
+    with sqlite3.connect(database_path) as connection:
+        binding = connection.execute(
+            "SELECT result_id, task_id, node_run_id, output_slot, "
+            "output_ref_id FROM node_task_result_output_bindings"
+        ).fetchone()
+    assert binding == (
+        result.result_id,
+        result.task_id,
+        result.node_run_id,
+        "out",
+        "table-1",
+    )
 
 
 def test_runtime_store_records_cancelled_result_from_cancel_requested_node(
@@ -2021,6 +2151,158 @@ def test_runtime_store_loop_queries_apply_pagination_and_batch_node_lookup(
             [refs[1].table_ref_id, refs[0].table_ref_id]
         )
     ] == refs
+
+
+def test_runtime_store_table_directory_projects_latest_result_bindings_in_two_queries(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    migrate(database_path)
+    store = RuntimeStore.from_sqlite_path(database_path)
+    run, physical_node = create_producer_context(store)
+    first_logical_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="logical-first",
+        node_type="builtin.pass_through",
+        node_run_id="logical-node-1",
+    )
+    second_logical_node = store.create_node_run(
+        workflow_run_id=run.workflow_run_id,
+        node_instance_id="logical-second",
+        node_type="builtin.pass_through",
+        node_run_id="logical-node-2",
+    )
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-result-bindings",
+    )
+    first_ref = make_table_ref(
+        table_ref_id="binding-table-1",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=physical_node.node_run_id,
+        logical_table_id="orders",
+        version=1,
+    )
+    second_ref = make_table_ref(
+        table_ref_id="binding-table-2",
+        workflow_run_id=run.workflow_run_id,
+        node_run_id=physical_node.node_run_id,
+        logical_table_id="orders",
+        version=2,
+    )
+    store.register_table_ref(first_ref)
+    store.register_table_ref(second_ref)
+
+    def record_result(
+        *,
+        task_id: str,
+        result_id: str,
+        node: NodeRun,
+        output_refs: list[str],
+        output_slot_bindings: dict[str, str],
+        finished_offset: int,
+    ) -> None:
+        task = NodeTaskModel(
+            task_id=task_id,
+            workflow_run_id=run.workflow_run_id,
+            workflow_process_id=process.process_id,
+            process_generation=process.process_generation,
+            node_run_id=node.node_run_id,
+            node_instance_id=node.node_instance_id,
+            node_type=node.node_type,
+            node_version="1.0",
+            attempt=node.attempt,
+            input_refs=[],
+            config={},
+            timeout_seconds=60,
+        )
+        store.create_node_task(task)
+        finished_at = utc_now() + timedelta(seconds=finished_offset)
+        assert store.record_node_task_result_once(
+            NodeTaskResultModel(
+                result_id=result_id,
+                task_id=task.task_id,
+                node_run_id=node.node_run_id,
+                attempt=node.attempt,
+                executor_id="executor-1",
+                process_generation=process.process_generation,
+                status=NodeResultStatus.SUCCEEDED,
+                output_refs=output_refs,
+                output_slot_bindings=output_slot_bindings,
+                started_at=finished_at,
+                finished_at=finished_at,
+            )
+        )
+
+    record_result(
+        task_id="task-logical-first-old",
+        result_id="result-logical-first-old",
+        node=first_logical_node,
+        output_refs=[first_ref.table_ref_id],
+        output_slot_bindings={
+            "out": first_ref.table_ref_id,
+            "preview": first_ref.table_ref_id,
+        },
+        finished_offset=0,
+    )
+    record_result(
+        task_id="task-logical-first-new",
+        result_id="result-logical-first-new",
+        node=first_logical_node,
+        output_refs=[second_ref.table_ref_id],
+        output_slot_bindings={"out": second_ref.table_ref_id},
+        finished_offset=1,
+    )
+    record_result(
+        task_id="task-logical-second",
+        result_id="result-logical-second",
+        node=second_logical_node,
+        output_refs=[first_ref.table_ref_id],
+        output_slot_bindings={"out": first_ref.table_ref_id},
+        finished_offset=2,
+    )
+    select_count = 0
+
+    def count_selects(
+        _connection,
+        _cursor,
+        statement: str,
+        _parameters,
+        _context,
+        _executemany,
+    ) -> None:
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    event.listen(store.engine, "before_cursor_execute", count_selects)
+    try:
+        directory = store.list_table_ref_directory(
+            run.workflow_run_id,
+            limit=100,
+        )
+    finally:
+        event.remove(store.engine, "before_cursor_execute", count_selects)
+
+    by_ref = {entry.table_ref.table_ref_id: entry for entry in directory}
+    assert select_count == 2
+    assert by_ref[first_ref.table_ref_id].source_node_instance_id == (
+        physical_node.node_instance_id
+    )
+    assert [
+        (
+            binding.node_instance_id,
+            binding.output_slots,
+        )
+        for binding in by_ref[first_ref.table_ref_id].result_bindings
+    ] == [
+        ("logical-first", ("preview",)),
+        ("logical-second", ("out",)),
+    ]
+    assert [
+        (binding.node_instance_id, binding.output_slots)
+        for binding in by_ref[second_ref.table_ref_id].result_bindings
+    ] == [("logical-first", ("out",))]
 
 
 def test_runtime_store_loop_run_round_trip_and_idempotency(

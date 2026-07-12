@@ -113,3 +113,36 @@ class NodeTaskResultRecord(Base):
     error_json: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str] = mapped_column(Text, nullable=False)
     finished_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class NodeTaskResultOutputBindingRecord(Base):
+    __tablename__ = "node_task_result_output_bindings"
+    __table_args__ = (
+        Index(
+            "idx_node_task_result_bindings_output_ref",
+            "output_ref_id",
+        ),
+        Index(
+            "idx_node_task_result_bindings_node_slot",
+            "node_run_id",
+            "output_slot",
+        ),
+    )
+
+    result_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_task_results.result_id"),
+        primary_key=True,
+    )
+    task_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_tasks.task_id"),
+        nullable=False,
+    )
+    node_run_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("node_runs.node_run_id"),
+        nullable=False,
+    )
+    output_slot: Mapped[str] = mapped_column(Text, primary_key=True)
+    output_ref_id: Mapped[str] = mapped_column(Text, nullable=False)

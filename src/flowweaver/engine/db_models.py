@@ -14,6 +14,9 @@ from flowweaver.engine.db_loop_models import LoopRunRecord as LoopRunRecord
 from flowweaver.engine.db_node_task_models import NodeRunRecord as NodeRunRecord
 from flowweaver.engine.db_node_task_models import NodeTaskRecord as NodeTaskRecord
 from flowweaver.engine.db_node_task_models import (
+    NodeTaskResultOutputBindingRecord as NodeTaskResultOutputBindingRecord,
+)
+from flowweaver.engine.db_node_task_models import (
     NodeTaskResultRecord as NodeTaskResultRecord,
 )
 from flowweaver.engine.db_runtime_event_models import (

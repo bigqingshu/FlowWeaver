@@ -158,6 +158,11 @@ def list_run_loop_iteration_table_refs(
                     if link.table_ref_id in entries_by_id
                     else None
                 ),
+                (
+                    entries_by_id[link.table_ref_id].result_bindings
+                    if link.table_ref_id in entries_by_id
+                    else ()
+                ),
             )
             for link in links
         ],

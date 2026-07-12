@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
+from flowweaver.engine.runtime_models import RunTableResultBinding
 from flowweaver.protocols.enums import LifecycleStatus, TableRole, TableStorageKind
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -10,10 +12,10 @@ def table_ref_summary_to_jsonable(
     value: TableRefModel,
     *,
     source_node_instance_id: str | None = None,
+    result_bindings: Sequence[RunTableResultBinding] | None = None,
 ) -> dict[str, Any]:
     can_read_rows = _table_ref_can_read_rows(value)
-    output_slot = _table_ref_output_slot(value)
-    return {
+    payload: dict[str, Any] = {
         "table_ref_id": value.table_ref_id,
         "workflow_run_id": value.created_by_workflow_run_id,
         "node_run_id": value.created_by_node_run_id,
@@ -27,7 +29,10 @@ def table_ref_summary_to_jsonable(
         "resource_profile_id": value.resource_profile_id,
         "mount_id": value.mount_id,
         "logical_table_id": value.logical_table_id,
-        "output_slot": output_slot,
+        "output_slot": result_binding_compatibility_output_slot(
+            value,
+            result_bindings,
+        ),
         "table_type": _table_ref_type(value),
         "preview_persistence": _table_ref_preview_persistence(value),
         "can_read_rows": can_read_rows,
@@ -38,16 +43,23 @@ def table_ref_summary_to_jsonable(
         "lifecycle_status": value.lifecycle_status.value,
         "created_at": value.created_at.isoformat(),
     }
+    if result_bindings is not None:
+        payload["result_bindings"] = result_bindings_to_jsonable(
+            result_bindings
+        )
+    return payload
 
 
 def table_ref_to_jsonable(
     value: TableRefModel,
     *,
     source_node_instance_id: str | None = None,
+    result_bindings: Sequence[RunTableResultBinding] | None = None,
 ) -> dict[str, Any]:
     payload = table_ref_summary_to_jsonable(
         value,
         source_node_instance_id=source_node_instance_id,
+        result_bindings=result_bindings,
     )
     payload["schema"] = [field.model_dump(mode="json") for field in value.schema]
     can_read_rows = payload["can_read_rows"]
@@ -97,7 +109,27 @@ def _table_ref_preview_persistence(value: TableRefModel) -> str:
     return "unknown"
 
 
-def _table_ref_output_slot(value: TableRefModel) -> str | None:
+def result_bindings_to_jsonable(
+    values: Sequence[RunTableResultBinding],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "node_run_id": value.node_run_id,
+            "node_instance_id": value.node_instance_id,
+            "output_slots": list(value.output_slots),
+        }
+        for value in values
+    ]
+
+
+def result_binding_compatibility_output_slot(
+    value: TableRefModel,
+    result_bindings: Sequence[RunTableResultBinding] | None,
+) -> str | None:
+    if result_bindings:
+        if len(result_bindings) == 1 and len(result_bindings[0].output_slots) == 1:
+            return result_bindings[0].output_slots[0]
+        return None
     output_slot = value.opaque_handle.get("output_slot")
     if isinstance(output_slot, str) and output_slot:
         return output_slot

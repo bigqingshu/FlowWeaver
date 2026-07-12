@@ -1693,7 +1693,7 @@ public sealed class MainWindowViewModelDataTests
         };
     }
 
-    private static TableRefDto TableRef(
+    private static RunTableDirectoryItemDto TableRef(
         string tableRefId,
         string workflowRunId,
         string nodeRunId,
@@ -1706,7 +1706,7 @@ public sealed class MainWindowViewModelDataTests
     {
         var resolvedCapabilities = capabilities ?? ["WRITE", "READ"];
         var resolvedCanReadRows = canReadRows ?? resolvedCapabilities.Contains("READ");
-        return new TableRefDto
+        return new RunTableDirectoryItemDto
         {
             TableRefId = tableRefId,
             WorkflowRunId = workflowRunId,
@@ -1720,6 +1720,15 @@ public sealed class MainWindowViewModelDataTests
             ProviderId = "runtime",
             LogicalTableId = "orders",
             OutputSlot = outputSlot,
+            ResultBindings =
+            [
+                new ResultBindingSummaryDto
+                {
+                    NodeRunId = nodeRunId,
+                    NodeInstanceId = sourceNodeInstanceId,
+                    OutputSlots = [outputSlot],
+                },
+            ],
             TableType = tableType ?? storageKind switch
             {
                 "MEMORY" => "memory_table",
@@ -1764,7 +1773,7 @@ public sealed class MainWindowViewModelDataTests
     }
 
     private static ApiResponseEnvelope<RunTableDirectoryPageDto> DirectoryPage(
-        TableRefDto tableRef,
+        RunTableDirectoryItemDto tableRef,
         int offset,
         int limit)
     {
@@ -2232,6 +2241,7 @@ public sealed class MainWindowViewModelDataTests
             }
 
             var filtered = TableRefsResponse.Data
+                .Select(RunTableDirectoryItemDto.FromTableRef)
                 .Where(item => tableType is null || item.TableType == tableType)
                 .Where(item => logicalTableId is null || item.LogicalTableId == logicalTableId)
                 .ToArray();

@@ -47,6 +47,7 @@ public sealed class RunLoopMonitorViewModelTests
 
         Assert.HasCount(1, viewModel.IterationNodes);
         Assert.HasCount(1, viewModel.IterationTableRefs);
+        Assert.AreEqual("body.result", viewModel.IterationTableRefs[0].SourceText);
         Assert.AreEqual(1, loopService.NodeCalls);
         Assert.AreEqual(1, loopService.TableCalls);
     }
@@ -233,6 +234,15 @@ public sealed class RunLoopMonitorViewModelTests
             LogicalTableId = "orders",
             SourceNodeInstanceId = "body",
             OutputSlot = "result",
+            ResultBindings =
+            [
+                new ResultBindingSummaryDto
+                {
+                    NodeRunId = "node-run-1",
+                    NodeInstanceId = "body",
+                    OutputSlots = ["result"],
+                },
+            ],
         };
     }
 

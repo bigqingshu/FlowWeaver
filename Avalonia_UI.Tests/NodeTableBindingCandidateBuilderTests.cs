@@ -100,6 +100,76 @@ public sealed class NodeTableBindingCandidateBuilderTests
         Assert.AreNotSame(changedNode, changedCatalog);
     }
 
+    [TestMethod]
+    public void ResultBindingsUseLogicalNodeInsteadOfPhysicalCreator()
+    {
+        var snapshot = WorkflowDefinitionDraftSnapshot.Parse(
+            """
+            {
+              "nodes": [
+                {"node_instance_id":"direct","node_type":"source","node_version":"1","config":{}},
+                {"node_instance_id":"target","node_type":"target","node_version":"1","config":{}}
+              ],
+              "connections": [
+                {"connection_id":"a","source_node_id":"direct","target_node_id":"target"}
+              ]
+            }
+            """);
+        var table = Table("ref-pass-through", "physical-creator", 1) with
+        {
+            Role = "CURRENT",
+            ResultBindings =
+            [
+                new ResultBindingSummaryDto
+                {
+                    NodeRunId = "logical-run",
+                    NodeInstanceId = "direct",
+                    OutputSlots = ["out", "preview"],
+                },
+            ],
+        };
+
+        var result = new NodeTableBindingCandidateBuilder().Build(
+            snapshot,
+            "revision-1",
+            "target",
+            "catalog-1",
+            [SourceDefinition()],
+            [table]);
+
+        Assert.IsTrue(result.InputCandidates.Any(candidate =>
+            candidate.SourceNodeInstanceId == "direct" &&
+            candidate.OutputSlot == "out" &&
+            candidate.RecentTableRefId == table.TableRefId));
+        Assert.IsTrue(result.InputCandidates.Any(candidate =>
+            candidate.SourceNodeInstanceId == "direct" &&
+            candidate.OutputSlot == "preview"));
+        Assert.IsFalse(result.InputCandidates.Any(candidate =>
+            candidate.SourceNodeInstanceId == "physical-creator"));
+    }
+
+    [TestMethod]
+    public void MissingResultBindingsUseLegacyOutputSlot()
+    {
+        var snapshot = WorkflowDefinitionDraftSnapshot.Parse(
+            """{"nodes":[{"node_instance_id":"direct","node_type":"source","node_version":"1","config":{}},{"node_instance_id":"target","node_type":"target","node_version":"1","config":{}}],"connections":[{"connection_id":"a","source_node_id":"direct","target_node_id":"target"}]}""");
+        var table = Table("legacy-ref", "direct", 1) with
+        {
+            Role = "CURRENT",
+            ResultBindings = [],
+        };
+
+        var result = new NodeTableBindingCandidateBuilder().Build(
+            snapshot,
+            "revision-1",
+            "target",
+            "catalog-1",
+            [SourceDefinition()],
+            [table]);
+
+        Assert.AreEqual("legacy-ref", result.InputCandidates[0].RecentTableRefId);
+    }
+
     private static NodeDefinitionDto SourceDefinition()
     {
         return new NodeDefinitionDto
@@ -120,14 +190,26 @@ public sealed class NodeTableBindingCandidateBuilderTests
         };
     }
 
-    private static TableRefDto Table(string id, string sourceNodeId, int version)
+    private static RunTableDirectoryItemDto Table(
+        string id,
+        string sourceNodeId,
+        int version)
     {
-        return new TableRefDto
+        return new RunTableDirectoryItemDto
         {
             TableRefId = id,
             WorkflowRunId = "run-1",
             SourceNodeInstanceId = sourceNodeId,
             OutputSlot = "out",
+            ResultBindings =
+            [
+                new ResultBindingSummaryDto
+                {
+                    NodeRunId = $"run-{sourceNodeId}",
+                    NodeInstanceId = sourceNodeId,
+                    OutputSlots = ["out"],
+                },
+            ],
             Role = "AUXILIARY",
             StorageKind = "MEMORY",
             LogicalTableId = "orders",

@@ -9,11 +9,11 @@ public partial class MainWindowViewModel
 {
     private const int TableDirectoryPageSize = 100;
 
-    private async Task<ApiResponseEnvelope<List<TableRefDto>>> LoadRunTableDirectoryAsync(
+    private async Task<ApiResponseEnvelope<List<RunTableDirectoryItemDto>>> LoadRunTableDirectoryAsync(
         string workflowRunId,
         CancellationToken cancellationToken)
     {
-        var result = new List<TableRefDto>();
+        var result = new List<RunTableDirectoryItemDto>();
         var offset = 0;
         while (true)
         {
@@ -25,7 +25,7 @@ public partial class MainWindowViewModel
                 cancellationToken: cancellationToken);
             if (!response.Ok || response.Data is null)
             {
-                return new ApiResponseEnvelope<List<TableRefDto>>
+                return new ApiResponseEnvelope<List<RunTableDirectoryItemDto>>
                 {
                     Ok = false,
                     Error = response.Error,
@@ -37,7 +37,7 @@ public partial class MainWindowViewModel
             result.AddRange(page.Items);
             if (!page.HasMore)
             {
-                return ApiResponseEnvelope<List<TableRefDto>>.Success(
+                return ApiResponseEnvelope<List<RunTableDirectoryItemDto>>.Success(
                     result,
                     response.RequestId);
             }

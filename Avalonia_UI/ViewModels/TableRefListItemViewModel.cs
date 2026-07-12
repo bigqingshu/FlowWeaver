@@ -27,6 +27,9 @@ public sealed class TableRefListItemViewModel : ViewModelBase
         MountId = tableRef.MountId;
         LogicalTableId = tableRef.LogicalTableId;
         OutputSlot = tableRef.OutputSlot;
+        ResultBindings = tableRef is RunTableDirectoryItemDto directoryItem
+            ? directoryItem.ResultBindings
+            : [];
         TableType = tableRef.TableType;
         PreviewPersistence = tableRef.PreviewPersistence;
         CanReadRows = tableRef.CanReadRows;
@@ -65,6 +68,8 @@ public sealed class TableRefListItemViewModel : ViewModelBase
 
     public string? OutputSlot { get; }
 
+    public ResultBindingSummaryDto[] ResultBindings { get; }
+
     public string TableType { get; }
 
     public string PreviewPersistence { get; }
@@ -97,7 +102,37 @@ public sealed class TableRefListItemViewModel : ViewModelBase
         ? NodeRunId
         : SourceNodeInstanceId;
 
-    public string OutputSlotText => string.IsNullOrWhiteSpace(OutputSlot) ? "-" : OutputSlot;
+    public string OutputSlotText
+    {
+        get
+        {
+            var outputSlots = ResultBindings
+                .SelectMany(binding => binding.OutputSlots)
+                .Where(outputSlot => !string.IsNullOrWhiteSpace(outputSlot))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (outputSlots.Length > 0)
+            {
+                return string.Join(", ", outputSlots);
+            }
+
+            return string.IsNullOrWhiteSpace(OutputSlot) ? "-" : OutputSlot;
+        }
+    }
+
+    public string LogicalOutputText
+    {
+        get
+        {
+            var logicalOutputs = ResultBindings
+                .SelectMany(binding => binding.OutputSlots.Select(outputSlot =>
+                    $"{LogicalNodeText(binding)}.{outputSlot}"))
+                .ToArray();
+            return logicalOutputs.Length > 0
+                ? string.Join(", ", logicalOutputs)
+                : OutputSlotText;
+        }
+    }
 
     public string ReadabilityText => CanReadRows
         ? translate("data_preview.readable")
@@ -128,7 +163,7 @@ public sealed class TableRefListItemViewModel : ViewModelBase
     }
 
     public string DirectorySummaryText =>
-        $"{TableTypeText} | {SourceNodeText}.{OutputSlotText} | {StorageKind} | {VersionText} | {PreviewPersistenceText} | {LifecycleStatus} | {ReadabilityText}";
+        $"{TableTypeText} | {SourceNodeText} -> {LogicalOutputText} | {StorageKind} | {VersionText} | {PreviewPersistenceText} | {LifecycleStatus} | {ReadabilityText}";
 
     public bool HasCapability(string capability)
     {
@@ -142,6 +177,7 @@ public sealed class TableRefListItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(PreviewPersistenceText));
         OnPropertyChanged(nameof(ReadabilityText));
         OnPropertyChanged(nameof(UnreadableReasonText));
+        OnPropertyChanged(nameof(LogicalOutputText));
         OnPropertyChanged(nameof(DirectorySummaryText));
     }
 
@@ -165,5 +201,12 @@ public sealed class TableRefListItemViewModel : ViewModelBase
             "data_preview.unreadable.rows_unavailable" => "rows are unavailable",
             _ => key,
         };
+    }
+
+    private static string LogicalNodeText(ResultBindingSummaryDto binding)
+    {
+        return string.IsNullOrWhiteSpace(binding.NodeInstanceId)
+            ? binding.NodeRunId
+            : binding.NodeInstanceId;
     }
 }

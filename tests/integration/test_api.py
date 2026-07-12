@@ -26,6 +26,7 @@ from flowweaver.protocols.enums import (
     LoopIterationRunStatus,
     LoopIterationTableRefRole,
     LoopRunStatus,
+    NodeResultStatus,
     NodeRunStatus,
     TableMutability,
     TableRole,
@@ -35,6 +36,7 @@ from flowweaver.protocols.enums import (
     WorkflowRunStatus,
 )
 from flowweaver.protocols.events import EventModel
+from flowweaver.protocols.node_task import NodeTaskModel, NodeTaskResultModel
 from flowweaver.protocols.table_ref import FieldSchemaModel, TableRefModel
 
 TOKEN = "test-token"
@@ -1795,6 +1797,38 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
         logical_table_id="loop_input",
     )
     store.register_table_ref(table_ref)
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-loop-api",
+    )
+    task = NodeTaskModel(
+        task_id="task-loop-api",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=node.node_run_id,
+        node_instance_id=node.node_instance_id,
+        node_type=node.node_type,
+        node_version="1.0",
+        attempt=node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    store.create_node_task(task)
+    assert store.record_node_task_result_once(
+        NodeTaskResultModel(
+            result_id="result-loop-api",
+            task_id=task.task_id,
+            node_run_id=node.node_run_id,
+            attempt=node.attempt,
+            executor_id="executor-1",
+            process_generation=process.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=[table_ref.table_ref_id],
+            output_slot_bindings={"result": table_ref.table_ref_id},
+        )
+    )
     loop = store.create_loop_run(
         loop_run_id="loop-run-1",
         workflow_run_id=run.workflow_run_id,
@@ -1945,6 +1979,14 @@ def test_run_loop_query_api_returns_loops_iterations_and_table_refs(
     assert table_refs[0]["storage_kind"] == TableStorageKind.RUNTIME_SQL.value
     assert table_refs[0]["source_node_run_id"] == node.node_run_id
     assert table_refs[0]["source_node_instance_id"] == "loop-body"
+    assert table_refs[0]["output_slot"] == "result"
+    assert table_refs[0]["result_bindings"] == [
+        {
+            "node_run_id": node.node_run_id,
+            "node_instance_id": "loop-body",
+            "output_slots": ["result"],
+        }
+    ]
     assert iteration_nodes == [
         {
             "loop_iteration_id": iteration.loop_iteration_id,
@@ -2022,6 +2064,38 @@ def test_run_metadata_directory_api_pages_and_filters_without_full_schema(
     ]
     for table_ref in refs:
         store.register_table_ref(table_ref)
+    process = store.create_workflow_process(
+        workflow_run_id=run.workflow_run_id,
+        process_id="process-run-directory",
+    )
+    task = NodeTaskModel(
+        task_id="task-run-directory-memory",
+        workflow_run_id=run.workflow_run_id,
+        workflow_process_id=process.process_id,
+        process_generation=process.process_generation,
+        node_run_id=second_node.node_run_id,
+        node_instance_id=second_node.node_instance_id,
+        node_type=second_node.node_type,
+        node_version="1.0",
+        attempt=second_node.attempt,
+        input_refs=[],
+        config={},
+        timeout_seconds=60,
+    )
+    store.create_node_task(task)
+    assert store.record_node_task_result_once(
+        NodeTaskResultModel(
+            result_id="result-run-directory-memory",
+            task_id=task.task_id,
+            node_run_id=second_node.node_run_id,
+            attempt=second_node.attempt,
+            executor_id="executor-1",
+            process_generation=process.process_generation,
+            status=NodeResultStatus.SUCCEEDED,
+            output_refs=[refs[1].table_ref_id],
+            output_slot_bindings={"memory_copy": refs[1].table_ref_id},
+        )
+    )
 
     node_page_response = client.get(
         f"/api/v1/runs/{run.workflow_run_id}/nodes",
@@ -2090,6 +2164,13 @@ def test_run_metadata_directory_api_pages_and_filters_without_full_schema(
     assert table_page["items"][0]["table_ref_id"] == refs[1].table_ref_id
     assert table_page["items"][0]["source_node_instance_id"] == "second-node"
     assert table_page["items"][0]["output_slot"] == "memory_copy"
+    assert table_page["items"][0]["result_bindings"] == [
+        {
+            "node_run_id": second_node.node_run_id,
+            "node_instance_id": "second-node",
+            "output_slots": ["memory_copy"],
+        }
+    ]
     assert "schema" not in table_page["items"][0]
     assert isinstance(legacy_tables, list)
     assert len(legacy_tables) == 3

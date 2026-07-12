@@ -747,7 +747,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":{"items":[{"table_ref_id":"table-1","workflow_run_id":"run-1","node_run_id":"node-run-1","source_node_run_id":"node-run-1","source_node_instance_id":"node-1","role":"AUXILIARY","storage_kind":"RUNTIME_SQL","scope":"WORKFLOW_RUN","mutability":"IMMUTABLE","provider_id":"runtime-sql","resource_profile_id":"profile-1","mount_id":"mount-1","logical_table_id":"orders","output_slot":"result","table_type":"runtime_sql_table","preview_persistence":"workflow_run_sql","can_read_rows":true,"supports_paged_rows":true,"schema_fingerprint":"fp","version":2,"capabilities":["READ"],"lifecycle_status":"PUBLISHED","created_at":"2026-07-10T01:02:03Z"}],"offset":0,"limit":20,"total":1,"has_more":false},"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":{"items":[{"table_ref_id":"table-1","workflow_run_id":"run-1","node_run_id":"node-run-1","source_node_run_id":"node-run-1","source_node_instance_id":"physical-node","result_bindings":[{"node_run_id":"logical-run-1","node_instance_id":"node-1","output_slots":["result","preview"]}],"role":"AUXILIARY","storage_kind":"RUNTIME_SQL","scope":"WORKFLOW_RUN","mutability":"IMMUTABLE","provider_id":"runtime-sql","resource_profile_id":"profile-1","mount_id":"mount-1","logical_table_id":"orders","output_slot":null,"table_type":"runtime_sql_table","preview_persistence":"workflow_run_sql","can_read_rows":true,"supports_paged_rows":true,"schema_fingerprint":"fp","version":2,"capabilities":["READ"],"lifecycle_status":"PUBLISHED","created_at":"2026-07-10T01:02:03Z"}],"offset":0,"limit":20,"total":1,"has_more":false},"error":null,"request_id":"req"}"""),
         });
         var client = new EngineHostApiClient(new HttpClient(handler));
 
@@ -765,8 +765,12 @@ public sealed class EngineHostApiClientTests
             new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/table-refs?paged=true&offset=0&limit=20&node_run_id=node%20run%201&table_type=runtime_sql_table&lifecycle=ACTIVE&lifecycle=PUBLISHED&logical_table_id=daily%20orders"),
             handler.RequestUri);
         Assert.AreEqual(1, result.Data?.Total);
-        Assert.AreEqual("node-1", result.Data?.Items[0].SourceNodeInstanceId);
-        Assert.AreEqual("result", result.Data?.Items[0].OutputSlot);
+        Assert.AreEqual("physical-node", result.Data?.Items[0].SourceNodeInstanceId);
+        Assert.IsNull(result.Data?.Items[0].OutputSlot);
+        Assert.AreEqual("node-1", result.Data?.Items[0].ResultBindings[0].NodeInstanceId);
+        CollectionAssert.AreEqual(
+            new[] { "result", "preview" },
+            result.Data?.Items[0].ResultBindings[0].OutputSlots);
         Assert.AreEqual("runtime_sql_table", result.Data?.Items[0].TableType);
         Assert.AreEqual("workflow_run_sql", result.Data?.Items[0].PreviewPersistence);
         Assert.IsTrue(result.Data?.Items[0].CanReadRows);
@@ -774,7 +778,9 @@ public sealed class EngineHostApiClientTests
         Assert.IsFalse(result.Data?.Items[0].Schema.HasValue);
 
         var item = new TableRefListItemViewModel(result.Data!.Items[0]);
-        Assert.AreEqual("node-1", item.SourceNodeInstanceId);
+        Assert.AreEqual("physical-node", item.SourceNodeInstanceId);
+        Assert.AreEqual("result, preview", item.OutputSlotText);
+        Assert.AreEqual("node-1.result, node-1.preview", item.LogicalOutputText);
         Assert.AreEqual("profile-1", item.ResourceProfileId);
         Assert.IsTrue(item.SupportsPagedRows);
     }
@@ -893,7 +899,7 @@ public sealed class EngineHostApiClientTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("""{"ok":true,"data":[{"loop_iteration_id":"iteration-1","table_ref_id":"table-1","role":"OUTPUT","logical_table_id":"orders","storage_kind":"RUNTIME_SQL","table_role":"CURRENT","version":2,"lifecycle_status":"PUBLISHED","source_node_run_id":"node-run-1","source_node_instance_id":"body-1","output_slot":"result","created_at":"2026-07-10T01:02:03Z"}],"error":null,"request_id":"req"}"""),
+            Content = new StringContent("""{"ok":true,"data":[{"loop_iteration_id":"iteration-1","table_ref_id":"table-1","role":"OUTPUT","logical_table_id":"orders","storage_kind":"RUNTIME_SQL","table_role":"CURRENT","version":2,"lifecycle_status":"PUBLISHED","source_node_run_id":"node-run-1","source_node_instance_id":"physical-body","result_bindings":[{"node_run_id":"logical-run-1","node_instance_id":"body-1","output_slots":["result"]}],"output_slot":"result","created_at":"2026-07-10T01:02:03Z"}],"error":null,"request_id":"req"}"""),
         });
         var service = new LoopRunQueryService(
             new EngineHostApiClient(new HttpClient(handler)));
@@ -911,8 +917,9 @@ public sealed class EngineHostApiClientTests
             new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/loops/loop%20run%201/iterations/iteration%201/table-refs?role=OUTPUT"),
             handler.RequestUri);
         Assert.AreEqual("OUTPUT", result.Data?[0].Role);
-        Assert.AreEqual("body-1", result.Data?[0].SourceNodeInstanceId);
+        Assert.AreEqual("physical-body", result.Data?[0].SourceNodeInstanceId);
         Assert.AreEqual("result", result.Data?[0].OutputSlot);
+        Assert.AreEqual("body-1", result.Data?[0].ResultBindings[0].NodeInstanceId);
     }
 
     [TestMethod]

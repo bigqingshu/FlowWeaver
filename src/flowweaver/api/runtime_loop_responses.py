@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
+from flowweaver.api.table_ref_responses import (
+    result_binding_compatibility_output_slot,
+    result_bindings_to_jsonable,
+)
 from flowweaver.engine.runtime_models import (
     LoopIterationNodeRun,
     LoopIterationRun,
     LoopIterationTableRef,
     LoopRun,
     NodeRun,
+    RunTableResultBinding,
 )
 from flowweaver.protocols.table_ref import TableRefModel
 
@@ -55,6 +61,7 @@ def loop_iteration_table_ref_to_jsonable(
     value: LoopIterationTableRef,
     table_ref: TableRefModel | None = None,
     source_node_instance_id: str | None = None,
+    result_bindings: Sequence[RunTableResultBinding] = (),
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "loop_iteration_id": value.loop_iteration_id,
@@ -63,9 +70,6 @@ def loop_iteration_table_ref_to_jsonable(
         "created_at": value.created_at.isoformat(),
     }
     if table_ref is not None:
-        output_slot = table_ref.opaque_handle.get("output_slot")
-        if not isinstance(output_slot, str) or not output_slot:
-            output_slot = table_ref.opaque_handle.get("output_name")
         payload.update(
             {
                 "logical_table_id": table_ref.logical_table_id,
@@ -75,7 +79,11 @@ def loop_iteration_table_ref_to_jsonable(
                 "lifecycle_status": table_ref.lifecycle_status.value,
                 "source_node_run_id": table_ref.created_by_node_run_id,
                 "source_node_instance_id": source_node_instance_id,
-                "output_slot": output_slot,
+                "result_bindings": result_bindings_to_jsonable(result_bindings),
+                "output_slot": result_binding_compatibility_output_slot(
+                    table_ref,
+                    result_bindings,
+                ),
             }
         )
     return payload
