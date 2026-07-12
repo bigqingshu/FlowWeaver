@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -17,7 +18,11 @@ from flowweaver.engine.runtime_models import (
     SharedPublicationMemberSummary,
     SharedPublicationSummary,
 )
-from flowweaver.engine.runtime_record_mappers import _datetime_from_text
+from flowweaver.engine.runtime_record_mappers import (
+    _datetime_from_text,
+    _datetime_to_text,
+    _optional_datetime_from_text,
+)
 from flowweaver.engine.runtime_shared_table_record_mappers import (
     _shared_publication_from_records,
 )
@@ -63,6 +68,7 @@ def get_shared_publication_version_from_session(
         select(SharedPublicationRecord)
         .where(SharedPublicationRecord.share_name == share_name)
         .where(SharedPublicationRecord.publication_version == publication_version)
+        .where(SharedPublicationRecord.status == "PUBLISHED")
     )
     if record is None:
         return None
@@ -79,6 +85,7 @@ def get_latest_shared_publication_from_session(
     record = session.scalar(
         select(SharedPublicationRecord)
         .where(SharedPublicationRecord.share_name == share_name)
+        .where(SharedPublicationRecord.status == "PUBLISHED")
         .order_by(SharedPublicationRecord.publication_version.desc())
         .limit(1)
     )
@@ -245,6 +252,20 @@ def list_shared_publication_summaries_from_session(
             input_snapshot_id=record.input_snapshot_id,
             retention_policy=json.loads(record.retention_policy_json),
             created_at=_datetime_from_text(record.created_at),
+            expires_at=_optional_datetime_from_text(record.expires_at),
+            release_started_at=_optional_datetime_from_text(
+                record.release_started_at
+            ),
+            cleanup_last_progress_at=_optional_datetime_from_text(
+                record.cleanup_last_progress_at
+            ),
+            released_at=_optional_datetime_from_text(record.released_at),
+            cleanup_attempt_count=record.cleanup_attempt_count,
+            last_cleanup_error=(
+                json.loads(record.last_cleanup_error_json)
+                if record.last_cleanup_error_json is not None
+                else None
+            ),
             member_count=member_counts.get(record.publication_id, 0),
             is_latest_published=(
                 record.status == "PUBLISHED"
@@ -267,6 +288,27 @@ def count_shared_publication_versions_from_session(
             )
         )
         or 0
+    )
+
+
+def list_expired_shared_publication_ids_from_session(
+    session: Session,
+    *,
+    now: datetime,
+    limit: int,
+) -> list[str]:
+    return list(
+        session.scalars(
+            select(SharedPublicationRecord.publication_id)
+            .where(SharedPublicationRecord.status == "PUBLISHED")
+            .where(SharedPublicationRecord.expires_at.is_not(None))
+            .where(SharedPublicationRecord.expires_at <= _datetime_to_text(now))
+            .order_by(
+                SharedPublicationRecord.expires_at,
+                SharedPublicationRecord.publication_id,
+            )
+            .limit(max(1, min(limit, 1000)))
+        )
     )
 
 

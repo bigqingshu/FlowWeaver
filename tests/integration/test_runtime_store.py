@@ -246,6 +246,102 @@ def test_alembic_migration_creates_required_tables(tmp_path: Path) -> None:
         "created_at",
         "table_ref_id",
     ]
+    assert {
+        "expires_at",
+        "release_started_at",
+        "cleanup_last_progress_at",
+        "released_at",
+        "cleanup_attempt_count",
+        "last_cleanup_error_json",
+    }.issubset(column_names(database_path, "shared_publications"))
+    assert indexes(database_path, "shared_publications")[
+        "idx_shared_publications_status_expires"
+    ] == ["status", "expires_at"]
+    assert indexes(database_path, "shared_publications")[
+        "idx_shared_publications_status_cleanup_progress"
+    ] == ["status", "cleanup_last_progress_at"]
+    assert indexes(database_path, "shared_publications")[
+        "idx_shared_publications_status_catalog"
+    ] == ["status", "share_name", "publication_version"]
+    assert indexes(database_path, "read_leases")[
+        "idx_read_leases_publication_blocker"
+    ] == ["publication_id", "released_at", "expires_at"]
+
+
+def test_shared_publication_lifecycle_migration_backfills_valid_retention_only(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "metadata.db"
+    config = alembic_config(database_path)
+    command.upgrade(config, "20260711_0023")
+    rows = [
+        (
+            "publication-valid-retention",
+            "valid-retention",
+            1,
+            '{"retention_seconds":3600}',
+        ),
+        (
+            "publication-missing-retention",
+            "missing-retention",
+            1,
+            "{}",
+        ),
+        (
+            "publication-damaged-retention",
+            "damaged-retention",
+            1,
+            "{",
+        ),
+        (
+            "publication-invalid-retention",
+            "invalid-retention",
+            1,
+            '{"retention_seconds":"3600"}',
+        ),
+        (
+            "publication-overflow-retention",
+            "overflow-retention",
+            1,
+            '{"retention_seconds":999999999999999999999999}',
+        ),
+    ]
+    with sqlite3.connect(database_path) as connection:
+        connection.executemany(
+            "INSERT INTO shared_publications ("
+            "publication_id, share_name, publication_version, "
+            "producer_workflow_id, producer_run_id, status, "
+            "input_snapshot_id, retention_policy_json, created_at"
+            ") VALUES (?, ?, ?, 'workflow-old', 'run-old', "
+            "'PUBLISHED', NULL, ?, '2026-07-11T00:00:00+00:00')",
+            rows,
+        )
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        migrated = dict(
+            connection.execute(
+                "SELECT publication_id, expires_at FROM shared_publications"
+            ).fetchall()
+        )
+        attempts = connection.execute(
+            "SELECT DISTINCT cleanup_attempt_count FROM shared_publications"
+        ).fetchall()
+    assert migrated["publication-valid-retention"] == (
+        "2026-07-11T01:00:00+00:00"
+    )
+    assert migrated["publication-missing-retention"] is None
+    assert migrated["publication-damaged-retention"] is None
+    assert migrated["publication-invalid-retention"] is None
+    assert migrated["publication-overflow-retention"] is None
+    assert attempts == [(0,)]
+
+    store = RuntimeStore.from_sqlite_path(database_path)
+    publication = store.get_shared_publication("publication-valid-retention")
+    assert publication is not None
+    assert publication.status == "PUBLISHED"
+    assert publication.expires_at is not None
 
 
 def test_table_ref_identity_migration_preserves_existing_refs(
@@ -515,6 +611,12 @@ def test_shared_publication_prerequisite_schema_is_available(
         "input_snapshot_id",
         "retention_policy_json",
         "created_at",
+        "expires_at",
+        "release_started_at",
+        "cleanup_last_progress_at",
+        "released_at",
+        "cleanup_attempt_count",
+        "last_cleanup_error_json",
     }
     assert column_names(database_path, "shared_publication_members") == {
         "publication_id",

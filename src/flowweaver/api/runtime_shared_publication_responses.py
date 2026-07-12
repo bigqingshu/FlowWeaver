@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from flowweaver.engine.runtime_models import (
@@ -8,6 +9,9 @@ from flowweaver.engine.runtime_models import (
     SharedPublicationMember,
     SharedPublicationMemberSummary,
     SharedPublicationSummary,
+)
+from flowweaver.engine.shared_publication_lifecycle import (
+    SharedPublicationCleanupPreview,
 )
 
 
@@ -22,6 +26,16 @@ def shared_publication_to_jsonable(value: SharedPublication) -> dict[str, Any]:
         "input_snapshot_id": value.input_snapshot_id,
         "retention_policy": value.retention_policy,
         "created_at": value.created_at.isoformat(),
+        "expires_at": _optional_datetime_to_jsonable(value.expires_at),
+        "release_started_at": _optional_datetime_to_jsonable(
+            value.release_started_at
+        ),
+        "cleanup_last_progress_at": _optional_datetime_to_jsonable(
+            value.cleanup_last_progress_at
+        ),
+        "released_at": _optional_datetime_to_jsonable(value.released_at),
+        "cleanup_attempt_count": value.cleanup_attempt_count,
+        "last_cleanup_error": value.last_cleanup_error,
         "members": [
             {
                 "publication_id": member.publication_id,
@@ -59,6 +73,16 @@ def shared_publication_summary_to_jsonable(
         "input_snapshot_id": value.input_snapshot_id,
         "retention_policy": value.retention_policy,
         "created_at": value.created_at.isoformat(),
+        "expires_at": _optional_datetime_to_jsonable(value.expires_at),
+        "release_started_at": _optional_datetime_to_jsonable(
+            value.release_started_at
+        ),
+        "cleanup_last_progress_at": _optional_datetime_to_jsonable(
+            value.cleanup_last_progress_at
+        ),
+        "released_at": _optional_datetime_to_jsonable(value.released_at),
+        "cleanup_attempt_count": value.cleanup_attempt_count,
+        "last_cleanup_error": value.last_cleanup_error,
         "member_count": value.member_count,
         "is_latest_published": value.is_latest_published,
     }
@@ -83,3 +107,24 @@ def shared_publication_member_to_jsonable(
             }
         )
     return payload
+
+
+def shared_publication_cleanup_preview_to_jsonable(
+    value: SharedPublicationCleanupPreview,
+) -> dict[str, Any]:
+    return {
+        "publication_id": value.publication_id,
+        "eligible": value.eligible,
+        "status": value.status,
+        "expires_at": _optional_datetime_to_jsonable(value.expires_at),
+        "is_latest_published": value.is_latest_published,
+        "active_read_lease_count": value.active_read_lease_count,
+        "active_table_lease_count": value.active_table_lease_count,
+        "releasable_member_count": value.releasable_member_count,
+        "protected_member_count": value.protected_member_count,
+        "blockers": [blocker.value for blocker in value.blockers],
+    }
+
+
+def _optional_datetime_to_jsonable(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None

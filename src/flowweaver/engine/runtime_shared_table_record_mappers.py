@@ -38,6 +38,18 @@ def _shared_publication_from_records(
         input_snapshot_id=record.input_snapshot_id,
         retention_policy=json.loads(record.retention_policy_json),
         created_at=_datetime_from_text(record.created_at),
+        expires_at=_optional_datetime_from_text(record.expires_at),
+        release_started_at=_optional_datetime_from_text(record.release_started_at),
+        cleanup_last_progress_at=_optional_datetime_from_text(
+            record.cleanup_last_progress_at
+        ),
+        released_at=_optional_datetime_from_text(record.released_at),
+        cleanup_attempt_count=record.cleanup_attempt_count,
+        last_cleanup_error=(
+            json.loads(record.last_cleanup_error_json)
+            if record.last_cleanup_error_json is not None
+            else None
+        ),
         members=tuple(
             _shared_publication_member_from_record(member) for member in members
         ),

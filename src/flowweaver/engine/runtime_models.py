@@ -215,6 +215,12 @@ class SharedPublication:
     input_snapshot_id: str | None
     retention_policy: dict[str, Any]
     created_at: datetime
+    expires_at: datetime | None
+    release_started_at: datetime | None
+    cleanup_last_progress_at: datetime | None
+    released_at: datetime | None
+    cleanup_attempt_count: int
+    last_cleanup_error: dict[str, Any] | None
     members: tuple[SharedPublicationMember, ...]
 
 
@@ -238,6 +244,12 @@ class SharedPublicationSummary:
     input_snapshot_id: str | None
     retention_policy: dict[str, Any]
     created_at: datetime
+    expires_at: datetime | None
+    release_started_at: datetime | None
+    cleanup_last_progress_at: datetime | None
+    released_at: datetime | None
+    cleanup_attempt_count: int
+    last_cleanup_error: dict[str, Any] | None
     member_count: int
     is_latest_published: bool
 
@@ -268,3 +280,11 @@ class ReadLease:
     acquired_at: datetime
     expires_at: datetime
     released_at: datetime | None
+
+
+@dataclass(frozen=True)
+class SharedTableReadAcquisition:
+    publication: SharedPublication
+    table_refs: tuple[TableRefModel, ...]
+    input_snapshot: InputSnapshot
+    read_lease: ReadLease

@@ -164,6 +164,7 @@ def test_shared_publication_directory_indexes_are_migrated(tmp_path: Path) -> No
     }
 
     assert "idx_shared_publications_catalog" in publication_indexes
+    assert "idx_shared_publications_status_catalog" in publication_indexes
     assert "idx_shared_publication_members_publication_export" in member_indexes
     assert "idx_shared_publication_members_table_ref" in member_indexes
 
@@ -267,7 +268,8 @@ def test_large_shared_publication_directory_stays_indexed_and_bounded(
         ).all()
 
     assert any(
-        "idx_shared_publications_catalog" in str(row[3]) for row in catalog_plan
+        "idx_shared_publications_status_catalog" in str(row[3])
+        for row in catalog_plan
     )
     assert any(
         "idx_shared_publication_members_publication_export" in str(row[3])

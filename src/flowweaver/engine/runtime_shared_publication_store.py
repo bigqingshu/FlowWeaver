@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.engine import Engine
@@ -42,6 +43,9 @@ from flowweaver.engine.runtime_shared_publication_queries import (
     get_shared_publication_version_from_session as _get_publication_version,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
+    list_expired_shared_publication_ids_from_session as _list_expired_publication_ids,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
     list_shared_publication_catalog_from_session as _list_publication_catalog,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
@@ -68,6 +72,9 @@ from flowweaver.engine.runtime_shared_table_store_helpers import (
 from flowweaver.engine.runtime_shared_table_store_helpers import (
     validate_shared_publication_members as _validate_shared_publication_members,
 )
+from flowweaver.engine.shared_publication_lifecycle import (
+    calculate_shared_publication_expires_at,
+)
 
 
 class RuntimeSharedPublicationStoreMixin:
@@ -89,6 +96,11 @@ class RuntimeSharedPublicationStoreMixin:
             raise ValueError("Shared publication requires at least one member")
 
         now = utc_now()
+        normalized_retention_policy = retention_policy or {}
+        expires_at = calculate_shared_publication_expires_at(
+            created_at=now,
+            retention_policy=normalized_retention_policy,
+        )
         publication_id = publication_id or new_id()
         member_records: list[SharedPublicationMemberRecord] = []
         with immediate_session(self.engine) as session:
@@ -114,8 +126,16 @@ class RuntimeSharedPublicationStoreMixin:
                 producer_run_id=producer_run_id,
                 status="PUBLISHED",
                 input_snapshot_id=input_snapshot_id,
-                retention_policy_json=_json_dumps(retention_policy or {}),
+                retention_policy_json=_json_dumps(normalized_retention_policy),
                 created_at=_datetime_to_text(now),
+                expires_at=(
+                    _datetime_to_text(expires_at) if expires_at is not None else None
+                ),
+                release_started_at=None,
+                cleanup_last_progress_at=None,
+                released_at=None,
+                cleanup_attempt_count=0,
+                last_cleanup_error_json=None,
             )
             session.add(publication_record)
             session.flush()
@@ -240,4 +260,17 @@ class RuntimeSharedPublicationStoreMixin:
             return _count_publication_members(
                 session,
                 publication_id=publication_id,
+            )
+
+    def list_expired_shared_publication_ids(
+        self,
+        *,
+        now: datetime,
+        limit: int = 50,
+    ) -> list[str]:
+        with self._session_factory() as session:
+            return _list_expired_publication_ids(
+                session,
+                now=now,
+                limit=limit,
             )

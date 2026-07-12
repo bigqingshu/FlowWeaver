@@ -16,6 +16,22 @@ class SharedPublicationRecord(Base):
             "status",
             "publication_version",
         ),
+        Index(
+            "idx_shared_publications_status_expires",
+            "status",
+            "expires_at",
+        ),
+        Index(
+            "idx_shared_publications_status_cleanup_progress",
+            "status",
+            "cleanup_last_progress_at",
+        ),
+        Index(
+            "idx_shared_publications_status_catalog",
+            "status",
+            "share_name",
+            "publication_version",
+        ),
     )
 
     publication_id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -27,6 +43,17 @@ class SharedPublicationRecord(Base):
     input_snapshot_id: Mapped[str | None] = mapped_column(Text)
     retention_policy_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[str | None] = mapped_column(Text)
+    release_started_at: Mapped[str | None] = mapped_column(Text)
+    cleanup_last_progress_at: Mapped[str | None] = mapped_column(Text)
+    released_at: Mapped[str | None] = mapped_column(Text)
+    cleanup_attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    last_cleanup_error_json: Mapped[str | None] = mapped_column(Text)
 
 
 class SharedPublicationMemberRecord(Base):
@@ -68,6 +95,14 @@ class InputSnapshotRecord(Base):
 
 class ReadLeaseRecord(Base):
     __tablename__ = "read_leases"
+    __table_args__ = (
+        Index(
+            "idx_read_leases_publication_blocker",
+            "publication_id",
+            "released_at",
+            "expires_at",
+        ),
+    )
 
     lease_id: Mapped[str] = mapped_column(Text, primary_key=True)
     publication_id: Mapped[str] = mapped_column(Text, nullable=False)

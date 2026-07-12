@@ -2653,6 +2653,13 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
             headers=auth_headers(),
         )
     )
+    cleanup_preview = response_data(
+        client.get(
+            "/api/v1/shared-publications/"
+            f"{publication.publication_id}/cleanup-preview",
+            headers=auth_headers(),
+        )
+    )
 
     assert table_refs[0]["table_ref_id"] == table_ref.table_ref_id
     assert table_refs[0]["workflow_run_id"] == run.workflow_run_id
@@ -2676,6 +2683,9 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     assert versions[0]["share_name"] == "daily_report"
     assert versions[0]["publication_version"] == 1
     assert versions[0]["members"][0]["table_ref_id"] == table_ref.table_ref_id
+    assert versions[0]["expires_at"] is None
+    assert versions[0]["cleanup_attempt_count"] == 0
+    assert versions[0]["last_cleanup_error"] is None
     assert catalog["items"] == [
         {
             "share_name": "daily_report",
@@ -2691,6 +2701,9 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
     )
     assert version_summaries["items"][0]["member_count"] == 1
     assert version_summaries["items"][0]["is_latest_published"] is True
+    assert version_summaries["items"][0]["expires_at"] is None
+    assert version_summaries["items"][0]["release_started_at"] is None
+    assert version_summaries["items"][0]["released_at"] is None
     assert "members" not in version_summaries["items"][0]
     assert members["items"] == [
         {
@@ -2705,6 +2718,34 @@ def test_k0c_read_only_api_contracts_return_runtime_summaries(
         }
     ]
     assert members["total"] == 1
+    assert cleanup_preview == {
+        "publication_id": publication.publication_id,
+        "eligible": False,
+        "status": "PUBLISHED",
+        "expires_at": None,
+        "is_latest_published": True,
+        "active_read_lease_count": 0,
+        "active_table_lease_count": 0,
+        "releasable_member_count": 1,
+        "protected_member_count": 0,
+        "blockers": [
+            "RETENTION_NOT_CONFIGURED",
+            "LATEST_VERSION_PROTECTED",
+            "PRODUCER_RUN_ACTIVE",
+        ],
+    }
+
+
+def test_shared_publication_cleanup_preview_returns_not_found(tmp_path: Path) -> None:
+    client, _store, _container = make_client(tmp_path)
+
+    response = client.get(
+        "/api/v1/shared-publications/missing-publication/cleanup-preview",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response_error(response)["error_code"] == "SHARED_PUBLICATION_NOT_FOUND"
 
 
 def test_data_api_reads_table_ref_schema_summary_and_limited_rows(

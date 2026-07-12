@@ -14,10 +14,14 @@ from flowweaver.api.responses import error_response, ok_response
 from flowweaver.api.run_pagination import paginated_ok_response, pagination_rejection
 from flowweaver.api.runtime_shared_publication_responses import (
     shared_publication_catalog_entry_to_jsonable,
+    shared_publication_cleanup_preview_to_jsonable,
     shared_publication_member_to_jsonable,
     shared_publication_summary_to_jsonable,
 )
 from flowweaver.engine.runtime_store import RuntimeStore
+from flowweaver.engine.shared_publication_lifecycle import (
+    SharedPublicationLifecycleService,
+)
 
 router = APIRouter(
     prefix="/api/v1/shared-publications",
@@ -129,4 +133,24 @@ def list_shared_publication_members(
         limit=limit,
         total=total,
         paged=True,
+    )
+
+
+@router.get("/{publication_id}/cleanup-preview", response_model=APIResponseModel)
+def get_shared_publication_cleanup_preview(
+    request: Request,
+    publication_id: str,
+    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+):
+    preview = SharedPublicationLifecycleService(store).preview(publication_id)
+    if preview is None:
+        return error_response(
+            request,
+            error_code="SHARED_PUBLICATION_NOT_FOUND",
+            message="Shared publication not found",
+            status_code=404,
+        )
+    return ok_response(
+        request,
+        shared_publication_cleanup_preview_to_jsonable(preview),
     )
