@@ -4,7 +4,7 @@ import json
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, union_all
 from sqlalchemy.orm import Session
 
 from flowweaver.engine.db_models import (
@@ -307,6 +307,47 @@ def list_expired_shared_publication_ids_from_session(
                 SharedPublicationRecord.expires_at,
                 SharedPublicationRecord.publication_id,
             )
+            .limit(max(1, min(limit, 1000)))
+        )
+    )
+
+
+def list_cleanup_candidate_ids_from_session(
+    session: Session,
+    *,
+    now: datetime,
+    stale_before: datetime,
+    limit: int,
+) -> list[str]:
+    published_candidates = (
+        select(
+            SharedPublicationRecord.publication_id.label("publication_id"),
+            SharedPublicationRecord.expires_at.label("candidate_at"),
+        )
+        .where(SharedPublicationRecord.status == "PUBLISHED")
+        .where(SharedPublicationRecord.expires_at.is_not(None))
+        .where(SharedPublicationRecord.expires_at <= _datetime_to_text(now))
+    )
+    stale_releasing_candidates = (
+        select(
+            SharedPublicationRecord.publication_id.label("publication_id"),
+            SharedPublicationRecord.cleanup_last_progress_at.label("candidate_at"),
+        )
+        .where(SharedPublicationRecord.status == "RELEASING")
+        .where(SharedPublicationRecord.cleanup_last_progress_at.is_not(None))
+        .where(
+            SharedPublicationRecord.cleanup_last_progress_at
+            <= _datetime_to_text(stale_before)
+        )
+    )
+    candidates = union_all(
+        published_candidates,
+        stale_releasing_candidates,
+    ).subquery()
+    return list(
+        session.scalars(
+            select(candidates.c.publication_id)
+            .order_by(candidates.c.candidate_at, candidates.c.publication_id)
             .limit(max(1, min(limit, 1000)))
         )
     )

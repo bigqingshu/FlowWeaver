@@ -30,11 +30,43 @@ def test_bootstrap_creates_data_dirs_token_and_blocks_second_instance(
     try:
         assert config.data_dir.joinpath("metadata", "flowweaver.db").exists()
         assert config.data_dir.joinpath("config", "local_api_token").exists()
+        assert container.table_provider_registry is not None
+        assert container.shared_publication_lifecycle_service is not None
+        assert container.shared_publication_cleanup_worker is not None
+        assert (
+            container.shared_publication_cleanup_worker._lifecycle_service
+            is container.shared_publication_lifecycle_service
+        )
+        assert (
+            container.shared_publication_lifecycle_service
+            ._table_ref_release_service
+            ._provider_registry
+            is container.table_provider_registry
+        )
 
         with pytest.raises(InstanceLockError):
             EngineHostBootstrap(config).initialize()
     finally:
         container.close()
+
+
+def test_bootstrap_starts_and_stops_shared_cleanup_worker(tmp_path: Path) -> None:
+    container = EngineHostBootstrap(
+        EngineConfig(
+            data_dir=tmp_path / "data",
+            shared_publication_cleanup_enabled=True,
+            shared_publication_cleanup_interval_seconds=0.05,
+        )
+    ).initialize()
+    worker = container.shared_publication_cleanup_worker
+    assert worker is not None
+    try:
+        container.start()
+        assert worker.is_running
+    finally:
+        container.close()
+
+    assert worker.is_running is False
 
 
 def test_bootstrap_default_accepts_workflow_process_execution_config(

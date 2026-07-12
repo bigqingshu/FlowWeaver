@@ -196,3 +196,32 @@ def test_release_service_drops_active_memory_table(tmp_path: Path) -> None:
     assert released.lifecycle_status == LifecycleStatus.RELEASED
     with pytest.raises(ValueError, match="memory table is not available"):
         provider.read_rows(table_ref, offset=0, limit=1)
+
+
+def test_release_stop_after_provider_keeps_releasable_for_restart(
+    tmp_path: Path,
+) -> None:
+    store, published, _workflow_id, _workflow_run_id = seed_runtime_table(tmp_path)
+    stopped = False
+
+    def request_stop() -> None:
+        nonlocal stopped
+        stopped = True
+
+    registry = TableProviderRegistry()
+    registry.register(
+        CallbackRuntimeProvider(tmp_path / "runtime-tables", request_stop),
+        storage_kinds=(published.storage_kind,),
+    )
+    service = TableRefReleaseService(store=store, provider_registry=registry)
+
+    result = service.release(
+        published.table_ref_id,
+        should_stop=lambda: stopped,
+    )
+
+    assert result.outcome == TableRefReleaseOutcome.FAILED
+    assert result.reason == "release_stopped_after_provider"
+    table_ref = store.get_table_ref(published.table_ref_id)
+    assert table_ref is not None
+    assert table_ref.lifecycle_status == LifecycleStatus.RELEASABLE

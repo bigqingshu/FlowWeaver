@@ -16,8 +16,18 @@ from flowweaver.common.instance_lock import InstanceLock
 from flowweaver.engine.event_router import EventRouter
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.shared_publication_cleanup_worker import (
+    SharedPublicationCleanupWorker,
+)
+from flowweaver.engine.shared_publication_lifecycle import (
+    SharedPublicationLifecycleService,
+)
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
+from flowweaver.engine.table_provider_registry import (
+    create_default_table_provider_registry,
+)
+from flowweaver.engine.table_ref_release import TableRefReleaseService
 from flowweaver.nodes.default_registry import create_default_node_registry
 
 
@@ -44,6 +54,21 @@ class EngineHostBootstrap:
             runtime_store=runtime_store,
             event_router=event_router,
         )
+        table_provider_registry = create_default_table_provider_registry(
+            config.resolved_runtime_dir()
+        )
+        lifecycle_service = SharedPublicationLifecycleService(
+            runtime_store,
+            table_ref_release_service=TableRefReleaseService(
+                store=runtime_store,
+                provider_registry=table_provider_registry,
+            ),
+        )
+        cleanup_worker = SharedPublicationCleanupWorker(
+            config=config,
+            store=runtime_store,
+            lifecycle_service=lifecycle_service,
+        )
         return ServiceContainer(
             config=config,
             runtime_store=runtime_store,
@@ -51,6 +76,9 @@ class EngineHostBootstrap:
             table_lease_manager=table_lease_manager,
             supervisor=supervisor,
             node_registry=create_default_node_registry(),
+            table_provider_registry=table_provider_registry,
+            shared_publication_lifecycle_service=lifecycle_service,
+            shared_publication_cleanup_worker=cleanup_worker,
             instance_lock=lock,
         )
 

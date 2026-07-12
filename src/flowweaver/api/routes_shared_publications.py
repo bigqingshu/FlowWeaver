@@ -8,7 +8,7 @@ from flowweaver.api.api_models import APIResponseModel
 from flowweaver.api.dependencies import (
     check_origin,
     get_runtime_store,
-    get_table_provider_registry,
+    get_shared_publication_lifecycle_service,
     require_api_token,
 )
 from flowweaver.api.responses import error_response, ok_response
@@ -24,8 +24,6 @@ from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.shared_publication_lifecycle import (
     SharedPublicationLifecycleService,
 )
-from flowweaver.engine.table_provider_registry import TableProviderRegistry
-from flowweaver.engine.table_ref_release import TableRefReleaseService
 
 router = APIRouter(
     prefix="/api/v1/shared-publications",
@@ -144,9 +142,12 @@ def list_shared_publication_members(
 def get_shared_publication_cleanup_preview(
     request: Request,
     publication_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
+    lifecycle_service: Annotated[
+        SharedPublicationLifecycleService,
+        Depends(get_shared_publication_lifecycle_service),
+    ],
 ):
-    preview = SharedPublicationLifecycleService(store).preview(publication_id)
+    preview = lifecycle_service.preview(publication_id)
     if preview is None:
         return error_response(
             request,
@@ -164,19 +165,12 @@ def get_shared_publication_cleanup_preview(
 def cleanup_shared_publication(
     request: Request,
     publication_id: str,
-    store: Annotated[RuntimeStore, Depends(get_runtime_store)],
-    provider_registry: Annotated[
-        TableProviderRegistry,
-        Depends(get_table_provider_registry),
+    lifecycle_service: Annotated[
+        SharedPublicationLifecycleService,
+        Depends(get_shared_publication_lifecycle_service),
     ],
 ):
-    result = SharedPublicationLifecycleService(
-        store,
-        table_ref_release_service=TableRefReleaseService(
-            store=store,
-            provider_registry=provider_registry,
-        ),
-    ).cleanup(publication_id)
+    result = lifecycle_service.cleanup(publication_id)
     return ok_response(
         request,
         shared_publication_cleanup_result_to_jsonable(result),

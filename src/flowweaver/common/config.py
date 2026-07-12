@@ -74,6 +74,32 @@ class EngineConfig(StrictModel):
         DEFAULT_WORKFLOW_PROCESS_MAX_CONCURRENT_NODE_TASKS
     )
     supervisor_maintenance_interval_seconds: float = 1.0
+    shared_publication_cleanup_enabled: bool = False
+    shared_publication_cleanup_interval_seconds: float = Field(
+        default=60.0,
+        ge=0.05,
+        le=86_400.0,
+    )
+    shared_publication_cleanup_publication_batch_size: int = Field(
+        default=20,
+        ge=1,
+        le=1000,
+    )
+    shared_publication_cleanup_table_ref_batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+    )
+    shared_publication_cleanup_cycle_budget_seconds: float = Field(
+        default=5.0,
+        ge=0.05,
+        le=300.0,
+    )
+    shared_publication_releasing_stale_seconds: int = Field(
+        default=300,
+        ge=1,
+        le=604_800,
+    )
     allowed_origins: set[str] = Field(default_factory=lambda: {"http://127.0.0.1"})
 
     @field_validator("workflow_process_execution_mode", mode="before")

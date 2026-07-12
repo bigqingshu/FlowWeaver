@@ -9,12 +9,17 @@ from threading import Barrier
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import event, text
+from sqlalchemy import event, insert, text
 
+from flowweaver.common.config import EngineConfig
 from flowweaver.common.database import sqlite_url
 from flowweaver.common.time import utc_now
+from flowweaver.engine.db_models import SharedPublicationRecord
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
+from flowweaver.engine.shared_publication_cleanup_worker import (
+    SharedPublicationCleanupWorker,
+)
 from flowweaver.engine.shared_publication_lifecycle import (
     SharedPublicationCleanupBlocker,
     SharedPublicationCleanupOutcome,
@@ -675,6 +680,112 @@ def test_large_manual_cleanup_limits_provider_work_per_request(
     assert provider.drop_calls == 10
 
 
+def test_cleanup_candidate_query_is_single_indexed_and_bounded(
+    tmp_path: Path,
+) -> None:
+    store = make_store(tmp_path)
+    publication_rows = [
+        {
+            "publication_id": f"candidate-{index:05d}",
+            "share_name": f"candidate-share-{index:05d}",
+            "publication_version": 1,
+            "producer_workflow_id": "workflow-candidate",
+            "producer_run_id": "run-candidate",
+            "status": "PUBLISHED",
+            "input_snapshot_id": None,
+            "retention_policy_json": '{"retention_seconds":1}',
+            "created_at": "2026-07-10T00:00:00+00:00",
+            "expires_at": "2026-07-10T00:00:01+00:00",
+            "release_started_at": None,
+            "cleanup_last_progress_at": None,
+        }
+        for index in range(10_000)
+    ]
+    publication_rows.append(
+        {
+            "publication_id": "candidate-no-retention",
+            "share_name": "candidate-no-retention",
+            "publication_version": 1,
+            "producer_workflow_id": "workflow-candidate",
+            "producer_run_id": "run-candidate",
+            "status": "PUBLISHED",
+            "input_snapshot_id": None,
+            "retention_policy_json": "{}",
+            "created_at": "2026-07-10T00:00:00+00:00",
+            "expires_at": None,
+            "release_started_at": None,
+            "cleanup_last_progress_at": None,
+        }
+    )
+    publication_rows.append(
+        {
+            "publication_id": "candidate-stale-releasing",
+            "share_name": "candidate-stale-releasing",
+            "publication_version": 1,
+            "producer_workflow_id": "workflow-candidate",
+            "producer_run_id": "run-candidate",
+            "status": "RELEASING",
+            "input_snapshot_id": None,
+            "retention_policy_json": '{"retention_seconds":1}',
+            "created_at": "2026-07-10T00:00:00+00:00",
+            "expires_at": "2026-07-10T00:00:01+00:00",
+            "release_started_at": "2026-07-10T00:00:02+00:00",
+            "cleanup_last_progress_at": "2026-07-10T00:00:02+00:00",
+        }
+    )
+    with store.engine.begin() as connection:
+        connection.execute(insert(SharedPublicationRecord), publication_rows)
+    select_count = 0
+
+    def count_selects(
+        _connection,
+        _cursor,
+        statement: str,
+        _parameters,
+        _context,
+        _executemany,
+    ) -> None:
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    event.listen(store.engine, "before_cursor_execute", count_selects)
+    try:
+        candidates = store.list_shared_publication_cleanup_candidate_ids(
+            now=datetime.fromisoformat("2026-07-12T00:00:00+00:00"),
+            stale_before=datetime.fromisoformat("2026-07-11T00:00:00+00:00"),
+            limit=25,
+        )
+    finally:
+        event.remove(store.engine, "before_cursor_execute", count_selects)
+
+    assert len(candidates) == 25
+    assert "candidate-no-retention" not in candidates
+    assert select_count == 1
+    with store.engine.connect() as connection:
+        query_plan = connection.exec_driver_sql(
+            "EXPLAIN QUERY PLAN SELECT publication_id FROM ("
+            "SELECT publication_id, expires_at AS candidate_at "
+            "FROM shared_publications WHERE status = 'PUBLISHED' "
+            "AND expires_at IS NOT NULL "
+            "AND expires_at <= '2026-07-12T00:00:00+00:00' "
+            "UNION ALL "
+            "SELECT publication_id, cleanup_last_progress_at AS candidate_at "
+            "FROM shared_publications WHERE status = 'RELEASING' "
+            "AND cleanup_last_progress_at IS NOT NULL "
+            "AND cleanup_last_progress_at <= '2026-07-11T00:00:00+00:00'"
+            ") ORDER BY candidate_at, publication_id LIMIT 25"
+        ).all()
+    assert any(
+        "idx_shared_publications_status_expires" in str(row[3])
+        for row in query_plan
+    )
+    assert any(
+        "idx_shared_publications_status_cleanup_progress" in str(row[3])
+        for row in query_plan
+    )
+
+
 def test_manual_cleanup_rechecks_preview_and_blocks_active_lease(
     tmp_path: Path,
 ) -> None:
@@ -748,3 +859,132 @@ def test_manual_cleanup_does_not_drop_member_referenced_by_other_publication(
     )
     assert counting_provider.drop_calls == 0
     assert provider.read_rows(old_refs[0], offset=0, limit=1) == [{"value": 1}]
+
+
+def test_worker_recovers_stale_releasing_publication_after_restart(
+    tmp_path: Path,
+) -> None:
+    store, provider, publication_id, _old_refs, now = seed_cleanup_context(tmp_path)
+    failing_service = make_cleanup_service(
+        store,
+        FailOnceRuntimeProvider(tmp_path / "runtime-tables"),
+    )
+    first = failing_service.cleanup(publication_id, now=now)
+    assert first.outcome == SharedPublicationCleanupOutcome.RETRY_PENDING
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE shared_publications "
+                "SET cleanup_last_progress_at = '2000-01-01T00:00:00+00:00' "
+                "WHERE publication_id = :publication_id"
+            ),
+            {"publication_id": publication_id},
+        )
+    service = make_cleanup_service(store, provider)
+    worker = SharedPublicationCleanupWorker(
+        config=EngineConfig(
+            data_dir=tmp_path,
+            shared_publication_cleanup_enabled=True,
+            shared_publication_cleanup_publication_batch_size=5,
+            shared_publication_cleanup_table_ref_batch_size=5,
+            shared_publication_cleanup_cycle_budget_seconds=2,
+            shared_publication_releasing_stale_seconds=1,
+        ),
+        store=store,
+        lifecycle_service=service,
+    )
+
+    cycle = worker.run_cycle()
+
+    assert cycle.cleaned_count == 1
+    publication = store.get_shared_publication(publication_id)
+    assert publication is not None
+    assert publication.status == "RELEASED"
+
+
+def test_worker_respects_reader_lease_then_cleans_after_release(
+    tmp_path: Path,
+) -> None:
+    store, _service, reader, publication_id, _latest_id, _table_ids, _now = (
+        seed_lifecycle_context(tmp_path)
+    )
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE shared_publications "
+                "SET expires_at = '2000-01-01T00:00:00+00:00' "
+                "WHERE publication_id = :publication_id"
+            ),
+            {"publication_id": publication_id},
+        )
+    read = reader.read(
+        consumer_workflow_run_id="run-lifecycle-consumer",
+        share_name="lifecycle-share",
+        version_policy=SharedTableVersionPolicy.EXACT_VERSION,
+        exact_version=1,
+        lease_expires_at=utc_now() + timedelta(minutes=5),
+    )
+    provider = NoopCountingRuntimeProvider(tmp_path / "runtime-tables")
+    service = make_cleanup_service(store, provider)
+    worker = SharedPublicationCleanupWorker(
+        config=EngineConfig(
+            data_dir=tmp_path,
+            shared_publication_cleanup_enabled=True,
+            shared_publication_cleanup_publication_batch_size=5,
+            shared_publication_cleanup_table_ref_batch_size=5,
+            shared_publication_cleanup_cycle_budget_seconds=2,
+        ),
+        store=store,
+        lifecycle_service=service,
+    )
+
+    blocked_cycle = worker.run_cycle()
+    store.release_read_lease(read.read_lease.lease_id)
+    cleaned_cycle = worker.run_cycle()
+
+    assert blocked_cycle.blocked_count >= 1
+    assert cleaned_cycle.cleaned_count >= 1
+    with pytest.raises(ValueError, match="Shared publication not found"):
+        reader.read(
+            consumer_workflow_run_id="run-lifecycle-consumer",
+            share_name="lifecycle-share",
+            version_policy=SharedTableVersionPolicy.EXACT_VERSION,
+            exact_version=1,
+            lease_expires_at=utc_now() + timedelta(minutes=5),
+        )
+
+
+def test_worker_never_cleans_latest_published_version(tmp_path: Path) -> None:
+    store, provider, old_id, _old_refs, _now = seed_cleanup_context(tmp_path)
+    with store.engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE shared_publications SET expires_at = NULL "
+                "WHERE publication_id = :publication_id"
+            ),
+            {"publication_id": old_id},
+        )
+        connection.exec_driver_sql(
+            "UPDATE shared_publications "
+            "SET expires_at = '2000-01-01T00:00:00+00:00' "
+            "WHERE publication_id = 'publication-cleanup-latest'"
+        )
+    service = make_cleanup_service(store, provider)
+    worker = SharedPublicationCleanupWorker(
+        config=EngineConfig(
+            data_dir=tmp_path,
+            shared_publication_cleanup_enabled=True,
+            shared_publication_cleanup_publication_batch_size=5,
+            shared_publication_cleanup_table_ref_batch_size=5,
+            shared_publication_cleanup_cycle_budget_seconds=2,
+        ),
+        store=store,
+        lifecycle_service=service,
+    )
+
+    cycle = worker.run_cycle()
+
+    assert cycle.blocked_count == 1
+    latest = store.get_shared_publication("publication-cleanup-latest")
+    assert latest is not None
+    assert latest.status == "PUBLISHED"

@@ -5,11 +5,15 @@ from fastapi import Request
 from flowweaver.engine.runtime_store import RuntimeStore
 from flowweaver.engine.runtime_table_provider import SQLiteRuntimeTableProvider
 from flowweaver.engine.service_container import ServiceContainer
+from flowweaver.engine.shared_publication_lifecycle import (
+    SharedPublicationLifecycleService,
+)
 from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_provider_registry import (
     TableProviderRegistry,
     create_default_table_provider_registry,
 )
+from flowweaver.engine.table_ref_release import TableRefReleaseService
 
 
 class APIAuthError(Exception):
@@ -37,6 +41,24 @@ def get_table_provider_registry(request: Request) -> TableProviderRegistry:
             container.config.resolved_runtime_dir()
         )
     return container.table_provider_registry
+
+
+def get_shared_publication_lifecycle_service(
+    request: Request,
+) -> SharedPublicationLifecycleService:
+    container = get_container(request)
+    if container.shared_publication_lifecycle_service is None:
+        provider_registry = get_table_provider_registry(request)
+        container.shared_publication_lifecycle_service = (
+            SharedPublicationLifecycleService(
+                container.runtime_store,
+                table_ref_release_service=TableRefReleaseService(
+                    store=container.runtime_store,
+                    provider_registry=provider_registry,
+                ),
+            )
+        )
+    return container.shared_publication_lifecycle_service
 
 
 def get_node_registry(request: Request):

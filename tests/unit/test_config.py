@@ -17,6 +17,9 @@ def test_engine_config_defaults_to_immediate_single_task_execution() -> None:
     assert config.workflow_process_max_concurrent_node_tasks == 1
     assert resolve_workflow_process_execution_mode(None) == "immediate"
     assert resolve_workflow_process_max_concurrent_node_tasks(None) == 1
+    assert config.shared_publication_cleanup_enabled is False
+    assert config.shared_publication_cleanup_publication_batch_size == 20
+    assert config.shared_publication_cleanup_table_ref_batch_size == 50
 
 
 def test_engine_config_accepts_threaded_mode_with_two_tasks() -> None:
@@ -53,3 +56,21 @@ def test_engine_config_rejects_explicit_invalid_max_concurrent_node_tasks(
         EngineConfig(
             workflow_process_max_concurrent_node_tasks=max_concurrent_node_tasks
         )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("shared_publication_cleanup_interval_seconds", 0),
+        ("shared_publication_cleanup_publication_batch_size", 0),
+        ("shared_publication_cleanup_table_ref_batch_size", 1001),
+        ("shared_publication_cleanup_cycle_budget_seconds", 0),
+        ("shared_publication_releasing_stale_seconds", 0),
+    ],
+)
+def test_engine_config_rejects_invalid_shared_cleanup_limits(
+    field_name: str,
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        EngineConfig.model_validate({field_name: value})

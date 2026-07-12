@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -205,6 +206,7 @@ class SharedPublicationLifecycleService:
         max_table_refs: int = 50,
         time_budget_seconds: float = 2.0,
         now: datetime | None = None,
+        should_stop: Callable[[], bool] | None = None,
     ) -> SharedPublicationCleanupResult:
         if self._table_ref_release_service is None:
             raise RuntimeError("TableRefReleaseService is required for cleanup")
@@ -212,6 +214,8 @@ class SharedPublicationLifecycleService:
             raise ValueError("max_table_refs must be between 1 and 1000")
         if time_budget_seconds <= 0:
             raise ValueError("time_budget_seconds must be positive")
+        if should_stop is not None and should_stop():
+            return _interrupted_cleanup_result(publication_id, (), status=None)
         cleanup_started_at = now or utc_now()
         preparation = run_immediate_transaction(
             self._store.engine,
@@ -239,15 +243,23 @@ class SharedPublicationLifecycleService:
             publication_id=publication_id,
             limit=max_table_refs + 1,
         )
+        if should_stop is not None and should_stop():
+            return _interrupted_cleanup_result(publication_id, ())
         started = perf_counter()
         member_results: list[SharedPublicationCleanupMemberResult] = []
         retry_reasons: list[dict[str, str]] = []
         for table_ref_id in candidate_ids[:max_table_refs]:
+            if should_stop is not None and should_stop():
+                return _interrupted_cleanup_result(
+                    publication_id,
+                    tuple(member_results),
+                )
             if perf_counter() - started >= time_budget_seconds:
                 break
             release_result = self._table_ref_release_service.release(
                 table_ref_id,
                 excluding_publication_id=publication_id,
+                should_stop=should_stop,
             )
             member_results.append(_cleanup_member_result(release_result))
             if _release_result_requires_retry(release_result):
@@ -257,6 +269,17 @@ class SharedPublicationLifecycleService:
                         "reason": release_result.reason or "release_incomplete",
                     }
                 )
+            if should_stop is not None and should_stop():
+                return _interrupted_cleanup_result(
+                    publication_id,
+                    tuple(member_results),
+                )
+
+        if should_stop is not None and should_stop():
+            return _interrupted_cleanup_result(
+                publication_id,
+                tuple(member_results),
+            )
 
         finalized, remaining_member_count = run_immediate_transaction(
             self._store.engine,
@@ -480,6 +503,34 @@ def _cleanup_member_result(
         table_ref_id=result.table_ref_id,
         outcome=result.outcome.value,
         reason=result.reason,
+    )
+
+
+def _interrupted_cleanup_result(
+    publication_id: str,
+    member_results: tuple[SharedPublicationCleanupMemberResult, ...],
+    *,
+    status: str | None = "RELEASING",
+) -> SharedPublicationCleanupResult:
+    return SharedPublicationCleanupResult(
+        publication_id=publication_id,
+        outcome=SharedPublicationCleanupOutcome.RETRY_PENDING,
+        status=status,
+        processed_member_count=len(member_results),
+        released_member_count=sum(
+            result.outcome == TableRefReleaseOutcome.RELEASED.value
+            for result in member_results
+        ),
+        skipped_member_count=sum(
+            result.outcome == TableRefReleaseOutcome.SKIPPED.value
+            for result in member_results
+        ),
+        failed_member_count=sum(
+            result.outcome == TableRefReleaseOutcome.FAILED.value
+            for result in member_results
+        ),
+        remaining_member_count=1,
+        member_results=member_results,
     )
 
 

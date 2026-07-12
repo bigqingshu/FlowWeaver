@@ -23,7 +23,7 @@ from flowweaver.engine.service_container import ServiceContainer
 def create_app(container: ServiceContainer) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        container.supervisor.start()
+        container.start()
         try:
             yield
         finally:

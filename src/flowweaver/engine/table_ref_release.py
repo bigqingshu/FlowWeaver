@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -77,6 +78,7 @@ class TableRefReleaseService:
         table_ref_id: str,
         *,
         excluding_publication_id: str | None = None,
+        should_stop: Callable[[], bool] | None = None,
     ) -> TableRefReleaseResult:
         current = self._store.get_table_ref(table_ref_id)
         if current is None:
@@ -123,6 +125,13 @@ class TableRefReleaseService:
                 outcome=TableRefReleaseOutcome.FAILED,
                 table_ref=claim.table_ref,
                 reason=str(exc),
+            )
+        if should_stop is not None and should_stop():
+            return TableRefReleaseResult(
+                table_ref_id=table_ref_id,
+                outcome=TableRefReleaseOutcome.FAILED,
+                table_ref=claim.table_ref,
+                reason="release_stopped_after_provider",
             )
 
         released = self._finalize(table_ref_id)

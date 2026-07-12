@@ -43,6 +43,9 @@ from flowweaver.engine.runtime_shared_publication_queries import (
     get_shared_publication_version_from_session as _get_publication_version,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
+    list_cleanup_candidate_ids_from_session as _list_cleanup_candidate_ids,
+)
+from flowweaver.engine.runtime_shared_publication_queries import (
     list_expired_shared_publication_ids_from_session as _list_expired_publication_ids,
 )
 from flowweaver.engine.runtime_shared_publication_queries import (
@@ -272,5 +275,20 @@ class RuntimeSharedPublicationStoreMixin:
             return _list_expired_publication_ids(
                 session,
                 now=now,
+                limit=limit,
+            )
+
+    def list_shared_publication_cleanup_candidate_ids(
+        self,
+        *,
+        now: datetime,
+        stale_before: datetime,
+        limit: int = 50,
+    ) -> list[str]:
+        with self._session_factory() as session:
+            return _list_cleanup_candidate_ids(
+                session,
+                now=now,
+                stale_before=stale_before,
                 limit=limit,
             )
