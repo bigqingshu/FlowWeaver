@@ -1,0 +1,66 @@
+{
+  "manifest_version": "1",
+  "plugin_id": "flowweaver.example.table_projection",
+  "plugin_version": "1.0.0",
+  "node_type": "plugin.flowweaver.table_projection",
+  "node_version": "1.0",
+  "display_name": "Table Projection",
+  "category": "table",
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "selected_columns": {
+        "type": "array",
+        "title": "Selected Columns",
+        "required": true,
+        "item_type": "string",
+        "description": "Columns to retain in source order"
+      },
+      "rename_first_to": {
+        "type": "string",
+        "title": "Rename First Column To",
+        "default": "",
+        "description": "Optional output name for the first selected column"
+      },
+      "batch_size": {
+        "type": "integer",
+        "title": "Batch Size",
+        "default": 500,
+        "minimum": 1,
+        "description": "Rows copied per staging batch"
+      }
+    }
+  },
+  "input_ports": [
+    {
+      "name": "in",
+      "required": true
+    }
+  ],
+  "output_ports": [
+    {
+      "name": "out",
+      "required": true
+    }
+  ],
+  "input_table_slots": [
+    {
+      "name": "in",
+      "display_name": "Source",
+      "description": "Source table to project",
+      "required": true
+    }
+  ],
+  "output_table_slots": [
+    {
+      "name": "out",
+      "display_name": "Projection",
+      "description": "Projected output table",
+      "allow_new_runtime_sql": true
+    }
+  ],
+  "execution_mode": "external_process",
+  "protocol": "flowweaver.plugin-jsonl.v1",
+  "entrypoint": "runner.py",
+  "external_actions": false
+}

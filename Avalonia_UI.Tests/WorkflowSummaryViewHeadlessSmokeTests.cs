@@ -46,7 +46,7 @@ public sealed class WorkflowSummaryViewHeadlessSmokeTests
             "The node management column should not host the add-node form.");
         StringAssert.Contains(
             addNodeXaml,
-            "ItemsSource=\"{Binding NodeDefinitions}\"");
+            "ItemsSource=\"{Binding AddableNodeDefinitions}\"");
         StringAssert.Contains(
             addNodeXaml,
             "SelectedItem=\"{Binding SelectedNewDraftNodeDefinition, Mode=TwoWay}\"");
