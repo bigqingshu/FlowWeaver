@@ -16,6 +16,13 @@ class NodeDefinitionSpec:
     node_type: str
     node_version: str
     display_name: str
+    plugin_id: str = "flowweaver.core"
+    provider_type: str = "core"
+    category: str | None = None
+    ui_visibility: str = "visible"
+    enabled: bool = True
+    disabled_reason: str | None = None
+    implementation_ref: str | None = None
     input_ports: tuple[NodePortSpec, ...] = ()
     output_ports: tuple[NodePortSpec, ...] = ()
     input_table_slots: tuple[NodeTableInputSlotSpec, ...] = ()
@@ -30,10 +37,16 @@ class NodeDefinitionSpec:
     def registry_key(self) -> tuple[str, str]:
         return (self.node_type, self.node_version)
 
-    def to_catalog_data(self, *, ui_visibility: str = "visible") -> dict[str, Any]:
+    def to_catalog_data(self) -> dict[str, Any]:
         return {
             "node_type": self.node_type,
             "node_version": self.node_version,
+            "plugin_id": self.plugin_id,
+            "provider_type": self.provider_type,
+            "category": self.category,
+            "ui_visibility": self.ui_visibility,
+            "enabled": self.enabled,
+            "disabled_reason": self.disabled_reason,
             "display_name": self.display_name,
             "input_ports": [port.to_catalog_data() for port in self.input_ports],
             "output_ports": [port.to_catalog_data() for port in self.output_ports],
@@ -46,7 +59,6 @@ class NodeDefinitionSpec:
             "execution_mode": self.execution_mode,
             "default_timeout_seconds": self.default_timeout_seconds,
             "retry_safe": self.retry_safe,
-            "ui_visibility": ui_visibility,
             "config_schema_version": self.config_schema_version,
             "config_schema": (
                 self.config_schema.to_schema()

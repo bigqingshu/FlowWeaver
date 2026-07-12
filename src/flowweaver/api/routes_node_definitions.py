@@ -18,7 +18,6 @@ from flowweaver.api.dependencies import (
     require_api_token,
 )
 from flowweaver.api.responses import ok_response
-from flowweaver.node_executor.builtin_fault import BUILTIN_FAULT_NODE_TYPES
 from flowweaver.nodes.registry import (
     NodeDefinitionSpec,
     NodePortSpec,
@@ -42,7 +41,7 @@ def list_node_definitions(
     definitions = [
         _to_node_definition_view(definition)
         for definition in registry.list_definitions()
-        if definition.node_type not in BUILTIN_FAULT_NODE_TYPES
+        if definition.ui_visibility == "visible"
     ]
     return ok_response(
         request,
@@ -55,7 +54,7 @@ def get_node_definition_catalog_state(
     request: Request,
     registry: Annotated[NodeRegistry, Depends(get_node_registry)],
 ):
-    state = registry.catalog_state(excluded_node_types=BUILTIN_FAULT_NODE_TYPES)
+    state = registry.catalog_state(ui_visibilities={"visible"})
     return ok_response(
         request,
         NodeDefinitionCatalogStateView(
@@ -69,21 +68,24 @@ def _to_node_definition_view(definition: NodeDefinitionSpec) -> NodeDefinitionVi
     return NodeDefinitionView(
         node_type=definition.node_type,
         node_version=definition.node_version,
+        plugin_id=definition.plugin_id,
+        provider_type=definition.provider_type,
+        category=definition.category,
+        enabled=definition.enabled,
+        disabled_reason=definition.disabled_reason,
         display_name=definition.display_name,
         input_ports=[_to_port_view(port) for port in definition.input_ports],
         output_ports=[_to_port_view(port) for port in definition.output_ports],
         input_table_slots=[
-            _to_input_table_slot_view(slot)
-            for slot in definition.input_table_slots
+            _to_input_table_slot_view(slot) for slot in definition.input_table_slots
         ],
         output_table_slots=[
-            _to_output_table_slot_view(slot)
-            for slot in definition.output_table_slots
+            _to_output_table_slot_view(slot) for slot in definition.output_table_slots
         ],
         execution_mode=definition.execution_mode,
         default_timeout_seconds=definition.default_timeout_seconds,
         retry_safe=definition.retry_safe,
-        ui_visibility="visible",
+        ui_visibility=definition.ui_visibility,
         config_schema_version=definition.config_schema_version,
         config_schema=(
             definition.config_schema.to_schema()

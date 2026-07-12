@@ -14,6 +14,7 @@ from flowweaver.engine.table_provider_registry import (
     create_default_table_provider_registry,
 )
 from flowweaver.engine.table_ref_release import TableRefReleaseService
+from flowweaver.plugin_runtime.catalog import PluginCatalog
 
 
 class APIAuthError(Exception):
@@ -64,6 +65,10 @@ def get_shared_publication_lifecycle_service(
 
 def get_node_registry(request: Request):
     return get_container(request).node_registry
+
+
+def get_plugin_catalog(request: Request) -> PluginCatalog:
+    return get_container(request).plugin_catalog
 
 
 def get_supervisor(request: Request) -> Supervisor:

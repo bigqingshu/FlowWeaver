@@ -1,3 +1,4 @@
+from flowweaver.nodes.default_registry import default_node_definitions
 from flowweaver.nodes.registry import (
     NodeConfigFieldSpec,
     NodeConfigSchemaSpec,
@@ -86,6 +87,12 @@ def test_definition_catalog_data_includes_table_slots() -> None:
 
     catalog_data = definition.to_catalog_data()
 
+    assert catalog_data["plugin_id"] == "flowweaver.core"
+    assert catalog_data["provider_type"] == "core"
+    assert catalog_data["ui_visibility"] == "visible"
+    assert catalog_data["enabled"] is True
+    assert "implementation_ref" not in catalog_data
+
     assert catalog_data["input_table_slots"] == [
         {
             "name": "main_table",
@@ -139,6 +146,27 @@ def test_catalog_state_changes_when_visible_table_slots_change() -> None:
     assert first_registry.catalog_state().catalog_hash != (
         second_registry.catalog_state().catalog_hash
     )
+
+
+def test_catalog_state_filters_by_ui_visibility() -> None:
+    node_registry = NodeRegistry()
+    node_registry.register(_definition())
+    node_registry.register(
+        NodeDefinitionSpec(
+            node_type="HiddenNode",
+            node_version="1.0",
+            display_name="Hidden",
+            ui_visibility="hidden",
+        )
+    )
+
+    state = node_registry.catalog_state(ui_visibilities={"visible"})
+
+    assert state.node_count == 1
+
+
+def test_default_builtin_node_baseline_remains_41() -> None:
+    assert len(default_node_definitions()) == 41
 
 
 def _definition(

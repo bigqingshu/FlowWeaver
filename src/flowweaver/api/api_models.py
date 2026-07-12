@@ -136,6 +136,11 @@ class NodeTableOutputSlotView(StrictModel):
 class NodeDefinitionView(StrictModel):
     node_type: str
     node_version: str
+    plugin_id: str
+    provider_type: str
+    category: str | None = None
+    enabled: bool = True
+    disabled_reason: str | None = None
     display_name: str
     input_ports: list[NodePortDefinitionView] = []
     output_ports: list[NodePortDefinitionView] = []
@@ -153,6 +158,28 @@ class NodeDefinitionCatalogStateView(StrictModel):
     catalog_hash: str
     node_count: int
     program_hash: str | None = None
+
+
+class PluginCatalogEntryView(StrictModel):
+    package_name: str
+    plugin_id: str | None = None
+    plugin_version: str | None = None
+    node_type: str | None = None
+    node_version: str | None = None
+    display_name: str | None = None
+    category: str | None = None
+    execution_mode: str | None = None
+    protocol: str | None = None
+    external_actions: bool | None = None
+    manifest_hash: str | None = None
+    enabled: bool
+    disabled_reason: str | None = None
+
+
+class PluginCatalogStateView(StrictModel):
+    catalog_hash: str
+    plugin_count: int
+    enabled_count: int
 
 
 class WorkflowDetailView(WorkflowDefinitionData):

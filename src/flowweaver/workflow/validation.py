@@ -86,6 +86,18 @@ def validate_workflow_definition(
                 )
             )
             continue
+        if not registered.enabled:
+            errors.append(
+                WorkflowValidationIssue(
+                    code="NODE_DISABLED",
+                    path=f"nodes[{index}]",
+                    message=(
+                        "Node type/version is disabled: "
+                        f"{node.node_type}@{node.node_version}"
+                    ),
+                )
+            )
+            continue
         definitions[node.node_instance_id] = registered
 
     incoming_ports: set[tuple[str, str]] = set()

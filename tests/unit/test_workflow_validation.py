@@ -224,6 +224,41 @@ def test_unknown_node_and_missing_required_input_are_rejected() -> None:
     }
 
 
+def test_disabled_node_is_rejected() -> None:
+    node_registry = registry()
+    node_registry.register(
+        NodeDefinitionSpec(
+            node_type="plugin.disabled",
+            node_version="1.0",
+            display_name="Disabled Plugin",
+            plugin_id="example.disabled",
+            provider_type="user_plugin",
+            enabled=False,
+            disabled_reason="manifest conflict",
+        )
+    )
+
+    result = validate_workflow_definition(
+        {
+            "schema_version": "1.0",
+            "nodes": [
+                {
+                    "node_instance_id": "disabled",
+                    "node_type": "plugin.disabled",
+                    "node_version": "1.0",
+                }
+            ],
+            "connections": [],
+        },
+        node_registry,
+    )
+
+    assert result.valid is False
+    assert [(error.code, error.path) for error in result.errors] == [
+        ("NODE_DISABLED", "nodes[0]")
+    ]
+
+
 def test_preview_loop_region_protocol_passes_validation() -> None:
     result = validate_workflow_definition(
         {

@@ -10,6 +10,7 @@ from flowweaver.api.responses import error_response
 from flowweaver.api.routes_data import router as data_router
 from flowweaver.api.routes_events import router as rest_events_router
 from flowweaver.api.routes_node_definitions import router as node_definitions_router
+from flowweaver.api.routes_plugins import router as plugins_router
 from flowweaver.api.routes_runs import router as runs_router
 from flowweaver.api.routes_shared_publications import (
     router as shared_publications_router,
@@ -69,6 +70,7 @@ def create_app(container: ServiceContainer) -> FastAPI:
 
     app.include_router(workflows_router)
     app.include_router(node_definitions_router)
+    app.include_router(plugins_router)
     app.include_router(runs_router)
     app.include_router(data_router)
     app.include_router(shared_publications_router)

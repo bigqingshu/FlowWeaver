@@ -59,6 +59,7 @@ def resolve_workflow_process_max_concurrent_node_tasks(
 
 class EngineConfig(StrictModel):
     data_dir: Path = Path("runtime")
+    plugin_dir: Path | None = None
     metadata_db_path: Path | None = None
     runtime_dir: Path | None = None
     log_dir: Path | None = None
@@ -136,6 +137,9 @@ class EngineConfig(StrictModel):
 
     def resolved_runtime_dir(self) -> Path:
         return self.runtime_dir or self.data_dir / "workflow_runs"
+
+    def resolved_plugin_dir(self) -> Path:
+        return self.plugin_dir or self.data_dir.parent / "plugins"
 
     def resolved_log_dir(self) -> Path:
         return self.log_dir or self.data_dir / "logs"

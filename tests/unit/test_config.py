@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -27,6 +29,7 @@ def test_engine_config_defaults_to_immediate_single_task_execution() -> None:
         == DEFAULT_MEMORY_TABLE_SOFT_ROW_LIMIT
     )
     assert config.memory_table_limits() == MemoryTableLimits()
+    assert config.resolved_plugin_dir() == Path("plugins")
 
 
 def test_engine_config_accepts_threaded_mode_with_two_tasks() -> None:

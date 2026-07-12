@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
@@ -95,11 +96,16 @@ def make_client(tmp_path: Path) -> tuple[TestClient, RuntimeStore, ServiceContai
     return TestClient(create_app(container)), store, container
 
 
-def make_default_registry_client(tmp_path: Path) -> tuple[TestClient, ServiceContainer]:
+def make_default_registry_client(
+    tmp_path: Path,
+    *,
+    plugin_dir: Path | None = None,
+) -> tuple[TestClient, ServiceContainer]:
     data_dir = tmp_path / "runtime"
     container = EngineHostBootstrap(
         EngineConfig(
             data_dir=data_dir,
+            plugin_dir=plugin_dir,
             local_api_token=TOKEN,
             enforce_single_instance=False,
             workflow_process_heartbeat_interval_seconds=0,
@@ -451,6 +457,10 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     assert by_type["PluginNode"]["output_ports"] == [
         {"name": "status", "required": False}
     ]
+    assert by_type["PluginNode"]["plugin_id"] == "flowweaver.core"
+    assert by_type["PluginNode"]["provider_type"] == "core"
+    assert by_type["PluginNode"]["category"] == "plugin"
+    assert by_type["PluginNode"]["enabled"] is True
     assert by_type["FilterRowsNode"]["input_ports"] == [
         {"name": "in", "required": True}
     ]
@@ -1368,6 +1378,96 @@ def test_node_definitions_state_api_returns_visible_catalog_hash(
     assert "DelayTestNode" not in {
         definition["node_type"] for definition in definitions
     }
+
+
+def test_plugin_catalog_api_returns_safe_enabled_and_disabled_entries(
+    tmp_path: Path,
+) -> None:
+    plugin_dir = tmp_path / "plugins"
+    valid_dir = plugin_dir / "valid"
+    valid_dir.mkdir(parents=True)
+    manifest = {
+        "manifest_version": "1",
+        "plugin_id": "example.api_plugin",
+        "plugin_version": "1.0.0",
+        "node_type": "plugin.example.api_plugin",
+        "node_version": "1.0",
+        "display_name": "API Plugin",
+        "category": "table",
+        "config_schema": {"type": "object", "properties": {}},
+        "input_ports": [],
+        "output_ports": [{"name": "out"}],
+        "input_table_slots": [],
+        "output_table_slots": [],
+        "execution_mode": "external_process",
+        "protocol": "flowweaver.plugin-jsonl.v1",
+        "entrypoint": "runner.py",
+        "external_actions": False,
+    }
+    (valid_dir / "plugin.json").write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+    (valid_dir / "runner.py").write_text(
+        "raise RuntimeError('must not be imported')\n",
+        encoding="utf-8",
+    )
+    invalid_dir = plugin_dir / "invalid"
+    invalid_dir.mkdir(parents=True)
+    (invalid_dir / "plugin.json").write_text("{}", encoding="utf-8")
+
+    client, container = make_default_registry_client(
+        tmp_path,
+        plugin_dir=plugin_dir,
+    )
+    try:
+        definitions = response_data(
+            client.get("/api/v1/node-definitions", headers=auth_headers())
+        )
+        plugins = response_data(client.get("/api/v1/plugins", headers=auth_headers()))
+        state = response_data(
+            client.get("/api/v1/plugins/state", headers=auth_headers())
+        )
+    finally:
+        container.close()
+
+    plugin_definition = next(
+        definition
+        for definition in definitions
+        if definition["node_type"] == "plugin.example.api_plugin"
+    )
+    assert plugin_definition["plugin_id"] == "example.api_plugin"
+    assert plugin_definition["provider_type"] == "user_plugin"
+    assert plugin_definition["category"] == "table"
+    assert plugin_definition["execution_mode"] == "PLUGIN_EXTERNAL_PROCESS"
+    assert "implementation_ref" not in plugin_definition
+    serialized_definition = json.dumps(plugin_definition)
+    assert "runner.py" not in serialized_definition
+    assert str(plugin_dir) not in serialized_definition
+
+    by_package = {plugin["package_name"]: plugin for plugin in plugins}
+    assert by_package["valid"]["enabled"] is True
+    assert by_package["valid"]["plugin_id"] == "example.api_plugin"
+    assert by_package["valid"]["manifest_hash"]
+    assert by_package["invalid"]["enabled"] is False
+    assert by_package["invalid"]["disabled_reason"]
+    serialized_plugins = json.dumps(plugins)
+    assert "runner.py" not in serialized_plugins
+    assert str(plugin_dir) not in serialized_plugins
+    assert state["plugin_count"] == 2
+    assert state["enabled_count"] == 1
+    assert len(state["catalog_hash"]) == 64
+
+
+def test_plugin_catalog_api_rejects_missing_token(tmp_path: Path) -> None:
+    client, container = make_default_registry_client(tmp_path)
+    try:
+        response = client.get("/api/v1/plugins")
+    finally:
+        container.close()
+
+    assert response.status_code == 401
+    assert response_error(response)["error_code"] == "UNAUTHORIZED"
 
 
 def test_node_definitions_api_rejects_missing_token(tmp_path: Path) -> None:

@@ -11,12 +11,18 @@ from flowweaver.nodes.default_table_transform_definitions import (
 )
 from flowweaver.nodes.default_write_definitions import default_write_node_definitions
 from flowweaver.nodes.registry import NodeDefinitionSpec, NodeRegistry
+from flowweaver.plugin_runtime.catalog import PluginCatalog
 
 
-def create_default_node_registry() -> NodeRegistry:
+def create_default_node_registry(
+    plugin_catalog: PluginCatalog | None = None,
+) -> NodeRegistry:
     registry = NodeRegistry()
     for definition in default_node_definitions():
         registry.register(definition)
+    if plugin_catalog is not None:
+        for definition in plugin_catalog.node_definitions():
+            registry.register(definition)
     return registry
 
 
@@ -27,7 +33,3 @@ def default_node_definitions() -> tuple[NodeDefinitionSpec, ...]:
         *default_write_node_definitions(),
         *default_resource_node_definitions(),
     )
-
-
-
-

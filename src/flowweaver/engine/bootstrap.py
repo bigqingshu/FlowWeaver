@@ -28,7 +28,11 @@ from flowweaver.engine.table_provider_registry import (
     create_default_table_provider_registry,
 )
 from flowweaver.engine.table_ref_release import TableRefReleaseService
-from flowweaver.nodes.default_registry import create_default_node_registry
+from flowweaver.nodes.default_registry import (
+    create_default_node_registry,
+    default_node_definitions,
+)
+from flowweaver.plugin_runtime.discovery import discover_plugins
 
 
 class EngineHostBootstrap:
@@ -70,13 +74,21 @@ class EngineHostBootstrap:
             store=runtime_store,
             lifecycle_service=lifecycle_service,
         )
+        core_definitions = default_node_definitions()
+        plugin_catalog = discover_plugins(
+            config.resolved_plugin_dir()
+        ).with_reserved_definitions(
+            core_definitions,
+            reserved_plugin_ids={"flowweaver.core", "flowweaver.dev_test"},
+        )
         return ServiceContainer(
             config=config,
             runtime_store=runtime_store,
             event_router=event_router,
             table_lease_manager=table_lease_manager,
             supervisor=supervisor,
-            node_registry=create_default_node_registry(),
+            node_registry=create_default_node_registry(plugin_catalog),
+            plugin_catalog=plugin_catalog,
             table_provider_registry=table_provider_registry,
             shared_publication_lifecycle_service=lifecycle_service,
             shared_publication_cleanup_worker=cleanup_worker,
@@ -153,6 +165,11 @@ def _resolve_config_paths(config: EngineConfig) -> EngineConfig:
                 config.temp_dir.resolve()
                 if config.temp_dir is not None
                 else data_dir / "temp"
+            ),
+            "plugin_dir": (
+                config.plugin_dir.resolve()
+                if config.plugin_dir is not None
+                else data_dir.parent / "plugins"
             ),
         }
     )

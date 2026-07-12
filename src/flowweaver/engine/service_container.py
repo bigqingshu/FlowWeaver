@@ -17,6 +17,7 @@ from flowweaver.engine.supervisor import Supervisor
 from flowweaver.engine.table_lease_manager import TableLeaseManager
 from flowweaver.engine.table_provider_registry import TableProviderRegistry
 from flowweaver.nodes.registry import NodeRegistry
+from flowweaver.plugin_runtime.catalog import PluginCatalog
 
 
 @dataclass
@@ -27,6 +28,7 @@ class ServiceContainer:
     table_lease_manager: TableLeaseManager
     supervisor: Supervisor
     node_registry: NodeRegistry
+    plugin_catalog: PluginCatalog = field(default_factory=PluginCatalog.empty)
     table_provider_registry: TableProviderRegistry | None = None
     shared_publication_lifecycle_service: (
         SharedPublicationLifecycleService | None
