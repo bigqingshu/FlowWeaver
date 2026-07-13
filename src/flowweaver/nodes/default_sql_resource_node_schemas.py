@@ -6,6 +6,13 @@ from flowweaver.nodes.registry import NodeConfigFieldSpec, NodeConfigSchemaSpec
 def _sql_mapping_schema() -> NodeConfigSchemaSpec:
     return NodeConfigSchemaSpec(
         properties={
+            "source_mode": NodeConfigFieldSpec(
+                type="enum",
+                title="Source Mode",
+                required=True,
+                default="table",
+                enum=("table", "all_tables", "query"),
+            ),
             "database_path": NodeConfigFieldSpec(
                 type="string",
                 title="Database Path",
@@ -34,7 +41,7 @@ def _sql_mapping_schema() -> NodeConfigSchemaSpec:
                 item_type="object",
                 description=(
                     "Optional list of field objects. When omitted, runtime infers "
-                    "table schema where possible."
+                    "table schema where possible. Not available in all_tables mode."
                 ),
             ),
         }

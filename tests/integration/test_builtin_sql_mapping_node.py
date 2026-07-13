@@ -34,6 +34,13 @@ def make_external_database(tmp_path: Path) -> Path:
             "INSERT INTO orders (row_id, amount) VALUES (?, ?)",
             [(1, 8.0), (2, 12.5)],
         )
+        connection.execute(
+            "CREATE TABLE customers (customer_id INTEGER NOT NULL, name TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO customers (customer_id, name) VALUES (1, 'Ada')"
+        )
+        connection.execute("CREATE VIEW order_totals AS SELECT amount FROM orders")
     return database_path
 
 
@@ -113,6 +120,11 @@ def test_default_registry_exposes_sql_mapping_node() -> None:
     assert definition.output_ports[0].name == "out"
     assert definition.config_schema is not None
     assert "database_path" in definition.config_schema.properties
+    assert definition.config_schema.properties["source_mode"].enum == (
+        "table",
+        "all_tables",
+        "query",
+    )
 
 
 def test_sql_mapping_node_outputs_external_sql_table_ref(tmp_path: Path) -> None:
@@ -150,6 +162,46 @@ def test_sql_mapping_node_outputs_external_sql_table_ref(tmp_path: Path) -> None
         {"row_id": 1, "amount": 8.0},
         {"row_id": 2, "amount": 12.5},
     ]
+
+
+def test_sql_mapping_node_maps_all_user_tables(tmp_path: Path) -> None:
+    external_database = make_external_database(tmp_path)
+    store = make_store(tmp_path)
+    workflow_run_id, node_run_id = seed_node_run(store)
+    runner = make_runner(tmp_path, store)
+
+    result = runner.execute(
+        make_task(
+            workflow_run_id=workflow_run_id,
+            node_run_id=node_run_id,
+            database_path=external_database,
+            config={
+                "source_mode": "all_tables",
+                "database_path": external_database.as_posix(),
+            },
+        ),
+        executor_id="executor-1",
+    )
+
+    assert result.status == NodeResultStatus.SUCCEEDED
+    assert set(result.output_slot_bindings) == {"customers", "orders"}
+    table_refs = [
+        store.get_table_ref(table_ref_id) for table_ref_id in result.output_refs
+    ]
+    assert all(table_ref is not None for table_ref in table_refs)
+    by_name = {table_ref.logical_table_id: table_ref for table_ref in table_refs}
+    assert set(by_name) == {"customers", "orders"}
+    assert by_name["customers"].opaque_handle == {
+        "database_path": external_database.as_posix(),
+        "table_name": "customers",
+    }
+    assert [field.name for field in by_name["customers"].schema] == [
+        "customer_id",
+        "name",
+    ]
+    assert result.output_slot_bindings == {
+        name: table_ref.table_ref_id for name, table_ref in by_name.items()
+    }
 
 
 def test_sql_mapping_node_rejects_invalid_config(tmp_path: Path) -> None:

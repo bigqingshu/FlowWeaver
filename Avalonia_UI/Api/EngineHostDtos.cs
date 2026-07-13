@@ -11,6 +11,18 @@ public sealed record HealthStatusDto
     public string Status { get; init; } = string.Empty;
 }
 
+public sealed record SqliteTableCatalogDto
+{
+    [JsonPropertyName("tables")]
+    public string[] Tables { get; init; } = [];
+}
+
+internal sealed record SqliteTableCatalogRequestDto
+{
+    [JsonPropertyName("database_path")]
+    public string DatabasePath { get; init; } = string.Empty;
+}
+
 public sealed record NodePortDefinitionDto
 {
     [JsonPropertyName("name")]

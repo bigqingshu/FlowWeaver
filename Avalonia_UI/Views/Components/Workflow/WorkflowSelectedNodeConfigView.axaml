@@ -5,6 +5,10 @@
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowSelectedNodeConfigView"
              x:DataType="vm:MainWindowViewModel">
     <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:SqlMappingTableNodeEditorViewModel"
+                      x:DataType="vm:SqlMappingTableNodeEditorViewModel">
+            <editors:SqlMappingTableNodeEditorView/>
+        </DataTemplate>
         <DataTemplate DataType="vm:PublishSharedTablesNodeEditorViewModel"
                       x:DataType="vm:PublishSharedTablesNodeEditorViewModel">
             <editors:PublishSharedTablesNodeEditorView/>

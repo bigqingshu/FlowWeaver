@@ -160,6 +160,14 @@ class NodeDefinitionCatalogStateView(StrictModel):
     program_hash: str | None = None
 
 
+class SqliteTableCatalogRequest(StrictModel):
+    database_path: str
+
+
+class SqliteTableCatalogView(StrictModel):
+    tables: list[str]
+
+
 class PluginCatalogEntryView(StrictModel):
     package_name: str
     plugin_id: str | None = None

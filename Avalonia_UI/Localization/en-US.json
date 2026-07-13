@@ -1291,5 +1291,21 @@
   "runs.loop_monitor.select_run": "Select a run to view loops.",
   "runs.loop_monitor.empty": "This run has no loop records.",
   "runs.loop_monitor.select_loop": "Select a loop to view iterations.",
-  "runs.loop_monitor.select_iteration": "Select an iteration to view nodes and tables."
+  "runs.loop_monitor.select_iteration": "Select an iteration to view nodes and tables.",
+  "node_config.sqlite.database_path": "Database file",
+  "node_config.sqlite.browse": "Browse for SQLite file",
+  "node_config.sqlite.refresh_tables": "Refresh table list",
+  "node_config.sqlite.source_mode": "Read mode",
+  "node_config.sqlite.mode.table": "One table",
+  "node_config.sqlite.mode.all_tables": "All tables",
+  "node_config.sqlite.mode.query": "SQL query",
+  "node_config.sqlite.table_name": "Table",
+  "node_config.sqlite.query": "Read-only query",
+  "node_config.sqlite.logical_table_id": "Logical table name",
+  "node_config.sqlite.all_tables_option": "All tables",
+  "node_config.sqlite.error.database_path_required": "Select or enter a SQLite database file.",
+  "node_config.sqlite.error.table_required": "Select a table.",
+  "node_config.sqlite.error.query_required": "Enter a read-only SELECT query.",
+  "node_config.sqlite.error.file_picker_failed": "The SQLite file picker failed.",
+  "node_config.sqlite.error.catalog_failed": "The SQLite table list could not be loaded."
 }

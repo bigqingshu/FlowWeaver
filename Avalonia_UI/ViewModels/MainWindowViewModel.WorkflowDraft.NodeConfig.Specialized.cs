@@ -32,6 +32,8 @@ public partial class MainWindowViewModel
                     Fields = SelectedNodeConfigEditableInputFields,
                     Connections = WorkflowDefinitionDetail.Connections,
                     CatalogService = _sharedPublicationCatalogService,
+                    SqliteTableCatalogService = _sqliteTableCatalogService,
+                    SqliteDatabaseFileService = _sqliteDatabaseFileService,
                     LocalizationService = _localizationService,
                     LifetimeToken = _shutdown.Token,
                 });

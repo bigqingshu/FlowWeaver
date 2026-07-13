@@ -1291,5 +1291,21 @@
   "runs.loop_monitor.select_run": "选择运行后查看循环。",
   "runs.loop_monitor.empty": "当前运行没有循环记录。",
   "runs.loop_monitor.select_loop": "选择循环后查看轮次。",
-  "runs.loop_monitor.select_iteration": "选择轮次后查看节点和表。"
+  "runs.loop_monitor.select_iteration": "选择轮次后查看节点和表。",
+  "node_config.sqlite.database_path": "数据库文件",
+  "node_config.sqlite.browse": "选择 SQLite 文件",
+  "node_config.sqlite.refresh_tables": "刷新数据表列表",
+  "node_config.sqlite.source_mode": "读取方式",
+  "node_config.sqlite.mode.table": "单个表",
+  "node_config.sqlite.mode.all_tables": "所有表",
+  "node_config.sqlite.mode.query": "SQL 查询",
+  "node_config.sqlite.table_name": "数据表",
+  "node_config.sqlite.query": "只读查询",
+  "node_config.sqlite.logical_table_id": "逻辑表名",
+  "node_config.sqlite.all_tables_option": "所有表",
+  "node_config.sqlite.error.database_path_required": "请选择或输入 SQLite 数据库文件。",
+  "node_config.sqlite.error.table_required": "请选择数据表。",
+  "node_config.sqlite.error.query_required": "请输入只读 SELECT 查询。",
+  "node_config.sqlite.error.file_picker_failed": "SQLite 文件选择失败。",
+  "node_config.sqlite.error.catalog_failed": "无法读取 SQLite 数据表列表。"
 }

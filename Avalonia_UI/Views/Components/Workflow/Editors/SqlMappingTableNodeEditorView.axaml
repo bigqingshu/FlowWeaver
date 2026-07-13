@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.Workflow.Editors.SqlMappingTableNodeEditorView"
+             x:DataType="vm:SqlMappingTableNodeEditorViewModel">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="140,*,Auto" ColumnSpacing="8">
+            <TextBlock Text="{Binding DatabasePathText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding DatabasePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Grid.Column="2"
+                    Content="&#x2026;"
+                    Command="{Binding BrowseDatabaseCommand}"
+                    ToolTip.Tip="{Binding BrowseText}"
+                    Width="32"
+                    Height="32"
+                    Padding="0"/>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="140,*,*,*" ColumnSpacing="6">
+            <TextBlock Text="{Binding SourceModeText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <ToggleButton Grid.Column="1"
+                          Content="{Binding TableModeText}"
+                          IsChecked="{Binding IsTableMode, Mode=OneWay}"
+                          Command="{Binding UseTableModeCommand}"/>
+            <ToggleButton Grid.Column="2"
+                          Content="{Binding AllTablesModeText}"
+                          IsChecked="{Binding IsAllTablesMode, Mode=OneWay}"
+                          Command="{Binding UseAllTablesModeCommand}"/>
+            <ToggleButton Grid.Column="3"
+                          Content="{Binding QueryModeText}"
+                          IsChecked="{Binding IsQueryMode, Mode=OneWay}"
+                          Command="{Binding UseQueryModeCommand}"/>
+        </Grid>
+
+        <Grid Grid.Row="2"
+              ColumnDefinitions="140,*,Auto"
+              ColumnSpacing="8"
+              IsVisible="{Binding IsTableCatalogMode}">
+            <TextBlock Text="{Binding TableNameText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding TableOptions}"
+                      SelectedItem="{Binding SelectedTableOption}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate DataType="vm:SqliteTableOptionViewModel"
+                                  x:DataType="vm:SqliteTableOptionViewModel">
+                        <TextBlock Text="{Binding DisplayText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding DisplayText}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="2"
+                    Content="&#x21BB;"
+                    Command="{Binding RefreshTablesCommand}"
+                    ToolTip.Tip="{Binding RefreshText}"
+                    Width="32"
+                    Height="32"
+                    Padding="0"/>
+        </Grid>
+
+        <Grid Grid.Row="3"
+              ColumnDefinitions="140,*"
+              ColumnSpacing="8"
+              IsVisible="{Binding IsQueryMode}">
+            <TextBlock Text="{Binding QueryText}"
+                       VerticalAlignment="Top"
+                       Margin="0,7,0,0"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding SqlQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="88"/>
+        </Grid>
+
+        <Grid Grid.Row="4"
+              ColumnDefinitions="140,*"
+              ColumnSpacing="8"
+              IsVisible="{Binding IsSingleResultMode}">
+            <TextBlock Text="{Binding LogicalTableIdText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding LogicalTableId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        </Grid>
+
+        <StackPanel Grid.Row="5" Spacing="4">
+            <ProgressBar IsIndeterminate="True"
+                         IsVisible="{Binding IsLoadingTables}"/>
+            <TextBlock Text="{Binding ErrorMessage}"
+                       IsVisible="{Binding HasError}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextErrorBrush}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

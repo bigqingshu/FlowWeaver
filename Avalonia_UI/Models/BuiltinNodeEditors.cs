@@ -7,6 +7,11 @@ public static class BuiltinNodeEditors
     public static IReadOnlyList<NodeEditorDescriptor> All { get; } =
         [
             new NodeEditorDescriptor(
+                "SqlMappingNode",
+                "SQLite Table Mapping",
+                NodeEditorKind.BuiltIn,
+                NodeEditorKey.SqlMappingTable),
+            new NodeEditorDescriptor(
                 "PublishSharedTablesNode",
                 "Publish Shared Tables",
                 NodeEditorKind.BuiltIn,

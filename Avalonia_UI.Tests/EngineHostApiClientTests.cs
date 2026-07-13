@@ -1112,6 +1112,39 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task ListSqliteTablesAsyncPostsDatabasePath()
+    {
+        string? requestBody = null;
+        var handler = new StubHandler(request =>
+        {
+            requestBody = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"ok":true,"data":{"tables":["customers","orders"]},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.ListSqliteTablesAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            @"C:\data\sales.db");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Post, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/node-resources/sqlite/tables"),
+            handler.RequestUri);
+        CollectionAssert.AreEqual(
+            new[] { "customers", "orders" },
+            result.Data?.Tables);
+        using var body = JsonDocument.Parse(requestBody!);
+        Assert.AreEqual(
+            @"C:\data\sales.db",
+            body.RootElement.GetProperty("database_path").GetString());
+    }
+
+    [TestMethod]
     public async Task ListSharedPublicationVersionSummariesAsyncUsesPagedVersionPath()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

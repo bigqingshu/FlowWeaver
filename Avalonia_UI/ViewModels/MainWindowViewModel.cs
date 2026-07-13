@@ -16,6 +16,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IWorkflowExportFileService _workflowExportFileService;
     private readonly ILocalizationService _localizationService;
     private readonly ISharedPublicationCatalogService _sharedPublicationCatalogService;
+    private readonly ISqliteTableCatalogService _sqliteTableCatalogService;
+    private readonly ISqliteDatabaseFileService _sqliteDatabaseFileService;
     private readonly NodeEditorResolver _nodeEditorResolver = new(BuiltinNodeEditors.CreateRegistry());
 
     private readonly CancellationTokenSource _shutdown = new();
@@ -56,7 +58,8 @@ public partial class MainWindowViewModel : ViewModelBase
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
         IWorkflowImportFileService? workflowImportFileService = null,
         IWorkflowExportFileService? workflowExportFileService = null,
-        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null)
+        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null,
+        ISqliteDatabaseFileService? sqliteDatabaseFileService = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
@@ -77,6 +80,11 @@ public partial class MainWindowViewModel : ViewModelBase
         _sharedPublicationCatalogService = new SharedPublicationCatalogService(
             apiClient,
             BuildSettings);
+        _sqliteTableCatalogService = new SqliteTableCatalogService(
+            apiClient,
+            BuildSettings);
+        _sqliteDatabaseFileService = sqliteDatabaseFileService
+            ?? new AvaloniaSqliteDatabaseFileService();
 
         InitializeWorkflowLoopRegions();
         InitializeWorkflowNodeTableBindings();

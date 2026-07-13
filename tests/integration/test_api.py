@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import queue
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -1352,6 +1353,37 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
     read_properties = by_type["ReadSharedTablesNode"]["config_schema"]["properties"]
     assert read_properties["version_policy"]["enum"] == ["LATEST", "EXACT_VERSION"]
     assert read_properties["exact_version"]["minimum"] == 1
+
+
+def test_sqlite_table_catalog_api_lists_user_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "catalog.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "CREATE TABLE alpha (row_id INTEGER PRIMARY KEY AUTOINCREMENT)"
+        )
+        connection.execute("CREATE TABLE beta (value TEXT)")
+        connection.execute("CREATE VIEW alpha_view AS SELECT row_id FROM alpha")
+
+    client, container = make_default_registry_client(tmp_path)
+    try:
+        response = client.post(
+            "/api/v1/node-resources/sqlite/tables",
+            json={"database_path": database_path.as_posix()},
+            headers=auth_headers(),
+        )
+        missing = client.post(
+            "/api/v1/node-resources/sqlite/tables",
+            json={"database_path": (tmp_path / "missing.db").as_posix()},
+            headers=auth_headers(),
+        )
+    finally:
+        container.close()
+
+    assert response_data(response) == {"tables": ["alpha", "beta"]}
+    assert missing.status_code == 400
+    assert response_error(missing)["error_code"] == (
+        "SQLITE_TABLE_CATALOG_UNAVAILABLE"
+    )
 
 
 def test_node_definitions_state_api_returns_visible_catalog_hash(

@@ -21,6 +21,14 @@ public interface IEngineHostApiClient
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<SqliteTableCatalogDto>> ListSqliteTablesAsync(
+        EngineHostConnectionSettings settings,
+        string databasePath,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
     Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default)

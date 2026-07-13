@@ -20,6 +20,15 @@ from flowweaver.nodes.builtin_sql_schema import (
 )
 from flowweaver.nodes.builtin_sql_schema import normalize_query as normalize_query
 
+SQL_SOURCE_MODE_TABLE = "table"
+SQL_SOURCE_MODE_ALL_TABLES = "all_tables"
+SQL_SOURCE_MODE_QUERY = "query"
+SQL_SOURCE_MODES = {
+    SQL_SOURCE_MODE_TABLE,
+    SQL_SOURCE_MODE_ALL_TABLES,
+    SQL_SOURCE_MODE_QUERY,
+}
+
 
 class SqlMappingTaskConfig:
     def __init__(
@@ -36,22 +45,53 @@ class SqlMappingTaskConfig:
         self.database_path = _required_path_config(config, "database_path")
         self.table_name = _optional_str_config(config, "table_name")
         self.query = _optional_str_config(config, "query")
-        if bool(self.table_name) == bool(self.query):
+        source_mode = _optional_str_config(config, "source_mode")
+        if source_mode is None and bool(self.table_name) == bool(self.query):
             raise ValueError(
                 "SqlMappingNode requires exactly one of table_name or query"
             )
-        self.logical_table_id = (
-            _optional_str_config(config, "logical_table_id")
-            or self.table_name
-            or self.node_instance_id
+        self.source_mode = source_mode or (
+            SQL_SOURCE_MODE_QUERY if self.query is not None else SQL_SOURCE_MODE_TABLE
         )
+        if self.source_mode not in SQL_SOURCE_MODES:
+            raise ValueError(f"unsupported source_mode: {self.source_mode}")
+
+        logical_table_id = _optional_str_config(config, "logical_table_id")
         self.version = _optional_int_config(config, "version") or 1
         self.schema = _optional_schema_config(config, "schema")
 
-    def opaque_handle(self) -> dict[str, str]:
+        if self.source_mode == SQL_SOURCE_MODE_TABLE:
+            if self.table_name is None or self.query is not None:
+                raise ValueError(
+                    "SqlMappingNode table mode requires table_name and no query"
+                )
+            self.logical_table_id = logical_table_id or self.table_name
+        elif self.source_mode == SQL_SOURCE_MODE_QUERY:
+            if self.query is None or self.table_name is not None:
+                raise ValueError(
+                    "SqlMappingNode query mode requires query and no table_name"
+                )
+            self.logical_table_id = logical_table_id or self.node_instance_id
+        else:
+            if self.table_name is not None or self.query is not None:
+                raise ValueError(
+                    "SqlMappingNode all_tables mode does not accept table_name or query"
+                )
+            if logical_table_id is not None:
+                raise ValueError(
+                    "SqlMappingNode all_tables mode does not accept logical_table_id"
+                )
+            if self.schema is not None:
+                raise ValueError(
+                    "SqlMappingNode all_tables mode does not accept schema"
+                )
+            self.logical_table_id = None
+
+    def opaque_handle(self, *, table_name: str | None = None) -> dict[str, str]:
         handle = {"database_path": self.database_path.as_posix()}
-        if self.table_name is not None:
-            handle["table_name"] = self.table_name
+        selected_table_name = table_name or self.table_name
+        if selected_table_name is not None:
+            handle["table_name"] = selected_table_name
         if self.query is not None:
             handle["query"] = normalize_query(self.query)
         return handle

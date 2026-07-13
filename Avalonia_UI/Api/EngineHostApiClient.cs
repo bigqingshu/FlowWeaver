@@ -59,6 +59,22 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<SqliteTableCatalogDto>> ListSqliteTablesAsync(
+        EngineHostConnectionSettings settings,
+        string databasePath,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<SqliteTableCatalogDto>(
+            settings,
+            HttpMethod.Post,
+            "api/v1/node-resources/sqlite/tables",
+            payload: new SqliteTableCatalogRequestDto
+            {
+                DatabasePath = databasePath,
+            },
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<List<PluginCatalogEntryDto>>> ListPluginsAsync(
         EngineHostConnectionSettings settings,
         CancellationToken cancellationToken = default)

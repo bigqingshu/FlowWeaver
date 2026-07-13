@@ -10,6 +10,8 @@ public static class NodeSpecializedEditorFactory
     {
         return editorKey switch
         {
+            NodeEditorKey.SqlMappingTable =>
+                SqlMappingTableNodeEditorViewModel.TryCreate(context),
             NodeEditorKey.PublishSharedTables =>
                 PublishSharedTablesNodeEditorViewModel.TryCreate(context),
             NodeEditorKey.ReadSharedTables =>

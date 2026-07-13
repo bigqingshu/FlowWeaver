@@ -8,11 +8,12 @@ namespace Avalonia_UI.Tests;
 public sealed class BuiltinNodeEditorsTests
 {
     [TestMethod]
-    public void AllRegistersSharedTableDedicatedEditors()
+    public void AllRegistersDedicatedEditors()
     {
         CollectionAssert.AreEqual(
             new[]
             {
+                "SqlMappingNode",
                 "PublishSharedTablesNode",
                 "ReadSharedTablesNode",
             },
@@ -20,6 +21,7 @@ public sealed class BuiltinNodeEditorsTests
         CollectionAssert.AreEqual(
             new[]
             {
+                NodeEditorKey.SqlMappingTable,
                 NodeEditorKey.PublishSharedTables,
                 NodeEditorKey.ReadSharedTables,
             },
@@ -43,6 +45,6 @@ public sealed class BuiltinNodeEditorsTests
             Assert.AreEqual(editor, registry.Find(editor.NodeType));
         }
 
-        Assert.HasCount(2, registry.ListEditors());
+        Assert.HasCount(3, registry.ListEditors());
     }
 }

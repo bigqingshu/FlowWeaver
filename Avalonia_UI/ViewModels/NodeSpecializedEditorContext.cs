@@ -15,6 +15,10 @@ public sealed record NodeSpecializedEditorContext
 
     public required ISharedPublicationCatalogService CatalogService { get; init; }
 
+    public ISqliteTableCatalogService? SqliteTableCatalogService { get; init; }
+
+    public ISqliteDatabaseFileService? SqliteDatabaseFileService { get; init; }
+
     public required ILocalizationService LocalizationService { get; init; }
 
     public required CancellationToken LifetimeToken { get; init; }
