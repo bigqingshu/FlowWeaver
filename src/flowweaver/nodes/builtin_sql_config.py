@@ -59,6 +59,7 @@ class SqlMappingTaskConfig:
         logical_table_id = _optional_str_config(config, "logical_table_id")
         self.version = _optional_int_config(config, "version") or 1
         self.schema = _optional_schema_config(config, "schema")
+        self.logical_table_id: str | None
 
         if self.source_mode == SQL_SOURCE_MODE_TABLE:
             if self.table_name is None or self.query is not None:
