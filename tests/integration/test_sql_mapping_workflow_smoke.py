@@ -366,6 +366,7 @@ def test_sql_mapping_node_definition_uses_generic_schema_contract(
     assert sql_mapping["input_ports"] == []
     assert sql_mapping["output_ports"] == [{"name": "out", "required": False}]
     assert set(sql_mapping["config_schema"]["properties"]) == {
+        "source_mode",
         "database_path",
         "table_name",
         "query",
