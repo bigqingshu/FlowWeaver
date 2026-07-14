@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
@@ -17,12 +18,43 @@ public sealed class RunLoopMonitorViewModelTests
     [TestMethod]
     public async Task SelectionLoadsLoopsThenIterationsThenDetails()
     {
+        var startedAt = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
         var loopService = new FakeLoopRunQueryService
         {
-            LoopsHandler = (_, _, _, _) => Success([Loop("loop-run-1", "run-1")]),
+            LoopsHandler = (_, _, _, _) => Success(
+            [
+                Loop("loop-run-1", "run-1") with
+                {
+                    ExitReason = "MAX_ITERATIONS_REACHED",
+                    StartedAt = startedAt,
+                    FinishedAt = startedAt.AddMinutes(3),
+                    Error = Json("{\"code\":\"LOOP_LIMIT\"}"),
+                },
+            ]),
             IterationsHandler = (_, _, _, _, _) =>
-                Success([Iteration("iteration-1", "loop-run-1")]),
-            NodesHandler = (_, _, _, _) => Success([IterationNode("iteration-1")]),
+                Success(
+                [
+                    Iteration("iteration-1", "loop-run-1") with
+                    {
+                        InputTableRefId = "table-input",
+                        OutputTableRefId = "table-output",
+                        FailedNodeRunId = "node-run-1",
+                        StartedAt = startedAt,
+                        FinishedAt = startedAt.AddMinutes(2),
+                        Error = Json("{\"code\":\"ITERATION_FAILED\"}"),
+                    },
+                ]),
+            NodesHandler = (_, _, _, _) => Success(
+            [
+                IterationNode("iteration-1") with
+                {
+                    CurrentStage = "apply_rules",
+                    Attempt = 2,
+                    StartedAt = startedAt,
+                    FinishedAt = startedAt.AddSeconds(30),
+                    Error = Json("{\"code\":\"NODE_FAILED\"}"),
+                },
+            ]),
             TablesHandler = (_, _, _, _, _) => Success([IterationTable("iteration-1")]),
         };
         var directoryService = new FakeRunTableDirectoryService();
@@ -34,6 +66,9 @@ public sealed class RunLoopMonitorViewModelTests
         Assert.AreEqual(0, loopService.IterationCalls);
         Assert.AreEqual(0, loopService.NodeCalls);
         Assert.AreEqual(0, loopService.TableCalls);
+        Assert.AreEqual("MAX_ITERATIONS_REACHED", viewModel.Loops[0].ExitReasonText);
+        Assert.AreEqual("03:00", viewModel.Loops[0].DurationText);
+        StringAssert.Contains(viewModel.Loops[0].ErrorJson, "LOOP_LIMIT");
 
         viewModel.SelectedLoop = viewModel.Loops[0];
         await viewModel.WaitForPendingLoadAsync();
@@ -41,6 +76,11 @@ public sealed class RunLoopMonitorViewModelTests
         Assert.HasCount(1, viewModel.Iterations);
         Assert.AreEqual(1, loopService.IterationCalls);
         Assert.AreEqual(0, loopService.NodeCalls);
+        Assert.AreEqual("table-input", viewModel.Iterations[0].InputTableRefIdText);
+        Assert.AreEqual("table-output", viewModel.Iterations[0].OutputTableRefIdText);
+        Assert.AreEqual("node-run-1", viewModel.Iterations[0].FailedNodeRunIdText);
+        Assert.AreEqual("02:00", viewModel.Iterations[0].DurationText);
+        StringAssert.Contains(viewModel.Iterations[0].ErrorJson, "ITERATION_FAILED");
 
         viewModel.SelectedIteration = viewModel.Iterations[0];
         await viewModel.WaitForPendingLoadAsync();
@@ -50,6 +90,10 @@ public sealed class RunLoopMonitorViewModelTests
         Assert.AreEqual("body.result", viewModel.IterationTableRefs[0].SourceText);
         Assert.AreEqual(1, loopService.NodeCalls);
         Assert.AreEqual(1, loopService.TableCalls);
+        Assert.AreEqual("body (FilterRowsNode)", viewModel.IterationNodes[0].NodeIdentityText);
+        Assert.AreEqual("apply_rules", viewModel.IterationNodes[0].CurrentStageText);
+        Assert.AreEqual("00:30", viewModel.IterationNodes[0].DurationText);
+        StringAssert.Contains(viewModel.IterationNodes[0].ErrorJson, "NODE_FAILED");
     }
 
     [TestMethod]
@@ -250,6 +294,12 @@ public sealed class RunLoopMonitorViewModelTests
     {
         return Task.FromResult(
             ApiResponseEnvelope<List<T>>.Success(values.ToList()));
+    }
+
+    private static JsonElement Json(string value)
+    {
+        using var document = JsonDocument.Parse(value);
+        return document.RootElement.Clone();
     }
 
     private sealed class FakeLoopRunQueryService : ILoopRunQueryService

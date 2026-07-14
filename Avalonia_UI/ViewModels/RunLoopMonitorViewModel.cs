@@ -96,6 +96,10 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     public string IterationsText => translate("runs.loop_monitor.iterations");
 
+    public string LoopDetailsText => translate("runs.loop_monitor.loop_details");
+
+    public string IterationDetailsText => translate("runs.loop_monitor.iteration_details");
+
     public string NodesText => translate("runs.loop_monitor.nodes");
 
     public string TablesText => translate("runs.loop_monitor.tables");
@@ -110,6 +114,38 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     public string SelectIterationText => translate("runs.loop_monitor.select_iteration");
 
+    public string LoopRunIdLabel => translate("runs.loop_monitor.loop_run_id");
+
+    public string LoopIdLabel => translate("runs.loop_monitor.loop_id");
+
+    public string StartNodeLabel => translate("runs.loop_monitor.start_node");
+
+    public string JudgeNodeLabel => translate("runs.loop_monitor.judge_node");
+
+    public string StatusLabel => translate("runs.loop_monitor.status");
+
+    public string ProgressLabel => translate("runs.loop_monitor.progress");
+
+    public string ExitReasonLabel => translate("runs.loop_monitor.exit_reason");
+
+    public string StartedLabel => translate("runs.loop_monitor.started");
+
+    public string FinishedLabel => translate("runs.loop_monitor.finished");
+
+    public string DurationLabel => translate("runs.loop_monitor.duration");
+
+    public string ErrorText => translate("runs.loop_monitor.error");
+
+    public string IterationIdLabel => translate("runs.loop_monitor.iteration_id");
+
+    public string IterationIndexLabel => translate("runs.loop_monitor.iteration_index");
+
+    public string InputTableRefLabel => translate("runs.loop_monitor.input_table_ref");
+
+    public string OutputTableRefLabel => translate("runs.loop_monitor.output_table_ref");
+
+    public string FailedNodeRunLabel => translate("runs.loop_monitor.failed_node_run");
+
     public bool IsBusy => IsLoadingLoops || IsLoadingIterations || IsLoadingIterationDetails;
 
     public bool HasLoops => Loops.Count > 0;
@@ -117,6 +153,10 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
     public bool HasNoLoops => !HasLoops && !IsLoadingLoops;
 
     public bool HasIterations => Iterations.Count > 0;
+
+    public bool HasSelectedLoop => SelectedLoop is not null;
+
+    public bool HasSelectedIteration => SelectedIteration is not null;
 
     public bool HasIterationDetails =>
         IterationNodes.Count > 0 || IterationTableRefs.Count > 0;
@@ -196,6 +236,8 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
         OnPropertyChanged(nameof(OverviewText));
         OnPropertyChanged(nameof(LoopsText));
         OnPropertyChanged(nameof(IterationsText));
+        OnPropertyChanged(nameof(LoopDetailsText));
+        OnPropertyChanged(nameof(IterationDetailsText));
         OnPropertyChanged(nameof(NodesText));
         OnPropertyChanged(nameof(TablesText));
         OnPropertyChanged(nameof(LoadMoreText));
@@ -203,6 +245,22 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(SelectLoopText));
         OnPropertyChanged(nameof(SelectIterationText));
+        OnPropertyChanged(nameof(LoopRunIdLabel));
+        OnPropertyChanged(nameof(LoopIdLabel));
+        OnPropertyChanged(nameof(StartNodeLabel));
+        OnPropertyChanged(nameof(JudgeNodeLabel));
+        OnPropertyChanged(nameof(StatusLabel));
+        OnPropertyChanged(nameof(ProgressLabel));
+        OnPropertyChanged(nameof(ExitReasonLabel));
+        OnPropertyChanged(nameof(StartedLabel));
+        OnPropertyChanged(nameof(FinishedLabel));
+        OnPropertyChanged(nameof(DurationLabel));
+        OnPropertyChanged(nameof(ErrorText));
+        OnPropertyChanged(nameof(IterationIdLabel));
+        OnPropertyChanged(nameof(IterationIndexLabel));
+        OnPropertyChanged(nameof(InputTableRefLabel));
+        OnPropertyChanged(nameof(OutputTableRefLabel));
+        OnPropertyChanged(nameof(FailedNodeRunLabel));
         if (string.IsNullOrWhiteSpace(workflowRunId))
         {
             Message = SelectRunText;
@@ -223,6 +281,7 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     partial void OnSelectedLoopChanged(LoopRunListItemViewModel? value)
     {
+        OnPropertyChanged(nameof(HasSelectedLoop));
         if (isResettingSelection)
         {
             return;
@@ -249,6 +308,7 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     partial void OnSelectedIterationChanged(LoopIterationListItemViewModel? value)
     {
+        OnPropertyChanged(nameof(HasSelectedIteration));
         if (isResettingSelection)
         {
             return;
@@ -552,7 +612,8 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
             {
                 IterationNodes.Add(new LoopIterationNodeListItemViewModel(
                     node,
-                    displayTextFormatter));
+                    displayTextFormatter,
+                    translate));
             }
 
             IterationTableRefs.Clear();

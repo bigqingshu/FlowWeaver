@@ -52,6 +52,14 @@ public sealed class RunLoopMonitorViewStructureTests
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationNodes}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationTableRefs}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding LoadMoreLoopsCommand}\"");
+        StringAssert.Contains(xaml, "Header=\"{Binding LoopDetailsText}\"");
+        StringAssert.Contains(xaml, "Header=\"{Binding IterationDetailsText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedLoop.ExitReasonText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedIteration.InputTableRefIdText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedIteration.OutputTableRefIdText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding SelectedIteration.FailedNodeRunIdText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding DiagnosticText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding ErrorJson}\"");
         Assert.IsFalse(xaml.Contains("IEngineHostApiClient", StringComparison.Ordinal));
     }
 
