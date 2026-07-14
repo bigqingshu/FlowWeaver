@@ -69,6 +69,7 @@ def _filter_rows_schema() -> NodeConfigSchemaSpec:
                 type="enum",
                 title="Operator",
                 required=True,
+                default="EQ",
                 enum=("EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"),
             ),
             "value": NodeConfigFieldSpec(

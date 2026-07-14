@@ -55,7 +55,7 @@
                               Command="{Binding UseLatestVersionCommand}"
                               MinWidth="96"/>
                 <ToggleButton Grid.Column="2"
-                              Content="{Binding ExactVersionTextLabel}"
+                              Content="{Binding ExactVersionPolicyOptionText}"
                               IsChecked="{Binding IsExactVersionPolicy}"
                               Command="{Binding UseExactVersionCommand}"
                               MinWidth="96"/>

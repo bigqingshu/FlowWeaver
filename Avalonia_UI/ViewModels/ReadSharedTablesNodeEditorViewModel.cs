@@ -22,6 +22,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
 
     private readonly ISharedPublicationCatalogService _catalogService;
     private readonly ILocalizationService _localizationService;
+    private readonly DisplayTextFormatter _displayTextFormatter;
     private readonly CancellationToken _lifetimeToken;
     private readonly List<string> _selectedMemberNames;
     private CancellationTokenSource? _shareRequestCts;
@@ -56,6 +57,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
         SelectedMembersField = selectedMembersField;
         _catalogService = context.CatalogService;
         _localizationService = context.LocalizationService;
+        _displayTextFormatter = new DisplayTextFormatter(context.LocalizationService);
         _lifetimeToken = context.LifetimeToken;
         shareName = shareNameField.InputValue;
         _directoryShareName = shareNameField.InputValue.Trim();
@@ -170,7 +172,14 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
         _localizationService.GetString("node_config.shared.read.version_policy");
 
     public string LatestText =>
-        _localizationService.GetString("node_config.shared.read.latest");
+        _displayTextFormatter.FormatBilingualOptionText(
+            "node_config.shared.read.latest",
+            "LATEST");
+
+    public string ExactVersionPolicyOptionText =>
+        _displayTextFormatter.FormatBilingualOptionText(
+            "node_config.shared.read.exact_version",
+            "EXACT_VERSION");
 
     public string ExactVersionTextLabel =>
         _localizationService.GetString("node_config.shared.read.exact_version");
@@ -357,6 +366,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
         OnPropertyChanged(nameof(ShareNameText));
         OnPropertyChanged(nameof(VersionPolicyText));
         OnPropertyChanged(nameof(LatestText));
+        OnPropertyChanged(nameof(ExactVersionPolicyOptionText));
         OnPropertyChanged(nameof(ExactVersionTextLabel));
         OnPropertyChanged(nameof(MembersText));
         OnPropertyChanged(nameof(SearchText));

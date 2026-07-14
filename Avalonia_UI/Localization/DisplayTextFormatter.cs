@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia_UI.Models;
 
 namespace Avalonia_UI.Localization;
 
@@ -184,16 +185,42 @@ public sealed class DisplayTextFormatter
         if (!string.IsNullOrWhiteSpace(nodeType)
             && !string.IsNullOrWhiteSpace(fieldName))
         {
-            var fieldSpecificText = TextOrFallback(
-                $"node_config.{nodeType}.{fieldName}.option.{value}",
-                value);
-            if (!string.Equals(fieldSpecificText, value, System.StringComparison.Ordinal))
+            var fieldSpecificKey =
+                $"node_config.{nodeType}.{fieldName}.option.{value}";
+            if (HasText(fieldSpecificKey))
             {
-                return fieldSpecificText;
+                return FormatBilingualOptionText(fieldSpecificKey, value);
             }
         }
 
-        return TextOrFallback($"node_config.option.{value}", value);
+        return FormatBilingualOptionText($"node_config.option.{value}", value);
+    }
+
+    public string FormatBilingualOptionText(string key, string fallback)
+    {
+        if (_localizationService is null)
+        {
+            return fallback;
+        }
+
+        var localized = TextOrFallback(key, fallback);
+        if (string.Equals(
+                _localizationService.CurrentLanguageCode,
+                SupportedLanguage.Default.Code,
+                System.StringComparison.OrdinalIgnoreCase))
+        {
+            return localized;
+        }
+
+        var defaultText = _localizationService.GetDefaultString(key);
+        if (string.Equals(defaultText, key, System.StringComparison.Ordinal))
+        {
+            defaultText = fallback;
+        }
+
+        return string.Equals(localized, defaultText, System.StringComparison.Ordinal)
+            ? localized
+            : $"{localized} ({defaultText})";
     }
 
     public string FormatRuntimeOptionsOptionValue(string group, string value)
@@ -239,6 +266,19 @@ public sealed class DisplayTextFormatter
         return string.Equals(text, key, System.StringComparison.Ordinal)
             ? fallback
             : text;
+    }
+
+    private bool HasText(string key)
+    {
+        return _localizationService is not null
+            && (!string.Equals(
+                    _localizationService.GetString(key),
+                    key,
+                    System.StringComparison.Ordinal)
+                || !string.Equals(
+                    _localizationService.GetDefaultString(key),
+                    key,
+                    System.StringComparison.Ordinal));
     }
 
     private string Format(string key, params object?[] args)

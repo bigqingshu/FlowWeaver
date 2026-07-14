@@ -40,6 +40,8 @@ public sealed class JsonLocalizationServiceTests
 
         Assert.AreEqual("zh-Hans", service.CurrentLanguageCode);
         Assert.AreEqual("服务地址", service.GetString("connection.base_url"));
+        Assert.AreEqual("Base URL", service.GetDefaultString("connection.base_url"));
+        Assert.AreEqual("missing.key", service.GetDefaultString("missing.key"));
         Assert.AreEqual("关闭", service.GetString("common.close"));
         Assert.AreEqual("简体中文", service.GetString("language.zh-Hans"));
         Assert.AreEqual(

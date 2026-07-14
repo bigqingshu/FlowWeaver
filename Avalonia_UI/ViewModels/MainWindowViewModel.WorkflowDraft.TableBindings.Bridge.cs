@@ -18,6 +18,7 @@ public partial class MainWindowViewModel
     {
         WorkflowNodeTableBindings = new WorkflowNodeTableBindingsViewModel(
             T,
+            DisplayTextFormatter,
             ApplyWorkflowNodeTableBindingsDraftAsync);
         RefreshWorkflowNodeTableBindingsFromDraft(force: true);
     }

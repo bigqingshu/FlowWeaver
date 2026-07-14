@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -33,6 +34,7 @@ public sealed partial class NodeTableInputBindingViewModel : ViewModelBase
         IReadOnlyList<NodeTableInputBindingCandidate> candidates,
         NodeTableInputBindingDraft? draft,
         Func<string, string> translate,
+        DisplayTextFormatter displayTextFormatter,
         Action<NodeTableInputBindingViewModel> selectionChanged)
     {
         this.selectionChanged = selectionChanged;
@@ -47,7 +49,9 @@ public sealed partial class NodeTableInputBindingViewModel : ViewModelBase
 
         Sources.Add(new NodeTableInputSourceOptionViewModel(
             new NodeTableInputBindingDraft { Slot = slot.Name },
-            translate("workflow.table_bindings.current_table")));
+            displayTextFormatter.FormatBilingualOptionText(
+                "workflow.table_bindings.current_table",
+                "current")));
         foreach (var candidate in candidates.Where(candidate =>
             IsStorageAllowed(candidate.StorageKind, slot.AllowedStorageKinds)))
         {

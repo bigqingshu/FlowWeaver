@@ -166,6 +166,24 @@ public sealed class SqlMappingTableNodeEditorViewModelTests
         Assert.IsFalse(editor.TryPrepareApply(out _));
     }
 
+    [TestMethod]
+    public async Task FixedSqliteOptionsUseChineseAndEnglishDisplayText()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var editor = SqlMappingTableNodeEditorViewModel.TryCreate(
+            Context(
+                new FakeSqliteDatabaseFileService(null),
+                new FakeSqliteTableCatalogService(),
+                localizationService: localizationService));
+        Assert.IsNotNull(editor);
+
+        Assert.AreEqual("单个表 (One table)", editor.TableModeText);
+        Assert.AreEqual("所有表 (All tables)", editor.AllTablesModeText);
+        Assert.AreEqual("SQL 查询 (SQL query)", editor.QueryModeText);
+        Assert.AreEqual("所有表 (All tables)", editor.TableOptions[0].DisplayText);
+    }
+
     private static NodeSpecializedEditorContext Context(
         ISqliteDatabaseFileService fileService,
         ISqliteTableCatalogService catalogService,
@@ -174,7 +192,8 @@ public sealed class SqlMappingTableNodeEditorViewModelTests
         string query = "",
         string logicalTableId = "",
         bool sourceModePresent = true,
-        bool schemaPresent = false)
+        bool schemaPresent = false,
+        ILocalizationService? localizationService = null)
     {
         return new NodeSpecializedEditorContext
         {
@@ -203,7 +222,7 @@ public sealed class SqlMappingTableNodeEditorViewModelTests
             CatalogService = new UnusedSharedPublicationCatalogService(),
             SqliteTableCatalogService = catalogService,
             SqliteDatabaseFileService = fileService,
-            LocalizationService = new JsonLocalizationService(),
+            LocalizationService = localizationService ?? new JsonLocalizationService(),
             LifetimeToken = CancellationToken.None,
         };
     }

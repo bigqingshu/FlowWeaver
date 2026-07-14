@@ -4094,11 +4094,8 @@ public sealed class MainWindowViewModelWorkflowTests
         var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
         var selectedNode = viewModel.SelectedWorkflowDefinitionNode;
 
-        Assert.IsFalse(viewModel.IsNodeConfigAutoSaveEnabled);
-        Assert.AreEqual("Enable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
-        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
         Assert.IsTrue(viewModel.IsNodeConfigAutoSaveEnabled);
-        Assert.AreEqual("Disable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
+        Assert.AreEqual("Auto-save", viewModel.NodeConfigAutoSaveText);
 
         field.InputValue = "total";
         Assert.AreEqual("amount", ReadFirstNodeConfigString(viewModel, "field"));
@@ -4117,13 +4114,12 @@ public sealed class MainWindowViewModelWorkflowTests
     {
         var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
             cancellationToken => Task.Delay(Timeout.Infinite, cancellationToken));
-        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
         viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue = "total";
 
         viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
 
         Assert.IsFalse(viewModel.IsNodeConfigAutoSaveEnabled);
-        Assert.AreEqual("Enable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
+        Assert.AreEqual("Auto-save", viewModel.NodeConfigAutoSaveText);
         Assert.AreEqual("total", ReadFirstNodeConfigString(viewModel, "field"));
     }
 
@@ -4159,7 +4155,6 @@ public sealed class MainWindowViewModelWorkflowTests
             definitionJson,
             schemaJson);
         var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
-        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
         field.InputValue = null;
 
         viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
@@ -4190,8 +4185,6 @@ public sealed class MainWindowViewModelWorkflowTests
         var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
             cancellationToken => releaseDelay.Task.WaitAsync(cancellationToken));
         var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
-        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
-
         field.HasInputValue = false;
         releaseDelay.SetResult();
         await WaitUntilAsync(

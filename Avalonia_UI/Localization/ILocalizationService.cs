@@ -17,5 +17,7 @@ public interface ILocalizationService
 
     string GetString(string key);
 
+    string GetDefaultString(string key);
+
     string Format(string key, params object?[] args);
 }

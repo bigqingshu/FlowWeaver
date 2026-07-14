@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,6 +14,7 @@ namespace Avalonia_UI.ViewModels;
 public sealed partial class WorkflowNodeTableBindingsViewModel : ViewModelBase
 {
     private readonly Func<string, string> translate;
+    private readonly DisplayTextFormatter displayTextFormatter;
     private readonly Func<string, Task> applyUpdatedDraftAsync;
     private readonly NodeTableBindingCandidateBuilder candidateBuilder = new();
     private string workflowDefinitionDraftJson = string.Empty;
@@ -23,9 +25,11 @@ public sealed partial class WorkflowNodeTableBindingsViewModel : ViewModelBase
 
     public WorkflowNodeTableBindingsViewModel(
         Func<string, string> translate,
+        DisplayTextFormatter displayTextFormatter,
         Func<string, Task> applyUpdatedDraftAsync)
     {
         this.translate = translate;
+        this.displayTextFormatter = displayTextFormatter;
         this.applyUpdatedDraftAsync = applyUpdatedDraftAsync;
     }
 
@@ -98,6 +102,7 @@ public sealed partial class WorkflowNodeTableBindingsViewModel : ViewModelBase
                     readResult.InputBindings.FirstOrDefault(binding =>
                         binding.Slot == slot.Name),
                     translate,
+                    displayTextFormatter,
                     OnInputSelectionChanged));
             }
 
@@ -109,6 +114,7 @@ public sealed partial class WorkflowNodeTableBindingsViewModel : ViewModelBase
                     readResult.OutputTargets.FirstOrDefault(target =>
                         target.Slot == slot.Name),
                     translate,
+                    displayTextFormatter,
                     OnOutputTargetChanged));
             }
         }

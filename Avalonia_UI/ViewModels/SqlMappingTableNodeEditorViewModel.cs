@@ -20,6 +20,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
     private const string QueryMode = "query";
 
     private readonly ILocalizationService _localizationService;
+    private readonly DisplayTextFormatter _displayTextFormatter;
     private readonly ISqliteTableCatalogService _catalogService;
     private readonly ISqliteDatabaseFileService _fileService;
     private readonly CancellationToken _lifetimeToken;
@@ -39,6 +40,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
         NodeConfigEditableFieldInputViewModel? schemaField)
     {
         _localizationService = context.LocalizationService;
+        _displayTextFormatter = new DisplayTextFormatter(context.LocalizationService);
         _catalogService = context.SqliteTableCatalogService!;
         _fileService = context.SqliteDatabaseFileService!;
         _lifetimeToken = context.LifetimeToken;
@@ -165,13 +167,19 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
         _localizationService.GetString("node_config.sqlite.source_mode");
 
     public string TableModeText =>
-        _localizationService.GetString("node_config.sqlite.mode.table");
+        _displayTextFormatter.FormatBilingualOptionText(
+            "node_config.sqlite.mode.table",
+            TableMode);
 
     public string AllTablesModeText =>
-        _localizationService.GetString("node_config.sqlite.mode.all_tables");
+        _displayTextFormatter.FormatBilingualOptionText(
+            "node_config.sqlite.mode.all_tables",
+            AllTablesMode);
 
     public string QueryModeText =>
-        _localizationService.GetString("node_config.sqlite.mode.query");
+        _displayTextFormatter.FormatBilingualOptionText(
+            "node_config.sqlite.mode.query",
+            QueryMode);
 
     public string TableNameText =>
         _localizationService.GetString("node_config.sqlite.table_name");
@@ -410,7 +418,9 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
             TableOptions.Clear();
             var allTables = new SqliteTableOptionViewModel(
                 null,
-                _localizationService.GetString("node_config.sqlite.all_tables_option"),
+                _displayTextFormatter.FormatBilingualOptionText(
+                    "node_config.sqlite.all_tables_option",
+                    AllTablesMode),
                 IsAllTables: true);
             TableOptions.Add(allTables);
 

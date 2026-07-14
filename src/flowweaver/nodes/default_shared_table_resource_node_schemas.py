@@ -38,6 +38,7 @@ def _read_shared_tables_schema() -> NodeConfigSchemaSpec:
                 type="enum",
                 title="Version Policy",
                 required=True,
+                default="LATEST",
                 enum=("LATEST", "EXACT_VERSION"),
             ),
             "exact_version": NodeConfigFieldSpec(

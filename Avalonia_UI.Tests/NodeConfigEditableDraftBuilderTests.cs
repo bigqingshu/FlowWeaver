@@ -116,6 +116,106 @@ public sealed class NodeConfigEditableDraftBuilderTests
     }
 
     [TestMethod]
+    public void BuildSelectsFirstOptionForMissingRequiredEnum()
+    {
+        var schema = ParseSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "operator": {
+                  "type": "enum",
+                  "required": true,
+                  "enum": ["EQ", "GT"]
+                }
+              }
+            }
+            """);
+        var draft = NodeConfigDraftBuilder.Build(
+            """{"nodes":[{"node_instance_id":"filter","config":{}}]}""",
+            "filter",
+            schema);
+
+        var field = NodeConfigEditableDraftBuilder.Build(draft).Fields.Single();
+
+        Assert.AreEqual("EQ", field.InputValue);
+        Assert.IsTrue(field.HasInputValue);
+    }
+
+    [TestMethod]
+    public void BuildSelectsFalseForMissingRequiredBoolean()
+    {
+        var schema = ParseSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean", "required": true}
+              }
+            }
+            """);
+        var draft = NodeConfigDraftBuilder.Build(
+            """{"nodes":[{"node_instance_id":"filter","config":{}}]}""",
+            "filter",
+            schema);
+
+        var field = NodeConfigEditableDraftBuilder.Build(draft).Fields.Single();
+
+        Assert.AreEqual("false", field.InputValue);
+        Assert.IsTrue(field.HasInputValue);
+    }
+
+    [TestMethod]
+    public void BuildKeepsMissingOptionalEnumUnset()
+    {
+        var schema = ParseSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "operator": {"type": "enum", "enum": ["EQ", "GT"]}
+              }
+            }
+            """);
+        var draft = NodeConfigDraftBuilder.Build(
+            """{"nodes":[{"node_instance_id":"filter","config":{}}]}""",
+            "filter",
+            schema);
+
+        var field = NodeConfigEditableDraftBuilder.Build(draft).Fields.Single();
+
+        Assert.AreEqual(string.Empty, field.InputValue);
+        Assert.IsFalse(field.HasInputValue);
+    }
+
+    [TestMethod]
+    public void BuildUsesDefaultWhenCurrentDropdownValueIsNull()
+    {
+        var schema = ParseSchema(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "operator": {
+                  "type": "enum",
+                  "default": "GT",
+                  "enum": ["EQ", "GT"]
+                }
+              }
+            }
+            """);
+        var draft = NodeConfigDraftBuilder.Build(
+            """{"nodes":[{"node_instance_id":"filter","config":{"operator":null}}]}""",
+            "filter",
+            schema);
+
+        var field = NodeConfigEditableDraftBuilder.Build(draft).Fields.Single();
+
+        Assert.AreEqual("GT", field.InputValue);
+        Assert.IsTrue(field.HasInputValue);
+    }
+
+    [TestMethod]
     public void BuildCarriesEditableFieldWarnings()
     {
         var schema = ParseSchema(

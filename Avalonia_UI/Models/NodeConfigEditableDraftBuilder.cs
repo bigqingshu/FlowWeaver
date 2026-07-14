@@ -33,14 +33,15 @@ public static class NodeConfigEditableDraftBuilder
 
     private static NodeConfigEditableDraftField BuildField(NodeConfigDraftField field)
     {
+        var inputValue = ResolveInputValue(field);
         return new NodeConfigEditableDraftField
         {
             Name = field.Name,
             Type = field.Type,
             Title = field.Title,
             Required = field.Required,
-            InputValue = FormatInputValue(field),
-            HasInputValue = field.HasCurrentValue || field.DefaultValue.HasValue,
+            InputValue = inputValue.Value,
+            HasInputValue = inputValue.HasValue,
             EnumValues = field.Type == NodeConfigFieldType.Enum
                 ? field.EnumValues
                 : [],
@@ -65,15 +66,28 @@ public static class NodeConfigEditableDraftBuilder
         }
     }
 
-    private static string FormatInputValue(NodeConfigDraftField field)
+    private static (string Value, bool HasValue) ResolveInputValue(
+        NodeConfigDraftField field)
     {
-        var value = field.CurrentValue ?? field.DefaultValue;
-        if (!value.HasValue)
+        var value = FirstNonNull(field.CurrentValue, field.DefaultValue);
+        if (value.HasValue)
         {
-            return string.Empty;
+            return (FormatJsonValue(value.Value), true);
         }
 
-        return FormatJsonValue(value.Value);
+        if (!field.Required)
+        {
+            return (string.Empty, false);
+        }
+
+        if (field.Type == NodeConfigFieldType.Enum && field.EnumValues.Count > 0)
+        {
+            return (field.EnumValues[0], true);
+        }
+
+        return field.Type == NodeConfigFieldType.Boolean
+            ? ("false", true)
+            : (string.Empty, false);
     }
 
     private static IReadOnlyList<string> FormatStringArrayValues(
@@ -85,7 +99,7 @@ public static class NodeConfigEditableDraftBuilder
             return [];
         }
 
-        var value = field.CurrentValue ?? field.DefaultValue;
+        var value = FirstNonNull(field.CurrentValue, field.DefaultValue);
         if (!value.HasValue || value.Value.ValueKind != JsonValueKind.Array)
         {
             return [];
@@ -107,6 +121,20 @@ public static class NodeConfigEditableDraftBuilder
             JsonValueKind.False => "false",
             _ => value.GetRawText(),
         };
+    }
+
+    private static JsonElement? FirstNonNull(
+        JsonElement? preferred,
+        JsonElement? fallback)
+    {
+        if (preferred.HasValue && preferred.Value.ValueKind != JsonValueKind.Null)
+        {
+            return preferred;
+        }
+
+        return fallback.HasValue && fallback.Value.ValueKind != JsonValueKind.Null
+            ? fallback
+            : null;
     }
 
 }

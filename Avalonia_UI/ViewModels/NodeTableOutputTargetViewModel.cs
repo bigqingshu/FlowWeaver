@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -26,6 +27,7 @@ public sealed partial class NodeTableOutputTargetViewModel : ViewModelBase
         IReadOnlyList<NodeTableExistingOutputTargetCandidate> existingTargets,
         NodeTableOutputTargetDraft? draft,
         Func<string, string> translate,
+        DisplayTextFormatter displayTextFormatter,
         Action targetChanged)
     {
         this.targetChanged = targetChanged;
@@ -33,7 +35,7 @@ public sealed partial class NodeTableOutputTargetViewModel : ViewModelBase
         SlotTitleText = $"{translate("workflow.table_bindings.output_slot")} ({slot.Name})";
         Description = slot.Description ?? string.Empty;
         TableNameText = translate("workflow.table_bindings.table_name");
-        AddTargetKinds(slot, translate);
+        AddTargetKinds(slot, displayTextFormatter);
         AddExistingTargets(existingTargets);
 
         isLoading = true;
@@ -228,26 +230,28 @@ public sealed partial class NodeTableOutputTargetViewModel : ViewModelBase
 
     private void AddTargetKinds(
         NodeTableOutputSlotDto slot,
-        Func<string, string> translate)
+        DisplayTextFormatter displayTextFormatter)
     {
-        AddTargetKind(slot.AllowCurrent, NodeTableOutputTargetDraft.CurrentTargetKind, "current", translate);
-        AddTargetKind(slot.AllowNewMemory, NodeTableOutputTargetDraft.NewMemoryTargetKind, "new_memory", translate);
-        AddTargetKind(slot.AllowNewRuntimeSql, NodeTableOutputTargetDraft.NewRuntimeSqlTargetKind, "new_runtime_sql", translate);
-        AddTargetKind(slot.AllowExistingMemory, NodeTableOutputTargetDraft.ExistingMemoryTargetKind, "existing_memory", translate);
-        AddTargetKind(slot.AllowExistingRuntimeSql, NodeTableOutputTargetDraft.ExistingRuntimeSqlTargetKind, "existing_runtime_sql", translate);
+        AddTargetKind(slot.AllowCurrent, NodeTableOutputTargetDraft.CurrentTargetKind, "current", displayTextFormatter);
+        AddTargetKind(slot.AllowNewMemory, NodeTableOutputTargetDraft.NewMemoryTargetKind, "new_memory", displayTextFormatter);
+        AddTargetKind(slot.AllowNewRuntimeSql, NodeTableOutputTargetDraft.NewRuntimeSqlTargetKind, "new_runtime_sql", displayTextFormatter);
+        AddTargetKind(slot.AllowExistingMemory, NodeTableOutputTargetDraft.ExistingMemoryTargetKind, "existing_memory", displayTextFormatter);
+        AddTargetKind(slot.AllowExistingRuntimeSql, NodeTableOutputTargetDraft.ExistingRuntimeSqlTargetKind, "existing_runtime_sql", displayTextFormatter);
     }
 
     private void AddTargetKind(
         bool allowed,
         string value,
         string localizationSuffix,
-        Func<string, string> translate)
+        DisplayTextFormatter displayTextFormatter)
     {
         if (allowed)
         {
             TargetKinds.Add(new NodeTableOutputTargetKindOptionViewModel(
                 value,
-                $"{translate($"workflow.table_bindings.target.{localizationSuffix}")} ({value})"));
+                displayTextFormatter.FormatBilingualOptionText(
+                    $"workflow.table_bindings.target.{localizationSuffix}",
+                    value)));
         }
     }
 

@@ -26,11 +26,11 @@
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <ToggleButton Grid.Column="1"
-                              Content="{Binding ToggleNodeConfigAutoSaveText}"
-                              Command="{Binding ToggleNodeConfigAutoSaveCommand}"
-                              IsChecked="{Binding IsNodeConfigAutoSaveEnabled, Mode=OneWay}"
-                              MinWidth="128"/>
+                <CheckBox Grid.Column="1"
+                          Content="{Binding NodeConfigAutoSaveText}"
+                          Command="{Binding ToggleNodeConfigAutoSaveCommand}"
+                          IsChecked="{Binding IsNodeConfigAutoSaveEnabled, Mode=OneWay}"
+                          VerticalAlignment="Center"/>
                 <Button Grid.Column="2"
                         Content="{Binding ApplyNodeConfigText}"
                         Command="{Binding ApplySelectedNodeConfigDraftCommand}"

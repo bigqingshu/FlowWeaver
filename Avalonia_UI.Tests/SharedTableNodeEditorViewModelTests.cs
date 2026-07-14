@@ -459,6 +459,24 @@ public sealed class SharedTableNodeEditorViewModelTests
         StringAssert.Contains(errorMessage, "positive integer");
     }
 
+    [TestMethod]
+    public async Task ReadVersionPolicyOptionsUseChineseAndEnglishDisplayText()
+    {
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var editor = ReadSharedTablesNodeEditorViewModel.TryCreate(
+            ReadContext(
+                new FakeCatalogService(),
+                localizationService: localizationService));
+        Assert.IsNotNull(editor);
+
+        Assert.AreEqual("最新版本 (Latest)", editor.LatestText);
+        Assert.AreEqual(
+            "指定版本 (Exact version)",
+            editor.ExactVersionPolicyOptionText);
+        Assert.AreEqual("指定版本", editor.ExactVersionTextLabel);
+    }
+
     private static NodeSpecializedEditorContext PublishContext(
         ISharedPublicationCatalogService service,
         string[] exportNames,
@@ -482,7 +500,8 @@ public sealed class SharedTableNodeEditorViewModelTests
         string policy = "LATEST",
         string exactVersion = "",
         string[]? selectedMembers = null,
-        bool includeMembersField = true)
+        bool includeMembersField = true,
+        ILocalizationService? localizationService = null)
     {
         var fields = new List<NodeConfigEditableFieldInputViewModel>
         {
@@ -506,7 +525,8 @@ public sealed class SharedTableNodeEditorViewModelTests
             "read",
             service,
             fields,
-            []);
+            [],
+            localizationService);
     }
 
     private static NodeSpecializedEditorContext Context(
@@ -514,7 +534,8 @@ public sealed class SharedTableNodeEditorViewModelTests
         string nodeInstanceId,
         ISharedPublicationCatalogService service,
         IReadOnlyList<NodeConfigEditableFieldInputViewModel> fields,
-        IReadOnlyList<WorkflowDefinitionConnectionListItemViewModel> connections)
+        IReadOnlyList<WorkflowDefinitionConnectionListItemViewModel> connections,
+        ILocalizationService? localizationService = null)
     {
         return new NodeSpecializedEditorContext
         {
@@ -528,7 +549,7 @@ public sealed class SharedTableNodeEditorViewModelTests
             Fields = fields,
             Connections = connections,
             CatalogService = service,
-            LocalizationService = new JsonLocalizationService(),
+            LocalizationService = localizationService ?? new JsonLocalizationService(),
             LifetimeToken = CancellationToken.None,
         };
     }

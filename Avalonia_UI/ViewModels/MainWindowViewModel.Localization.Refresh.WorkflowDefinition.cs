@@ -26,7 +26,7 @@ public partial class MainWindowViewModel
     {
         OnPropertyChanged(nameof(NodeConfigSectionText));
         OnPropertyChanged(nameof(ApplyNodeConfigText));
-        OnPropertyChanged(nameof(ToggleNodeConfigAutoSaveText));
+        OnPropertyChanged(nameof(NodeConfigAutoSaveText));
         OnPropertyChanged(nameof(ApplyNodeDisplayNameText));
     }
 }

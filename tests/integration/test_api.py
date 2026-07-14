@@ -758,6 +758,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
         "type": "enum",
         "title": "Operator",
         "required": True,
+        "default": "EQ",
         "enum": ["EQ", "NE", "GT", "GE", "LT", "LE", "CONTAINS", "IS_NULL"],
     }
 
@@ -1352,6 +1353,7 @@ def test_node_definitions_api_returns_visible_builtin_nodes(tmp_path: Path) -> N
 
     read_properties = by_type["ReadSharedTablesNode"]["config_schema"]["properties"]
     assert read_properties["version_policy"]["enum"] == ["LATEST", "EXACT_VERSION"]
+    assert read_properties["version_policy"]["default"] == "LATEST"
     assert read_properties["exact_version"]["minimum"] == 1
 
 

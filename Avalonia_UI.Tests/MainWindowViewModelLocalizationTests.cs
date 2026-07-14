@@ -54,24 +54,18 @@ public sealed class MainWindowViewModelLocalizationTests
     }
 
     [TestMethod]
-    public async Task NodeConfigAutoSaveToggleLabelsAreLocalized()
+    public async Task NodeConfigAutoSaveLabelIsLocalized()
     {
         var localizationService = new JsonLocalizationService();
         await localizationService.SetLanguageAsync("zh-Hans");
         Assert.AreEqual(
-            "开启更改自动保存",
-            localizationService.GetString("definition.enable_node_config_auto_save"));
-        Assert.AreEqual(
-            "关闭更改自动保存",
-            localizationService.GetString("definition.disable_node_config_auto_save"));
+            "自动保存",
+            localizationService.GetString("definition.node_config_auto_save"));
 
         await localizationService.SetLanguageAsync("en-US");
         Assert.AreEqual(
-            "Enable auto-save",
-            localizationService.GetString("definition.enable_node_config_auto_save"));
-        Assert.AreEqual(
-            "Disable auto-save",
-            localizationService.GetString("definition.disable_node_config_auto_save"));
+            "Auto-save",
+            localizationService.GetString("definition.node_config_auto_save"));
     }
 
     [TestMethod]

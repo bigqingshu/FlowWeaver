@@ -182,6 +182,8 @@ public sealed class WorkflowSummaryViewStructureTests
         StringAssert.Contains(
             xaml,
             "Command=\"{Binding ToggleNodeConfigAutoSaveCommand}\"");
+        StringAssert.Contains(xaml, "<CheckBox Grid.Column=\"1\"");
+        Assert.IsFalse(xaml.Contains("<ToggleButton", StringComparison.Ordinal));
         StringAssert.Contains(
             xaml,
             "IsChecked=\"{Binding IsNodeConfigAutoSaveEnabled, Mode=OneWay}\"");

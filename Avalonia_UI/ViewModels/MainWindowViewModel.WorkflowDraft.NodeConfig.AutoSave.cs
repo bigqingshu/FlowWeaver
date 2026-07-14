@@ -19,12 +19,9 @@ public partial class MainWindowViewModel
     private bool preserveSelectedNodeConfigEditorForDraftChange;
 
     [ObservableProperty]
-    private bool isNodeConfigAutoSaveEnabled;
+    private bool isNodeConfigAutoSaveEnabled = true;
 
-    public string ToggleNodeConfigAutoSaveText => T(
-        IsNodeConfigAutoSaveEnabled
-            ? "definition.disable_node_config_auto_save"
-            : "definition.enable_node_config_auto_save");
+    public string NodeConfigAutoSaveText => T("definition.node_config_auto_save");
 
     [RelayCommand]
     private void ToggleNodeConfigAutoSave()
@@ -160,6 +157,6 @@ public partial class MainWindowViewModel
 
     partial void OnIsNodeConfigAutoSaveEnabledChanged(bool value)
     {
-        OnPropertyChanged(nameof(ToggleNodeConfigAutoSaveText));
+        OnPropertyChanged(nameof(NodeConfigAutoSaveText));
     }
 }

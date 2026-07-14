@@ -264,7 +264,7 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
             new[] { "EQ", "GT", "IS_NULL" },
             input.EnumOptions.Select(option => option.Value).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "等于", "大于", "为空" },
+            new[] { "等于 (Equals)", "大于 (Greater than)", "为空 (Is null)" },
             input.EnumOptions.Select(option => option.DisplayText).ToArray());
 
         input.InputValue = "IS_NULL";
@@ -287,7 +287,7 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
             new[] { "true", "false" },
             booleanInput.BooleanOptions.Select(option => option.Value).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "是", "否" },
+            new[] { "是 (Yes)", "否 (No)" },
             booleanInput.BooleanOptions.Select(option => option.DisplayText).ToArray());
     }
 
@@ -316,7 +316,7 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
             new[] { "run_table", "memory_table", "sqlite" },
             input.EnumOptions.Select(option => option.Value).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "中转表", "内存表", "SQLite" },
+            new[] { "中转表 (Run table)", "内存表 (Memory table)", "SQLite" },
             input.EnumOptions.Select(option => option.DisplayText).ToArray());
     }
 
@@ -344,7 +344,7 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
             new[] { "anchor", "node" },
             input.EnumOptions.Select(option => option.Value).ToArray());
         CollectionAssert.AreEqual(
-            new[] { "锚点", "节点" },
+            new[] { "锚点 (Anchor)", "节点 (Node)" },
             input.EnumOptions.Select(option => option.DisplayText).ToArray());
 
         input.InputValue = "node";

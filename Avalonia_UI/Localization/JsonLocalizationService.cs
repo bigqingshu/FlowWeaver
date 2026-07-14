@@ -77,6 +77,13 @@ public sealed class JsonLocalizationService : ILocalizationService
             : key;
     }
 
+    public string GetDefaultString(string key)
+    {
+        return _fallbackStrings.TryGetValue(key, out var fallback)
+            ? fallback
+            : key;
+    }
+
     public string Format(string key, params object?[] args)
     {
         return string.Format(
