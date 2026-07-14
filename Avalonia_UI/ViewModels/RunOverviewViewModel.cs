@@ -32,6 +32,8 @@ public sealed partial class RunOverviewViewModel : ViewModelBase
     private int requestVersion;
     private Task pendingLoadTask = Task.CompletedTask;
 
+    public event Action<RunMonitorDrilldownRequest>? DrilldownRequested;
+
     public RunOverviewViewModel(
         IRunReviewService runReviewService,
         Func<string, string> translate,
@@ -79,6 +81,12 @@ public sealed partial class RunOverviewViewModel : ViewModelBase
     public string PreviewLabel => translate("runs.overview.preview");
 
     public string RunErrorText => translate("runs.overview.run_error");
+
+    public string ViewTablesText => translate("runs.drilldown.tables");
+
+    public string ViewPreviewText => translate("runs.drilldown.preview");
+
+    public string ViewLogsText => translate("runs.drilldown.logs");
 
     public string RunIdLabel => translate("runs.overview.run_id");
 
@@ -195,6 +203,7 @@ public sealed partial class RunOverviewViewModel : ViewModelBase
         workflowRunId = normalizedRunId;
         canUseActions = actionsEnabled;
         RefreshCommand.NotifyCanExecuteChanged();
+        NotifyDrilldownCommandStateChanged();
 
         if (!contextChanged)
         {
@@ -262,6 +271,9 @@ public sealed partial class RunOverviewViewModel : ViewModelBase
         OnPropertyChanged(nameof(LifecycleStatusesLabel));
         OnPropertyChanged(nameof(PreviewLabel));
         OnPropertyChanged(nameof(RunErrorText));
+        OnPropertyChanged(nameof(ViewTablesText));
+        OnPropertyChanged(nameof(ViewPreviewText));
+        OnPropertyChanged(nameof(ViewLogsText));
         RaiseReviewPropertyChanges();
 
         if (workflowRunId is null)
@@ -289,12 +301,52 @@ public sealed partial class RunOverviewViewModel : ViewModelBase
         await pendingLoadTask;
     }
 
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewTables()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Tables);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewPreview()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Preview);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewLogs()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Logs);
+    }
+
     private bool CanRefresh()
     {
         return isActive
             && canUseActions
             && !IsLoading
             && !string.IsNullOrWhiteSpace(workflowRunId);
+    }
+
+    private bool CanDrilldown()
+    {
+        return canUseActions && !string.IsNullOrWhiteSpace(workflowRunId);
+    }
+
+    private void RequestDrilldown(RunMonitorDrilldownDestination destination)
+    {
+        if (workflowRunId is not null)
+        {
+            DrilldownRequested?.Invoke(new RunMonitorDrilldownRequest(
+                destination,
+                workflowRunId));
+        }
+    }
+
+    private void NotifyDrilldownCommandStateChanged()
+    {
+        ViewTablesCommand.NotifyCanExecuteChanged();
+        ViewPreviewCommand.NotifyCanExecuteChanged();
+        ViewLogsCommand.NotifyCanExecuteChanged();
     }
 
     private void BeginLoad()

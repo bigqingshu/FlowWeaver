@@ -34,6 +34,8 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
     private int requestVersion;
     private Task pendingLoadTask = Task.CompletedTask;
 
+    public event Action<RunMonitorDrilldownRequest>? DrilldownRequested;
+
     public NodeRunMonitorViewModel(
         IRunTableDirectoryService service,
         Func<string, string> translate,
@@ -112,6 +114,12 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
     public string StateVersionLabel => translate("node_runs.state_version");
 
     public string ErrorText => translate("node_runs.error");
+
+    public string ViewTablesText => translate("runs.drilldown.node_tables");
+
+    public string ViewPreviewText => translate("runs.drilldown.node_preview");
+
+    public string ViewLogsText => translate("runs.drilldown.node_logs");
 
     public string PageText => string.Format(
         CultureInfo.CurrentCulture,
@@ -217,6 +225,9 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
         OnPropertyChanged(nameof(HeartbeatLabel));
         OnPropertyChanged(nameof(StateVersionLabel));
         OnPropertyChanged(nameof(ErrorText));
+        OnPropertyChanged(nameof(ViewTablesText));
+        OnPropertyChanged(nameof(ViewPreviewText));
+        OnPropertyChanged(nameof(ViewLogsText));
         OnPropertyChanged(nameof(PageText));
 
         if (workflowRunId is null)
@@ -248,6 +259,8 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
         {
             Message = value is null ? SelectNodeText : translate("node_runs.loaded");
         }
+
+        NotifyDrilldownCommandStateChanged();
     }
 
     partial void OnOffsetChanged(int value)
@@ -300,6 +313,24 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
         await pendingLoadTask;
     }
 
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewTables()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Tables);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewPreview()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Preview);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDrilldown))]
+    private void ViewLogs()
+    {
+        RequestDrilldown(RunMonitorDrilldownDestination.Logs);
+    }
+
     private bool CanRefresh()
     {
         return canUseActions && workflowRunId is not null && !IsLoading;
@@ -313,6 +344,24 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
     private bool CanNextPage()
     {
         return CanRefresh() && HasNextPage;
+    }
+
+    private bool CanDrilldown()
+    {
+        return canUseActions
+            && workflowRunId is not null
+            && SelectedNodeRun is not null;
+    }
+
+    private void RequestDrilldown(RunMonitorDrilldownDestination destination)
+    {
+        if (workflowRunId is not null && SelectedNodeRun is not null)
+        {
+            DrilldownRequested?.Invoke(new RunMonitorDrilldownRequest(
+                destination,
+                workflowRunId,
+                SelectedNodeRun.NodeRunId));
+        }
     }
 
     private void QueueLoad(bool resetOffset)
@@ -435,6 +484,14 @@ public sealed partial class NodeRunMonitorViewModel : ViewModelBase
         RefreshCommand.NotifyCanExecuteChanged();
         PreviousPageCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
+        NotifyDrilldownCommandStateChanged();
+    }
+
+    private void NotifyDrilldownCommandStateChanged()
+    {
+        ViewTablesCommand.NotifyCanExecuteChanged();
+        ViewPreviewCommand.NotifyCanExecuteChanged();
+        ViewLogsCommand.NotifyCanExecuteChanged();
     }
 
     private void BuildStatusOptions()

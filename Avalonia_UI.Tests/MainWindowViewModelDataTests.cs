@@ -16,6 +16,96 @@ namespace Avalonia_UI.Tests;
 public sealed class MainWindowViewModelDataTests
 {
     [TestMethod]
+    public async Task RunTableDrilldownReusesDataDirectoryWithoutLoadingRows()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            [
+                TableRef("table-1", "run-1", "node-run-1"),
+                TableRef("table-2", "run-1", "node-run-2"),
+            ]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+
+        viewModel.RunOverview.ViewTablesCommand.Execute(null);
+        await viewModel.WaitForPendingRunMonitorDrilldownAsync();
+
+        Assert.AreEqual(ShellPageKey.Data, viewModel.SelectedShellPageKey);
+        Assert.IsNull(viewModel.RunTableNodeRunIdFilter);
+        Assert.AreEqual("run-1", apiClient.LastTableRefWorkflowRunId);
+        Assert.HasCount(2, viewModel.TableRefs);
+        Assert.IsNull(apiClient.LastTableRowsTableRefId);
+    }
+
+    [TestMethod]
+    public async Task NodePreviewDrilldownFiltersExistingDirectoryAndDoesNotLoadRows()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            [
+                TableRef("table-1", "run-1", "node-run-1"),
+                TableRef("table-2", "run-1", "node-run-2"),
+            ]),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.NodeRunMonitor.Nodes.Add(new NodeRunListItemViewModel(
+            NodeRun("node-run-2", "run-1")));
+        viewModel.NodeRunMonitor.SelectedNodeRun = viewModel.NodeRunMonitor.Nodes[0];
+
+        viewModel.NodeRunMonitor.ViewPreviewCommand.Execute(null);
+        await viewModel.WaitForPendingRunMonitorDrilldownAsync();
+
+        Assert.AreEqual(ShellPageKey.DataPreview, viewModel.SelectedShellPageKey);
+        Assert.AreEqual("node-run-2", viewModel.RunTableNodeRunIdFilter);
+        Assert.AreEqual("node-run-2", apiClient.LastTableRefNodeRunId);
+        Assert.HasCount(1, viewModel.TableRefs);
+        Assert.AreEqual("table-2", viewModel.TableRefs[0].TableRefId);
+        Assert.IsNull(apiClient.LastTableRowsTableRefId);
+    }
+
+    [TestMethod]
+    public async Task NodeLogDrilldownWritesExistingFiltersAndRefreshesLogs()
+    {
+        var apiClient = new FakeApiClient();
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.NodeRunMonitor.Nodes.Add(new NodeRunListItemViewModel(
+            NodeRun("node-run-1", "run-1")));
+        viewModel.NodeRunMonitor.SelectedNodeRun = viewModel.NodeRunMonitor.Nodes[0];
+
+        viewModel.NodeRunMonitor.ViewLogsCommand.Execute(null);
+        await viewModel.WaitForPendingRunMonitorDrilldownAsync();
+
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
+        Assert.AreEqual("run-1", viewModel.LogWorkflowRunIdFilter);
+        Assert.AreEqual("node-run-1", viewModel.LogNodeRunIdFilter);
+        Assert.AreEqual("run-1", apiClient.LastEventWorkflowRunId);
+        Assert.AreEqual("node-run-1", apiClient.LastEventNodeRunId);
+    }
+
+    [TestMethod]
+    public async Task RunLogDrilldownClearsPreviousNodeFilter()
+    {
+        var apiClient = new FakeApiClient();
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.LogNodeRunIdFilter = "old-node-run";
+
+        viewModel.RunOverview.ViewLogsCommand.Execute(null);
+        await viewModel.WaitForPendingRunMonitorDrilldownAsync();
+
+        Assert.AreEqual(ShellPageKey.Logs, viewModel.SelectedShellPageKey);
+        Assert.AreEqual("run-1", viewModel.LogWorkflowRunIdFilter);
+        Assert.AreEqual(string.Empty, viewModel.LogNodeRunIdFilter);
+        Assert.AreEqual("run-1", apiClient.LastEventWorkflowRunId);
+        Assert.IsNull(apiClient.LastEventNodeRunId);
+    }
+
+    [TestMethod]
     public async Task RefreshTableRefsUsesSelectedRunAndLoadsSummaries()
     {
         var apiClient = new FakeApiClient
@@ -1693,6 +1783,18 @@ public sealed class MainWindowViewModelDataTests
         };
     }
 
+    private static NodeRunDto NodeRun(string nodeRunId, string workflowRunId)
+    {
+        return new NodeRunDto
+        {
+            NodeRunId = nodeRunId,
+            WorkflowRunId = workflowRunId,
+            NodeInstanceId = "node",
+            NodeType = "FilterRowsNode",
+            Status = "SUCCEEDED",
+        };
+    }
+
     private static RunTableDirectoryItemDto TableRef(
         string tableRefId,
         string workflowRunId,
@@ -2022,6 +2124,12 @@ public sealed class MainWindowViewModelDataTests
 
         public string? LastTableRefWorkflowRunId { get; private set; }
 
+        public string? LastTableRefNodeRunId { get; private set; }
+
+        public string? LastEventWorkflowRunId { get; private set; }
+
+        public string? LastEventNodeRunId { get; private set; }
+
         public string? LastTableRowsTableRefId { get; private set; }
 
         public string? LastTableRefDetailId { get; private set; }
@@ -2221,6 +2329,7 @@ public sealed class MainWindowViewModelDataTests
             CancellationToken cancellationToken = default)
         {
             LastTableRefWorkflowRunId = workflowRunId;
+            LastTableRefNodeRunId = nodeRunId;
             if (RunTableDirectoryHandler is not null)
             {
                 return await RunTableDirectoryHandler(
@@ -2242,6 +2351,7 @@ public sealed class MainWindowViewModelDataTests
 
             var filtered = TableRefsResponse.Data
                 .Select(RunTableDirectoryItemDto.FromTableRef)
+                .Where(item => nodeRunId is null || item.NodeRunId == nodeRunId)
                 .Where(item => tableType is null || item.TableType == tableType)
                 .Where(item => logicalTableId is null || item.LogicalTableId == logicalTableId)
                 .ToArray();
@@ -2481,7 +2591,10 @@ public sealed class MainWindowViewModelDataTests
             int limit = 100,
             CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            LastEventWorkflowRunId = workflowRunId;
+            LastEventNodeRunId = nodeRunId;
+            return Task.FromResult(
+                ApiResponseEnvelope<List<RuntimeEventDto>>.Success([]));
         }
 
         public Task<ApiResponseEnvelope<List<SharedPublicationDto>>> ListSharedPublicationsAsync(

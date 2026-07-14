@@ -117,6 +117,14 @@ public sealed class RunMonitorPresentationTests
         StringAssert.Contains(nodeXaml, "Command=\"{Binding PreviousPageCommand}\"");
         StringAssert.Contains(nodeXaml, "Command=\"{Binding NextPageCommand}\"");
         StringAssert.Contains(nodeXaml, "SelectedNodeRun.ErrorJson");
+        StringAssert.Contains(nodeXaml, "Command=\"{Binding ViewTablesCommand}\"");
+        StringAssert.Contains(nodeXaml, "Command=\"{Binding ViewPreviewCommand}\"");
+        StringAssert.Contains(nodeXaml, "Command=\"{Binding ViewLogsCommand}\"");
+
+        var overviewXaml = File.ReadAllText(GetViewPath("RunOverviewView.axaml"));
+        StringAssert.Contains(overviewXaml, "Command=\"{Binding ViewTablesCommand}\"");
+        StringAssert.Contains(overviewXaml, "Command=\"{Binding ViewPreviewCommand}\"");
+        StringAssert.Contains(overviewXaml, "Command=\"{Binding ViewLogsCommand}\"");
     }
 
     private static bool IsWidthSafeButton(XElement button)

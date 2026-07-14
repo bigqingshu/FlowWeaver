@@ -13,6 +13,7 @@ public partial class MainWindowViewModel
             new RunTableDirectoryService(apiClient),
             T,
             DisplayTextFormatter);
+        NodeRunMonitor.DrilldownRequested += OnRunMonitorDrilldownRequested;
         RefreshNodeRunMonitorContext();
     }
 

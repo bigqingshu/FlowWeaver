@@ -15,6 +15,7 @@ public partial class MainWindowViewModel
         }
 
         var requestedRunId = SelectedRun.WorkflowRunId;
+        var requestedNodeRunId = RunTableNodeRunIdFilter;
         var requestVersion = ++tableRefsLoadVersion;
         var requestCancellation = BeginTableRefDirectoryRequest();
         IsLoadingTableRefs = true;
@@ -26,10 +27,15 @@ public partial class MainWindowViewModel
             runMetadataCache.InvalidateRun(requestedRunId);
             var response = await LoadRunTableDirectoryAsync(
                 requestedRunId,
-                requestCancellation.Token);
+                requestCancellation.Token,
+                requestedNodeRunId);
 
             if (
                 SelectedRun?.WorkflowRunId != requestedRunId
+                || !string.Equals(
+                    RunTableNodeRunIdFilter,
+                    requestedNodeRunId,
+                    StringComparison.Ordinal)
                 || requestVersion != tableRefsLoadVersion)
             {
                 return;
@@ -38,7 +44,12 @@ public partial class MainWindowViewModel
             if (response.Ok && response.Data is not null)
             {
                 ApplyRefreshedTableRefs(response.Data);
-                TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
+                TableRefMessage = requestedNodeRunId is null
+                    ? F("format.loaded_table_refs", TableRefs.Count)
+                    : F(
+                        "format.loaded_node_table_refs",
+                        TableRefs.Count,
+                        requestedNodeRunId);
                 return;
             }
 

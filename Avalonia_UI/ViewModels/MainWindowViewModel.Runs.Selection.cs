@@ -27,6 +27,7 @@ public partial class MainWindowViewModel
             tableRefsLoadVersion++;
             IsLoadingNodeRuns = false;
             IsLoadingTableRefs = false;
+            RunTableNodeRunIdFilter = null;
             NodeRuns.Clear();
             TableRefs.Clear();
             NotifyWorkflowNodeTableBindingsTableCatalogChanged();

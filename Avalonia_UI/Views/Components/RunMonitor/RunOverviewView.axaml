@@ -29,6 +29,20 @@
                    TextWrapping="Wrap"
                    Foreground="{DynamicResource TextErrorBrush}"/>
 
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <Button Content="{Binding ViewTablesText}"
+                    Command="{Binding ViewTablesCommand}"
+                    HorizontalAlignment="Stretch"/>
+            <Button Grid.Column="1"
+                    Content="{Binding ViewPreviewText}"
+                    Command="{Binding ViewPreviewCommand}"
+                    HorizontalAlignment="Stretch"/>
+            <Button Grid.Column="2"
+                    Content="{Binding ViewLogsText}"
+                    Command="{Binding ViewLogsCommand}"
+                    HorizontalAlignment="Stretch"/>
+        </Grid>
+
         <StackPanel IsVisible="{Binding HasReview}" Spacing="10">
             <TextBlock Text="{Binding BasicText}"
                        FontWeight="SemiBold"

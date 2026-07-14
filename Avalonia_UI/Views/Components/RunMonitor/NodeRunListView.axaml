@@ -114,6 +114,19 @@
                         <TextBlock Grid.Row="8" Text="{Binding StateVersionLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                         <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding SelectedNodeRun.StateVersion}"/>
                     </Grid>
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                        <Button Content="{Binding ViewTablesText}"
+                                Command="{Binding ViewTablesCommand}"
+                                HorizontalAlignment="Stretch"/>
+                        <Button Grid.Column="1"
+                                Content="{Binding ViewPreviewText}"
+                                Command="{Binding ViewPreviewCommand}"
+                                HorizontalAlignment="Stretch"/>
+                        <Button Grid.Column="2"
+                                Content="{Binding ViewLogsText}"
+                                Command="{Binding ViewLogsCommand}"
+                                HorizontalAlignment="Stretch"/>
+                    </Grid>
                     <Border IsVisible="{Binding SelectedNodeRun.HasError}"
                             Background="{DynamicResource ErrorBackgroundBrush}"
                             BorderBrush="{DynamicResource ErrorBorderBrush}"

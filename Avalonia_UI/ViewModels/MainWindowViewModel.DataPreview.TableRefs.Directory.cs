@@ -11,7 +11,8 @@ public partial class MainWindowViewModel
 
     private async Task<ApiResponseEnvelope<List<RunTableDirectoryItemDto>>> LoadRunTableDirectoryAsync(
         string workflowRunId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? nodeRunId = null)
     {
         var result = new List<RunTableDirectoryItemDto>();
         var offset = 0;
@@ -22,6 +23,7 @@ public partial class MainWindowViewModel
                 workflowRunId,
                 offset,
                 TableDirectoryPageSize,
+                nodeRunId: nodeRunId,
                 cancellationToken: cancellationToken);
             if (!response.Ok || response.Data is null)
             {

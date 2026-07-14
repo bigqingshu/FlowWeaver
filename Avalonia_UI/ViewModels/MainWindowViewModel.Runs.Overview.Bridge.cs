@@ -17,6 +17,7 @@ public partial class MainWindowViewModel
             new RunReviewService(apiClient),
             T,
             DisplayTextFormatter);
+        RunOverview.DrilldownRequested += OnRunMonitorDrilldownRequested;
         RunOverview.SetActive(SelectedRunMonitorTabIndex == 0);
         RefreshRunOverviewContext();
     }
