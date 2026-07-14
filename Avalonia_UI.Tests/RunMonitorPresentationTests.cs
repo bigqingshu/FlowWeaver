@@ -65,6 +65,24 @@ public sealed class RunMonitorPresentationTests
             .Any(button =>
                 (string?)button.Attribute("Command")
                 == "{Binding BackgroundRunManagement.StartCommand}"));
+        Assert.IsTrue(document
+            .Descendants()
+            .Any(element => element.Name.LocalName == "BackgroundRunLauncherView"));
+    }
+
+    [TestMethod]
+    public void BackgroundRunLauncherUsesSharedModeTargetAndStartState()
+    {
+        var xaml = File.ReadAllText(GetViewPath("BackgroundRunLauncherView.axaml"));
+
+        StringAssert.Contains(xaml, "Command=\"{Binding UseFullStartModeCommand}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding UsePreviewToNodeStartModeCommand}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding StartTargetNodes}\"");
+        StringAssert.Contains(
+            xaml,
+            "SelectedItem=\"{Binding SelectedStartTargetNode, Mode=TwoWay}\"");
+        StringAssert.Contains(xaml, "Command=\"{Binding StartCommand}\"");
+        StringAssert.Contains(xaml, "IsEnabled=\"{Binding CanStartBackgroundRun}\"");
     }
 
     [TestMethod]

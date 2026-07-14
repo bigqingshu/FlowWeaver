@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.BackgroundRunLauncherView"
+             x:DataType="vm:BackgroundRunManagementViewModel">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+        <TextBlock Text="{Binding StartLauncherText}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,*" ColumnSpacing="6">
+            <TextBlock Text="{Binding StartModeText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <ToggleButton Grid.Column="1"
+                          Content="{Binding StartFullModeText}"
+                          IsChecked="{Binding IsFullStartMode, Mode=OneWay}"
+                          Command="{Binding UseFullStartModeCommand}"
+                          HorizontalAlignment="Stretch"/>
+            <ToggleButton Grid.Column="2"
+                          Content="{Binding StartPreviewModeText}"
+                          IsChecked="{Binding IsPreviewToNodeStartMode, Mode=OneWay}"
+                          Command="{Binding UsePreviewToNodeStartModeCommand}"
+                          HorizontalAlignment="Stretch"/>
+        </Grid>
+
+        <Grid Grid.Row="2"
+              ColumnDefinitions="Auto,*"
+              ColumnSpacing="6"
+              IsVisible="{Binding CanSelectStartTargetNode}">
+            <TextBlock Text="{Binding StartTargetNodeText}"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding StartTargetNodes}"
+                      SelectedItem="{Binding SelectedStartTargetNode, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate DataType="vm:BackgroundRunTargetNodeOptionViewModel"
+                                  x:DataType="vm:BackgroundRunTargetNodeOptionViewModel">
+                        <TextBlock Text="{Binding DisplayText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding DisplayText}"/>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </Grid>
+
+        <Button Grid.Row="3"
+                Content="{Binding StartText}"
+                Command="{Binding StartCommand}"
+                IsEnabled="{Binding CanStartBackgroundRun}"
+                Classes="Primary"
+                HorizontalAlignment="Stretch"/>
+    </Grid>
+</UserControl>

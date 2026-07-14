@@ -18,6 +18,7 @@ public partial class MainWindowViewModel
         RunOverview.RefreshLocalizedText();
         NodeRunMonitor.RefreshLocalizedText();
         RunLoopMonitor.RefreshLocalizedText();
+        RefreshBackgroundRunLaunchTargets();
         BackgroundRunManagement.RefreshLocalizedText();
         RefreshSelectedNodeConfigDraftState();
     }

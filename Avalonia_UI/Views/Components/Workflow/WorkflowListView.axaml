@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:rm="using:Avalonia_UI.Views.Components.RunMonitor"
              x:Class="Avalonia_UI.Views.Components.Workflow.WorkflowListView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="18">
@@ -71,9 +72,7 @@
             <Grid Grid.Row="3"
                   RowDefinitions="Auto,Auto"
                   RowSpacing="8">
-                <Button Content="{Binding BackgroundRunManagement.StartText}"
-                        Command="{Binding BackgroundRunManagement.StartCommand}"
-                        HorizontalAlignment="Stretch"/>
+                <rm:BackgroundRunLauncherView DataContext="{Binding BackgroundRunManagement}"/>
                 <Grid Grid.Row="1"
                       ColumnDefinitions="*,*,*"
                       ColumnSpacing="8">

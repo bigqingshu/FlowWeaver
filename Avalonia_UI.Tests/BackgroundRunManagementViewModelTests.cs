@@ -33,8 +33,73 @@ public sealed class BackgroundRunManagementViewModelTests
 
         Assert.AreEqual("wf-1", service.LastStartedWorkflowId);
         Assert.AreEqual("full", service.LastStartedRunMode);
+        Assert.IsNull(service.LastStartedTargetNodeInstanceId);
         Assert.AreEqual("run-background", viewModel.SelectedRun?.WorkflowRunId);
         Assert.AreEqual("background_manual", viewModel.SelectedRun?.TriggerSource);
+    }
+
+    [TestMethod]
+    public async Task PreviewStartRequiresLoadedTargetAndSendsSelectedNode()
+    {
+        var startedRun = Run(
+            "run-preview",
+            "PENDING",
+            triggerSource: "background_manual") with
+        {
+            RunMode = "preview_to_node",
+            TargetNodeInstanceId = "filter",
+        };
+        var service = new FakeBackgroundRunService
+        {
+            StartResponse = ApiResponseEnvelope<WorkflowRunDto>.Success(startedRun),
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success([startedRun]),
+        };
+        var viewModel = CreateViewModel(service);
+        viewModel.SetStartTargetNodes(
+        [
+            new("source", "source / Generate Test Table"),
+            new("filter", "filter / Filter Rows"),
+        ],
+        definitionLoaded: true);
+
+        viewModel.UsePreviewToNodeStartModeCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.CanSelectStartTargetNode);
+        Assert.IsFalse(viewModel.StartCommand.CanExecute(null));
+        viewModel.SelectedStartTargetNode = viewModel.StartTargetNodes[1];
+        viewModel.Offset = BackgroundRunManagementViewModel.PageSize;
+        Assert.IsTrue(viewModel.StartCommand.CanExecute(null));
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("preview_to_node", service.LastStartedRunMode);
+        Assert.AreEqual("filter", service.LastStartedTargetNodeInstanceId);
+        Assert.AreEqual(0, viewModel.Offset);
+        Assert.AreEqual("run-preview", viewModel.SelectedRun?.WorkflowRunId);
+    }
+
+    [TestMethod]
+    public void FullModeClearsPreviewTargetAndUnloadedDefinitionDisablesStart()
+    {
+        var service = new FakeBackgroundRunService();
+        var viewModel = new BackgroundRunManagementViewModel(service, key => key);
+        viewModel.SetContext(Settings(), "wf-1", canUseActions: true);
+
+        Assert.IsFalse(viewModel.StartCommand.CanExecute(null));
+
+        viewModel.SetStartTargetNodes(
+            [new("filter", "filter / Filter Rows")],
+            definitionLoaded: true);
+        viewModel.UsePreviewToNodeStartModeCommand.Execute(null);
+        viewModel.SelectedStartTargetNode = viewModel.StartTargetNodes[0];
+        Assert.AreEqual("filter", viewModel.SelectedStartTargetNodeInstanceId);
+
+        viewModel.UseFullStartModeCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsFullStartMode);
+        Assert.IsNull(viewModel.SelectedStartTargetNode);
+        Assert.IsNull(viewModel.SelectedStartTargetNodeInstanceId);
+        Assert.IsTrue(viewModel.StartCommand.CanExecute(null));
     }
 
     [TestMethod]
@@ -417,6 +482,7 @@ public sealed class BackgroundRunManagementViewModelTests
     {
         var viewModel = new BackgroundRunManagementViewModel(service, key => key);
         viewModel.SetContext(Settings(), "wf-1", canUseActions: true);
+        viewModel.SetStartTargetNodes([], definitionLoaded: true);
         return viewModel;
     }
 
@@ -517,6 +583,8 @@ public sealed class BackgroundRunManagementViewModelTests
 
         public string? LastStartedRunMode { get; private set; }
 
+        public string? LastStartedTargetNodeInstanceId { get; private set; }
+
         public RunListRequest? LastListRequest { get; private set; }
 
         public string? LastRetriedWorkflowRunId { get; private set; }
@@ -536,6 +604,7 @@ public sealed class BackgroundRunManagementViewModelTests
         {
             LastStartedWorkflowId = workflowId;
             LastStartedRunMode = runMode;
+            LastStartedTargetNodeInstanceId = targetNodeInstanceId;
             return Task.FromResult(StartResponse);
         }
 

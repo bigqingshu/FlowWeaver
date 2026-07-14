@@ -702,6 +702,14 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(2, viewModel.WorkflowDefinitionDraftNodeCount);
         Assert.AreEqual("2 node(s)", viewModel.WorkflowDefinitionDraftNodeCountText);
         Assert.HasCount(2, viewModel.WorkflowDefinitionDraftNodes);
+        Assert.HasCount(2, viewModel.BackgroundRunManagement.StartTargetNodes);
+        Assert.AreEqual(
+            "source",
+            viewModel.BackgroundRunManagement.StartTargetNodes[0].NodeInstanceId);
+        Assert.AreEqual(
+            "filter",
+            viewModel.BackgroundRunManagement.StartTargetNodes[1].NodeInstanceId);
+        Assert.IsTrue(viewModel.BackgroundRunManagement.CanStartBackgroundRun);
         Assert.AreEqual(1, viewModel.WorkflowDefinitionDraftConnectionCount);
         Assert.IsNotNull(viewModel.WorkflowDefinitionDraftStructure);
         Assert.AreEqual(

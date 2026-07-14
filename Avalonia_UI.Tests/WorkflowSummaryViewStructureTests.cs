@@ -722,7 +722,10 @@ public sealed class WorkflowSummaryViewStructureTests
 
         StringAssert.Contains(
             workflowXaml,
-            "Command=\"{Binding BackgroundRunManagement.StartCommand}\"");
+            "<rm:BackgroundRunLauncherView DataContext=\"{Binding BackgroundRunManagement}\"/>");
+        StringAssert.Contains(
+            runXaml,
+            "<rm:BackgroundRunLauncherView DataContext=\"{Binding BackgroundRunManagement}\"/>");
         StringAssert.Contains(
             runXaml,
             "SelectedItem=\"{Binding BackgroundRunManagement.SelectedTriggerSource, Mode=TwoWay}\"");

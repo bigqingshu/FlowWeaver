@@ -17,6 +17,10 @@ public sealed record BackgroundRunFilterOptionViewModel(
     string? Value,
     string DisplayText);
 
+public sealed record BackgroundRunTargetNodeOptionViewModel(
+    string NodeInstanceId,
+    string DisplayText);
+
 public sealed record RunTableCleanupItemViewModel(
     string TableRefId,
     string? Reason)
@@ -41,6 +45,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private CancellationTokenSource? cleanupCancellation;
     private string? cleanupWorkflowRunId;
     private bool suppressFilterRefresh;
+    private bool isStartDefinitionLoaded;
 
     public BackgroundRunManagementViewModel(
         IBackgroundRunService service,
@@ -69,6 +74,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public ObservableCollection<BackgroundRunFilterOptionViewModel> StatusOptions { get; } = new();
 
+    public ObservableCollection<BackgroundRunTargetNodeOptionViewModel> StartTargetNodes { get; } = new();
+
     public ObservableCollection<RunTableCleanupItemViewModel> CleanedTableRefs { get; } = new();
 
     public ObservableCollection<RunTableCleanupItemViewModel> SkippedTableRefs { get; } = new();
@@ -86,6 +93,12 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     [ObservableProperty]
     private BackgroundRunFilterOptionViewModel? selectedStatus;
+
+    [ObservableProperty]
+    private string selectedStartRunMode = "full";
+
+    [ObservableProperty]
+    private BackgroundRunTargetNodeOptionViewModel? selectedStartTargetNode;
 
     [ObservableProperty]
     private int offset;
@@ -121,6 +134,16 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     public string StatusFilterText => translate("runs.background.status_filter");
 
     public string StartText => translate("runs.background.start");
+
+    public string StartLauncherText => translate("runs.background.launcher");
+
+    public string StartModeText => translate("runs.background.start_mode");
+
+    public string StartFullModeText => translate("runs.mode.full");
+
+    public string StartPreviewModeText => translate("runs.mode.preview_to_node");
+
+    public string StartTargetNodeText => translate("runs.background.target_node");
 
     public string RetryText => translate("runs.background.retry");
 
@@ -193,6 +216,24 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     public bool CanRetrySelectedRun =>
         canUseEngineActions && SelectedRun is not null && !IsBusy;
 
+    public bool IsFullStartMode => string.Equals(
+        SelectedStartRunMode,
+        "full",
+        StringComparison.Ordinal);
+
+    public bool IsPreviewToNodeStartMode => string.Equals(
+        SelectedStartRunMode,
+        "preview_to_node",
+        StringComparison.Ordinal);
+
+    public bool CanSelectStartTargetNode =>
+        isStartDefinitionLoaded && IsPreviewToNodeStartMode;
+
+    public bool CanStartBackgroundRun => CanStart();
+
+    public string? SelectedStartTargetNodeInstanceId =>
+        SelectedStartTargetNode?.NodeInstanceId;
+
     public void SetContext(
         EngineHostConnectionSettings connectionSettings,
         string? selectedWorkflowId,
@@ -209,9 +250,36 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             Runs.Clear();
             SelectedRun = null;
             HasNextPage = false;
+            ResetStartConfiguration();
         }
 
         NotifyCommandStateChanged();
+    }
+
+    public void SetStartTargetNodes(
+        IEnumerable<BackgroundRunTargetNodeOptionViewModel> targets,
+        bool definitionLoaded)
+    {
+        var selectedNodeInstanceId = SelectedStartTargetNode?.NodeInstanceId;
+        StartTargetNodes.Clear();
+        if (definitionLoaded)
+        {
+            foreach (var target in targets
+                         .Where(target => !string.IsNullOrWhiteSpace(target.NodeInstanceId))
+                         .GroupBy(target => target.NodeInstanceId, StringComparer.Ordinal)
+                         .Select(group => group.First()))
+            {
+                StartTargetNodes.Add(target);
+            }
+        }
+
+        isStartDefinitionLoaded = definitionLoaded;
+        SelectedStartTargetNode = StartTargetNodes.FirstOrDefault(target =>
+            string.Equals(
+                target.NodeInstanceId,
+                selectedNodeInstanceId,
+                StringComparison.Ordinal));
+        NotifyStartStateChanged();
     }
 
     public async Task LoadPageAsync(
@@ -404,6 +472,11 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         OnPropertyChanged(nameof(RunModeFilterText));
         OnPropertyChanged(nameof(StatusFilterText));
         OnPropertyChanged(nameof(StartText));
+        OnPropertyChanged(nameof(StartLauncherText));
+        OnPropertyChanged(nameof(StartModeText));
+        OnPropertyChanged(nameof(StartFullModeText));
+        OnPropertyChanged(nameof(StartPreviewModeText));
+        OnPropertyChanged(nameof(StartTargetNodeText));
         OnPropertyChanged(nameof(RetryText));
         OnPropertyChanged(nameof(CleanupText));
         OnPropertyChanged(nameof(CleanupCancelText));
@@ -458,6 +531,22 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     partial void OnSelectedStatusChanged(BackgroundRunFilterOptionViewModel? value)
     {
         QueueFilterRefresh();
+    }
+
+    partial void OnSelectedStartRunModeChanged(string value)
+    {
+        if (!IsPreviewToNodeStartMode)
+        {
+            SelectedStartTargetNode = null;
+        }
+
+        NotifyStartStateChanged();
+    }
+
+    partial void OnSelectedStartTargetNodeChanged(
+        BackgroundRunTargetNodeOptionViewModel? value)
+    {
+        NotifyStartStateChanged();
     }
 
     partial void OnOffsetChanged(int value)
@@ -534,11 +623,15 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
-        if (workflowId is null)
+        if (workflowId is null || !CanStart())
         {
             return;
         }
 
+        var runMode = SelectedStartRunMode;
+        var targetNodeInstanceId = IsPreviewToNodeStartMode
+            ? SelectedStartTargetNode?.NodeInstanceId
+            : null;
         IsStarting = true;
         ErrorMessage = null;
         try
@@ -546,7 +639,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             var response = await service.StartAsync(
                 settings,
                 workflowId,
-                "full",
+                runMode,
+                targetNodeInstanceId,
                 cancellationToken: CancellationToken.None);
             if (!response.Ok || response.Data is null)
             {
@@ -800,10 +894,42 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         return LoadPageAsync();
     }
 
+    [RelayCommand]
+    private void UseFullStartMode()
+    {
+        SelectedStartRunMode = "full";
+    }
+
+    [RelayCommand]
+    private void UsePreviewToNodeStartMode()
+    {
+        SelectedStartRunMode = "preview_to_node";
+    }
+
     private bool CanRefresh() => canUseEngineActions && !IsBusy;
 
-    private bool CanStart() =>
-        canUseEngineActions && !string.IsNullOrWhiteSpace(workflowId) && !IsBusy;
+    private bool CanStart()
+    {
+        if (!canUseEngineActions
+            || string.IsNullOrWhiteSpace(workflowId)
+            || !isStartDefinitionLoaded
+            || IsBusy)
+        {
+            return false;
+        }
+
+        if (IsFullStartMode)
+        {
+            return true;
+        }
+
+        return IsPreviewToNodeStartMode
+            && SelectedStartTargetNode is not null
+            && StartTargetNodes.Any(target => string.Equals(
+                target.NodeInstanceId,
+                SelectedStartTargetNode.NodeInstanceId,
+                StringComparison.Ordinal));
+    }
 
     private bool CanRetry() => CanRetrySelectedRun;
 
@@ -877,6 +1003,26 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         NextPageCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanCleanupSelectedRun));
         OnPropertyChanged(nameof(CanRetrySelectedRun));
+        OnPropertyChanged(nameof(CanStartBackgroundRun));
+    }
+
+    private void ResetStartConfiguration()
+    {
+        isStartDefinitionLoaded = false;
+        StartTargetNodes.Clear();
+        SelectedStartTargetNode = null;
+        SelectedStartRunMode = "full";
+        NotifyStartStateChanged();
+    }
+
+    private void NotifyStartStateChanged()
+    {
+        OnPropertyChanged(nameof(IsFullStartMode));
+        OnPropertyChanged(nameof(IsPreviewToNodeStartMode));
+        OnPropertyChanged(nameof(CanSelectStartTargetNode));
+        OnPropertyChanged(nameof(CanStartBackgroundRun));
+        OnPropertyChanged(nameof(SelectedStartTargetNodeInstanceId));
+        StartCommand.NotifyCanExecuteChanged();
     }
 
     private void BuildFilterOptions()

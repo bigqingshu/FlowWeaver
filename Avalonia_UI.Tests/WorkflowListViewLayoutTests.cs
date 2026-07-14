@@ -19,20 +19,18 @@ public sealed class WorkflowListViewLayoutTests
             .Single(element =>
                 (string?)element.Attribute("Grid.Row") == "3"
                 && element
-                    .Descendants(avalonia + "Button")
-                    .Any(button =>
-                        (string?)button.Attribute("Command")
-                        == "{Binding BackgroundRunManagement.StartCommand}"));
+                    .Descendants()
+                    .Any(child => child.Name.LocalName == "BackgroundRunLauncherView"));
 
         Assert.AreEqual("Auto,Auto", (string?)actionGrid.Attribute("RowDefinitions"));
         Assert.AreEqual("8", (string?)actionGrid.Attribute("RowSpacing"));
 
-        var backgroundRunButton = actionGrid
-            .Elements(avalonia + "Button")
-            .Single(button =>
-                (string?)button.Attribute("Command")
-                == "{Binding BackgroundRunManagement.StartCommand}");
-        Assert.AreEqual("Stretch", (string?)backgroundRunButton.Attribute("HorizontalAlignment"));
+        var backgroundRunLauncher = actionGrid
+            .Elements()
+            .Single(element => element.Name.LocalName == "BackgroundRunLauncherView");
+        Assert.AreEqual(
+            "{Binding BackgroundRunManagement}",
+            (string?)backgroundRunLauncher.Attribute("DataContext"));
 
         var managementGrid = actionGrid
             .Elements(avalonia + "Grid")

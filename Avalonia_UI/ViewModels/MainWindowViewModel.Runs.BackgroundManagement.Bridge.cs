@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
 using Avalonia_UI.Models;
@@ -36,6 +37,30 @@ public partial class MainWindowViewModel
             BuildSettings(),
             SelectedWorkflow?.WorkflowId,
             CanUseEngineActions);
+        RefreshBackgroundRunLaunchTargets();
+    }
+
+    private void RefreshBackgroundRunLaunchTargets()
+    {
+        if (BackgroundRunManagement is null)
+        {
+            return;
+        }
+
+        var definitionLoaded = SelectedWorkflow is not null
+            && WorkflowDefinitionDetail is not null
+            && string.Equals(
+                SelectedWorkflow.WorkflowId,
+                WorkflowDefinitionDetail.WorkflowId,
+                StringComparison.Ordinal);
+        System.Collections.Generic.IEnumerable<BackgroundRunTargetNodeOptionViewModel> targets =
+            definitionLoaded
+            ? WorkflowDefinitionDetail!.Nodes.Select(node =>
+                new BackgroundRunTargetNodeOptionViewModel(
+                    node.NodeInstanceId,
+                    node.NodeSummaryText))
+            : [];
+        BackgroundRunManagement.SetStartTargetNodes(targets, definitionLoaded);
     }
 
     private void OnBackgroundRunManagementPropertyChanged(
