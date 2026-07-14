@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.RunCleanupResultView"
+             x:DataType="vm:BackgroundRunManagementViewModel"
+             IsVisible="{Binding HasCleanupResult}">
+    <Expander Header="{Binding CleanupResultText}">
+        <StackPanel Margin="0,8,0,0" Spacing="8">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <TextBlock Text="{Binding CleanupOutcomeLabel}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding CleanupOutcomeText}"
+                           FontWeight="SemiBold"/>
+            </Grid>
+            <TextBlock Text="{Binding CleanupCountsText}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+
+            <StackPanel IsVisible="{Binding HasCleanedTableRefs}" Spacing="4">
+                <TextBlock Text="{Binding CleanedTableRefsText}" FontWeight="SemiBold"/>
+                <ListBox ItemsSource="{Binding CleanedTableRefs}" MaxHeight="110">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:RunTableCleanupItemViewModel"
+                                      x:DataType="vm:RunTableCleanupItemViewModel">
+                            <TextBlock Margin="6,3"
+                                       Text="{Binding TableRefId}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding HasSkippedTableRefs}" Spacing="4">
+                <TextBlock Text="{Binding SkippedTableRefsText}" FontWeight="SemiBold"/>
+                <ListBox ItemsSource="{Binding SkippedTableRefs}" MaxHeight="130">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:RunTableCleanupItemViewModel"
+                                      x:DataType="vm:RunTableCleanupItemViewModel">
+                            <StackPanel Margin="6,3">
+                                <TextBlock Text="{Binding TableRefId}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Reason}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding HasFailedTableRefs}" Spacing="4">
+                <TextBlock Text="{Binding FailedTableRefsText}" FontWeight="SemiBold"/>
+                <ListBox ItemsSource="{Binding FailedTableRefs}" MaxHeight="130">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:RunTableCleanupItemViewModel"
+                                      x:DataType="vm:RunTableCleanupItemViewModel">
+                            <StackPanel Margin="6,3">
+                                <TextBlock Text="{Binding TableRefId}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Reason}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextErrorBrush}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <Expander Header="{Binding CleanupAdvancedText}">
+                <Grid Margin="0,6,0,0" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <TextBlock Text="{Binding CleanupCursorLabel}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding CleanupCursorText}"
+                               TextWrapping="Wrap"
+                               FontFamily="Consolas"
+                               FontSize="12"/>
+                </Grid>
+            </Expander>
+        </StackPanel>
+    </Expander>
+</UserControl>

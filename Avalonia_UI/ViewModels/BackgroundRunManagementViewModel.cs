@@ -17,6 +17,13 @@ public sealed record BackgroundRunFilterOptionViewModel(
     string? Value,
     string DisplayText);
 
+public sealed record RunTableCleanupItemViewModel(
+    string TableRefId,
+    string? Reason)
+{
+    public bool HasReason => !string.IsNullOrWhiteSpace(Reason);
+}
+
 public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 {
     public const int PageSize = 50;
@@ -62,6 +69,12 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public ObservableCollection<BackgroundRunFilterOptionViewModel> StatusOptions { get; } = new();
 
+    public ObservableCollection<RunTableCleanupItemViewModel> CleanedTableRefs { get; } = new();
+
+    public ObservableCollection<RunTableCleanupItemViewModel> SkippedTableRefs { get; } = new();
+
+    public ObservableCollection<RunTableCleanupItemViewModel> FailedTableRefs { get; } = new();
+
     [ObservableProperty]
     private WorkflowRunListItemViewModel? selectedRun;
 
@@ -98,6 +111,9 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     [ObservableProperty]
     private string? errorMessage;
 
+    [ObservableProperty]
+    private RunTableCleanupResultDto? cleanupResult;
+
     public string TriggerSourceFilterText => translate("runs.background.trigger_filter");
 
     public string RunModeFilterText => translate("runs.background.mode_filter");
@@ -120,6 +136,20 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public string CleanupConfirmText => translate("runs.background.cleanup_confirm");
 
+    public string CleanupResultText => translate("runs.cleanup_result.section");
+
+    public string CleanupOutcomeLabel => translate("runs.cleanup_result.outcome");
+
+    public string CleanedTableRefsText => translate("runs.cleanup_result.cleaned");
+
+    public string SkippedTableRefsText => translate("runs.cleanup_result.skipped");
+
+    public string FailedTableRefsText => translate("runs.cleanup_result.failed");
+
+    public string CleanupAdvancedText => translate("runs.cleanup_result.advanced");
+
+    public string CleanupCursorLabel => translate("runs.cleanup_result.cursor");
+
     public string PageText => string.Format(
         translate("runs.background.page_format"),
         Offset / PageSize + 1,
@@ -131,6 +161,31 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     public bool IsBusy => IsLoading || IsStarting || IsRetrying || IsCleaningTables;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public bool HasCleanupResult => CleanupResult is not null;
+
+    public bool HasCleanedTableRefs => CleanedTableRefs.Count > 0;
+
+    public bool HasSkippedTableRefs => SkippedTableRefs.Count > 0;
+
+    public bool HasFailedTableRefs => FailedTableRefs.Count > 0;
+
+    public string CleanupOutcomeText => CleanupResult is null
+        ? string.Empty
+        : FormatProtocolValue("runs.cleanup_result.outcome", CleanupResult.Outcome);
+
+    public string CleanupCountsText => CleanupResult is null
+        ? string.Empty
+        : string.Format(
+            translate("runs.cleanup_result.counts_format"),
+            CleanupResult.ProcessedCount,
+            CleanupResult.CleanedCount,
+            CleanupResult.SkippedCount,
+            CleanupResult.FailedCount);
+
+    public string CleanupCursorText => string.IsNullOrWhiteSpace(CleanupResult?.ContinuationCursor)
+        ? "-"
+        : CleanupResult.ContinuationCursor;
 
     public bool CanCleanupSelectedRun =>
         canUseEngineActions && SelectedRun?.IsTerminal == true && !IsBusy;
@@ -356,6 +411,15 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         OnPropertyChanged(nameof(NextPageText));
         OnPropertyChanged(nameof(RetryConfirmText));
         OnPropertyChanged(nameof(CleanupConfirmText));
+        OnPropertyChanged(nameof(CleanupResultText));
+        OnPropertyChanged(nameof(CleanupOutcomeLabel));
+        OnPropertyChanged(nameof(CleanedTableRefsText));
+        OnPropertyChanged(nameof(SkippedTableRefsText));
+        OnPropertyChanged(nameof(FailedTableRefsText));
+        OnPropertyChanged(nameof(CleanupAdvancedText));
+        OnPropertyChanged(nameof(CleanupCursorLabel));
+        OnPropertyChanged(nameof(CleanupOutcomeText));
+        OnPropertyChanged(nameof(CleanupCountsText));
         OnPropertyChanged(nameof(PageText));
     }
 
@@ -367,6 +431,14 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                 StringComparison.Ordinal))
         {
             RequestCleanupCancellation();
+        }
+
+        if (CleanupResult is not null && !string.Equals(
+                CleanupResult.WorkflowRunId,
+                value?.WorkflowRunId,
+                StringComparison.Ordinal))
+        {
+            CleanupResult = null;
         }
 
         SelectedRunChanged?.Invoke(value);
@@ -415,6 +487,42 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     partial void OnErrorMessageChanged(string? value)
     {
         OnPropertyChanged(nameof(HasError));
+    }
+
+    partial void OnCleanupResultChanged(RunTableCleanupResultDto? value)
+    {
+        CleanedTableRefs.Clear();
+        SkippedTableRefs.Clear();
+        FailedTableRefs.Clear();
+        if (value is not null)
+        {
+            foreach (var tableRefId in value.CleanedTableRefIds)
+            {
+                CleanedTableRefs.Add(new RunTableCleanupItemViewModel(tableRefId, null));
+            }
+
+            foreach (var issue in value.Skipped)
+            {
+                SkippedTableRefs.Add(new RunTableCleanupItemViewModel(
+                    issue.TableRefId,
+                    issue.Reason));
+            }
+
+            foreach (var issue in value.Failed)
+            {
+                FailedTableRefs.Add(new RunTableCleanupItemViewModel(
+                    issue.TableRefId,
+                    issue.Reason));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasCleanupResult));
+        OnPropertyChanged(nameof(HasCleanedTableRefs));
+        OnPropertyChanged(nameof(HasSkippedTableRefs));
+        OnPropertyChanged(nameof(HasFailedTableRefs));
+        OnPropertyChanged(nameof(CleanupOutcomeText));
+        OnPropertyChanged(nameof(CleanupCountsText));
+        OnPropertyChanged(nameof(CleanupCursorText));
     }
 
     [RelayCommand(CanExecute = nameof(CanRefresh))]
@@ -523,6 +631,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         var cancellation = new CancellationTokenSource();
         cleanupCancellation = cancellation;
         cleanupWorkflowRunId = run.WorkflowRunId;
+        CleanupResult = null;
         IsCleaningTables = true;
         ErrorMessage = null;
         var processedCount = 0;
@@ -552,7 +661,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                 {
                     if (receivedBatch)
                     {
-                        TablesCleaned?.Invoke(
+                        PublishCleanupResult(
                             run.WorkflowRunId,
                             BuildCleanupResult(
                                 run.WorkflowRunId,
@@ -598,7 +707,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                         previousCursor,
                         StringComparison.Ordinal))
                 {
-                    TablesCleaned?.Invoke(
+                    PublishCleanupResult(
                         run.WorkflowRunId,
                         BuildCleanupResult(
                             run.WorkflowRunId,
@@ -630,7 +739,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                 skipped,
                 failed,
                 continuationCursor: null);
-            TablesCleaned?.Invoke(run.WorkflowRunId, result);
+            PublishCleanupResult(run.WorkflowRunId, result);
             Message = string.Format(
                 translate("runs.background.cleaned_format"),
                 result.CleanedCount,
@@ -641,7 +750,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         {
             if (receivedBatch)
             {
-                TablesCleaned?.Invoke(
+                PublishCleanupResult(
                     run.WorkflowRunId,
                     BuildCleanupResult(
                         run.WorkflowRunId,
@@ -838,6 +947,33 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private static string DescribeError<T>(ApiResponseEnvelope<T> response)
     {
         return response.Error?.Message ?? response.Error?.ErrorCode ?? "UNKNOWN_ERROR";
+    }
+
+    private void PublishCleanupResult(
+        string workflowRunId,
+        RunTableCleanupResultDto result)
+    {
+        if (string.Equals(
+                SelectedRun?.WorkflowRunId,
+                workflowRunId,
+                StringComparison.Ordinal))
+        {
+            CleanupResult = result;
+        }
+
+        TablesCleaned?.Invoke(workflowRunId, result);
+    }
+
+    private string FormatProtocolValue(string prefix, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "-";
+        }
+
+        var key = $"{prefix}.{value}";
+        var localized = translate(key);
+        return string.Equals(localized, key, StringComparison.Ordinal) ? value : localized;
     }
 
     private static RunTableCleanupResultDto BuildCleanupResult(

@@ -7,7 +7,7 @@
     <Border Classes="Card" Padding="14">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding RunsSectionText}"
                            FontSize="16"
@@ -46,6 +46,9 @@
 
             <Separator Grid.Row="4"/>
             <rm:RunOverviewView Grid.Row="5" DataContext="{Binding RunOverview}"/>
+            <Separator Grid.Row="6" IsVisible="{Binding BackgroundRunManagement.HasCleanupResult}"/>
+            <rm:RunCleanupResultView Grid.Row="7"
+                                     DataContext="{Binding BackgroundRunManagement}"/>
         </Grid>
         </ScrollViewer>
     </Border>

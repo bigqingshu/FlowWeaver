@@ -164,6 +164,61 @@ public sealed class BackgroundRunManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task CleanupResultExposesIdsAndReasonsAndClearsForAnotherRun()
+    {
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-first", "SUCCEEDED"), Run("run-second", "SUCCEEDED")]),
+            CleanupResponse = ApiResponseEnvelope<RunTableCleanupResultDto>.Success(
+                new RunTableCleanupResultDto
+                {
+                    WorkflowRunId = "run-first",
+                    Outcome = "COMPLETED",
+                    ProcessedCount = 3,
+                    CleanedCount = 1,
+                    SkippedCount = 1,
+                    FailedCount = 1,
+                    CleanedTableRefIds = ["table-cleaned"],
+                    Skipped =
+                    [
+                        new RunTableCleanupIssueDto
+                        {
+                            TableRefId = "table-skipped",
+                            Reason = "external_storage",
+                        },
+                    ],
+                    Failed =
+                    [
+                        new RunTableCleanupIssueDto
+                        {
+                            TableRefId = "table-failed",
+                            Reason = "provider_error",
+                        },
+                    ],
+                }),
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+
+        await viewModel.CleanupTablesCommand.ExecuteAsync(null);
+
+        Assert.IsNotNull(viewModel.CleanupResult);
+        Assert.AreEqual("COMPLETED", viewModel.CleanupOutcomeText);
+        Assert.HasCount(1, viewModel.CleanedTableRefs);
+        Assert.AreEqual("table-cleaned", viewModel.CleanedTableRefs[0].TableRefId);
+        Assert.AreEqual("external_storage", viewModel.SkippedTableRefs[0].Reason);
+        Assert.AreEqual("provider_error", viewModel.FailedTableRefs[0].Reason);
+
+        viewModel.SelectRun(viewModel.Runs[1]);
+
+        Assert.IsNull(viewModel.CleanupResult);
+        Assert.IsEmpty(viewModel.CleanedTableRefs);
+        Assert.IsEmpty(viewModel.SkippedTableRefs);
+        Assert.IsEmpty(viewModel.FailedTableRefs);
+    }
+
+    [TestMethod]
     public async Task TerminalRunCleanupContinuesUntilCompleted()
     {
         var service = new FakeBackgroundRunService
@@ -255,7 +310,12 @@ public sealed class BackgroundRunManagementViewModelTests
         var viewModel = CreateViewModel(service);
         await viewModel.LoadPageAsync();
         var publishedRunIds = new List<string>();
-        viewModel.TablesCleaned += (runId, _) => publishedRunIds.Add(runId);
+        RunTableCleanupResultDto? partialResult = null;
+        viewModel.TablesCleaned += (runId, result) =>
+        {
+            publishedRunIds.Add(runId);
+            partialResult = result;
+        };
 
         var cleanupTask = viewModel.CleanupTablesCommand.ExecuteAsync(null);
         await secondBatchStarted.Task;
@@ -267,6 +327,11 @@ public sealed class BackgroundRunManagementViewModelTests
         CollectionAssert.AreEqual(
             new[] { "run-first" },
             publishedRunIds.ToArray());
+        Assert.IsNotNull(partialResult);
+        Assert.AreEqual("CANCELLED", partialResult.Outcome);
+        Assert.AreEqual(1, partialResult.CleanedCount);
+        Assert.AreEqual("cursor-1", partialResult.ContinuationCursor);
+        Assert.IsNull(viewModel.CleanupResult);
         Assert.AreEqual("runs.background.cleanup_cancelled", viewModel.Message);
     }
 

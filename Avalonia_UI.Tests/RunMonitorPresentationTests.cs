@@ -127,6 +127,23 @@ public sealed class RunMonitorPresentationTests
         StringAssert.Contains(overviewXaml, "Command=\"{Binding ViewLogsCommand}\"");
     }
 
+    [TestMethod]
+    public void CleanupResultUsesVirtualizedBoundedLists()
+    {
+        var xaml = File.ReadAllText(GetViewPath("RunCleanupResultView.axaml"));
+        StringAssert.Contains(xaml, "x:DataType=\"vm:BackgroundRunManagementViewModel\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding CleanedTableRefs}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding SkippedTableRefs}\"");
+        StringAssert.Contains(xaml, "ItemsSource=\"{Binding FailedTableRefs}\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"110\"");
+        StringAssert.Contains(xaml, "MaxHeight=\"130\"");
+
+        var detailXaml = File.ReadAllText(GetViewPath("RunDetailPanelView.axaml"));
+        StringAssert.Contains(
+            detailXaml,
+            "DataContext=\"{Binding BackgroundRunManagement}\"");
+    }
+
     private static bool IsWidthSafeButton(XElement button)
     {
         return (string?)button.Attribute("HorizontalAlignment") == "Stretch"
