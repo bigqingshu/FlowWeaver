@@ -1,10 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
+             xmlns:rm="using:Avalonia_UI.Views.Components.RunMonitor"
              x:Class="Avalonia_UI.Views.Components.RunMonitor.RunDetailPanelView"
              x:DataType="vm:MainWindowViewModel">
     <Border Classes="Card" Padding="14">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding RunsSectionText}"
                            FontSize="16"
@@ -41,12 +44,15 @@
                 </Border>
             </ScrollViewer>
 
-            <TextBlock Grid.Row="4" Text="{Binding NodeRunsSectionText}"
+            <Separator Grid.Row="4"/>
+            <rm:RunOverviewView Grid.Row="5" DataContext="{Binding RunOverview}"/>
+            <Separator Grid.Row="6"/>
+            <TextBlock Grid.Row="7" Text="{Binding NodeRunsSectionText}"
                        FontSize="16"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <TextBlock Grid.Row="5" Text="{Binding NodeRunMessage}" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-            <ScrollViewer Grid.Row="6" IsVisible="{Binding HasNodeRunError}" MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <TextBlock Grid.Row="8" Text="{Binding NodeRunMessage}" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+            <ScrollViewer Grid.Row="9" IsVisible="{Binding HasNodeRunError}" MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                 <Border Background="{DynamicResource ErrorBackgroundBrush}" BorderBrush="{DynamicResource ErrorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
                     <TextBlock Text="{Binding NodeRunErrorMessage}"
                                TextWrapping="Wrap"
@@ -56,5 +62,6 @@
                 </Border>
             </ScrollViewer>
         </Grid>
+        </ScrollViewer>
     </Border>
 </UserControl>

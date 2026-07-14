@@ -10,6 +10,7 @@ public partial class MainWindowViewModel
         WorkflowRunListItemViewModel? newValue)
     {
         BackgroundRunManagement?.SelectRun(newValue);
+        RefreshRunOverviewContext();
         var runChanged = !string.Equals(
             oldValue?.WorkflowRunId,
             newValue?.WorkflowRunId,

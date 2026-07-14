@@ -15,6 +15,7 @@ public partial class MainWindowViewModel
         RefreshWorkflowLoopRegionsFromDraft();
         RefreshWorkflowNodeTableBindingsFromDraft(force: true);
         WorkflowLoopRegions.RefreshLocalizedText();
+        RunOverview.RefreshLocalizedText();
         RunLoopMonitor.RefreshLocalizedText();
         BackgroundRunManagement.RefreshLocalizedText();
         RefreshSelectedNodeConfigDraftState();

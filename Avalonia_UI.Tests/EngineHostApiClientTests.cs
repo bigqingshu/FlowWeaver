@@ -538,6 +538,31 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task GetRunReviewAsyncParsesSummaryAndUsesEscapedPath()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"ok":true,"data":{"run":{"workflow_run_id":"run-1","workflow_id":"wf-1","revision_id":"rev-1","workflow_version":2,"definition_hash":"hash","status":"SUCCEEDED","run_mode":"full","trigger_source":"background_manual","target_node_instance_id":null,"state_version":3,"owner_process_id":"process-1","process_generation":1,"fencing_token":"token-1","input_snapshot_id":"snapshot-1","started_at":"2026-07-14T01:00:00Z","finished_at":"2026-07-14T01:00:02Z","completion_reason":"completed","error":null},"node_runs":[{"node_run_id":"node-run-1","workflow_run_id":"run-1","node_instance_id":"source","node_type":"SourceNode","status":"SUCCEEDED","state_version":1,"executor_id":"executor-1","progress":1.0,"current_stage":"done","attempt":1,"started_at":null,"finished_at":null,"last_heartbeat":null,"error":null}],"table_refs":[],"table_ref_summary":{"total":2,"readable":1,"by_storage_kind":{"runtime_sqlite":2},"by_lifecycle_status":{"ACTIVE":1,"RELEASED":1}},"data_preview":{"uses_paged_rows":true,"row_data_embedded":false,"readable_table_ref_ids":["table-1"]},"future_field":"ignored"},"error":null,"request_id":"req"}"""),
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.GetRunReviewAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Get, handler.RequestMethod);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201/review"),
+            handler.RequestUri);
+        Assert.AreEqual("run-1", result.Data?.Run.WorkflowRunId);
+        Assert.AreEqual(2, result.Data?.TableRefSummary.Total);
+        Assert.AreEqual(1, result.Data?.TableRefSummary.Readable);
+        Assert.AreEqual("table-1", result.Data?.DataPreview.ReadableTableRefIds[0]);
+    }
+
+    [TestMethod]
     public async Task GetRunRuntimeOptionsAsyncParsesVersionsAndActiveTasks()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

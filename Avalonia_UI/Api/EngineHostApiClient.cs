@@ -351,6 +351,18 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<RunReviewDto>> GetRunReviewAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<RunReviewDto>(
+            settings,
+            HttpMethod.Get,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}/review",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<WorkflowRunRuntimeOptionsDto>> GetRunRuntimeOptionsAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

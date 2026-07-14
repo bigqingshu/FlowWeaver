@@ -7,7 +7,8 @@
     <Grid ColumnDefinitions="340, 1.3*, 1*" ColumnSpacing="16" Margin="12">
         <rm:RunListView Grid.Column="0" />
         <rm:NodeRunListView Grid.Column="1" />
-        <TabControl Grid.Column="2">
+        <TabControl Grid.Column="2"
+                    SelectedIndex="{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}">
             <TabItem Header="{Binding RunLoopMonitor.OverviewText}">
                 <rm:RunDetailPanelView />
             </TabItem>

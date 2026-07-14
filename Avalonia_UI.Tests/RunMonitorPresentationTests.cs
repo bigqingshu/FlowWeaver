@@ -86,6 +86,20 @@ public sealed class RunMonitorPresentationTests
         }
     }
 
+    [TestMethod]
+    public void RunOverviewUsesLazyTabStateAndDedicatedViewModel()
+    {
+        var pageXaml = File.ReadAllText(GetPagePath("RunMonitorPage.axaml"));
+        StringAssert.Contains(
+            pageXaml,
+            "SelectedIndex=\"{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}\"");
+
+        var detailXaml = File.ReadAllText(GetViewPath("RunDetailPanelView.axaml"));
+        StringAssert.Contains(
+            detailXaml,
+            "<rm:RunOverviewView Grid.Row=\"5\" DataContext=\"{Binding RunOverview}\"/>");
+    }
+
     private static bool IsWidthSafeButton(XElement button)
     {
         return (string?)button.Attribute("HorizontalAlignment") == "Stretch"
@@ -103,6 +117,28 @@ public sealed class RunMonitorPresentationTests
                 "Views",
                 "Components",
                 "RunMonitor",
+                fileName);
+            if (File.Exists(path))
+            {
+                return path;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate {fileName}.");
+    }
+
+    private static string GetPagePath(string fileName)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var path = Path.Combine(
+                directory.FullName,
+                "Avalonia_UI",
+                "Views",
+                "Pages",
                 fileName);
             if (File.Exists(path))
             {

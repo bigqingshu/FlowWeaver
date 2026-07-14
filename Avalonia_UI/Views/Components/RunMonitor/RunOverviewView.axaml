@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Avalonia_UI.ViewModels"
+             x:Class="Avalonia_UI.Views.Components.RunMonitor.RunOverviewView"
+             x:DataType="vm:RunOverviewViewModel">
+    <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+            <TextBlock Text="{Binding SectionText}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <ProgressBar Grid.Column="1"
+                         Width="72"
+                         Height="8"
+                         IsIndeterminate="True"
+                         IsVisible="{Binding IsLoading}"
+                         VerticalAlignment="Center"/>
+            <Button Grid.Column="2"
+                    Content="{Binding RefreshText}"
+                    Command="{Binding RefreshCommand}"/>
+        </Grid>
+
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+        <TextBlock Text="{Binding ErrorMessage}"
+                   IsVisible="{Binding HasError}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextErrorBrush}"/>
+
+        <StackPanel IsVisible="{Binding HasReview}" Spacing="10">
+            <TextBlock Text="{Binding BasicText}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <Grid ColumnDefinitions="Auto,*"
+                  RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                  ColumnSpacing="12"
+                  RowSpacing="6">
+                <TextBlock Text="{Binding RunIdLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding RunIdText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="1" Text="{Binding WorkflowLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding WorkflowText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="2" Text="{Binding RevisionLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RevisionText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="3" Text="{Binding StatusLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding StatusText}"/>
+                <TextBlock Grid.Row="4" Text="{Binding ModeLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ModeText}"/>
+                <TextBlock Grid.Row="5" Text="{Binding TriggerLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TriggerText}"/>
+                <TextBlock Grid.Row="6" Text="{Binding TargetLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding TargetText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="7" Text="{Binding StartedLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding StartedText}"/>
+                <TextBlock Grid.Row="8" Text="{Binding FinishedLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding FinishedText}"/>
+                <TextBlock Grid.Row="9" Text="{Binding DurationLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding DurationText}"/>
+                <TextBlock Grid.Row="10" Text="{Binding CompletionReasonLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="10" Grid.Column="1" Text="{Binding CompletionReasonText}" TextWrapping="Wrap"/>
+            </Grid>
+
+            <Separator/>
+            <TextBlock Text="{Binding TableSummaryText}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Text="{Binding CountsText}" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="Auto,*"
+                  RowDefinitions="Auto,Auto,Auto"
+                  ColumnSpacing="12"
+                  RowSpacing="6">
+                <TextBlock Text="{Binding StorageKindsLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding StorageKindsText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="1" Text="{Binding LifecycleStatusesLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LifecycleStatusesText}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Row="2" Text="{Binding PreviewLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PreviewText}" TextWrapping="Wrap"/>
+            </Grid>
+
+            <Border IsVisible="{Binding HasRunError}"
+                    Background="{DynamicResource ErrorBackgroundBrush}"
+                    BorderBrush="{DynamicResource ErrorBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding RunErrorText}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding RunErrorJson}"
+                               TextWrapping="Wrap"
+                               FontFamily="Consolas"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextErrorBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <Expander Header="{Binding AdvancedText}">
+                <TextBlock Margin="0,8,0,0"
+                           Text="{Binding DiagnosticText}"
+                           TextWrapping="Wrap"
+                           FontFamily="Consolas"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </Expander>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

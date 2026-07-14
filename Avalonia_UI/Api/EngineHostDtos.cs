@@ -377,6 +377,51 @@ public sealed record WorkflowRunDto
     public JsonElement? Error { get; init; }
 }
 
+public sealed record RunReviewDto
+{
+    [JsonPropertyName("run")]
+    public WorkflowRunDto Run { get; init; } = new();
+
+    [JsonPropertyName("node_runs")]
+    public NodeRunDto[] NodeRuns { get; init; } = [];
+
+    [JsonPropertyName("table_refs")]
+    public TableRefDto[] TableRefs { get; init; } = [];
+
+    [JsonPropertyName("table_ref_summary")]
+    public RunReviewTableRefSummaryDto TableRefSummary { get; init; } = new();
+
+    [JsonPropertyName("data_preview")]
+    public RunReviewDataPreviewDto DataPreview { get; init; } = new();
+}
+
+public sealed record RunReviewTableRefSummaryDto
+{
+    [JsonPropertyName("total")]
+    public int Total { get; init; }
+
+    [JsonPropertyName("readable")]
+    public int Readable { get; init; }
+
+    [JsonPropertyName("by_storage_kind")]
+    public Dictionary<string, int> ByStorageKind { get; init; } = new();
+
+    [JsonPropertyName("by_lifecycle_status")]
+    public Dictionary<string, int> ByLifecycleStatus { get; init; } = new();
+}
+
+public sealed record RunReviewDataPreviewDto
+{
+    [JsonPropertyName("uses_paged_rows")]
+    public bool UsesPagedRows { get; init; }
+
+    [JsonPropertyName("row_data_embedded")]
+    public bool RowDataEmbedded { get; init; }
+
+    [JsonPropertyName("readable_table_ref_ids")]
+    public string[] ReadableTableRefIds { get; init; } = [];
+}
+
 public sealed record RuntimeFeedbackTelemetryOverrideDto
 {
     [JsonPropertyName("log_level")]

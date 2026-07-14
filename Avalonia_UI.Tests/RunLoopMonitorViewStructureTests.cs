@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Avalonia_UI.Tests;
@@ -16,9 +17,16 @@ public sealed class RunLoopMonitorViewStructureTests
             "Views",
             "Pages",
             "RunMonitorPage.axaml");
+        var document = XDocument.Parse(pageXaml);
+        var avalonia = document.Root!.Name.Namespace;
+        var detailTabs = document
+            .Descendants(avalonia + "TabControl")
+            .Single(element => (string?)element.Attribute("Grid.Column") == "2");
 
         StringAssert.Contains(pageXaml, "ColumnDefinitions=\"340, 1.3*, 1*\"");
-        StringAssert.Contains(pageXaml, "<TabControl Grid.Column=\"2\">");
+        Assert.AreEqual(
+            "{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}",
+            (string?)detailTabs.Attribute("SelectedIndex"));
         StringAssert.Contains(pageXaml, "<rm:RunDetailPanelView />");
         StringAssert.Contains(
             pageXaml,
