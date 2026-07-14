@@ -144,7 +144,8 @@ public sealed class MainWindowViewModelLocalizationTests
         Assert.AreEqual("真实最大轮数", viewModel.WorkflowLoopRegions.MaxIterationsText);
         Assert.AreEqual("启用真实循环", viewModel.WorkflowLoopRegions.EnabledText);
         Assert.AreEqual("循环监视", viewModel.RunLoopMonitor.SectionText);
-        Assert.AreEqual("运行概览", viewModel.RunLoopMonitor.OverviewText);
+        Assert.AreEqual("概览", viewModel.RunLoopMonitor.OverviewText);
+        Assert.AreEqual("循环", viewModel.RunLoopMonitor.TabText);
         Assert.AreEqual("刷新详情", viewModel.DetailsText);
         Assert.AreEqual("工作流节点", viewModel.WorkflowNodesSectionText);
         Assert.AreEqual("应用名称", viewModel.ApplyNodeDisplayNameText);

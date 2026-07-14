@@ -111,7 +111,10 @@
                             HorizontalAlignment="Stretch"/>
                 </Grid>
 
-                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,*"
+                      RowDefinitions="Auto,Auto"
+                      ColumnSpacing="8"
+                      RowSpacing="8">
                     <Button Content="{Binding BackgroundRunManagement.RetryText}"
                             IsEnabled="{Binding BackgroundRunManagement.CanRetrySelectedRun}"
                             HorizontalAlignment="Stretch">
@@ -131,27 +134,7 @@
                             </Flyout>
                         </Button.Flyout>
                     </Button>
-                    <Button Grid.Column="1"
-                            Content="{Binding BackgroundRunManagement.CleanupText}"
-                            IsEnabled="{Binding BackgroundRunManagement.CanCleanupSelectedRun}"
-                            HorizontalAlignment="Stretch">
-                        <Button.Flyout>
-                            <Flyout>
-                                <StackPanel Spacing="10">
-                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupText}"
-                                               FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupConfirmText}"
-                                               MaxWidth="300"
-                                               TextWrapping="Wrap"/>
-                                    <Button Content="{Binding BackgroundRunManagement.CleanupText}"
-                                            Command="{Binding BackgroundRunManagement.CleanupTablesCommand}"
-                                            Classes="Primary"
-                                            HorizontalAlignment="Right"/>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                    <Panel Grid.Column="2"
+                    <Panel Grid.Column="1"
                            Background="Transparent"
                            ToolTip.Tip="{Binding CancelSelectedRunDisabledReasonText}">
                         <Button Content="{Binding CancelText}"
@@ -174,6 +157,27 @@
                             </Button.Flyout>
                         </Button>
                     </Panel>
+                    <Button Grid.Row="1"
+                            Grid.ColumnSpan="2"
+                            Content="{Binding BackgroundRunManagement.CleanupText}"
+                            IsEnabled="{Binding BackgroundRunManagement.CanCleanupSelectedRun}"
+                            HorizontalAlignment="Stretch">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupText}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding BackgroundRunManagement.CleanupConfirmText}"
+                                               MaxWidth="300"
+                                               TextWrapping="Wrap"/>
+                                    <Button Content="{Binding BackgroundRunManagement.CleanupText}"
+                                            Command="{Binding BackgroundRunManagement.CleanupTablesCommand}"
+                                            Classes="Primary"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                            </Button.Flyout>
+                    </Button>
                 </Grid>
 
                 <Button Content="{Binding BackgroundRunManagement.CleanupCancelText}"

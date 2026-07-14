@@ -4,15 +4,21 @@
              xmlns:rm="using:Avalonia_UI.Views.Components.RunMonitor"
              x:Class="Avalonia_UI.Views.Pages.RunMonitorPage"
              x:DataType="vm:MainWindowViewModel">
-    <Grid ColumnDefinitions="340, 1.3*, 1*" ColumnSpacing="16" Margin="12">
+    <Grid ColumnDefinitions="340, 1*, 1*" ColumnSpacing="16" Margin="12">
         <rm:RunListView Grid.Column="0" />
         <rm:NodeRunListView Grid.Column="1" DataContext="{Binding NodeRunMonitor}" />
         <TabControl Grid.Column="2"
                     SelectedIndex="{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}">
-            <TabItem Header="{Binding RunLoopMonitor.OverviewText}">
+            <TabItem>
+                <TabItem.Header>
+                    <TextBlock Text="{Binding RunLoopMonitor.OverviewText}" FontSize="14"/>
+                </TabItem.Header>
                 <rm:RunDetailPanelView />
             </TabItem>
-            <TabItem Header="{Binding RunLoopMonitor.SectionText}">
+            <TabItem>
+                <TabItem.Header>
+                    <TextBlock Text="{Binding RunLoopMonitor.TabText}" FontSize="14"/>
+                </TabItem.Header>
                 <rm:RunLoopMonitorView DataContext="{Binding RunLoopMonitor}" />
             </TabItem>
         </TabControl>

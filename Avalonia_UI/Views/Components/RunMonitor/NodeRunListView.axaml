@@ -62,16 +62,22 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <Grid Grid.Row="3" ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
-                <Button Content="{Binding PreviousPageText}"
-                        Command="{Binding PreviousPageCommand}"
-                        HorizontalAlignment="Stretch"/>
-                <TextBlock Grid.Column="1"
+            <Grid Grid.Row="3"
+                  ColumnDefinitions="*,*"
+                  RowDefinitions="Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="6">
+                <TextBlock Grid.ColumnSpan="2"
                            Text="{Binding PageText}"
                            VerticalAlignment="Center"
                            HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <Button Grid.Column="2"
+                <Button Grid.Row="1"
+                        Content="{Binding PreviousPageText}"
+                        Command="{Binding PreviousPageCommand}"
+                        HorizontalAlignment="Stretch"/>
+                <Button Grid.Row="1"
+                        Grid.Column="1"
                         Content="{Binding NextPageText}"
                         Command="{Binding NextPageCommand}"
                         HorizontalAlignment="Stretch"/>

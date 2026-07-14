@@ -23,7 +23,7 @@ public sealed class RunLoopMonitorViewStructureTests
             .Descendants(avalonia + "TabControl")
             .Single(element => (string?)element.Attribute("Grid.Column") == "2");
 
-        StringAssert.Contains(pageXaml, "ColumnDefinitions=\"340, 1.3*, 1*\"");
+        StringAssert.Contains(pageXaml, "ColumnDefinitions=\"340, 1*, 1*\"");
         Assert.AreEqual(
             "{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}",
             (string?)detailTabs.Attribute("SelectedIndex"));
@@ -52,8 +52,8 @@ public sealed class RunLoopMonitorViewStructureTests
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationNodes}\"");
         StringAssert.Contains(xaml, "ItemsSource=\"{Binding IterationTableRefs}\"");
         StringAssert.Contains(xaml, "Command=\"{Binding LoadMoreLoopsCommand}\"");
-        StringAssert.Contains(xaml, "Header=\"{Binding LoopDetailsText}\"");
-        StringAssert.Contains(xaml, "Header=\"{Binding IterationDetailsText}\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding LoopDetailsText}\" FontSize=\"14\"");
+        StringAssert.Contains(xaml, "Text=\"{Binding IterationDetailsText}\" FontSize=\"14\"");
         StringAssert.Contains(xaml, "Text=\"{Binding SelectedLoop.ExitReasonText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding SelectedIteration.InputTableRefIdText}\"");
         StringAssert.Contains(xaml, "Text=\"{Binding SelectedIteration.OutputTableRefIdText}\"");

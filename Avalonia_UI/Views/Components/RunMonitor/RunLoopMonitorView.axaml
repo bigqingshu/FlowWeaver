@@ -17,11 +17,20 @@
                              IsVisible="{Binding IsBusy}"/>
             </Grid>
 
-            <Grid Grid.Row="1" ColumnDefinitions="88,*,Auto" ColumnSpacing="8">
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,Auto"
+                  RowDefinitions="Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="6">
                 <TextBlock Text="{Binding LoopsText}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <ComboBox Grid.Column="1"
+                <Button Grid.Column="1"
+                        Content="{Binding LoadMoreText}"
+                        Command="{Binding LoadMoreLoopsCommand}"
+                        MinWidth="78"/>
+                <ComboBox Grid.Row="1"
+                          Grid.ColumnSpan="2"
                           ItemsSource="{Binding Loops}"
                           SelectedItem="{Binding SelectedLoop, Mode=TwoWay}">
                     <ComboBox.ItemTemplate>
@@ -47,17 +56,22 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Grid.Column="2"
-                        Content="{Binding LoadMoreText}"
-                        Command="{Binding LoadMoreLoopsCommand}"
-                        MinWidth="78"/>
             </Grid>
 
-            <Grid Grid.Row="2" ColumnDefinitions="88,*,Auto" ColumnSpacing="8">
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="*,Auto"
+                  RowDefinitions="Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="6">
                 <TextBlock Text="{Binding IterationsText}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <ComboBox Grid.Column="1"
+                <Button Grid.Column="1"
+                        Content="{Binding LoadMoreText}"
+                        Command="{Binding LoadMoreIterationsCommand}"
+                        MinWidth="78"/>
+                <ComboBox Grid.Row="1"
+                          Grid.ColumnSpan="2"
                           ItemsSource="{Binding Iterations}"
                           SelectedItem="{Binding SelectedIteration, Mode=TwoWay}">
                     <ComboBox.ItemTemplate>
@@ -75,14 +89,13 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Grid.Column="2"
-                        Content="{Binding LoadMoreText}"
-                        Command="{Binding LoadMoreIterationsCommand}"
-                        MinWidth="78"/>
             </Grid>
 
             <TabControl Grid.Row="3">
-                <TabItem Header="{Binding LoopDetailsText}">
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="{Binding LoopDetailsText}" FontSize="14"/>
+                    </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="8" Spacing="10">
@@ -104,7 +117,7 @@
                                     <TextBlock Grid.Row="3" Text="{Binding JudgeNodeLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedLoop.JudgeNodeInstanceId}" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="4" Text="{Binding StatusLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedLoop.StatusText}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedLoop.StatusText}" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="5" Text="{Binding ProgressLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                     <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedLoop.ProgressText}"/>
                                     <TextBlock Grid.Row="6" Text="{Binding ExitReasonLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -135,7 +148,10 @@
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
-                <TabItem Header="{Binding IterationDetailsText}">
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="{Binding IterationDetailsText}" FontSize="14"/>
+                    </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="8" Spacing="10">
@@ -153,7 +169,7 @@
                                     <TextBlock Grid.Row="1" Text="{Binding IterationIndexLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedIteration.IndexText}"/>
                                     <TextBlock Grid.Row="2" Text="{Binding StatusLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedIteration.StatusText}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedIteration.StatusText}" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="3" Text="{Binding InputTableRefLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedIteration.InputTableRefIdText}" TextWrapping="Wrap"/>
                                     <TextBlock Grid.Row="4" Text="{Binding OutputTableRefLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
@@ -186,7 +202,10 @@
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
-                <TabItem Header="{Binding NodesText}">
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="{Binding NodesText}" FontSize="14"/>
+                    </TabItem.Header>
                     <ListBox ItemsSource="{Binding IterationNodes}"
                              MinHeight="180">
                         <ListBox.ItemTemplate>
@@ -228,7 +247,10 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </TabItem>
-                <TabItem Header="{Binding TablesText}">
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock Text="{Binding TablesText}" FontSize="14"/>
+                    </TabItem.Header>
                     <ListBox ItemsSource="{Binding IterationTableRefs}"
                              MinHeight="180">
                         <ListBox.ItemTemplate>

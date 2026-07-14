@@ -28,7 +28,9 @@ public sealed class RunMonitorPresentationTests
         var grids = footer.Elements(avalonia + "Grid").ToArray();
         Assert.HasCount(2, grids);
         Assert.AreEqual("*,*", (string?)grids[0].Attribute("ColumnDefinitions"));
-        Assert.AreEqual("*,*,*", (string?)grids[1].Attribute("ColumnDefinitions"));
+        Assert.AreEqual("*,*", (string?)grids[1].Attribute("ColumnDefinitions"));
+        Assert.AreEqual("Auto,Auto", (string?)grids[1].Attribute("RowDefinitions"));
+        Assert.AreEqual("8", (string?)grids[1].Attribute("RowSpacing"));
 
         var pageButtons = grids[0].Elements(avalonia + "Button").ToArray();
         Assert.HasCount(2, pageButtons);

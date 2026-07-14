@@ -92,6 +92,8 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     public string OverviewText => translate("runs.loop_monitor.overview");
 
+    public string TabText => translate("runs.loop_monitor.tab");
+
     public string LoopsText => translate("runs.loop_monitor.loops");
 
     public string IterationsText => translate("runs.loop_monitor.iterations");
@@ -234,6 +236,7 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(SectionText));
         OnPropertyChanged(nameof(OverviewText));
+        OnPropertyChanged(nameof(TabText));
         OnPropertyChanged(nameof(LoopsText));
         OnPropertyChanged(nameof(IterationsText));
         OnPropertyChanged(nameof(LoopDetailsText));
