@@ -216,6 +216,34 @@ public sealed class EngineHostApiClientTests
     }
 
     [TestMethod]
+    public async Task DeleteRunAsyncUsesRunDeletePath()
+    {
+        HttpMethod? method = null;
+        var handler = new StubHandler(request =>
+        {
+            method = request.Method;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"ok":true,"data":{"workflow_run_id":"run-1","deleted":true},"error":null,"request_id":"req"}"""),
+            };
+        });
+        var client = new EngineHostApiClient(new HttpClient(handler));
+
+        var result = await client.DeleteRunAsync(
+            new EngineHostConnectionSettings { Token = "secret" },
+            "run 1");
+
+        Assert.IsTrue(result.Ok);
+        Assert.AreEqual(HttpMethod.Delete, method);
+        Assert.AreEqual(
+            new Uri("http://127.0.0.1:8000/api/v1/runs/run%201"),
+            handler.RequestUri);
+        Assert.AreEqual("run-1", result.Data?.WorkflowRunId);
+        Assert.IsTrue(result.Data?.Deleted);
+    }
+
+    [TestMethod]
     public async Task CreateWorkflowAsyncPostsCreatePayload()
     {
         HttpMethod? method = null;

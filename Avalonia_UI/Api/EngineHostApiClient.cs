@@ -351,6 +351,18 @@ public sealed class EngineHostApiClient : IEngineHostApiClient
             cancellationToken: cancellationToken);
     }
 
+    public Task<ApiResponseEnvelope<WorkflowRunDeleteResultDto>> DeleteRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        return SendAsync<WorkflowRunDeleteResultDto>(
+            settings,
+            HttpMethod.Delete,
+            $"api/v1/runs/{Uri.EscapeDataString(workflowRunId)}",
+            cancellationToken: cancellationToken);
+    }
+
     public Task<ApiResponseEnvelope<RunReviewDto>> GetRunReviewAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

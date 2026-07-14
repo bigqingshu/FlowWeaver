@@ -127,6 +127,14 @@ public interface IEngineHostApiClient
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunDeleteResultDto>> DeleteRunAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException();
+    }
+
     Task<ApiResponseEnvelope<RunReviewDto>> GetRunReviewAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

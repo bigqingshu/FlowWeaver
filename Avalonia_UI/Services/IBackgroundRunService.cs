@@ -30,6 +30,11 @@ public interface IBackgroundRunService
         string workflowRunId,
         CancellationToken cancellationToken = default);
 
+    Task<ApiResponseEnvelope<WorkflowRunDeleteResultDto>> DeleteAsync(
+        EngineHostConnectionSettings settings,
+        string workflowRunId,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResponseEnvelope<WorkflowProcessDto>> CancelAsync(
         EngineHostConnectionSettings settings,
         string workflowRunId,

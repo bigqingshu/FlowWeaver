@@ -12,6 +12,7 @@ from flowweaver.api.dependencies import (
 )
 from flowweaver.api.responses import ok_response
 from flowweaver.api.routes_run_actions import router as run_actions_router
+from flowweaver.api.routes_run_deletion import router as run_deletion_router
 from flowweaver.api.routes_run_loops import router as run_loops_router
 from flowweaver.api.routes_run_queries import router as run_queries_router
 from flowweaver.api.routes_run_runtime_options import (
@@ -28,6 +29,7 @@ router = APIRouter(
 )
 router.include_router(run_loops_router)
 router.include_router(run_actions_router)
+router.include_router(run_deletion_router)
 router.include_router(run_tables_router)
 router.include_router(run_queries_router)
 router.include_router(run_runtime_options_router)

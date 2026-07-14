@@ -272,6 +272,15 @@ public sealed record WorkflowDeleteResultDto
     public bool Deleted { get; init; }
 }
 
+public sealed record WorkflowRunDeleteResultDto
+{
+    [JsonPropertyName("workflow_run_id")]
+    public string WorkflowRunId { get; init; } = string.Empty;
+
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; init; }
+}
+
 public sealed record WorkflowValidationIssueDto
 {
     [JsonPropertyName("code")]

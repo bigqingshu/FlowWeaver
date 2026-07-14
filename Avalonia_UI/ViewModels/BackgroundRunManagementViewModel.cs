@@ -64,6 +64,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public event Action<WorkflowRunListItemViewModel>? RunRetried;
 
+    public event Action<string>? RunDeleted;
+
     public event Action<string, RunTableCleanupResultDto>? TablesCleaned;
 
     public ObservableCollection<WorkflowRunListItemViewModel> Runs { get; } = new();
@@ -116,6 +118,9 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private bool isRetrying;
 
     [ObservableProperty]
+    private bool isDeleting;
+
+    [ObservableProperty]
     private bool isCleaningTables;
 
     [ObservableProperty]
@@ -147,6 +152,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public string RetryText => translate("runs.background.retry");
 
+    public string DeleteText => translate("runs.background.delete");
+
     public string CleanupText => translate("runs.background.cleanup");
 
     public string CleanupCancelText => translate("runs.background.cleanup_cancel");
@@ -156,6 +163,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     public string NextPageText => translate("runs.background.next_page");
 
     public string RetryConfirmText => translate("runs.background.retry_confirm");
+
+    public string DeleteConfirmText => translate("runs.background.delete_confirm");
 
     public string CleanupConfirmText => translate("runs.background.cleanup_confirm");
 
@@ -181,7 +190,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public bool HasPreviousPage => Offset > 0;
 
-    public bool IsBusy => IsLoading || IsStarting || IsRetrying || IsCleaningTables;
+    public bool IsBusy =>
+        IsLoading || IsStarting || IsRetrying || IsDeleting || IsCleaningTables;
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
@@ -211,6 +221,9 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         : CleanupResult.ContinuationCursor;
 
     public bool CanCleanupSelectedRun =>
+        canUseEngineActions && SelectedRun?.IsTerminal == true && !IsBusy;
+
+    public bool CanDeleteSelectedRun =>
         canUseEngineActions && SelectedRun?.IsTerminal == true && !IsBusy;
 
     public bool CanRetrySelectedRun =>
@@ -478,11 +491,13 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         OnPropertyChanged(nameof(StartPreviewModeText));
         OnPropertyChanged(nameof(StartTargetNodeText));
         OnPropertyChanged(nameof(RetryText));
+        OnPropertyChanged(nameof(DeleteText));
         OnPropertyChanged(nameof(CleanupText));
         OnPropertyChanged(nameof(CleanupCancelText));
         OnPropertyChanged(nameof(PreviousPageText));
         OnPropertyChanged(nameof(NextPageText));
         OnPropertyChanged(nameof(RetryConfirmText));
+        OnPropertyChanged(nameof(DeleteConfirmText));
         OnPropertyChanged(nameof(CleanupConfirmText));
         OnPropertyChanged(nameof(CleanupResultText));
         OnPropertyChanged(nameof(CleanupOutcomeLabel));
@@ -566,6 +581,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     partial void OnIsStartingChanged(bool value) => NotifyBusyStateChanged();
 
     partial void OnIsRetryingChanged(bool value) => NotifyBusyStateChanged();
+
+    partial void OnIsDeletingChanged(bool value) => NotifyBusyStateChanged();
 
     partial void OnIsCleaningTablesChanged(bool value)
     {
@@ -874,6 +891,57 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanDelete))]
+    private async Task DeleteRunAsync()
+    {
+        var run = SelectedRun;
+        if (run is null || !run.IsTerminal)
+        {
+            return;
+        }
+
+        IsDeleting = true;
+        ErrorMessage = null;
+        try
+        {
+            var response = await service.DeleteAsync(
+                settings,
+                run.WorkflowRunId,
+                cancellationToken: CancellationToken.None);
+            if (!response.Ok || response.Data is null || !response.Data.Deleted)
+            {
+                Message = translate("runs.background.delete_failed");
+                ErrorMessage = response.Ok
+                    ? translate("runs.background.delete_failed")
+                    : DescribeDeleteError(response);
+                return;
+            }
+
+            var deletedRunId = run.WorkflowRunId;
+            var deletedIndex = FindRunIndex(deletedRunId);
+            if (deletedIndex >= 0)
+            {
+                Runs.RemoveAt(deletedIndex);
+            }
+
+            if (Runs.Count == 0 && Offset > 0)
+            {
+                Offset = Math.Max(0, Offset - PageSize);
+            }
+
+            SelectedRun = Runs.FirstOrDefault();
+            RunDeleted?.Invoke(deletedRunId);
+            await LoadPageAsync(SelectedRun?.WorkflowRunId);
+            Message = string.Format(
+                translate("runs.background.deleted_format"),
+                deletedRunId);
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanCancelCleanup))]
     private void CancelCleanupTables()
     {
@@ -933,6 +1001,8 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     private bool CanRetry() => CanRetrySelectedRun;
 
+    private bool CanDelete() => CanDeleteSelectedRun;
+
     private bool CanCleanup() => CanCleanupSelectedRun;
 
     private bool CanCancelCleanup() =>
@@ -988,6 +1058,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsBusy));
         OnPropertyChanged(nameof(CanCleanupSelectedRun));
+        OnPropertyChanged(nameof(CanDeleteSelectedRun));
         OnPropertyChanged(nameof(CanRetrySelectedRun));
         NotifyCommandStateChanged();
     }
@@ -997,11 +1068,13 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
         RefreshCommand.NotifyCanExecuteChanged();
         StartCommand.NotifyCanExecuteChanged();
         RetryCommand.NotifyCanExecuteChanged();
+        DeleteRunCommand.NotifyCanExecuteChanged();
         CleanupTablesCommand.NotifyCanExecuteChanged();
         CancelCleanupTablesCommand.NotifyCanExecuteChanged();
         PreviousPageCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanCleanupSelectedRun));
+        OnPropertyChanged(nameof(CanDeleteSelectedRun));
         OnPropertyChanged(nameof(CanRetrySelectedRun));
         OnPropertyChanged(nameof(CanStartBackgroundRun));
     }
@@ -1093,6 +1166,25 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
     private static string DescribeError<T>(ApiResponseEnvelope<T> response)
     {
         return response.Error?.Message ?? response.Error?.ErrorCode ?? "UNKNOWN_ERROR";
+    }
+
+    private string DescribeDeleteError(
+        ApiResponseEnvelope<WorkflowRunDeleteResultDto> response)
+    {
+        return response.Error?.ErrorCode switch
+        {
+            "WORKFLOW_RUN_NOT_FOUND" =>
+                translate("runs.background.delete_not_found"),
+            "WORKFLOW_RUN_NOT_TERMINAL" =>
+                translate("runs.background.delete_not_terminal"),
+            "WORKFLOW_RUN_PROCESS_ACTIVE" =>
+                translate("runs.background.delete_process_active"),
+            "WORKFLOW_RUN_TABLES_NOT_CLEANED" =>
+                translate("runs.background.delete_tables_not_cleaned"),
+            "WORKFLOW_RUN_DELETE_BLOCKED" =>
+                translate("runs.background.delete_blocked"),
+            _ => DescribeError(response),
+        };
     }
 
     private void PublishCleanupResult(

@@ -22,6 +22,7 @@ public partial class MainWindowViewModel
         BackgroundRunManagement.SelectedRunChanged += OnBackgroundRunManagementSelectedRunChanged;
         BackgroundRunManagement.RunStarted += OnBackgroundRunStarted;
         BackgroundRunManagement.RunRetried += OnBackgroundRunRetried;
+        BackgroundRunManagement.RunDeleted += OnBackgroundRunDeleted;
         BackgroundRunManagement.TablesCleaned += OnBackgroundRunTablesCleaned;
         RefreshBackgroundRunManagementContext();
     }
@@ -70,6 +71,7 @@ public partial class MainWindowViewModel
         if (eventArgs.PropertyName is nameof(BackgroundRunManagementViewModel.IsLoading)
             or nameof(BackgroundRunManagementViewModel.IsStarting)
             or nameof(BackgroundRunManagementViewModel.IsRetrying)
+            or nameof(BackgroundRunManagementViewModel.IsDeleting)
             or nameof(BackgroundRunManagementViewModel.IsCleaningTables))
         {
             IsLoadingRuns = BackgroundRunManagement.IsBusy;
@@ -117,6 +119,11 @@ public partial class MainWindowViewModel
             run.StatusText);
         WorkflowErrorMessage = null;
         ShowWorkflowNotification("workflow.retry_run", UiNotificationKind.Success);
+    }
+
+    private void OnBackgroundRunDeleted(string workflowRunId)
+    {
+        runMetadataCache.InvalidateRun(workflowRunId);
     }
 
     private async void OnBackgroundRunTablesCleaned(

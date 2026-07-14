@@ -201,6 +201,107 @@ public sealed class BackgroundRunManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task NonTerminalRunCannotBeDeleted()
+    {
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-running", "RUNNING")]),
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+
+        Assert.IsFalse(viewModel.CanDeleteSelectedRun);
+        Assert.IsFalse(viewModel.DeleteRunCommand.CanExecute(null));
+
+        await viewModel.DeleteRunCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, service.DeleteCallCount);
+    }
+
+    [TestMethod]
+    public async Task TerminalRunDeletionRemovesRunRefreshesPageAndPublishesId()
+    {
+        var deletedRun = Run("run-delete", "FAILED");
+        var remainingRun = Run("run-remaining", "SUCCEEDED");
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [deletedRun, remainingRun]),
+            DeleteResponse = ApiResponseEnvelope<WorkflowRunDeleteResultDto>.Success(
+                new WorkflowRunDeleteResultDto
+                {
+                    WorkflowRunId = "run-delete",
+                    Deleted = true,
+                }),
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+        service.RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+            [remainingRun]);
+        string? publishedRunId = null;
+        viewModel.RunDeleted += runId => publishedRunId = runId;
+
+        await viewModel.DeleteRunCommand.ExecuteAsync(null);
+
+        Assert.AreEqual("run-delete", service.LastDeletedWorkflowRunId);
+        Assert.AreEqual("run-delete", publishedRunId);
+        Assert.HasCount(1, viewModel.Runs);
+        Assert.AreEqual("run-remaining", viewModel.SelectedRun?.WorkflowRunId);
+        Assert.AreEqual("runs.background.deleted_format", viewModel.Message);
+    }
+
+    [TestMethod]
+    public async Task RunDeletionFailureKeepsSelectionAndLocalizesKnownError()
+    {
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-delete", "SUCCEEDED")]),
+            DeleteResponse = ApiResponseEnvelope<WorkflowRunDeleteResultDto>.Failure(
+                "WORKFLOW_RUN_TABLES_NOT_CLEANED",
+                "Internal tables remain."),
+        };
+        var viewModel = CreateViewModel(service);
+        await viewModel.LoadPageAsync();
+
+        await viewModel.DeleteRunCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.Runs);
+        Assert.AreEqual("run-delete", viewModel.SelectedRun?.WorkflowRunId);
+        Assert.AreEqual(
+            "runs.background.delete_tables_not_cleaned",
+            viewModel.ErrorMessage);
+    }
+
+    [TestMethod]
+    public async Task DeletingOnlyRunOnLaterPageReturnsToPreviousPage()
+    {
+        var service = new FakeBackgroundRunService
+        {
+            RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+                [Run("run-last", "CANCELLED")]),
+            DeleteResponse = ApiResponseEnvelope<WorkflowRunDeleteResultDto>.Success(
+                new WorkflowRunDeleteResultDto
+                {
+                    WorkflowRunId = "run-last",
+                    Deleted = true,
+                }),
+        };
+        var viewModel = CreateViewModel(service);
+        viewModel.Offset = BackgroundRunManagementViewModel.PageSize;
+        await viewModel.LoadPageAsync();
+        service.RunsResponse = ApiResponseEnvelope<List<WorkflowRunDto>>.Success(
+            [Run("run-previous", "SUCCEEDED")]);
+
+        await viewModel.DeleteRunCommand.ExecuteAsync(null);
+
+        Assert.AreEqual(0, viewModel.Offset);
+        Assert.AreEqual(0, service.LastListRequest?.Offset);
+        Assert.AreEqual("run-previous", viewModel.SelectedRun?.WorkflowRunId);
+    }
+
+    [TestMethod]
     public async Task TerminalRunCleanupPublishesCleanupResult()
     {
         var result = new RunTableCleanupResultDto
@@ -563,6 +664,11 @@ public sealed class BackgroundRunManagementViewModelTests
         public ApiResponseEnvelope<WorkflowRunDto> GetRunResponse { get; set; } =
             ApiResponseEnvelope<WorkflowRunDto>.Failure("NOT_CONFIGURED", "No run response.");
 
+        public ApiResponseEnvelope<WorkflowRunDeleteResultDto> DeleteResponse { get; set; } =
+            ApiResponseEnvelope<WorkflowRunDeleteResultDto>.Failure(
+                "NOT_CONFIGURED",
+                "No delete response.");
+
         public ApiResponseEnvelope<RunTableCleanupResultDto> CleanupResponse { get; set; } =
             ApiResponseEnvelope<RunTableCleanupResultDto>.Failure(
                 "NOT_CONFIGURED",
@@ -589,7 +695,11 @@ public sealed class BackgroundRunManagementViewModelTests
 
         public string? LastRetriedWorkflowRunId { get; private set; }
 
+        public string? LastDeletedWorkflowRunId { get; private set; }
+
         public string? LastCleanedWorkflowRunId { get; private set; }
+
+        public int DeleteCallCount { get; private set; }
 
         public int CleanupCallCount { get; private set; }
 
@@ -647,6 +757,16 @@ public sealed class BackgroundRunManagementViewModelTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(GetRunResponse);
+        }
+
+        public Task<ApiResponseEnvelope<WorkflowRunDeleteResultDto>> DeleteAsync(
+            EngineHostConnectionSettings settings,
+            string workflowRunId,
+            CancellationToken cancellationToken = default)
+        {
+            DeleteCallCount++;
+            LastDeletedWorkflowRunId = workflowRunId;
+            return Task.FromResult(DeleteResponse);
         }
 
         public Task<ApiResponseEnvelope<WorkflowRunDto>> RetryAsync(

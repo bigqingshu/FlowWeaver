@@ -112,7 +112,7 @@
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*"
-                      RowDefinitions="Auto,Auto"
+                      RowDefinitions="Auto,Auto,Auto"
                       ColumnSpacing="8"
                       RowSpacing="8">
                     <Button Content="{Binding BackgroundRunManagement.RetryText}"
@@ -177,6 +177,27 @@
                                 </StackPanel>
                             </Flyout>
                             </Button.Flyout>
+                    </Button>
+                    <Button Grid.Row="2"
+                            Grid.ColumnSpan="2"
+                            Content="{Binding BackgroundRunManagement.DeleteText}"
+                            IsEnabled="{Binding BackgroundRunManagement.CanDeleteSelectedRun}"
+                            HorizontalAlignment="Stretch">
+                        <Button.Flyout>
+                            <Flyout>
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="{Binding BackgroundRunManagement.DeleteText}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding BackgroundRunManagement.DeleteConfirmText}"
+                                               MaxWidth="320"
+                                               TextWrapping="Wrap"/>
+                                    <Button Content="{Binding BackgroundRunManagement.DeleteText}"
+                                            Command="{Binding BackgroundRunManagement.DeleteRunCommand}"
+                                            Foreground="{DynamicResource TextErrorBrush}"
+                                            HorizontalAlignment="Right"/>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
                     </Button>
                 </Grid>
 

@@ -29,7 +29,9 @@ public sealed class RunMonitorPresentationTests
         Assert.HasCount(2, grids);
         Assert.AreEqual("*,*", (string?)grids[0].Attribute("ColumnDefinitions"));
         Assert.AreEqual("*,*", (string?)grids[1].Attribute("ColumnDefinitions"));
-        Assert.AreEqual("Auto,Auto", (string?)grids[1].Attribute("RowDefinitions"));
+        Assert.AreEqual(
+            "Auto,Auto,Auto",
+            (string?)grids[1].Attribute("RowDefinitions"));
         Assert.AreEqual("8", (string?)grids[1].Attribute("RowSpacing"));
 
         var pageButtons = grids[0].Elements(avalonia + "Button").ToArray();
@@ -52,8 +54,13 @@ public sealed class RunMonitorPresentationTests
                     ? new[] { element }
                     : element.Elements(avalonia + "Button"))
             .ToArray();
-        Assert.HasCount(3, actionButtons);
+        Assert.HasCount(4, actionButtons);
         Assert.IsTrue(actionButtons.All(IsWidthSafeButton));
+        Assert.IsTrue(document
+            .Descendants(avalonia + "Button")
+            .Any(button =>
+                (string?)button.Attribute("Command")
+                == "{Binding BackgroundRunManagement.DeleteRunCommand}"));
 
         var cancelCleanup = footer
             .Elements(avalonia + "Button")
