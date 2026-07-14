@@ -275,7 +275,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
 
     public bool TryPrepareApply(out string errorMessage)
     {
-        var normalizedShareName = ShareName.Trim();
+        var normalizedShareName = ShareName?.Trim() ?? string.Empty;
         if (normalizedShareName.Length == 0)
         {
             errorMessage = _localizationService.GetString(
@@ -449,7 +449,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
 
     private async Task LoadVersionsAsync(bool reset)
     {
-        var normalizedShareName = ShareName.Trim();
+        var normalizedShareName = ShareName?.Trim() ?? string.Empty;
         if (normalizedShareName.Length == 0)
         {
             ErrorMessage = _localizationService.GetString(
@@ -710,9 +710,9 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
             ?? _localizationService.GetString("node_config.shared.error.request_failed");
     }
 
-    private static string? NormalizeQuery(string value)
+    private static string? NormalizeQuery(string? value)
     {
-        var normalized = value.Trim();
+        var normalized = value?.Trim() ?? string.Empty;
         return normalized.Length == 0 ? null : normalized;
     }
 

@@ -234,7 +234,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
     [RelayCommand(CanExecute = nameof(CanRefreshTables))]
     private async Task RefreshTablesAsync()
     {
-        var path = DatabasePath.Trim();
+        var path = DatabasePath?.Trim() ?? string.Empty;
         if (path.Length == 0)
         {
             ErrorMessage = _localizationService.GetString(
@@ -291,7 +291,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
 
     public bool TryPrepareApply(out string errorMessage)
     {
-        var path = DatabasePath.Trim();
+        var path = DatabasePath?.Trim() ?? string.Empty;
         if (path.Length == 0)
         {
             errorMessage = _localizationService.GetString(
@@ -316,7 +316,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
         }
         else if (IsQueryMode)
         {
-            var query = SqlQuery.Trim();
+            var query = SqlQuery?.Trim() ?? string.Empty;
             if (query.Length == 0)
             {
                 errorMessage = _localizationService.GetString(
@@ -496,9 +496,9 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
 
     private static void SetOptionalField(
         NodeConfigEditableFieldInputViewModel field,
-        string value)
+        string? value)
     {
-        var normalized = value.Trim();
+        var normalized = value?.Trim() ?? string.Empty;
         if (normalized.Length == 0)
         {
             ClearField(field);

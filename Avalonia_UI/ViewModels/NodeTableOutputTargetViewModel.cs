@@ -95,7 +95,7 @@ public sealed partial class NodeTableOutputTargetViewModel : ViewModelBase
 
         var logicalId = IsExistingTarget
             ? SelectedExistingTarget?.Candidate.LogicalTableId
-            : LogicalTableId.Trim();
+            : LogicalTableId?.Trim();
         if (string.IsNullOrWhiteSpace(logicalId))
         {
             return null;

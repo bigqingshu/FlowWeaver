@@ -172,4 +172,12 @@ public sealed class RuntimeOptionsDraftStateMapperTests
             new[] { "password", "token", "api_key" },
             new List<string>(columns));
     }
+
+    [TestMethod]
+    public void ParseRedactColumnsTreatsNullAsEmptyInput()
+    {
+        var columns = RuntimeOptionsDraftStateMapper.ParseRedactColumns(null);
+
+        Assert.IsEmpty(columns);
+    }
 }

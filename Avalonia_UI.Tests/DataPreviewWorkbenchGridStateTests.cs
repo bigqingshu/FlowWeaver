@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Avalonia_UI.Models;
+using Avalonia_UI.ViewModels;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Avalonia_UI.Tests;
@@ -28,6 +29,27 @@ public sealed class DataPreviewWorkbenchGridStateTests
         Assert.IsFalse(state.TryUpdateCell(-1, 0, "changed"));
         Assert.IsFalse(state.TryUpdateCell(0, 2, "changed"));
         Assert.IsFalse(state.IsDirty);
+    }
+
+    [TestMethod]
+    public void TextInputAndGridStateNormalizeNullCellValue()
+    {
+        var state = CreateState();
+        string? updatedValue = null;
+        var input = new TableDataPreviewCellViewModel(
+            "second",
+            value =>
+            {
+                updatedValue = value;
+                state.TryUpdateCell(0, 1, value);
+            });
+
+        input.Text = null;
+
+        Assert.AreEqual(string.Empty, input.Text);
+        Assert.AreEqual(string.Empty, updatedValue);
+        Assert.AreEqual(string.Empty, state.EditableCellRows[0][1]);
+        Assert.IsTrue(state.IsDirty);
     }
 
     [TestMethod]

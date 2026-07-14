@@ -229,6 +229,32 @@ public sealed class SharedTableNodeEditorViewModelTests
     }
 
     [TestMethod]
+    public async Task ReadEditorHandlesNullSearchAndShareNameWithoutThrowing()
+    {
+        var service = new FakeCatalogService
+        {
+            SearchHandler = (query, _, _, _) =>
+            {
+                Assert.IsNull(query);
+                return Task.FromResult(CatalogPage());
+            },
+        };
+        var editor = ReadSharedTablesNodeEditorViewModel.TryCreate(
+            ReadContext(service));
+        Assert.IsNotNull(editor);
+
+        editor.ShareSearchText = null!;
+        await editor.RefreshSharesCommand.ExecuteAsync(null);
+        Assert.IsFalse(editor.HasError);
+
+        editor.ShareName = null!;
+        Assert.IsFalse(editor.TryPrepareApply(out var errorMessage));
+        StringAssert.Contains(errorMessage, "Share name");
+        await editor.RefreshVersionsCommand.ExecuteAsync(null);
+        Assert.IsTrue(editor.HasError);
+    }
+
+    [TestMethod]
     public async Task ReadEditorDiscardsLateShareAndVersionResponsesAndCancelsOldRequests()
     {
         var oldShares = NewCompletion<SharedPublicationCatalogPageDto>();

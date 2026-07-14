@@ -14,6 +14,6 @@ public partial class MainWindowViewModel
             return;
         }
 
-        ScheduleAdvancedWorkflowDraftJsonApply(value);
+        ScheduleAdvancedWorkflowDraftJsonApply(value ?? string.Empty);
     }
 }

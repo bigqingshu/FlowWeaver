@@ -13,7 +13,7 @@ public partial class MainWindowViewModel
             && !IsWorkflowDefinitionDraftBusy
             && !HasWorkflowDefinitionRevisionConflict
             && !string.Equals(
-                SelectedNodeDisplayNameDraft.Trim(),
+                SelectedNodeDisplayNameDraft?.Trim() ?? string.Empty,
                 SelectedWorkflowDefinitionNode.DisplayName,
                 StringComparison.Ordinal);
     }

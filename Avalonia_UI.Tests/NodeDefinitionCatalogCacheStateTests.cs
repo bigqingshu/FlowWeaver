@@ -35,6 +35,26 @@ public sealed class NodeDefinitionCatalogCacheStateTests
     }
 
     [TestMethod]
+    public void ConnectionKeyNormalizesNullTextInputsWithoutThrowing()
+    {
+        var first = NodeDefinitionCatalogCacheState.BuildConnectionKey(
+            new EngineHostConnectionSettings
+            {
+                BaseUrl = null!,
+                Token = null!,
+            });
+        var second = NodeDefinitionCatalogCacheState.BuildConnectionKey(
+            new EngineHostConnectionSettings
+            {
+                BaseUrl = string.Empty,
+                Token = string.Empty,
+            });
+
+        Assert.AreEqual(first, second);
+        StringAssert.StartsWith(first, "|token:");
+    }
+
+    [TestMethod]
     public void CatalogHitRequiresLoadedStateConnectionAndCatalogHash()
     {
         var cacheState = new NodeDefinitionCatalogCacheState();

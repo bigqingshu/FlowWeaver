@@ -8,7 +8,7 @@ namespace Avalonia_UI.Models;
 public static class NodeConfigDraftBuilder
 {
     public static NodeConfigDraft Build(
-        string workflowDefinitionDraftJson,
+        string? workflowDefinitionDraftJson,
         string nodeInstanceId,
         NodeConfigSchemaDescriptor? schema)
     {
@@ -18,6 +18,14 @@ public static class NodeConfigDraftBuilder
                 nodeInstanceId,
                 NodeConfigDraftStatus.SchemaUnsupported,
                 "CONFIG_DRAFT_SCHEMA_UNSUPPORTED");
+        }
+
+        if (string.IsNullOrWhiteSpace(workflowDefinitionDraftJson))
+        {
+            return Draft(
+                nodeInstanceId,
+                NodeConfigDraftStatus.JsonInvalid,
+                "CONFIG_DRAFT_JSON_INVALID");
         }
 
         JsonDocument document;

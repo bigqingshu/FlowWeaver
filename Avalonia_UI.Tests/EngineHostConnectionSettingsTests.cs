@@ -89,4 +89,42 @@ public sealed class EngineHostConnectionSettingsTests
         {
         }
     }
+
+    [TestMethod]
+    public void BuildHealthUriRejectsNullBaseUrlWithoutThrowingNullReferenceException()
+    {
+        var settings = new EngineHostConnectionSettings
+        {
+            BaseUrl = null!,
+        };
+
+        try
+        {
+            settings.BuildHealthUri();
+            Assert.Fail("Expected an InvalidOperationException.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            Assert.AreEqual("EngineHost base URL is required.", exception.Message);
+        }
+    }
+
+    [TestMethod]
+    public void BuildRuntimeEventsWebSocketUriRejectsNullToken()
+    {
+        var settings = new EngineHostConnectionSettings
+        {
+            Token = null!,
+        };
+
+        try
+        {
+            settings.BuildRuntimeEventsWebSocketUri();
+            Assert.Fail("Expected an InvalidOperationException.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            Assert.AreEqual("EngineHost token is required.", exception.Message);
+        }
+    }
 }

@@ -120,9 +120,9 @@ public sealed class NodeDefinitionCatalogCacheState
             catalogHash);
     }
 
-    private static string NormalizeBaseUrl(string baseUrl)
+    private static string NormalizeBaseUrl(string? baseUrl)
     {
-        var trimmed = baseUrl.Trim();
+        var trimmed = baseUrl?.Trim() ?? string.Empty;
         if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
         {
             return uri.GetLeftPart(UriPartial.Authority)
@@ -133,9 +133,9 @@ public sealed class NodeDefinitionCatalogCacheState
         return trimmed.ToLowerInvariant();
     }
 
-    private static string ComputeTokenFingerprint(string token)
+    private static string ComputeTokenFingerprint(string? token)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token ?? string.Empty));
         return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
     }
 

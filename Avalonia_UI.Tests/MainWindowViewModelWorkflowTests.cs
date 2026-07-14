@@ -3587,6 +3587,16 @@ public sealed class MainWindowViewModelWorkflowTests
             "Node display name applied to draft. Validate before saving.",
             viewModel.WorkflowDefinitionValidationMessage);
         Assert.IsFalse(viewModel.ApplySelectedNodeDisplayNameDraftCommand.CanExecute(null));
+
+        viewModel.SelectedNodeDisplayNameDraft = null!;
+        Assert.IsTrue(viewModel.ApplySelectedNodeDisplayNameDraftCommand.CanExecute(null));
+        viewModel.ApplySelectedNodeDisplayNameDraftCommand.Execute(null);
+
+        using var clearedDraft = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsFalse(
+            clearedDraft.RootElement
+                .GetProperty("nodes")[0]
+                .TryGetProperty("display_name", out _));
     }
 
     [TestMethod]
@@ -3832,6 +3842,12 @@ public sealed class MainWindowViewModelWorkflowTests
         StringAssert.Contains(
             viewModel.RuntimeOptionsEditorErrorMessage,
             "Runtime options JSON is invalid.");
+
+        viewModel.RuntimeOptionsJsonDraft = null!;
+        viewModel.ApplyRuntimeOptionsDraftCommand.Execute(null);
+
+        Assert.AreEqual(originalDraft, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsTrue(viewModel.HasRuntimeOptionsEditorError);
     }
 
     [TestMethod]
@@ -5950,6 +5966,23 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "latest",
             viewModel.WorkflowDefinitionDraftStructure?.Nodes[0].NodeInstanceId);
+    }
+
+    [TestMethod]
+    public async Task AdvancedDraftJsonDebounceNormalizesNullInput()
+    {
+        var viewModel = CreateViewModel(
+            new FakeApiClient(),
+            workflowDraftJsonDebounceDelay: cancellationToken =>
+                Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken));
+        viewModel.WorkflowDefinitionDraftJson =
+            """{"nodes":[],"connections":[]}""";
+
+        viewModel.AdvancedWorkflowDefinitionDraftJson = null!;
+
+        await Task.Delay(100);
+        Assert.AreEqual(string.Empty, viewModel.WorkflowDefinitionDraftJson);
+        Assert.IsNull(viewModel.WorkflowDefinitionDraftStructure);
     }
 
     [TestMethod]

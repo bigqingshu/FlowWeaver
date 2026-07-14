@@ -21,7 +21,7 @@ public sealed class EngineHostConnectionSettings
         string path,
         IEnumerable<KeyValuePair<string, string?>>? query = null)
     {
-        var trimmedBaseUrl = BaseUrl.Trim();
+        var trimmedBaseUrl = BaseUrl?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(trimmedBaseUrl))
         {
             throw new InvalidOperationException("EngineHost base URL is required.");

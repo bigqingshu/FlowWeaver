@@ -200,6 +200,21 @@ public sealed class WorkflowRunRuntimeOptionsViewModelTests
     }
 
     [TestMethod]
+    public void OverrideEditorTreatsNullRedactColumnsAsExplicitEmptyOverride()
+    {
+        var editor = new RuntimeFeedbackPolicyOverrideEditorViewModel(Localization())
+        {
+            OverrideRedactColumns = true,
+            RedactColumnsDraft = null!,
+        };
+
+        Assert.IsTrue(editor.TryBuild(out var draft, out var validationError));
+        Assert.IsNull(validationError);
+        Assert.IsNotNull(draft.RedactColumns);
+        Assert.HasCount(0, draft.RedactColumns);
+    }
+
+    [TestMethod]
     public void MainWindowBridgeSupportsOrdinaryPreviewAndBackgroundRunsWithoutDirtyingDraft()
     {
         var apiClient = new EngineHostApiClient(new HttpClient(new NeverSendHandler()));

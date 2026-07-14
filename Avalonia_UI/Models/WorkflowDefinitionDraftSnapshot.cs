@@ -22,20 +22,29 @@ public sealed class WorkflowDefinitionDraftSnapshot
 
     public bool Succeeded => Warning is null;
 
-    public static WorkflowDefinitionDraftSnapshot Parse(string draftJson)
+    public static WorkflowDefinitionDraftSnapshot Parse(string? draftJson)
     {
+        var normalizedDraftJson = draftJson ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedDraftJson))
+        {
+            return new WorkflowDefinitionDraftSnapshot(
+                normalizedDraftJson,
+                default,
+                "WORKFLOW_DRAFT_JSON_INVALID");
+        }
+
         try
         {
-            using var document = JsonDocument.Parse(draftJson);
+            using var document = JsonDocument.Parse(normalizedDraftJson);
             return new WorkflowDefinitionDraftSnapshot(
-                draftJson,
+                normalizedDraftJson,
                 document.RootElement.Clone(),
                 warning: null);
         }
         catch (JsonException)
         {
             return new WorkflowDefinitionDraftSnapshot(
-                draftJson,
+                normalizedDraftJson,
                 default,
                 "WORKFLOW_DRAFT_JSON_INVALID");
         }

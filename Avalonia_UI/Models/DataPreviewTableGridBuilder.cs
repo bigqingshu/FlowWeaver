@@ -42,21 +42,22 @@ public sealed record DataPreviewWorkbenchGridState
 
     public int LastVisibleRowNumber => Offset + Rows.Length;
 
-    public bool TryUpdateCell(int rowIndex, int columnIndex, string value)
+    public bool TryUpdateCell(int rowIndex, int columnIndex, string? value)
     {
+        var normalized = value ?? string.Empty;
         if (rowIndex < 0
             || rowIndex >= EditableCellRows.Length
             || columnIndex < 0
             || columnIndex >= EditableCellRows[rowIndex].Length
             || string.Equals(
                 EditableCellRows[rowIndex][columnIndex],
-                value,
+                normalized,
                 StringComparison.Ordinal))
         {
             return false;
         }
 
-        EditableCellRows[rowIndex][columnIndex] = value;
+        EditableCellRows[rowIndex][columnIndex] = normalized;
         return true;
     }
 
@@ -124,7 +125,7 @@ public static class DataPreviewTableGridBuilder
 
         return rowIndexes
             .Where(rowIndex => editableCellRows[rowIndex].Any(
-                value => value.Contains(
+                value => (value ?? string.Empty).Contains(
                     filter,
                     StringComparison.OrdinalIgnoreCase)))
             .ToArray();
@@ -163,7 +164,7 @@ public static class DataPreviewTableGridBuilder
     }
 
     public static bool TryParseDelimitedTable(
-        string text,
+        string? text,
         out string[] columns,
         out JsonElement[] rows,
         out string? errorMessage)
@@ -172,7 +173,7 @@ public static class DataPreviewTableGridBuilder
         rows = [];
         errorMessage = null;
 
-        var lines = text
+        var lines = (text ?? string.Empty)
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Split('\n')
@@ -237,9 +238,9 @@ public static class DataPreviewTableGridBuilder
         };
     }
 
-    private static string EscapeTsv(string value)
+    private static string EscapeTsv(string? value)
     {
-        return value
+        return (value ?? string.Empty)
             .Replace("\r\n", " ", StringComparison.Ordinal)
             .Replace("\r", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
@@ -322,9 +323,9 @@ public static class DataPreviewTableGridBuilder
         return JsonSerializer.SerializeToElement(row, FlowWeaverJson.Options).Clone();
     }
 
-    private static string? NormalizeFilter(string value)
+    private static string? NormalizeFilter(string? value)
     {
-        var trimmed = value.Trim();
+        var trimmed = value?.Trim() ?? string.Empty;
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }

@@ -72,6 +72,9 @@ public sealed class DataPreviewTableGridBuilderTests
             new[] { 0, 1, 2 },
             DataPreviewTableGridBuilder.GetVisibleRowIndexes(rows, " "));
         CollectionAssert.AreEqual(
+            new[] { 0, 1, 2 },
+            DataPreviewTableGridBuilder.GetVisibleRowIndexes(rows, null!));
+        CollectionAssert.AreEqual(
             new[] { 1, 2 },
             DataPreviewTableGridBuilder.GetVisibleRowIndexes(rows, "bob"));
     }
@@ -84,10 +87,11 @@ public sealed class DataPreviewTableGridBuilderTests
             [
                 ["Alice", "line1\nline2"],
                 ["Bob\tJr", "ok"],
+                [null!, "empty"],
             ]);
 
         Assert.AreEqual(
-            "name\tnote\nAlice\tline1 line2\nBob Jr\tok",
+            "name\tnote\nAlice\tline1 line2\nBob Jr\tok\n\tempty",
             tsv.Replace("\r\n", "\n"));
     }
 
@@ -113,6 +117,21 @@ public sealed class DataPreviewTableGridBuilderTests
     {
         var parsed = DataPreviewTableGridBuilder.TryParseDelimitedTable(
             "name\tamount",
+            out var columns,
+            out var rows,
+            out var errorMessage);
+
+        Assert.IsFalse(parsed);
+        Assert.IsEmpty(columns);
+        Assert.IsEmpty(rows);
+        Assert.AreEqual("data_preview.paste_requires_rows", errorMessage);
+    }
+
+    [TestMethod]
+    public void TryParseDelimitedTableRejectsNullInputWithoutThrowing()
+    {
+        var parsed = DataPreviewTableGridBuilder.TryParseDelimitedTable(
+            null,
             out var columns,
             out var rows,
             out var errorMessage);

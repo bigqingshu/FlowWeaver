@@ -5,7 +5,7 @@ namespace Avalonia_UI.Models;
 
 public static class RuntimeOptionsDraftReader
 {
-    public static RuntimeOptionsDraftReadResult Read(string workflowDefinitionDraftJson)
+    public static RuntimeOptionsDraftReadResult Read(string? workflowDefinitionDraftJson)
     {
         return Read(
             WorkflowDefinitionDraftSnapshot.Parse(workflowDefinitionDraftJson));
@@ -45,8 +45,15 @@ public static class RuntimeOptionsDraftReader
     }
 
     public static RuntimeOptionsDraftReadResult ReadRuntimeOptionsJson(
-        string runtimeOptionsJson)
+        string? runtimeOptionsJson)
     {
+        if (string.IsNullOrWhiteSpace(runtimeOptionsJson))
+        {
+            return Failed(
+                RuntimeOptionsDraftReadStatus.JsonInvalid,
+                "RUNTIME_OPTIONS_JSON_INVALID");
+        }
+
         JsonDocument document;
         try
         {

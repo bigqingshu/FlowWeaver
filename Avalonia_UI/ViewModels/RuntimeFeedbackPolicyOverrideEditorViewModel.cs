@@ -124,7 +124,7 @@ public sealed partial class RuntimeFeedbackPolicyOverrideEditorViewModel : ViewM
             IncludeMetrics = IncludeMetrics,
             PayloadByteLimit = payloadLimit,
             RedactColumns = OverrideRedactColumns
-                ? RedactColumnsDraft
+                ? (RedactColumnsDraft ?? string.Empty)
                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Distinct(StringComparer.Ordinal)
                     .ToArray()

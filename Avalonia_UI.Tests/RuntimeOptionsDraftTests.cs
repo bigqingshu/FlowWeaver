@@ -97,6 +97,26 @@ public sealed class RuntimeOptionsDraftTests
     }
 
     [TestMethod]
+    public void ReadRejectsNullWorkflowJsonWithoutThrowing()
+    {
+        var result = RuntimeOptionsDraftReader.Read((string?)null);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(RuntimeOptionsDraftReadStatus.JsonInvalid, result.Status);
+        Assert.AreEqual("WORKFLOW_DRAFT_JSON_INVALID", result.Warning);
+    }
+
+    [TestMethod]
+    public void ReadRuntimeOptionsJsonRejectsNullInputWithoutThrowing()
+    {
+        var result = RuntimeOptionsDraftReader.ReadRuntimeOptionsJson(null);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(RuntimeOptionsDraftReadStatus.JsonInvalid, result.Status);
+        Assert.AreEqual("RUNTIME_OPTIONS_JSON_INVALID", result.Warning);
+    }
+
+    [TestMethod]
     public void ReadRejectsNonObjectRuntimeOptions()
     {
         var result = RuntimeOptionsDraftReader.Read("""{"runtime_options": []}""");

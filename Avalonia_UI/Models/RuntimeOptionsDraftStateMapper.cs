@@ -137,9 +137,9 @@ public static class RuntimeOptionsDraftStateMapper
         };
     }
 
-    public static IReadOnlyList<string> ParseRedactColumns(string input)
+    public static IReadOnlyList<string> ParseRedactColumns(string? input)
     {
-        return input
+        return (input ?? string.Empty)
             .Split([',', ';', '\r', '\n'], StringSplitOptions.TrimEntries)
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Distinct(StringComparer.Ordinal)

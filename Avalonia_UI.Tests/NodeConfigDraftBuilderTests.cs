@@ -166,6 +166,21 @@ public sealed class NodeConfigDraftBuilderTests
     }
 
     [TestMethod]
+    public void BuildReturnsJsonInvalidWhenDraftJsonIsNull()
+    {
+        var draft = NodeConfigDraftBuilder.Build(
+            null,
+            "filter",
+            ParseSchema("""{"type":"object","properties":{}}"""));
+
+        Assert.IsFalse(draft.IsSupported);
+        Assert.AreEqual(NodeConfigDraftStatus.JsonInvalid, draft.Status);
+        CollectionAssert.Contains(
+            draft.Warnings.ToArray(),
+            "CONFIG_DRAFT_JSON_INVALID");
+    }
+
+    [TestMethod]
     public void BuildReturnsNodeNotFoundWhenSelectedNodeIsMissing()
     {
         var draft = NodeConfigDraftBuilder.Build(

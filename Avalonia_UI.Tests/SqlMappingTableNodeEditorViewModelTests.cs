@@ -103,6 +103,32 @@ public sealed class SqlMappingTableNodeEditorViewModelTests
     }
 
     [TestMethod]
+    public void NullTextInputsReturnValidationErrorsWithoutThrowing()
+    {
+        var editor = SqlMappingTableNodeEditorViewModel.TryCreate(
+            Context(
+                new FakeSqliteDatabaseFileService(null),
+                new FakeSqliteTableCatalogService(),
+                databasePath: @"C:\data\sales.db"));
+        Assert.IsNotNull(editor);
+
+        editor.DatabasePath = null!;
+        Assert.IsFalse(editor.TryPrepareApply(out var pathError));
+        StringAssert.Contains(pathError, "SQLite database");
+
+        editor.DatabasePath = @"C:\data\sales.db";
+        editor.UseQueryModeCommand.Execute(null);
+        editor.SqlQuery = null!;
+        Assert.IsFalse(editor.TryPrepareApply(out var queryError));
+        StringAssert.Contains(queryError, "SELECT query");
+
+        editor.SqlQuery = "SELECT 1";
+        editor.LogicalTableId = null!;
+        Assert.IsTrue(editor.TryPrepareApply(out var applyError), applyError);
+        Assert.IsFalse(editor.LogicalTableIdField.HasInputValue);
+    }
+
+    [TestMethod]
     public void EditorReportsConfigPropertyChanges()
     {
         var editor = SqlMappingTableNodeEditorViewModel.TryCreate(
