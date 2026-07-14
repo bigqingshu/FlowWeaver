@@ -181,6 +181,12 @@ public sealed class WorkflowSummaryViewStructureTests
             "Command=\"{Binding ApplySelectedNodeConfigDraftCommand}\"");
         StringAssert.Contains(
             xaml,
+            "Command=\"{Binding ToggleNodeConfigAutoSaveCommand}\"");
+        StringAssert.Contains(
+            xaml,
+            "IsChecked=\"{Binding IsNodeConfigAutoSaveEnabled, Mode=OneWay}\"");
+        StringAssert.Contains(
+            xaml,
             "x:DataType=\"vm:NodeConfigEditableFieldInputViewModel\"");
         StringAssert.Contains(xaml, "Text=\"{Binding InputValue, Mode=TwoWay");
         StringAssert.Contains(xaml, "SelectedValue=\"{Binding InputValue, Mode=TwoWay}\"");

@@ -6,6 +6,11 @@ public partial class MainWindowViewModel
 {
     private async Task<bool> TrySaveWorkflowDefinitionDraftAsync()
     {
+        if (!FlushPendingNodeConfigAutoSave())
+        {
+            return false;
+        }
+
         if (WorkflowDefinitionDetail is null)
         {
             RejectWorkflowDefinitionSaveWithoutDetail();

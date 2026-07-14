@@ -59,7 +59,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IWorkflowImportFileService? workflowImportFileService = null,
         IWorkflowExportFileService? workflowExportFileService = null,
         Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null,
-        ISqliteDatabaseFileService? sqliteDatabaseFileService = null)
+        ISqliteDatabaseFileService? sqliteDatabaseFileService = null,
+        Func<CancellationToken, Task>? nodeConfigAutoSaveDelay = null)
     {
         _healthClient = healthClient;
         _apiClient = apiClient;
@@ -70,6 +71,8 @@ public partial class MainWindowViewModel : ViewModelBase
             ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
         _workflowDraftJsonDebounceDelay = workflowDraftJsonDebounceDelay
             ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken));
+        _nodeConfigAutoSaveDelay = nodeConfigAutoSaveDelay
+            ?? (cancellationToken => Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken));
         _connectionSettingsStore = connectionSettingsStore ?? new FileConnectionSettingsStore();
         _uiSettingsStore = uiSettingsStore ?? new FileUiSettingsStore();
         _workflowImportFileService =

@@ -20,13 +20,18 @@
     </UserControl.DataTemplates>
     <Border Classes="Card" Padding="14">
         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                 <TextBlock Text="{Binding NodeConfigSectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimaryBrush}"/>
-                <Button Grid.Column="1"
+                <ToggleButton Grid.Column="1"
+                              Content="{Binding ToggleNodeConfigAutoSaveText}"
+                              Command="{Binding ToggleNodeConfigAutoSaveCommand}"
+                              IsChecked="{Binding IsNodeConfigAutoSaveEnabled, Mode=OneWay}"
+                              MinWidth="128"/>
+                <Button Grid.Column="2"
                         Content="{Binding ApplyNodeConfigText}"
                         Command="{Binding ApplySelectedNodeConfigDraftCommand}"
                         MinWidth="104"/>

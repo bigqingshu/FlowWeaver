@@ -26,6 +26,14 @@ public partial class MainWindowViewModel
             return;
         }
 
+        if (!FlushPendingNodeConfigAutoSave())
+        {
+            WorkflowMessage = T("workflow.start_failed");
+            WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
+            ShowWorkflowNotification("workflow.run", UiNotificationKind.Error);
+            return;
+        }
+
         IsStartingWorkflow = true;
         WorkflowMessage = F("format.starting_workflow", SelectedWorkflow.Name);
         WorkflowErrorMessage = null;

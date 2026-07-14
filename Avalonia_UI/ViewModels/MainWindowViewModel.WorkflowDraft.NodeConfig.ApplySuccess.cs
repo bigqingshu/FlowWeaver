@@ -5,13 +5,38 @@ namespace Avalonia_UI.ViewModels;
 public partial class MainWindowViewModel
 {
     private void ApplySelectedNodeConfigDraftSuccess(
-        NodeConfigDraftApplyResult patchResult)
+        NodeConfigDraftApplyResult patchResult,
+        bool automatic)
     {
-        WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        hasUnappliedNodeConfigChanges = false;
+        hasUnappliedSpecializedNodeConfigChanges = false;
+        if (automatic)
+        {
+            foreach (var field in SelectedNodeConfigEditableInputFields)
+            {
+                field.AcceptChanges();
+            }
+
+            SelectedNodeSpecializedEditor?.AcceptChanges();
+        }
+
+        preserveSelectedNodeConfigEditorForDraftChange = automatic;
+        try
+        {
+            WorkflowDefinitionDraftJson = patchResult.UpdatedWorkflowDefinitionDraftJson;
+        }
+        finally
+        {
+            preserveSelectedNodeConfigEditorForDraftChange = false;
+        }
+
         WorkflowDefinitionValidationMessage = T("definition.node_config_applied");
         WorkflowDefinitionValidationErrorMessage = null;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Success);
+        if (!automatic)
+        {
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_config",
+                UiNotificationKind.Success);
+        }
     }
 }

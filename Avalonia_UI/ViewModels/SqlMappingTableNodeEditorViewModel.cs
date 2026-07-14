@@ -23,8 +23,8 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
     private readonly ISqliteTableCatalogService _catalogService;
     private readonly ISqliteDatabaseFileService _fileService;
     private readonly CancellationToken _lifetimeToken;
-    private readonly string _originalTableName;
-    private readonly string _originalQuery;
+    private string _originalTableName;
+    private string _originalQuery;
     private CancellationTokenSource? _requestCts;
     private bool _disposed;
     private bool _rebuildingOptions;
@@ -101,6 +101,8 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
     }
 
     public string NodeType { get; }
+
+    public event EventHandler? ConfigChanged;
 
     public NodeConfigEditableFieldInputViewModel SourceModeField { get; }
 
@@ -376,6 +378,16 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
             includeMissingSelection: false);
     }
 
+    public void AcceptChanges()
+    {
+        _originalTableName = TableNameField.HasInputValue
+            ? TableNameField.InputValue
+            : string.Empty;
+        _originalQuery = QueryField.HasInputValue
+            ? QueryField.InputValue
+            : string.Empty;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -504,6 +516,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
     partial void OnDatabasePathChanged(string value)
     {
         RefreshTablesCommand.NotifyCanExecuteChanged();
+        ConfigChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnSourceModeChanged(string value)
@@ -513,6 +526,7 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
         OnPropertyChanged(nameof(IsQueryMode));
         OnPropertyChanged(nameof(IsTableCatalogMode));
         OnPropertyChanged(nameof(IsSingleResultMode));
+        ConfigChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnSelectedTableOptionChanged(SqliteTableOptionViewModel? value)
@@ -523,6 +537,17 @@ public partial class SqlMappingTableNodeEditorViewModel : ViewModelBase,
         }
 
         SourceMode = value.IsAllTables ? AllTablesMode : TableMode;
+        ConfigChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    partial void OnSqlQueryChanged(string value)
+    {
+        ConfigChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    partial void OnLogicalTableIdChanged(string value)
+    {
+        ConfigChanged?.Invoke(this, EventArgs.Empty);
     }
 
     partial void OnIsLoadingTablesChanged(bool value)

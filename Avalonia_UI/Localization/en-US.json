@@ -121,6 +121,8 @@
   "definition.workflow_nodes": "Workflow nodes",
   "definition.node_config": "Node config",
   "definition.apply_node_config": "Apply config",
+  "definition.enable_node_config_auto_save": "Enable auto-save",
+  "definition.disable_node_config_auto_save": "Disable auto-save",
   "definition.apply_node_display_name": "Apply name",
   "definition.runtime_options": "Runtime options",
   "definition.runtime_options_open_editor": "Options",

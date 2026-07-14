@@ -121,6 +121,8 @@
   "definition.workflow_nodes": "工作流节点",
   "definition.node_config": "节点配置",
   "definition.apply_node_config": "应用配置",
+  "definition.enable_node_config_auto_save": "开启更改自动保存",
+  "definition.disable_node_config_auto_save": "关闭更改自动保存",
   "definition.apply_node_display_name": "应用名称",
   "definition.runtime_options": "运行配置字",
   "definition.runtime_options_open_editor": "配置字",

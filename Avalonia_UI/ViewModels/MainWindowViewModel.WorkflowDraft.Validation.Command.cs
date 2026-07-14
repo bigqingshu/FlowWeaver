@@ -9,6 +9,11 @@ public partial class MainWindowViewModel
     [RelayCommand(CanExecute = nameof(CanValidateWorkflowDefinitionDraft))]
     private async Task ValidateWorkflowDefinitionDraftAsync()
     {
+        if (!FlushPendingNodeConfigAutoSave())
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(WorkflowDefinitionDraftJson))
         {
             RejectWorkflowDefinitionDraftValidationWithoutDraft();

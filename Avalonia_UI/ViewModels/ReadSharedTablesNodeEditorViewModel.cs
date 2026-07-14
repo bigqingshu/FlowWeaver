@@ -37,6 +37,7 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
     private bool _membersFullyLoaded;
     private bool _versionDirectoryLoaded;
     private bool _memberDirectoryLoaded;
+    private bool _suppressConfigChanged;
     private string? _directoryShareName;
     private string? _selectedPublicationId;
     private bool _disposed;
@@ -95,6 +96,8 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
     }
 
     public string NodeType { get; }
+
+    public event EventHandler? ConfigChanged;
 
     public NodeConfigEditableFieldInputViewModel ShareNameField { get; }
 
@@ -249,10 +252,24 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
     [RelayCommand]
     private void ClearSelectedMembers()
     {
+        var changed = _selectedMemberNames.Count > 0;
+        _suppressConfigChanged = true;
         _selectedMemberNames.Clear();
-        foreach (var member in MemberOptions)
+        try
         {
-            member.IsSelected = false;
+            foreach (var member in MemberOptions)
+            {
+                member.IsSelected = false;
+            }
+        }
+        finally
+        {
+            _suppressConfigChanged = false;
+        }
+
+        if (changed)
+        {
+            ConfigChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -346,6 +363,10 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(LoadMoreText));
         OnPropertyChanged(nameof(ClearMembersText));
+    }
+
+    public void AcceptChanges()
+    {
     }
 
     public void Dispose()
@@ -633,15 +654,23 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
     private void HandleMemberSelectionChanged(
         SharedPublicationMemberOptionViewModel member)
     {
+        var changed = false;
         var index = _selectedMemberNames.FindIndex(
             name => string.Equals(name, member.ExportName, StringComparison.Ordinal));
         if (member.IsSelected && index < 0)
         {
             _selectedMemberNames.Add(member.ExportName);
+            changed = true;
         }
         else if (!member.IsSelected && index >= 0)
         {
             _selectedMemberNames.RemoveAt(index);
+            changed = true;
+        }
+
+        if (changed && !_suppressConfigChanged)
+        {
+            ConfigChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -737,7 +766,12 @@ public partial class ReadSharedTablesNodeEditorViewModel : ViewModelBase,
                 value.PublicationId,
                 StringComparison.Ordinal))
         {
+            var selectedMembersChanged = _selectedMemberNames.Count > 0;
             _selectedMemberNames.Clear();
+            if (selectedMembersChanged)
+            {
+                ConfigChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         _selectedPublicationId = value.PublicationId;

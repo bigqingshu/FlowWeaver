@@ -65,7 +65,7 @@ public static class NodeConfigEditableDraftConfigBuilder
         out JsonNode? value)
     {
         value = null;
-        var input = field.InputValue;
+        var input = field.InputValue ?? string.Empty;
 
         if (field.Required && !field.HasInputValue)
         {

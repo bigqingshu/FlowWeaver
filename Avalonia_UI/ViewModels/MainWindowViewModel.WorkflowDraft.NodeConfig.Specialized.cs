@@ -50,7 +50,18 @@ public partial class MainWindowViewModel
             return;
         }
 
-        SelectedNodeSpecializedEditor?.Dispose();
+        if (SelectedNodeSpecializedEditor is not null)
+        {
+            SelectedNodeSpecializedEditor.ConfigChanged -=
+                OnSelectedNodeSpecializedEditorConfigChanged;
+            SelectedNodeSpecializedEditor.Dispose();
+        }
+
+        if (editor is not null)
+        {
+            editor.ConfigChanged += OnSelectedNodeSpecializedEditorConfigChanged;
+        }
+
         SelectedNodeSpecializedEditor = editor;
     }
 

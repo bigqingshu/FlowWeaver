@@ -7,17 +7,26 @@ public partial class MainWindowViewModel
     private void RebuildSelectedNodeConfigEditableInputFields(
         NodeConfigEditableDraft? editableDraft)
     {
+        foreach (var field in SelectedNodeConfigEditableInputFields)
+        {
+            field.PropertyChanged -= OnSelectedNodeConfigFieldPropertyChanged;
+        }
+
+        CancelPendingNodeConfigAutoSave();
+        hasUnappliedNodeConfigChanges = false;
+        hasUnappliedSpecializedNodeConfigChanges = false;
         SelectedNodeConfigEditableInputFields.Clear();
         if (editableDraft is not null)
         {
             var nodeType = SelectedWorkflowDefinitionNode?.NodeType ?? string.Empty;
             foreach (var field in editableDraft.Fields)
             {
-                SelectedNodeConfigEditableInputFields.Add(
-                    new NodeConfigEditableFieldInputViewModel(
-                        field,
-                        nodeType,
-                        DisplayTextFormatter));
+                var input = new NodeConfigEditableFieldInputViewModel(
+                    field,
+                    nodeType,
+                    DisplayTextFormatter);
+                input.PropertyChanged += OnSelectedNodeConfigFieldPropertyChanged;
+                SelectedNodeConfigEditableInputFields.Add(input);
             }
         }
 

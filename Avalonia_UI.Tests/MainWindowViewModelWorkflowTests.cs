@@ -4069,6 +4069,127 @@ public sealed class MainWindowViewModelWorkflowTests
     }
 
     [TestMethod]
+    public async Task NodeConfigAutoSaveAppliesAfterDelayWithoutRebuildingEditor()
+    {
+        var releaseDelay = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
+            cancellationToken => releaseDelay.Task.WaitAsync(cancellationToken));
+        var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
+        var selectedNode = viewModel.SelectedWorkflowDefinitionNode;
+
+        Assert.IsFalse(viewModel.IsNodeConfigAutoSaveEnabled);
+        Assert.AreEqual("Enable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+        Assert.IsTrue(viewModel.IsNodeConfigAutoSaveEnabled);
+        Assert.AreEqual("Disable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
+
+        field.InputValue = "total";
+        Assert.AreEqual("amount", ReadFirstNodeConfigString(viewModel, "field"));
+        releaseDelay.SetResult();
+        await WaitUntilAsync(
+            () => ReadFirstNodeConfigString(viewModel, "field") == "total");
+
+        Assert.AreSame(selectedNode, viewModel.SelectedWorkflowDefinitionNode);
+        Assert.AreSame(field, viewModel.SelectedNodeConfigEditableInputFields.Single());
+        Assert.IsFalse(field.IsDirty);
+        Assert.IsTrue(viewModel.IsWorkflowDefinitionDraftDirty);
+    }
+
+    [TestMethod]
+    public async Task DisablingNodeConfigAutoSaveFlushesPendingChange()
+    {
+        var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
+            cancellationToken => Task.Delay(Timeout.Infinite, cancellationToken));
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+        viewModel.SelectedNodeConfigEditableInputFields.Single().InputValue = "total";
+
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsNodeConfigAutoSaveEnabled);
+        Assert.AreEqual("Enable auto-save", viewModel.ToggleNodeConfigAutoSaveText);
+        Assert.AreEqual("total", ReadFirstNodeConfigString(viewModel, "field"));
+    }
+
+    [TestMethod]
+    public async Task DisablingNodeConfigAutoSaveRejectsNullIntegerWithoutCrashing()
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"limit": 3}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        const string schemaJson =
+            """
+            {
+              "type": "object",
+              "properties": {
+                "limit": {"type": "integer"}
+              }
+            }
+            """;
+        var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
+            cancellationToken => Task.Delay(Timeout.Infinite, cancellationToken),
+            definitionJson,
+            schemaJson);
+        var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+        field.InputValue = null;
+
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsNodeConfigAutoSaveEnabled);
+        Assert.AreEqual(string.Empty, field.InputValue);
+        Assert.AreEqual(
+            "Node config apply failed.",
+            viewModel.WorkflowDefinitionValidationMessage);
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "limit: EDITABLE_CONFIG_FIELD_INTEGER_INVALID");
+        using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        Assert.AreEqual(
+            3,
+            document.RootElement
+                .GetProperty("nodes")[0]
+                .GetProperty("config")
+                .GetProperty("limit")
+                .GetInt64());
+    }
+
+    [TestMethod]
+    public async Task NodeConfigAutoSaveKeepsInvalidChangeOutOfDraft()
+    {
+        var releaseDelay = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var viewModel = await CreateLoadedNodeConfigAutoSaveViewModel(
+            cancellationToken => releaseDelay.Task.WaitAsync(cancellationToken));
+        var field = viewModel.SelectedNodeConfigEditableInputFields.Single();
+        viewModel.ToggleNodeConfigAutoSaveCommand.Execute(null);
+
+        field.HasInputValue = false;
+        releaseDelay.SetResult();
+        await WaitUntilAsync(
+            () => viewModel.WorkflowDefinitionValidationMessage
+                == "Node config apply failed.");
+
+        Assert.AreEqual("amount", ReadFirstNodeConfigString(viewModel, "field"));
+        Assert.IsTrue(field.IsDirty);
+        StringAssert.Contains(
+            viewModel.WorkflowDefinitionValidationErrorMessage,
+            "field: EDITABLE_CONFIG_FIELD_REQUIRED");
+    }
+
+    [TestMethod]
     public async Task ApplySelectedNodeConfigDraftRoundTripsSharedTableStringArrays()
     {
         var definitionJson =
@@ -5869,7 +5990,8 @@ public sealed class MainWindowViewModelWorkflowTests
         Func<CancellationToken, Task>? dataPreviewRunRefreshDelay = null,
         IWorkflowImportFileService? workflowImportFileService = null,
         IWorkflowExportFileService? workflowExportFileService = null,
-        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null)
+        Func<CancellationToken, Task>? workflowDraftJsonDebounceDelay = null,
+        Func<CancellationToken, Task>? nodeConfigAutoSaveDelay = null)
     {
         return new MainWindowViewModel(
             new EngineHostHealthClient(apiClient),
@@ -5878,12 +6000,94 @@ public sealed class MainWindowViewModelWorkflowTests
             dataPreviewRunRefreshDelay: dataPreviewRunRefreshDelay,
             workflowImportFileService: workflowImportFileService,
             workflowExportFileService: workflowExportFileService,
-            workflowDraftJsonDebounceDelay: workflowDraftJsonDebounceDelay)
+            workflowDraftJsonDebounceDelay: workflowDraftJsonDebounceDelay,
+            nodeConfigAutoSaveDelay: nodeConfigAutoSaveDelay)
         {
             BaseUrl = "http://127.0.0.1:8000",
             Token = "secret",
             ConnectionStatus = ConnectionStatus.Connected,
         };
+    }
+
+    private static async Task<MainWindowViewModel>
+        CreateLoadedNodeConfigAutoSaveViewModel(
+            Func<CancellationToken, Task> autoSaveDelay)
+    {
+        const string definitionJson =
+            """
+            {
+              "schema_version": "1.0",
+              "nodes": [
+                {
+                  "node_instance_id": "filter",
+                  "node_type": "FilterRowsNode",
+                  "node_version": "1.0",
+                  "config": {"field": "amount"}
+                }
+              ],
+              "connections": []
+            }
+            """;
+        const string schemaJson =
+            """
+            {
+              "type": "object",
+              "properties": {
+                "field": {"type": "string", "required": true}
+              }
+            }
+            """;
+        return await CreateLoadedNodeConfigAutoSaveViewModel(
+            autoSaveDelay,
+            definitionJson,
+            schemaJson);
+    }
+
+    private static async Task<MainWindowViewModel>
+        CreateLoadedNodeConfigAutoSaveViewModel(
+            Func<CancellationToken, Task> autoSaveDelay,
+            string definitionJson,
+            string schemaJson)
+    {
+        var apiClient = new FakeApiClient
+        {
+            WorkflowsResponse = ApiResponseEnvelope<List<WorkflowDefinitionDto>>.Success(
+                new List<WorkflowDefinitionDto>
+                {
+                    Workflow("wf-1", "Daily Load", 1),
+                }),
+            WorkflowDetailResponse = ApiResponseEnvelope<WorkflowDefinitionDto>.Success(
+                Workflow("wf-1", "Daily Load", 1, definitionJson)),
+            WorkflowRevisionsResponse = ApiResponseEnvelope<List<WorkflowRevisionDto>>.Success(
+                new List<WorkflowRevisionDto>()),
+            NodeDefinitionsResponse = ApiResponseEnvelope<List<NodeDefinitionDto>>.Success(
+                new List<NodeDefinitionDto>
+                {
+                    NodeDefinition(
+                        "FilterRowsNode",
+                        "Filter Rows",
+                        schemaJson: schemaJson),
+                }),
+        };
+        var viewModel = CreateViewModel(
+            apiClient,
+            nodeConfigAutoSaveDelay: autoSaveDelay);
+        await viewModel.RefreshWorkflowsCommand.ExecuteAsync(null);
+        await viewModel.LoadSelectedWorkflowDefinitionCommand.ExecuteAsync(null);
+        await viewModel.RefreshNodeDefinitionsCommand.ExecuteAsync(null);
+        return viewModel;
+    }
+
+    private static string? ReadFirstNodeConfigString(
+        MainWindowViewModel viewModel,
+        string fieldName)
+    {
+        using var document = JsonDocument.Parse(viewModel.WorkflowDefinitionDraftJson);
+        return document.RootElement
+            .GetProperty("nodes")[0]
+            .GetProperty("config")
+            .GetProperty(fieldName)
+            .GetString();
     }
 
     private static async Task WaitUntilAsync(Func<bool> predicate)

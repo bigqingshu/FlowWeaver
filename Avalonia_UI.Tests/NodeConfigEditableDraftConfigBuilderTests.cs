@@ -101,6 +101,29 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
     }
 
     [TestMethod]
+    public void BuildNormalizesNullStringInputToEmptyString()
+    {
+        var draft = new NodeConfigEditableDraft
+        {
+            NodeInstanceId = "filter",
+            Fields =
+            [
+                Field(
+                    "field",
+                    NodeConfigFieldType.String,
+                    null!,
+                    hasInputValue: true),
+            ],
+        };
+
+        var result = NodeConfigEditableDraftConfigBuilder.Build(draft);
+
+        Assert.IsTrue(result.Succeeded);
+        using var document = JsonDocument.Parse(result.ConfigJson);
+        Assert.AreEqual(string.Empty, document.RootElement.GetProperty("field").GetString());
+    }
+
+    [TestMethod]
     public void BuildRejectsRequiredEmptyField()
     {
         var draft = new NodeConfigEditableDraft
@@ -170,6 +193,42 @@ public sealed class NodeConfigEditableDraftConfigBuilderTests
         CollectionAssert.Contains(
             result.FieldErrors.Select(error => error.Warning).ToArray(),
             "EDITABLE_CONFIG_FIELD_ENUM_INVALID");
+    }
+
+    [TestMethod]
+    public void BuildRejectsNullNonStringScalarInputsWithoutThrowing()
+    {
+        var draft = new NodeConfigEditableDraft
+        {
+            NodeInstanceId = "filter",
+            Fields =
+            [
+                Field("limit", NodeConfigFieldType.Integer, null!),
+                Field("ratio", NodeConfigFieldType.Number, null!),
+                Field("enabled", NodeConfigFieldType.Boolean, null!),
+                Field(
+                    "operator",
+                    NodeConfigFieldType.Enum,
+                    null!,
+                    enumValues: ["GT", "LT"]),
+            ],
+        };
+
+        var result = NodeConfigEditableDraftConfigBuilder.Build(draft);
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(
+            NodeConfigEditableDraftConfigBuildStatus.FieldInvalid,
+            result.Status);
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                "EDITABLE_CONFIG_FIELD_INTEGER_INVALID",
+                "EDITABLE_CONFIG_FIELD_NUMBER_INVALID",
+                "EDITABLE_CONFIG_FIELD_BOOLEAN_INVALID",
+                "EDITABLE_CONFIG_FIELD_ENUM_INVALID",
+            },
+            result.FieldErrors.Select(error => error.Warning).ToArray());
     }
 
     [TestMethod]

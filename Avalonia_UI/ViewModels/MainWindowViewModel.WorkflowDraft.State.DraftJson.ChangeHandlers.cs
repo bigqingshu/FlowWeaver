@@ -7,11 +7,14 @@ public partial class MainWindowViewModel
         AdvanceWorkflowNodeTableBindingsDraftRevision();
         SynchronizeAdvancedWorkflowDraftJson(value);
         OnPropertyChanged(nameof(HasWorkflowDefinitionDraft));
-        RefreshWorkflowDefinitionDraftStructureState();
-        RefreshWorkflowLoopRegionsFromDraft();
-        RefreshWorkflowNodeTableBindingsFromDraft();
-        RefreshSelectedNodeConfigDraftState();
-        RefreshRuntimeOptionsDraftState();
+        if (!preserveSelectedNodeConfigEditorForDraftChange)
+        {
+            RefreshWorkflowDefinitionDraftStructureState();
+            RefreshWorkflowLoopRegionsFromDraft();
+            RefreshWorkflowNodeTableBindingsFromDraft();
+            RefreshSelectedNodeConfigDraftState();
+            RefreshRuntimeOptionsDraftState();
+        }
 
         IsWorkflowDefinitionDraftDirty =
             workflowDefinitionDraftDocumentState.IsDirty(value);

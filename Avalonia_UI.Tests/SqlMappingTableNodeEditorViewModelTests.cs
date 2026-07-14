@@ -103,6 +103,24 @@ public sealed class SqlMappingTableNodeEditorViewModelTests
     }
 
     [TestMethod]
+    public void EditorReportsConfigPropertyChanges()
+    {
+        var editor = SqlMappingTableNodeEditorViewModel.TryCreate(
+            Context(
+                new FakeSqliteDatabaseFileService(null),
+                new FakeSqliteTableCatalogService(),
+                databasePath: @"C:\data\sales.db",
+                tableName: "orders"));
+        Assert.IsNotNull(editor);
+        var configChangedCount = 0;
+        editor.ConfigChanged += (_, _) => configChangedCount++;
+
+        editor.LogicalTableId = "daily_orders";
+
+        Assert.AreEqual(1, configChangedCount);
+    }
+
+    [TestMethod]
     public async Task RefreshDropsTableMissingFromNewDatabase()
     {
         var editor = SqlMappingTableNodeEditorViewModel.TryCreate(

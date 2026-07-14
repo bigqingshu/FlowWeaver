@@ -58,8 +58,12 @@ public sealed class SharedTableNodeEditorViewModelTests
         Assert.HasCount(2, editor.InputMappings);
         Assert.AreEqual("source_b", editor.InputMappings[0].Connection?.SourceNodeId);
         Assert.AreEqual("source_a", editor.InputMappings[1].Connection?.SourceNodeId);
+        var configChangedCount = 0;
+        editor.ConfigChanged += (_, _) => configChangedCount++;
         editor.InputMappings[0].ExportName = "orders";
         editor.InputMappings[1].ExportName = "customers";
+
+        Assert.AreEqual(2, configChangedCount);
 
         Assert.IsTrue(editor.TryPrepareApply(out var errorMessage));
         Assert.AreEqual(string.Empty, errorMessage);
@@ -68,6 +72,22 @@ public sealed class SharedTableNodeEditorViewModelTests
             editor.ExportNamesField.StringArrayItems
                 .Select(item => item.Value)
                 .ToArray());
+    }
+
+    [TestMethod]
+    public void ReadEditorReportsSelectedMemberChanges()
+    {
+        var editor = ReadSharedTablesNodeEditorViewModel.TryCreate(
+            ReadContext(
+                new FakeCatalogService(),
+                selectedMembers: ["orders"]));
+        Assert.IsNotNull(editor);
+        var configChangedCount = 0;
+        editor.ConfigChanged += (_, _) => configChangedCount++;
+
+        editor.ClearSelectedMembersCommand.Execute(null);
+
+        Assert.AreEqual(1, configChangedCount);
     }
 
     [TestMethod]

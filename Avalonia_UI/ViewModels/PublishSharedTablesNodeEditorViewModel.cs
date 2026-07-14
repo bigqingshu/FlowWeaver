@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using Avalonia_UI.Localization;
@@ -43,6 +44,10 @@ public sealed class PublishSharedTablesNodeEditorViewModel : ViewModelBase,
                     index < connections.Length ? connections[index] : null,
                     index < existingNames.Length ? existingNames[index] : string.Empty,
                     _localizationService)));
+        foreach (var mapping in InputMappings)
+        {
+            mapping.PropertyChanged += OnInputMappingPropertyChanged;
+        }
     }
 
     public static PublishSharedTablesNodeEditorViewModel? TryCreate(
@@ -64,6 +69,8 @@ public sealed class PublishSharedTablesNodeEditorViewModel : ViewModelBase,
     }
 
     public string NodeType { get; }
+
+    public event EventHandler? ConfigChanged;
 
     public NodeConfigEditableFieldInputViewModel ShareNameField { get; }
 
@@ -161,8 +168,26 @@ public sealed class PublishSharedTablesNodeEditorViewModel : ViewModelBase,
         }
     }
 
+    public void AcceptChanges()
+    {
+    }
+
     public void Dispose()
     {
+        foreach (var mapping in InputMappings)
+        {
+            mapping.PropertyChanged -= OnInputMappingPropertyChanged;
+        }
+    }
+
+    private void OnInputMappingPropertyChanged(
+        object? sender,
+        PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(PublishSharedTableInputMappingViewModel.ExportName))
+        {
+            ConfigChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private static NodeConfigEditableFieldInputViewModel? FindField(

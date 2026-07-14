@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
@@ -25,8 +26,8 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
         Type = field.Type;
         Title = field.Title;
         Required = field.Required;
-        OriginalInputValue = field.InputValue;
-        InputValue = field.InputValue;
+        OriginalInputValue = field.InputValue ?? string.Empty;
+        InputValue = OriginalInputValue;
         OriginalHasInputValue = field.HasInputValue;
         HasInputValue = field.HasInputValue;
         EnumValues = field.EnumValues;
@@ -51,15 +52,15 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
 
     public bool Required { get; }
 
-    public string OriginalInputValue { get; }
+    public string OriginalInputValue { get; private set; }
 
-    public bool OriginalHasInputValue { get; }
+    public bool OriginalHasInputValue { get; private set; }
 
     public IReadOnlyList<string> EnumValues { get; }
 
     public string? ItemType { get; }
 
-    public IReadOnlyList<string> OriginalStringArrayValues { get; }
+    public IReadOnlyList<string> OriginalStringArrayValues { get; private set; }
 
     public ObservableCollection<NodeConfigStringArrayItemViewModel> StringArrayItems { get; } =
         new();
@@ -122,8 +123,24 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
                 OriginalInputValue,
                 StringComparison.Ordinal));
 
-    [ObservableProperty]
     private string inputValue = string.Empty;
+
+    [AllowNull]
+    public string InputValue
+    {
+        get => inputValue;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (!SetProperty(ref inputValue, normalized))
+            {
+                return;
+            }
+
+            HasInputValue = true;
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
 
     [ObservableProperty]
     private bool hasInputValue;
@@ -145,6 +162,16 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
                 .ToArray(),
             Warnings = Warnings,
         };
+    }
+
+    public void AcceptChanges()
+    {
+        OriginalInputValue = InputValue;
+        OriginalHasInputValue = HasInputValue;
+        OriginalStringArrayValues = StringArrayItems
+            .Select(item => item.Value)
+            .ToArray();
+        OnPropertyChanged(nameof(IsDirty));
     }
 
     public void ReplaceStringArrayValues(
@@ -243,12 +270,6 @@ public partial class NodeConfigEditableFieldInputViewModel : ViewModelBase
                 moveUpAvailable: index > 0,
                 moveDownAvailable: index < StringArrayItems.Count - 1);
         }
-    }
-
-    partial void OnInputValueChanged(string value)
-    {
-        HasInputValue = true;
-        OnPropertyChanged(nameof(IsDirty));
     }
 
     partial void OnHasInputValueChanged(bool value)

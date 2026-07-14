@@ -4,9 +4,13 @@ namespace Avalonia_UI.ViewModels;
 
 public interface INodeSpecializedEditorViewModel : IDisposable
 {
+    event EventHandler? ConfigChanged;
+
     string NodeType { get; }
 
     bool TryPrepareApply(out string errorMessage);
 
     void RefreshLocalizedText();
+
+    void AcceptChanges();
 }

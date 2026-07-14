@@ -15,6 +15,17 @@ public partial class MainWindowViewModel
             return;
         }
 
+        if (!FlushPendingNodeConfigAutoSave())
+        {
+            WorkflowMessage = T("workflow.start_failed");
+            WorkflowErrorMessage = WorkflowDefinitionValidationErrorMessage;
+            DataPreviewMessage = T("data_preview.preview_failed");
+            DataPreviewErrorMessage = WorkflowDefinitionValidationErrorMessage;
+            ShowWorkflowNotification("workflow.preview", UiNotificationKind.Error);
+            ShowDataPreviewNotification(UiNotificationKind.Error);
+            return;
+        }
+
         var targetNodeInstanceId = SelectedWorkflowDefinitionNode.NodeInstanceId;
         IsStartingWorkflow = true;
         WorkflowMessage = F("format.previewing_workflow_to_node", targetNodeInstanceId);

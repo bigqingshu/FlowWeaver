@@ -4,44 +4,50 @@ namespace Avalonia_UI.ViewModels;
 
 public partial class MainWindowViewModel
 {
-    private void ApplySelectedNodeConfigDraftMissingSelectionFailure()
+    private void ApplySelectedNodeConfigDraftMissingSelectionFailure(
+        bool showNotification)
     {
-        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
         WorkflowDefinitionValidationErrorMessage =
             DisplayTextFormatter.FormatSelectedNodeConfigDraftMissingSelection();
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Error);
+        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
+        ShowNodeConfigApplyFailureNotification(showNotification);
     }
 
     private void ApplySelectedNodeConfigDraftConfigBuildFailure(
-        NodeConfigEditableDraftConfigResult configResult)
+        NodeConfigEditableDraftConfigResult configResult,
+        bool showNotification)
     {
-        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
         WorkflowDefinitionValidationErrorMessage =
             FormatNodeConfigApplyErrors(configResult);
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Error);
+        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
+        ShowNodeConfigApplyFailureNotification(showNotification);
     }
 
     private void ApplySelectedNodeConfigDraftSpecializedValidationFailure(
-        string errorMessage)
+        string errorMessage,
+        bool showNotification)
     {
-        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
         WorkflowDefinitionValidationErrorMessage = errorMessage;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Error);
+        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
+        ShowNodeConfigApplyFailureNotification(showNotification);
     }
 
     private void ApplySelectedNodeConfigDraftPatchFailure(
-        NodeConfigDraftApplyResult patchResult)
+        NodeConfigDraftApplyResult patchResult,
+        bool showNotification)
     {
-        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
         WorkflowDefinitionValidationErrorMessage = patchResult.Warning;
-        ShowWorkflowDefinitionNotification(
-            "workflow.definition.node_config",
-            UiNotificationKind.Error);
+        WorkflowDefinitionValidationMessage = T("definition.node_config_apply_failed");
+        ShowNodeConfigApplyFailureNotification(showNotification);
+    }
+
+    private void ShowNodeConfigApplyFailureNotification(bool showNotification)
+    {
+        if (showNotification)
+        {
+            ShowWorkflowDefinitionNotification(
+                "workflow.definition.node_config",
+                UiNotificationKind.Error);
+        }
     }
 }

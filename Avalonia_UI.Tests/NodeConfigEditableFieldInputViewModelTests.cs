@@ -64,6 +64,26 @@ public sealed class NodeConfigEditableFieldInputViewModelTests
     }
 
     [TestMethod]
+    public void InputFieldNormalizesNullBindingValueToEmptyString()
+    {
+        var input = new NodeConfigEditableFieldInputViewModel(
+            new NodeConfigEditableDraftField
+            {
+                Name = "limit",
+                Type = NodeConfigFieldType.Integer,
+                InputValue = "3",
+                HasInputValue = true,
+            });
+
+        input.InputValue = null;
+
+        Assert.AreEqual(string.Empty, input.InputValue);
+        Assert.IsTrue(input.HasInputValue);
+        Assert.IsTrue(input.IsDirty);
+        Assert.AreEqual(string.Empty, input.ToEditableDraftField().InputValue);
+    }
+
+    [TestMethod]
     public void InputFieldExposesViewHelpersForTextAndBooleanInputs()
     {
         var textInput = new NodeConfigEditableFieldInputViewModel(
