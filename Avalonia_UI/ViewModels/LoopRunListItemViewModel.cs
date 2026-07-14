@@ -1,12 +1,18 @@
 using System;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class LoopRunListItemViewModel
+public sealed class LoopRunListItemViewModel : ViewModelBase
 {
-    public LoopRunListItemViewModel(LoopRunDto loopRun)
+    private readonly DisplayTextFormatter displayTextFormatter;
+
+    public LoopRunListItemViewModel(
+        LoopRunDto loopRun,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         LoopRunId = loopRun.LoopRunId;
         WorkflowRunId = loopRun.WorkflowRunId;
         LoopId = loopRun.LoopId;
@@ -44,5 +50,12 @@ public sealed class LoopRunListItemViewModel
 
     public string ProgressText => $"{CurrentIteration}/{MaxIterations}";
 
+    public string StatusText => displayTextFormatter.FormatRuntimeStatus(Status);
+
     public string BoundaryText => $"{StartNodeInstanceId} -> {JudgeNodeInstanceId}";
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(StatusText));
+    }
 }

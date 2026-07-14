@@ -38,6 +38,18 @@ public sealed class DisplayTextFormatter
         return Format("format.list_attempt", attempt);
     }
 
+    public string FormatRuntimeStatus(string status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return status;
+        }
+
+        return TextOrFallback(
+            $"runs.status.{status.ToUpperInvariant()}",
+            status);
+    }
+
     public string FormatMemberCount(int count)
     {
         return Format("format.list_member_count", count);

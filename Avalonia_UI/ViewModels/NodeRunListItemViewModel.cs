@@ -5,7 +5,7 @@ using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class NodeRunListItemViewModel
+public sealed class NodeRunListItemViewModel : ViewModelBase
 {
     public NodeRunListItemViewModel(
         NodeRunDto nodeRun,
@@ -55,6 +55,14 @@ public sealed class NodeRunListItemViewModel
 
     public string AttemptText => DisplayTextFormatter.FormatAttempt(Attempt);
 
+    public string StatusText => DisplayTextFormatter.FormatRuntimeStatus(Status);
+
     public string LastHeartbeatText =>
         LastHeartbeat?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-";
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(AttemptText));
+    }
 }

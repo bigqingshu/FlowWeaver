@@ -4,6 +4,11 @@ public partial class MainWindowViewModel
 {
     private void NotifyRunsLocalizedTextChanged()
     {
+        foreach (var nodeRun in NodeRuns)
+        {
+            nodeRun.RefreshLocalizedText();
+        }
+
         OnPropertyChanged(nameof(RunsSectionText));
         OnPropertyChanged(nameof(CancelText));
         OnPropertyChanged(nameof(CancelConfirmTitleText));

@@ -15,7 +15,8 @@ public partial class MainWindowViewModel
     {
         BackgroundRunManagement = new BackgroundRunManagementViewModel(
             new BackgroundRunService(apiClient),
-            T);
+            T,
+            DisplayTextFormatter);
         BackgroundRunManagement.PropertyChanged += OnBackgroundRunManagementPropertyChanged;
         BackgroundRunManagement.SelectedRunChanged += OnBackgroundRunManagementSelectedRunChanged;
         BackgroundRunManagement.RunStarted += OnBackgroundRunStarted;
@@ -73,7 +74,10 @@ public partial class MainWindowViewModel
     {
         LastStartedRunId = run.WorkflowRunId;
         LastStartedRunStatus = run.Status;
-        WorkflowMessage = F("format.started_run_with_status", run.WorkflowRunId, run.Status);
+        WorkflowMessage = F(
+            "format.started_run_with_status",
+            run.WorkflowRunId,
+            run.StatusText);
         WorkflowErrorMessage = null;
         ShowWorkflowNotification("workflow.background_run", UiNotificationKind.Success);
     }
@@ -82,7 +86,10 @@ public partial class MainWindowViewModel
     {
         LastStartedRunId = run.WorkflowRunId;
         LastStartedRunStatus = run.Status;
-        WorkflowMessage = F("format.started_run_with_status", run.WorkflowRunId, run.Status);
+        WorkflowMessage = F(
+            "format.started_run_with_status",
+            run.WorkflowRunId,
+            run.StatusText);
         WorkflowErrorMessage = null;
         ShowWorkflowNotification("workflow.retry_run", UiNotificationKind.Success);
     }

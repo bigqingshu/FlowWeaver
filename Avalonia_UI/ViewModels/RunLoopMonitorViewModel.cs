@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -19,6 +20,7 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
     private readonly RunMetadataCache metadataCache;
     private readonly Func<string, string> translate;
     private readonly Func<CancellationToken, Task> refreshDelay;
+    private readonly DisplayTextFormatter displayTextFormatter;
 
     private EngineHostConnectionSettings? settings;
     private string? workflowRunId;
@@ -37,11 +39,13 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
         ILoopRunQueryService loopRunQueryService,
         RunMetadataCache metadataCache,
         Func<string, string> translate,
-        Func<CancellationToken, Task>? refreshDelay = null)
+        Func<CancellationToken, Task>? refreshDelay = null,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
         this.loopRunQueryService = loopRunQueryService;
         this.metadataCache = metadataCache;
         this.translate = translate;
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         this.refreshDelay = refreshDelay
             ?? (cancellationToken => Task.Delay(
                 TimeSpan.FromMilliseconds(200),
@@ -173,6 +177,21 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
 
     public void RefreshLocalizedText()
     {
+        foreach (var loop in Loops)
+        {
+            loop.RefreshLocalizedText();
+        }
+
+        foreach (var iteration in Iterations)
+        {
+            iteration.RefreshLocalizedText();
+        }
+
+        foreach (var node in IterationNodes)
+        {
+            node.RefreshLocalizedText();
+        }
+
         OnPropertyChanged(nameof(SectionText));
         OnPropertyChanged(nameof(OverviewText));
         OnPropertyChanged(nameof(LoopsText));
@@ -373,7 +392,7 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
             {
                 if (existingIds.Add(loop.LoopRunId))
                 {
-                    Loops.Add(new LoopRunListItemViewModel(loop));
+                    Loops.Add(new LoopRunListItemViewModel(loop, displayTextFormatter));
                 }
             }
 
@@ -452,7 +471,9 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
             {
                 if (existingIds.Add(iteration.LoopIterationId))
                 {
-                    Iterations.Add(new LoopIterationListItemViewModel(iteration));
+                    Iterations.Add(new LoopIterationListItemViewModel(
+                        iteration,
+                        displayTextFormatter));
                 }
             }
 
@@ -529,7 +550,9 @@ public sealed partial class RunLoopMonitorViewModel : ViewModelBase
             IterationNodes.Clear();
             foreach (var node in nodesResponse.Data)
             {
-                IterationNodes.Add(new LoopIterationNodeListItemViewModel(node));
+                IterationNodes.Add(new LoopIterationNodeListItemViewModel(
+                    node,
+                    displayTextFormatter));
             }
 
             IterationTableRefs.Clear();

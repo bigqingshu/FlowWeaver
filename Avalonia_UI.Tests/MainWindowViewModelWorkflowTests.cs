@@ -4908,14 +4908,14 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual("wf-1", apiClient.StartedWorkflowId);
         Assert.AreEqual("run-1", viewModel.LastStartedRunId);
         Assert.AreEqual("PENDING", viewModel.LastStartedRunStatus);
-        Assert.AreEqual("Started run run-1 (PENDING).", viewModel.WorkflowMessage);
+        Assert.AreEqual("Started run run-1 (Pending).", viewModel.WorkflowMessage);
         Assert.IsTrue(viewModel.HasLastStartedRun);
         Assert.AreEqual("run-1", viewModel.SelectedRun?.WorkflowRunId);
         Assert.AreEqual("wf-1", apiClient.LastRunWorkflowId);
         Assert.IsTrue(viewModel.IsNotificationOpen);
         Assert.AreEqual("workflow.run", viewModel.NotificationKey);
         Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
-        Assert.AreEqual("Started run run-1 (PENDING).", viewModel.NotificationTitle);
+        Assert.AreEqual("Started run run-1 (Pending).", viewModel.NotificationTitle);
         Assert.AreEqual(string.Empty, viewModel.NotificationMessage);
     }
 

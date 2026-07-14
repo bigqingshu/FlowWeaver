@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -24,6 +25,7 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     private readonly IBackgroundRunService service;
     private readonly Func<string, string> translate;
+    private readonly DisplayTextFormatter displayTextFormatter;
     private EngineHostConnectionSettings settings = new();
     private string? workflowId;
     private bool canUseEngineActions;
@@ -35,10 +37,12 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
 
     public BackgroundRunManagementViewModel(
         IBackgroundRunService service,
-        Func<string, string> translate)
+        Func<string, string> translate,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
         this.service = service;
         this.translate = translate;
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         BuildFilterOptions();
     }
 
@@ -208,7 +212,10 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             Runs.Clear();
             foreach (var run in response.Data)
             {
-                Runs.Add(new WorkflowRunListItemViewModel(run, translate));
+                Runs.Add(new WorkflowRunListItemViewModel(
+                    run,
+                    translate,
+                    displayTextFormatter));
             }
 
             HasNextPage = response.Data.Count >= PageSize;
@@ -283,7 +290,10 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             return false;
         }
 
-        var merged = new WorkflowRunListItemViewModel(run, translate);
+        var merged = new WorkflowRunListItemViewModel(
+            run,
+            translate,
+            displayTextFormatter);
         if (existingIndex >= 0)
         {
             Runs[existingIndex] = merged;
@@ -437,7 +447,10 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                 return;
             }
 
-            var started = new WorkflowRunListItemViewModel(response.Data, translate);
+            var started = new WorkflowRunListItemViewModel(
+                response.Data,
+                translate,
+                displayTextFormatter);
             RunStarted?.Invoke(started);
             await LoadPageAsync(started.WorkflowRunId, resetOffset: true);
             if (Runs.All(run => run.WorkflowRunId != started.WorkflowRunId))
@@ -478,7 +491,10 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
                 return;
             }
 
-            var retried = new WorkflowRunListItemViewModel(response.Data, translate);
+            var retried = new WorkflowRunListItemViewModel(
+                response.Data,
+                translate,
+                displayTextFormatter);
             RunRetried?.Invoke(retried);
             await LoadPageAsync(retried.WorkflowRunId, resetOffset: true);
             if (Runs.All(run => run.WorkflowRunId != retried.WorkflowRunId))
@@ -780,7 +796,9 @@ public sealed partial class BackgroundRunManagementViewModel : ViewModelBase
             "ABORTED",
         })
         {
-            StatusOptions.Add(new(status, status));
+            StatusOptions.Add(new(
+                status,
+                displayTextFormatter.FormatRuntimeStatus(status)));
         }
 
         SelectedTriggerSource ??= TriggerSourceOptions[0];

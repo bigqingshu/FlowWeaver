@@ -76,7 +76,7 @@ public partial class MainWindowViewModel
                 F(
                     "format.started_run_with_status",
                     response.Data.WorkflowRunId,
-                    response.Data.Status);
+                    DisplayTextFormatter.FormatRuntimeStatus(response.Data.Status));
             ShowWorkflowNotification("workflow.run", UiNotificationKind.Success);
             IsStartingWorkflow = false;
             await TrackWorkflowRunUntilTerminalAsync(response.Data.WorkflowRunId);

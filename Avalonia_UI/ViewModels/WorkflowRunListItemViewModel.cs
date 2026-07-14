@@ -1,17 +1,21 @@
 using System;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
 public sealed class WorkflowRunListItemViewModel : ViewModelBase
 {
     private readonly Func<string, string> translate;
+    private readonly DisplayTextFormatter displayTextFormatter;
 
     public WorkflowRunListItemViewModel(
         WorkflowRunDto run,
-        Func<string, string>? translate = null)
+        Func<string, string>? translate = null,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
         this.translate = translate ?? DefaultText;
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         WorkflowRunId = run.WorkflowRunId;
         WorkflowId = run.WorkflowId;
         RevisionId = run.RevisionId;
@@ -56,6 +60,8 @@ public sealed class WorkflowRunListItemViewModel : ViewModelBase
     public string CompletionReasonText =>
         string.IsNullOrWhiteSpace(CompletionReason) ? "-" : CompletionReason;
 
+    public string StatusText => displayTextFormatter.FormatRuntimeStatus(Status);
+
     public string RunModeText =>
         $"{translate($"runs.mode.{RunMode}")} ({RunMode})";
 
@@ -67,6 +73,7 @@ public sealed class WorkflowRunListItemViewModel : ViewModelBase
 
     public void RefreshLocalizedText()
     {
+        OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(RunModeText));
         OnPropertyChanged(nameof(TriggerSourceText));
     }

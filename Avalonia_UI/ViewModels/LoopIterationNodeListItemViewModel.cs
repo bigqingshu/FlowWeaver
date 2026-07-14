@@ -2,13 +2,19 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class LoopIterationNodeListItemViewModel
+public sealed class LoopIterationNodeListItemViewModel : ViewModelBase
 {
-    public LoopIterationNodeListItemViewModel(LoopIterationNodeRunDto nodeRun)
+    private readonly DisplayTextFormatter displayTextFormatter;
+
+    public LoopIterationNodeListItemViewModel(
+        LoopIterationNodeRunDto nodeRun,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         NodeRunId = nodeRun.NodeRunId;
         NodeInstanceId = nodeRun.NodeInstanceId;
         Role = nodeRun.Role;
@@ -40,6 +46,13 @@ public sealed class LoopIterationNodeListItemViewModel
             CultureInfo.InvariantCulture,
             $"{Math.Clamp(Progress.Value, 0.0, 1.0) * 100:0}%")
         : "-";
+
+    public string StatusText => displayTextFormatter.FormatRuntimeStatus(Status);
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(StatusText));
+    }
 }
 
 public sealed class LoopIterationTableRefListItemViewModel

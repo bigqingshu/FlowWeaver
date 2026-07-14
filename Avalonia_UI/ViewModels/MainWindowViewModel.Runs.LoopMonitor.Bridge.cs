@@ -18,6 +18,7 @@ public partial class MainWindowViewModel
         RunLoopMonitor = new RunLoopMonitorViewModel(
             loopRunQueryService,
             runMetadataCache,
-            T);
+            T,
+            displayTextFormatter: DisplayTextFormatter);
     }
 }

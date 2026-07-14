@@ -1,11 +1,17 @@
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 
 namespace Avalonia_UI.ViewModels;
 
-public sealed class LoopIterationListItemViewModel
+public sealed class LoopIterationListItemViewModel : ViewModelBase
 {
-    public LoopIterationListItemViewModel(LoopIterationRunDto iteration)
+    private readonly DisplayTextFormatter displayTextFormatter;
+
+    public LoopIterationListItemViewModel(
+        LoopIterationRunDto iteration,
+        DisplayTextFormatter? displayTextFormatter = null)
     {
+        this.displayTextFormatter = displayTextFormatter ?? DisplayTextFormatter.Invariant;
         LoopIterationId = iteration.LoopIterationId;
         LoopRunId = iteration.LoopRunId;
         IterationIndex = iteration.IterationIndex;
@@ -30,4 +36,11 @@ public sealed class LoopIterationListItemViewModel
     public string? FailedNodeRunId { get; }
 
     public string IndexText => $"#{IterationIndex + 1}";
+
+    public string StatusText => displayTextFormatter.FormatRuntimeStatus(Status);
+
+    public void RefreshLocalizedText()
+    {
+        OnPropertyChanged(nameof(StatusText));
+    }
 }

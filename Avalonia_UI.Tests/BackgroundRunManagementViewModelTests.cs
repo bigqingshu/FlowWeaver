@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia_UI.Api;
+using Avalonia_UI.Localization;
 using Avalonia_UI.Models;
 using Avalonia_UI.Services;
 using Avalonia_UI.ViewModels;
@@ -65,6 +66,28 @@ public sealed class BackgroundRunManagementViewModelTests
         Assert.AreEqual("background_manual", service.LastListRequest?.TriggerSource);
         Assert.AreEqual(50, service.LastListRequest?.Offset);
         Assert.AreEqual(50, service.LastListRequest?.Limit);
+    }
+
+    [TestMethod]
+    public async Task StatusFilterLocalizesDisplayTextAndPreservesRawValue()
+    {
+        var service = new FakeBackgroundRunService();
+        var localizationService = new JsonLocalizationService();
+        await localizationService.SetLanguageAsync("zh-Hans");
+        var viewModel = new BackgroundRunManagementViewModel(
+            service,
+            localizationService.GetString,
+            new DisplayTextFormatter(localizationService));
+        viewModel.SelectedStatus = viewModel.StatusOptions.Single(
+            option => option.Value == "RUNNING");
+
+        Assert.AreEqual("运行中", viewModel.SelectedStatus.DisplayText);
+
+        await localizationService.SetLanguageAsync("en-US");
+        viewModel.RefreshLocalizedText();
+
+        Assert.AreEqual("RUNNING", viewModel.SelectedStatus.Value);
+        Assert.AreEqual("Running", viewModel.SelectedStatus.DisplayText);
     }
 
     [TestMethod]

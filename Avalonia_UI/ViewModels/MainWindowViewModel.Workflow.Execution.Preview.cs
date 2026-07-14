@@ -88,7 +88,7 @@ public partial class MainWindowViewModel
                 F(
                     "format.started_preview_run_with_status",
                     response.Data.WorkflowRunId,
-                    response.Data.Status,
+                    DisplayTextFormatter.FormatRuntimeStatus(response.Data.Status),
                     targetNodeInstanceId);
             ShowWorkflowNotification("workflow.preview", UiNotificationKind.Success);
             IsStartingWorkflow = false;
