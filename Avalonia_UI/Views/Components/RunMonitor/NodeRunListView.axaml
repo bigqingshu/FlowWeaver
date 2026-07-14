@@ -2,11 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Avalonia_UI.ViewModels"
              x:Class="Avalonia_UI.Views.Components.RunMonitor.NodeRunListView"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:NodeRunMonitorViewModel">
     <Border Classes="Card" Padding="14">
-        <Grid RowDefinitions="Auto,*" RowSpacing="10">
+        <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto" RowSpacing="10">
             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <TextBlock Text="{Binding NodeRunsSectionText}"
+                <TextBlock Text="{Binding SectionText}"
                            FontSize="16"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
@@ -16,15 +16,32 @@
                              Height="8"
                              VerticalAlignment="Center"
                              IsIndeterminate="True"
-                             IsVisible="{Binding IsNodeRunBusy}"/>
+                             IsVisible="{Binding IsLoading}"/>
                 <Button Grid.Column="2"
                         Content="{Binding RefreshText}"
-                        Command="{Binding RefreshNodeRunsCommand}"
+                        Command="{Binding RefreshCommand}"
                         MinWidth="84"/>
             </Grid>
 
-            <ListBox Grid.Row="1"
-                     ItemsSource="{Binding NodeRuns}"
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <TextBlock Text="{Binding StatusFilterText}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding StatusOptions}"
+                          SelectedItem="{Binding SelectedStatus, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="vm:NodeRunStatusFilterOptionViewModel"
+                                      x:DataType="vm:NodeRunStatusFilterOptionViewModel">
+                            <TextBlock Text="{Binding DisplayText}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+
+            <ListBox Grid.Row="2"
+                     ItemsSource="{Binding Nodes}"
+                     SelectedItem="{Binding SelectedNodeRun, Mode=TwoWay}"
                      BorderBrush="{DynamicResource ControlBorderBrush}"
                      BorderThickness="1">
                 <ListBox.ItemTemplate>
@@ -44,6 +61,80 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <Grid Grid.Row="3" ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+                <Button Content="{Binding PreviousPageText}"
+                        Command="{Binding PreviousPageCommand}"
+                        HorizontalAlignment="Stretch"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding PageText}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Button Grid.Column="2"
+                        Content="{Binding NextPageText}"
+                        Command="{Binding NextPageCommand}"
+                        HorizontalAlignment="Stretch"/>
+            </Grid>
+
+            <StackPanel Grid.Row="4" Spacing="4">
+                <TextBlock Text="{Binding Message}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <TextBlock Text="{Binding ErrorMessage}"
+                           IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextErrorBrush}"/>
+            </StackPanel>
+
+            <Expander Grid.Row="5"
+                      Header="{Binding DetailsText}"
+                      IsEnabled="{Binding HasSelectedNodeRun}">
+                <StackPanel Margin="0,8,0,0" Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          ColumnSpacing="12"
+                          RowSpacing="5">
+                        <TextBlock Text="{Binding NodeRunIdLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding SelectedNodeRun.NodeRunId}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="1" Text="{Binding NodeLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedNodeRun.NodeIdentityText}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="2" Text="{Binding StatusLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedNodeRun.StatusText}"/>
+                        <TextBlock Grid.Row="3" Text="{Binding ExecutorLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedNodeRun.ExecutorIdText}" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="4" Text="{Binding StartedLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedNodeRun.StartedAtText}"/>
+                        <TextBlock Grid.Row="5" Text="{Binding FinishedLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedNodeRun.FinishedAtText}"/>
+                        <TextBlock Grid.Row="6" Text="{Binding DurationLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedNodeRun.DurationText}"/>
+                        <TextBlock Grid.Row="7" Text="{Binding HeartbeatLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding SelectedNodeRun.LastHeartbeatText}"/>
+                        <TextBlock Grid.Row="8" Text="{Binding StateVersionLabel}" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding SelectedNodeRun.StateVersion}"/>
+                    </Grid>
+                    <Border IsVisible="{Binding SelectedNodeRun.HasError}"
+                            Background="{DynamicResource ErrorBackgroundBrush}"
+                            BorderBrush="{DynamicResource ErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding ErrorText}" FontWeight="SemiBold"/>
+                            <ScrollViewer MaxHeight="140"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding SelectedNodeRun.ErrorJson}"
+                                           TextWrapping="Wrap"
+                                           FontFamily="Consolas"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextErrorBrush}"/>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Expander>
         </Grid>
     </Border>
 </UserControl>

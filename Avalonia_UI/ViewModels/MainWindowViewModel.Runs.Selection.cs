@@ -11,6 +11,7 @@ public partial class MainWindowViewModel
     {
         BackgroundRunManagement?.SelectRun(newValue);
         RefreshRunOverviewContext();
+        RefreshNodeRunMonitorContext();
         var runChanged = !string.Equals(
             oldValue?.WorkflowRunId,
             newValue?.WorkflowRunId,

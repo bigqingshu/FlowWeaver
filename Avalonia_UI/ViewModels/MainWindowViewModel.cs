@@ -92,6 +92,7 @@ public partial class MainWindowViewModel : ViewModelBase
         InitializeWorkflowLoopRegions();
         InitializeWorkflowNodeTableBindings();
         InitializeRunOverview(apiClient);
+        InitializeNodeRunMonitor(apiClient);
         InitializeRunLoopMonitor(apiClient);
         InitializeBackgroundRunManagement(apiClient);
         InitializeLanguageMenuItems();

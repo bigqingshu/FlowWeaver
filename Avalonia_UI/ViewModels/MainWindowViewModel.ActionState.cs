@@ -15,6 +15,7 @@ public partial class MainWindowViewModel
         NotifyDataPreviewActionStateChanged();
         NotifySharedPublicationActionStateChanged();
         RefreshRunOverviewContext();
+        RefreshNodeRunMonitorContext();
         RefreshBackgroundRunManagementContext();
     }
 

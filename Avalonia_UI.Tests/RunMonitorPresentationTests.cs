@@ -100,6 +100,25 @@ public sealed class RunMonitorPresentationTests
             "<rm:RunOverviewView Grid.Row=\"5\" DataContext=\"{Binding RunOverview}\"/>");
     }
 
+    [TestMethod]
+    public void NodeRunMonitorUsesPagedSelectionAndDetails()
+    {
+        var pageXaml = File.ReadAllText(GetPagePath("RunMonitorPage.axaml"));
+        StringAssert.Contains(
+            pageXaml,
+            "<rm:NodeRunListView Grid.Column=\"1\" DataContext=\"{Binding NodeRunMonitor}\" />");
+
+        var nodeXaml = File.ReadAllText(GetViewPath("NodeRunListView.axaml"));
+        StringAssert.Contains(nodeXaml, "x:DataType=\"vm:NodeRunMonitorViewModel\"");
+        StringAssert.Contains(nodeXaml, "ItemsSource=\"{Binding Nodes}\"");
+        StringAssert.Contains(
+            nodeXaml,
+            "SelectedItem=\"{Binding SelectedNodeRun, Mode=TwoWay}\"");
+        StringAssert.Contains(nodeXaml, "Command=\"{Binding PreviousPageCommand}\"");
+        StringAssert.Contains(nodeXaml, "Command=\"{Binding NextPageCommand}\"");
+        StringAssert.Contains(nodeXaml, "SelectedNodeRun.ErrorJson");
+    }
+
     private static bool IsWidthSafeButton(XElement button)
     {
         return (string?)button.Attribute("HorizontalAlignment") == "Stretch"

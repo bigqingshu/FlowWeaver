@@ -7,7 +7,7 @@
     <Border Classes="Card" Padding="14">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <TextBlock Text="{Binding RunsSectionText}"
                            FontSize="16"
@@ -46,21 +46,6 @@
 
             <Separator Grid.Row="4"/>
             <rm:RunOverviewView Grid.Row="5" DataContext="{Binding RunOverview}"/>
-            <Separator Grid.Row="6"/>
-            <TextBlock Grid.Row="7" Text="{Binding NodeRunsSectionText}"
-                       FontSize="16"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <TextBlock Grid.Row="8" Text="{Binding NodeRunMessage}" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-            <ScrollViewer Grid.Row="9" IsVisible="{Binding HasNodeRunError}" MaxHeight="180" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <Border Background="{DynamicResource ErrorBackgroundBrush}" BorderBrush="{DynamicResource ErrorBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
-                    <TextBlock Text="{Binding NodeRunErrorMessage}"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextErrorBrush}"
-                               FontFamily="Consolas"
-                               FontSize="12"/>
-                </Border>
-            </ScrollViewer>
         </Grid>
         </ScrollViewer>
     </Border>

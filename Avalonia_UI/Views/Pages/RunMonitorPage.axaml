@@ -6,7 +6,7 @@
              x:DataType="vm:MainWindowViewModel">
     <Grid ColumnDefinitions="340, 1.3*, 1*" ColumnSpacing="16" Margin="12">
         <rm:RunListView Grid.Column="0" />
-        <rm:NodeRunListView Grid.Column="1" />
+        <rm:NodeRunListView Grid.Column="1" DataContext="{Binding NodeRunMonitor}" />
         <TabControl Grid.Column="2"
                     SelectedIndex="{Binding SelectedRunMonitorTabIndex, Mode=TwoWay}">
             <TabItem Header="{Binding RunLoopMonitor.OverviewText}">
