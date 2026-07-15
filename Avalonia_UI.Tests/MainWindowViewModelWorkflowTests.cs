@@ -4989,6 +4989,22 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Source: full run run-1, node generate, table orders.",
             viewModel.DataPreviewSourceText);
+        Assert.HasCount(1, viewModel.DataPreviewStates);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        CollectionAssert.AreEqual(
+            new[] { "1", "12.5" },
+            viewModel.DataPreviewWorkbenchRows[0].Cells
+                .Select(cell => cell.Text)
+                .ToArray());
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
+
+        viewModel.SelectedShellPageKey = ShellPageKey.DataPreview;
+
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
         Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
         Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.NotificationTitle);
@@ -5231,6 +5247,17 @@ public sealed class MainWindowViewModelWorkflowTests
         Assert.AreEqual(
             "Source: preview run run-preview to node generate, table orders.",
             viewModel.DataPreviewSourceText);
+        Assert.HasCount(1, viewModel.DataPreviewStates);
+        Assert.AreEqual("table-1", viewModel.SelectedDataPreviewTableOption?.TableRefId);
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
+
+        viewModel.SelectedShellPageKey = ShellPageKey.DataPreview;
+
+        Assert.AreEqual("table-1", viewModel.LoadedDataPreviewTableRef?.TableRefId);
+        Assert.HasCount(1, viewModel.DataPreviewWorkbenchRows);
+        Assert.AreEqual(1, apiClient.GetTableRowsCallCount);
         Assert.AreEqual("data_preview.refresh", viewModel.NotificationKey);
         Assert.AreEqual(UiNotificationKind.Success, viewModel.NotificationKind);
         Assert.AreEqual("Loaded 1/1 preview row(s) for orders.", viewModel.NotificationTitle);
@@ -6439,6 +6466,8 @@ public sealed class MainWindowViewModelWorkflowTests
 
         public string? LastTableRowsTableRefId { get; private set; }
 
+        public int GetTableRowsCallCount { get; private set; }
+
         public string? CancelledWorkflowRunId { get; private set; }
 
         public int ListLoopRunsCallCount { get; private set; }
@@ -6771,6 +6800,7 @@ public sealed class MainWindowViewModelWorkflowTests
         {
             LastSettings = settings;
             LastTableRowsTableRefId = tableRefId;
+            GetTableRowsCallCount++;
             return Task.FromResult(TableRowsResponse);
         }
 

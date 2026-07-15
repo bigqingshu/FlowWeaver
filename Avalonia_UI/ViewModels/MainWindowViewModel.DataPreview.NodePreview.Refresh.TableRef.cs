@@ -36,6 +36,15 @@ public partial class MainWindowViewModel
                 requestedNodeInstanceId,
                 notifyResult);
         }
+        else if (CanInitializeDataPreviewWorkbenchFromNodePreview(requestedRunId))
+        {
+            dataPreviewSelectionState.Capture(
+                stateKey: null,
+                tableRef.TableRefId);
+            ApplyRefreshedTableRefs(tableRefsResponse.Data);
+            TableRefMessage = F("format.loaded_table_refs", TableRefs.Count);
+            TableRefErrorMessage = null;
+        }
 
         return tableRef;
     }

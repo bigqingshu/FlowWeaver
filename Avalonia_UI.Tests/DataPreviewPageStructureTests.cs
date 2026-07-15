@@ -26,8 +26,11 @@ public sealed class DataPreviewPageStructureTests
         StringAssert.Contains(xaml, "SelectedItem=\"{Binding SelectedDataPreviewTableOption, Mode=TwoWay}\"");
         StringAssert.Contains(
             xaml,
-            "ItemsSource=\"{Binding TableRefs}\"",
-            "The state directory should retain unreadable table metadata.");
+            "ItemsSource=\"{Binding VisibleTableRefs}\"",
+            "The processing-state list should render only the current collapsed or expanded projection.");
+        StringAssert.Contains(xaml, "Command=\"{Binding ToggleTableListCommand}\"");
+        StringAssert.Contains(xaml, "IsVisible=\"{Binding HasAdditionalTableRefs}\"");
+        StringAssert.Contains(xaml, "ToolTip.Tip=\"{Binding TableListToggleToolTip}\"");
         Assert.IsFalse(
             xaml.Contains("SelectedItem=\"{Binding SelectedDataPreviewTableRef", StringComparison.Ordinal),
             "DataPreviewPage should not use the legacy shared table-ref selection for user-facing selectors.");

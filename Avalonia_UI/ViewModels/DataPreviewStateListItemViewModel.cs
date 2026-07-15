@@ -1,12 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Avalonia_UI.ViewModels;
 
 public sealed class DataPreviewStateListItemViewModel : ViewModelBase
 {
+    private const int CollapsedTableLimit = 3;
+
     private readonly Func<string, string> translate;
+    private readonly IReadOnlyList<TableRefListItemViewModel> collapsedTableRefs;
+    private bool isTableListExpanded;
 
     public DataPreviewStateListItemViewModel(
         string workflowRunId,
@@ -40,6 +45,8 @@ public sealed class DataPreviewStateListItemViewModel : ViewModelBase
         SourceNodeInstanceId = TableRefs
             .Select(tableRef => tableRef.SourceNodeInstanceId)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        collapsedTableRefs = TableRefs.Take(CollapsedTableLimit).ToArray();
+        ToggleTableListCommand = new RelayCommand(ToggleTableList);
     }
 
     public string WorkflowRunId { get; }
@@ -51,6 +58,36 @@ public sealed class DataPreviewStateListItemViewModel : ViewModelBase
     public string? SourceNodeInstanceId { get; }
 
     public IReadOnlyList<TableRefListItemViewModel> TableRefs { get; }
+
+    public IReadOnlyList<TableRefListItemViewModel> VisibleTableRefs =>
+        IsTableListExpanded ? TableRefs : collapsedTableRefs;
+
+    public bool HasAdditionalTableRefs => TableCount > CollapsedTableLimit;
+
+    public bool IsTableListExpanded
+    {
+        get => isTableListExpanded;
+        private set
+        {
+            if (!SetProperty(ref isTableListExpanded, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(VisibleTableRefs));
+            OnPropertyChanged(nameof(TableListToggleGlyph));
+            OnPropertyChanged(nameof(TableListToggleToolTip));
+        }
+    }
+
+    public string TableListToggleGlyph => IsTableListExpanded ? "▲" : "▼";
+
+    public string TableListToggleToolTip => translate(
+        IsTableListExpanded
+            ? "data_preview.collapse_tables"
+            : "data_preview.expand_tables");
+
+    public IRelayCommand ToggleTableListCommand { get; }
 
     public string StateKey => $"{WorkflowRunId}:{NodeRunId}:{TableType}";
 
@@ -130,6 +167,15 @@ public sealed class DataPreviewStateListItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(DisplayText));
         OnPropertyChanged(nameof(TableTypeText));
         OnPropertyChanged(nameof(SummaryText));
+        OnPropertyChanged(nameof(TableListToggleToolTip));
+    }
+
+    private void ToggleTableList()
+    {
+        if (HasAdditionalTableRefs)
+        {
+            IsTableListExpanded = !IsTableListExpanded;
+        }
     }
 
     private static int TableTypeOrder(string tableType)
@@ -153,6 +199,8 @@ public sealed class DataPreviewStateListItemViewModel : ViewModelBase
             "data_preview.table_type.runtime_sql_table" => "Runtime SQL table",
             "data_preview.table_type.external_sql_table" => "External SQL reference",
             "data_preview.readable" => "readable",
+            "data_preview.expand_tables" => "Expand all tables",
+            "data_preview.collapse_tables" => "Collapse table list",
             _ => key,
         };
     }

@@ -1185,6 +1185,8 @@
   "data_preview.workbench_refresh": "Refresh table",
   "data_preview.table_selector": "Data table",
   "data_preview.state_selector": "Processing state",
+  "data_preview.expand_tables": "Expand all tables",
+  "data_preview.collapse_tables": "Collapse table list",
   "data_preview.load_selected_table": "Load selected table",
   "data_preview.search": "Search",
   "data_preview.search_watermark": "Filter current page",

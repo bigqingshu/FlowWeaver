@@ -60,6 +60,66 @@ public sealed class DataPreviewStateListItemViewModelTests
     }
 
     [TestMethod]
+    public void StateShowsThreeTablesByDefaultAndTogglesTheFullList()
+    {
+        var state = new DataPreviewStateListItemViewModel(
+            "run-1",
+            "node-run-1",
+            "runtime_sql_table",
+            Enumerable.Range(1, 5)
+                .Select(index => TableRef(
+                    $"table-{index}",
+                    "run-1",
+                    "node-run-1")));
+
+        Assert.HasCount(5, state.TableRefs);
+        Assert.HasCount(3, state.VisibleTableRefs);
+        CollectionAssert.AreEqual(
+            new[] { "table-1", "table-2", "table-3" },
+            state.VisibleTableRefs
+                .Select(tableRef => tableRef.TableRefId)
+                .ToArray());
+        Assert.IsTrue(state.HasAdditionalTableRefs);
+        Assert.IsFalse(state.IsTableListExpanded);
+        Assert.AreEqual("▼", state.TableListToggleGlyph);
+        Assert.AreEqual("Expand all tables", state.TableListToggleToolTip);
+
+        state.ToggleTableListCommand.Execute(null);
+
+        Assert.IsTrue(state.IsTableListExpanded);
+        Assert.HasCount(5, state.VisibleTableRefs);
+        Assert.AreEqual("▲", state.TableListToggleGlyph);
+        Assert.AreEqual("Collapse table list", state.TableListToggleToolTip);
+
+        state.ToggleTableListCommand.Execute(null);
+
+        Assert.IsFalse(state.IsTableListExpanded);
+        Assert.HasCount(3, state.VisibleTableRefs);
+    }
+
+    [TestMethod]
+    public void StateWithThreeTablesDoesNotExpand()
+    {
+        var state = new DataPreviewStateListItemViewModel(
+            "run-1",
+            "node-run-1",
+            "runtime_sql_table",
+            Enumerable.Range(1, 3)
+                .Select(index => TableRef(
+                    $"table-{index}",
+                    "run-1",
+                    "node-run-1")));
+
+        Assert.IsFalse(state.HasAdditionalTableRefs);
+        Assert.HasCount(3, state.VisibleTableRefs);
+
+        state.ToggleTableListCommand.Execute(null);
+
+        Assert.IsFalse(state.IsTableListExpanded);
+        Assert.HasCount(3, state.VisibleTableRefs);
+    }
+
+    [TestMethod]
     public void ConstructorRejectsMixedNodeRunTableRefs()
     {
         var exception = Assert.ThrowsExactly<ArgumentException>(() =>

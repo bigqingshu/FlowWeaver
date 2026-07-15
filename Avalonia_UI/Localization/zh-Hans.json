@@ -1185,6 +1185,8 @@
   "data_preview.workbench_refresh": "刷新表格",
   "data_preview.table_selector": "数据表",
   "data_preview.state_selector": "处理状态",
+  "data_preview.expand_tables": "展开全部表",
+  "data_preview.collapse_tables": "收起表列表",
   "data_preview.load_selected_table": "载入选中表",
   "data_preview.search": "搜索",
   "data_preview.search_watermark": "筛选当前页",

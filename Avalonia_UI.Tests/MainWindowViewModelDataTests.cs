@@ -1544,6 +1544,38 @@ public sealed class MainWindowViewModelDataTests
     }
 
     [TestMethod]
+    public async Task HistoricalNodePreviewRefreshDoesNotInitializeIndependentWorkbench()
+    {
+        var apiClient = new FakeApiClient
+        {
+            TableRefsResponse = ApiResponseEnvelope<List<TableRefDto>>.Success(
+            [
+                TableRef("table-1", "run-1", "node-run-1"),
+            ]),
+            TableRowsResponse = ApiResponseEnvelope<TableDataRowsDto>.Success(
+                TableRows(
+                    "table-1",
+                    ["row_id"],
+                    [
+                        JsonDocument.Parse("""{"row_id":1}""")
+                            .RootElement
+                            .Clone(),
+                    ],
+                    rowCount: 1)),
+        };
+        var viewModel = CreateViewModel(apiClient);
+        viewModel.SelectedRun = new WorkflowRunListItemViewModel(Run("run-1", "wf-1"));
+        viewModel.SelectedWorkflowDefinitionNode = WorkflowNode("generate");
+
+        await viewModel.RefreshSelectedWorkflowNodeDataPreviewCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.DataPreviewRows);
+        Assert.IsEmpty(viewModel.DataPreviewStates);
+        Assert.IsNull(viewModel.LoadedDataPreviewTableRef);
+        Assert.IsEmpty(viewModel.DataPreviewWorkbenchRows);
+    }
+
+    [TestMethod]
     public async Task SameRunStatusRefreshKeepsRunRelatedData()
     {
         var apiClient = new FakeApiClient

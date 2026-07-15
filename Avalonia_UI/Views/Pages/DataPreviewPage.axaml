@@ -28,7 +28,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="vm:DataPreviewStateListItemViewModel"
                                       x:DataType="vm:DataPreviewStateListItemViewModel">
-                            <Grid ColumnDefinitions="*,Auto"
+                            <Grid ColumnDefinitions="*,Auto,Auto"
                                   RowDefinitions="Auto,Auto,Auto,Auto"
                                   ColumnSpacing="10"
                                   Margin="8">
@@ -40,6 +40,14 @@
                                            Text="{Binding TableCountText}"
                                            FontSize="12"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                <Button Grid.Column="2"
+                                        Width="24"
+                                        Height="24"
+                                        Padding="0"
+                                        Content="{Binding TableListToggleGlyph}"
+                                        Command="{Binding ToggleTableListCommand}"
+                                        IsVisible="{Binding HasAdditionalTableRefs}"
+                                        ToolTip.Tip="{Binding TableListToggleToolTip}"/>
                                 <TextBlock Grid.Row="1"
                                            Text="{Binding WorkflowRunId}"
                                            FontSize="12"
@@ -51,13 +59,14 @@
                                            FontSize="12"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <TextBlock Grid.Row="2"
+                                           Grid.ColumnSpan="3"
                                            Text="{Binding SummaryText}"
                                            FontSize="12"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 <ItemsControl Grid.Row="3"
-                                              Grid.ColumnSpan="2"
-                                              ItemsSource="{Binding TableRefs}"
+                                              Grid.ColumnSpan="3"
+                                              ItemsSource="{Binding VisibleTableRefs}"
                                               Margin="0,4,0,0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="vm:TableRefListItemViewModel"
